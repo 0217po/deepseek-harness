@@ -10,47 +10,47 @@
         - text: Open keyboard shortcuts
         - button "Remove shortcut for Open keyboard shortcuts"
         - button "Edit shortcut for Open keyboard shortcuts"
-        - button "Open keyboard shortcuts Ctrl + /": Ctrl + /
+        - button "Open keyboard shortcuts ⌘ /": ⌘ /
       - listitem:
         - text: Toggle left sidebar
         - button "Remove shortcut for Toggle left sidebar"
         - button "Edit shortcut for Toggle left sidebar"
-        - button "Toggle left sidebar Ctrl + Alt + B": Ctrl + Alt + B
+        - button "Toggle left sidebar ⌥ ⌘ B": ⌥ ⌘ B
       - listitem:
         - text: Open settings
         - button "Remove shortcut for Open settings"
         - button "Edit shortcut for Open settings"
-        - button "Open settings Ctrl + ,": Ctrl + ,
+        - button "Open settings ⌘ ,": ⌘ ,
       - listitem:
         - text: New Session
         - button "Remove shortcut for New Session"
         - button "Edit shortcut for New Session"
-        - button "New Session Ctrl + Alt + N": Ctrl + Alt + N
+        - button "New Session ⌥ ⌘ N": ⌥ ⌘ N
       - listitem:
         - text: Search sessions
         - button "Remove shortcut for Search sessions"
         - button "Edit shortcut for Search sessions"
-        - button "Search sessions Ctrl + Alt + K": Ctrl + Alt + K
+        - button "Search sessions ⌥ ⌘ K": ⌥ ⌘ K
       - listitem:
         - text: Add workspace
         - button "Remove shortcut for Add workspace"
         - button "Edit shortcut for Add workspace"
-        - button "Add workspace Ctrl + Alt + O": Ctrl + Alt + O
+        - button "Add workspace ⌥ ⌘ O": ⌥ ⌘ O
       - listitem:
         - text: Rename session
         - button "Remove shortcut for Rename session"
         - button "Edit shortcut for Rename session"
-        - button "Rename session Ctrl + Shift + R": Ctrl + Shift + R
+        - button "Rename session ⇧ ⌘ R": ⇧ ⌘ R
       - listitem:
         - text: Fork session
         - button "Remove shortcut for Fork session"
         - button "Edit shortcut for Fork session"
-        - button "Fork session Ctrl + Shift + F": Ctrl + Shift + F
+        - button "Fork session ⇧ ⌘ F": ⇧ ⌘ F
       - listitem:
         - text: Archive session
         - button "Remove shortcut for Archive session"
         - button "Edit shortcut for Archive session"
-        - button "Archive session Ctrl + Alt + A": Ctrl + Alt + A
+        - button "Archive session ⌥ ⌘ A": ⌥ ⌘ A
   - region "Message input":
     - heading "Message input" [level=3]
     - list:
@@ -59,10 +59,10 @@
         - button "Send message Enter" [disabled]: Enter
       - listitem:
         - text: New line
-        - button "New line Shift + Enter" [disabled]: Shift + Enter
+        - button "New line ⇧ Enter" [disabled]: ⇧ Enter
       - listitem:
         - text: Use the complementary Queue / Steer action
-        - button "Use the complementary Queue / Steer action Ctrl + Enter" [disabled]: Ctrl + Enter
+        - button "Use the complementary Queue / Steer action ⌘ Enter" [disabled]: ⌘ Enter
       - listitem:
         - text: Open command menu
         - button "Open command menu /" [disabled]: /
