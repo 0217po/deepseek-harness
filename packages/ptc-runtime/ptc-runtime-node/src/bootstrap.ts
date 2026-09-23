@@ -107,7 +107,7 @@ const CONSOLE_LEVELS = ['log', 'info', 'warn', 'error', 'debug'] as const
  * @param logs - the buffer every rendered line is pushed into.
  * @returns the five-method console object handed to the program.
  */
-export function makeConsoleShim(logs: LogBuffer): Record<(typeof CONSOLE_LEVELS)[number], (...args: unknown[]) => void> {
+export function makeConsoleShim(logs: Pick<LogBuffer, 'push'>): Record<(typeof CONSOLE_LEVELS)[number], (...args: unknown[]) => void> {
   const render = (args: unknown[]): string =>
     args.map(arg => typeof arg === 'string' ? arg : inspect(arg, INSPECT_OPTIONS)).join(' ')
   const shim = Object.create(null) as Record<(typeof CONSOLE_LEVELS)[number], (...args: unknown[]) => void>
@@ -129,7 +129,7 @@ export function makeConsoleShim(logs: LogBuffer): Record<(typeof CONSOLE_LEVELS)
  * @returns the restore function (the in-process tests un-patch; the real
  *   child never needs to).
  */
-export function captureStreamWrites(logs: LogBuffer, stream: PatchableStream): () => void {
+export function captureStreamWrites(logs: Pick<LogBuffer, 'push'>, stream: PatchableStream): () => void {
   // The slot's VALUE is stored for restore and reassigned — never invoked
   // detached, so the unbound-method concern does not apply.
   // oxlint-disable-next-line typescript/unbound-method

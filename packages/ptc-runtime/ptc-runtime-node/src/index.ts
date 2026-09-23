@@ -11,15 +11,14 @@ import type { ConfinedArgv, SandboxExecutionPolicy, SandboxMode } from '@deepsee
 import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-fs'
-import { snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
-import { validateBindings } from './bindings.ts'
+import { replyToBinding, validateBindings } from './bindings.ts'
 import { JsonChannel } from './channel.ts'
 import { bootstrapArgs } from './launch.ts'
 import type { LaunchConfig } from './launch.ts'
 import { OutputLedger } from './output-ledger.ts'
-import { drainOutput } from './output-stream.ts'
+import { terminateProcess } from './output-stream.ts'
 import { STARTUP_ENVIRONMENT_NAMES } from './environment.ts'
-import { decodePtcJsonWire, encodePtcJsonWire } from './json-wire.ts'
+import { decodePtcJsonWire } from './json-wire.ts'
 import type { ProgramBootData } from './protocol.ts'
 
 /** Deployment-varying runtime bounds and launch choices. */
@@ -171,20 +170,12 @@ export class NodePtcRuntime extends PtcRuntime {
       void (async () => {
         if (handle !== undefined) {
           try {
-            handle.terminate()
-            await Promise.all([handle.done.catch(() => {}), handle.waitForExit()])
-            const drained = await Promise.all([
-              drainOutput(handle.stdout, this.config.graceMs),
-              drainOutput(handle.stderr, this.config.graceMs),
-            ])
-            if (drained.includes(false) && failure === undefined) {
+            const drained = await terminateProcess(handle, this.config.graceMs)
+            if (!drained && failure === undefined) {
               failure = { kind: 'worker-exit', message: 'Node process output did not close cleanly' }
             }
           } catch (error: unknown) {
             failure = { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(error)}` }
-          } finally {
-            handle.stdout?.destroy()
-            handle.stderr?.destroy()
           }
         }
         const outcome = outputOverflow ? overflowResult ?? output.limit(logs)
@@ -320,17 +311,10 @@ export class NodePtcRuntime extends PtcRuntime {
             if (++pending > this.config.maxPendingCalls || (pendingBytes += bytes) > this.config.maxMessageBytes) { protocolFailure('pending binding calls exceed configured limits'); return }
             const id = raw.id
             void (async () => {
-              let reply: unknown
-              try {
-                const value = snapshotJsonValue(await fn(args))
-                if (value === undefined) throw new Error('binding resolution must be lossless JSON')
-                reply = { type: 'reply', id, ok: true, value: encodePtcJsonWire(value) }
-              } catch (error: unknown) {
-                reply = { type: 'reply', id, ok: false, message: messageOf(error) }
-              } finally {
+              const reply = await replyToBinding(id, fn, args).finally(() => {
                 pending -= 1
                 pendingBytes -= bytes
-              }
+              })
               if (!settled) await transport.send(reply)
             })().catch((error: unknown) => { protocolFailure(messageOf(error)) })
             return

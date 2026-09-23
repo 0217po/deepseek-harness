@@ -1,0 +1,30 @@
+{
+  "initial": [
+    {
+      "name": "run_code",
+      "description": "Execute TypeScript in an in-memory REPL. Top-level declarations and await are supported; use console.log or a final JSON expression for output. Top-level return is not supported. Call tools as await tools.name(args) using the declarations in the system prompt. Image-bearing subtool results are attached after the run. Variables, functions, and imported modules remain in memory for this Agent across calls. Use await import(...) for modules. This environment has full host access without a file sandbox; process.env starts empty. Restart, Agent disposal, cancellation, timeout, or process failure clears the environment. If a variable is undefined, recreate it and reacquire its resources. State is not restored from the conversation, and failed evaluations can leave earlier mutations in memory. Await all tool calls; background callbacks cannot call tools after their evaluation ends. The working directory is the Session's current directory.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "TypeScript REPL statements with optional top-level await and a final JSON expression."
+          },
+          "description": {
+            "type": "string",
+            "description": "Clear, concise description of what this program does in active voice, 5-10 words (shown in the UI). Examples: \"Count TODO markers across packages\"; \"Read failing test and its fixture\"; \"Rename config key in every cordis.yml\"."
+          },
+          "timeoutMs": {
+            "type": "number",
+            "description": "Positive elapsed-time budget in milliseconds, including nested tool and approval waits. Default 120000; capped at 600000. Zero does not disable the deadline."
+          }
+        },
+        "required": [
+          "code",
+          "description"
+        ]
+      }
+    }
+  ],
+  "changes": []
+}

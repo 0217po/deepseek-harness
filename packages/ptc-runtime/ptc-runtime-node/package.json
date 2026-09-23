@@ -22,11 +22,17 @@
     "./process": {
       "types": "./lib/types/process-entry.d.ts",
       "default": "./lib/process.js"
+    },
+    "./persistent": {
+      "types": "./lib/types/persistent.d.ts",
+      "default": "./lib/persistent.js"
     }
   },
   "files": [
     "lib/index.js",
     "lib/process.js",
+    "lib/persistent.js",
+    "lib/persistent-process.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",

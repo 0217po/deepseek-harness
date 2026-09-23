@@ -2215,6 +2215,8 @@ export interface Config {
   inspectTimeoutMs?: number
   /** Maximum duration of the GitHub repository connection check before installation, in milliseconds. */
   githubConnectionTimeoutMs?: number
+  /** Maximum time one captured package run may print nothing before the manager terminates it, in milliseconds. */
+  idleTimeoutMs?: number
   /** The registry lookups and installations ask first, as an http(s) URL; absent, the one pnpm's own configuration names. */
   registry?: string
   /**
@@ -2278,7 +2280,7 @@ export interface LaunchConfig {
 }
 ```
 
-来源： [`packages/ptc-runtime/ptc-runtime-node/src/index.ts:26`](../packages/ptc-runtime/ptc-runtime-node/src/index.ts)
+来源： [`packages/ptc-runtime/ptc-runtime-node/src/index.ts:25`](../packages/ptc-runtime/ptc-runtime-node/src/index.ts)
 
 <a id="deepseek-aidsh-pwsh-local"></a>
 
@@ -2798,10 +2800,14 @@ export interface Config {
 export interface Config {
   /** Absolute assets directory containing the three skill folders and shared scripts; defaults to packaged assets. */
   assetRoot?: string
+  /** Standalone Node executable; defaults to the current executable outside Electron and SEA. */
+  node?: string
+  /** Absolute LibreOffice Kit CLI entry; false explicitly disables CLI access. */
+  cli?: string | false
 }
 ```
 
-来源： [`packages/skill/skill-office/src/index.ts:15`](../packages/skill/skill-office/src/index.ts)
+来源： [`packages/skill/skill-office/src/index.ts:16`](../packages/skill/skill-office/src/index.ts)
 
 <a id="deepseek-aidsh-spill-local"></a>
 

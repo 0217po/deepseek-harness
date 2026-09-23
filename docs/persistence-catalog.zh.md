@@ -6656,7 +6656,7 @@ SHA-256: `b81e9de81a481b24e1e1f9adf038bfc59e57b4f35ce62f8f1e45284186f4f812`
 
 SHA-256: `dba54c09c6e7aafc9acbed7792ecc920d99f92d0784aeeed10af55f7fe0bc8cd`
 
-来源：[`packages/core/tools/src/ptc.ts:14`](../packages/core/tools/src/ptc.ts)
+来源：[`packages/core/tools/src/ptc.ts:15`](../packages/core/tools/src/ptc.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|

@@ -16,6 +16,8 @@ type HostBindings = Record<string, PtcBindingFunction>
 class ControlledRuntime extends PtcRuntime {
   language = 'typescript'
   readonly isolation = 'process'
+  policyMode: 'read-only' | undefined = 'read-only'
+  override get sandboxMode(): 'read-only' | undefined { return this.policyMode }
   execute: (spec: PtcRunSpec) => Promise<PtcRunResult> = () => Promise.resolve(completed)
 
   resolve(request: PtcRunRequest): PtcRunSpec {
@@ -96,17 +98,20 @@ describe('workflow host callback validation', () => {
     } finally { await handle.dispose() }
   })
 
-  it('carries Session authority and an explicit unlimited deadline to the runtime', async () => {
-    const { ctx, parent, start } = await setup(async (bindings, spec) => {
+  it.each([true, false])('carries Session cwd and an unlimited deadline with confinement capability %s', async (confined) => {
+    const { ctx, runtime, parent, start } = await setup(async (bindings, spec) => {
       expect(spec.timeoutMs).toBeNull()
       expect(spec.cwd).toBe(parent.session.header.cwd)
-      expect(spec.sandboxPolicy).toEqual(ctx.sandboxPolicy.resolve({ session: parent.session }))
+      expect(spec.sandboxPolicy).toEqual(confined ? ctx.sandboxPolicy.resolve({ session: parent.session }) : undefined)
       expect(await bindings.begin!({})).toMatchObject({ body: 'return null', meta: { name: 'host-test' } })
       return completed
     })
+    runtime.policyMode = confined ? 'read-only' : undefined
     const handle = start()
-    try { expect((await handle.result).stopReason).toBe('completed') }
-    finally { await handle.dispose() }
+    try {
+      const result = await handle.result
+      expect(result.stopReason, result.error).toBe('completed')
+    } finally { await handle.dispose() }
   })
 })
 

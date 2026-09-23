@@ -215,6 +215,7 @@ export default defineConfig({
         'packages/*/*/src/worker.ts',
         // The built Node entry invokes the independently covered process bootstrap through fd 7.
         'packages/ptc-runtime/ptc-runtime-node/src/process-entry.ts',
+        'packages/ptc-runtime/ptc-runtime-node/src/persistent-process-entry.ts',
         // Dynamic Host/Client composition is covered by its focused lifecycle
         // tests and assembled application checks rather than per-file coverage.
         'packages/self-modification/*/src/**/*.{ts,tsx}',
