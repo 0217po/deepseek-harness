@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'">
+  <title>DSH CUA Electron fixture</title>
+  <style>
+    body { margin: 32px; font: 18px system-ui, sans-serif; color: #1f2937; background: #fff; }
+    h1 { font-size: 23px; }
+    button, input { display: block; margin: 16px 0; font: inherit; padding: 10px; }
+    input { width: 470px; }
+    #count { font-size: 24px; }
+  </style>
+</head>
+<body>
+  <h1>Disposable Electron fixture</h1>
+  <button id="increment">Increment Electron</button>
+  <p id="count" role="status">Clicks: 0</p>
+  <label for="text">Electron text</label>
+  <input id="text" type="text" placeholder="Type into Chromium">
+  <script>
+    const button = document.querySelector('#increment')
+    const field = document.querySelector('#text')
+    const label = document.querySelector('#count')
+    let clicks = 0
+    let lastClickTrusted = null
+    let lastInputTrusted = null
+    function report() { console.log('DSH_CUA_STATE ' + JSON.stringify({ clicks, text: field.value, lastClickTrusted, lastInputTrusted })) }
+    button.addEventListener('click', event => { clicks += 1; lastClickTrusted = event.isTrusted; label.textContent = `Clicks: ${clicks}`; report() })
+    field.addEventListener('input', event => { lastInputTrusted = event.isTrusted; report() })
+    report()
+  </script>
+</body>
+</html>
