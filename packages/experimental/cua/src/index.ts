@@ -59,24 +59,26 @@ export const GUIDANCE = `Use cua with method getCapabilities and params {} to in
 Initialize the object API once in persistent PTC. Reuse its variables in later calls; put temporary declarations inside { ... } blocks to avoid redeclaration errors. All object methods are async. Await getWindow before using the returned window object. getAXState returns text, not a structured state object.
 
 Object API signatures (options default to { emit: true }):
-cua.getCapabilities(options?) -> { platform, permissions, sessionLocked, methods, coordinateSpace, browser }
-cua.listApps(options?) -> Array<{ id, displayName, isRunning, pid }>
-cua.getState(options?) -> { apps, browsers: [] }
-cua.getApp(selector: string) -> App
-app.activate() -> { dispatched: true, verified: false }
-app.getWindows(options?) -> Array<{ windowId, pid, appName, title, bounds, isOnScreen, onCurrentSpace }>
-app.getWindow(windowId: number) -> Window
-app.typeText(text: string), app.paste(text: string), app.pressKey(chord: string) -> action result
+
+- cua.getCapabilities(options?) -> { platform, permissions, sessionLocked, methods, coordinateSpace, browser }
+- cua.listApps(options?) -> Array<{ id, displayName, isRunning, pid }>
+- cua.getState(options?) -> { apps, browsers: [] }
+- cua.getApp(selector: string) -> App
+- app.activate() -> { dispatched: true, verified: false }
+- app.getWindows(options?) -> Array<{ windowId, pid, appName, title, bounds, isOnScreen, onCurrentSpace }>
+- app.getWindow(windowId: number) -> Window
+- app.typeText(text: string), app.paste(text: string), app.pressKey(chord: string) -> action result
 
 App and Window methods:
-getAXState(options?: { emit?: boolean, disableDiffing?: boolean }) -> string
-getScreenshot(options?: { emit?: boolean }) -> Uint8Array
-getAXStateAndScreenshot(options?) -> { state: string, screenshot: Uint8Array }
-click(target: number | [x, y], options?: { mouseButton?: "left" | "right", clickCount?: 1 | 2 }) -> action result
-setValue(elementIndex: number, value: string) -> action result
-performSecondaryAction(elementIndex: number, action: string) -> action result
-scroll({ x, y, deltaLinesX, deltaLinesY }) -> action result
-drag(from: [x, y], to: [x, y]) -> action result
+
+- getAXState(options?: { emit?: boolean, disableDiffing?: boolean }) -> string
+- getScreenshot(options?: { emit?: boolean }) -> Uint8Array
+- getAXStateAndScreenshot(options?) -> { state: string, screenshot: Uint8Array }
+- click(target: number | [x, y], options?: { mouseButton?: "left" | "right", clickCount?: 1 | 2 }) -> action result
+- setValue(elementIndex: number, value: string) -> action result
+- performSecondaryAction(elementIndex: number, action: string) -> action result
+- scroll({ x, y, deltaLinesX, deltaLinesY }) -> action result
+- drag(from: [x, y], to: [x, y]) -> action result
 
 Raw operation tools use { method, params }, including params: {} for parameterless methods. getApp selects without activating the app. Prefer background actions so the user can keep working elsewhere; native apps may still change focus in response to input. Invoke performSecondaryAction with an action advertised in the AX tree, such as raise, only when that visible action is needed. Raising a window explicitly activates its app. When a hidden window or a window on another Space cannot be observed, app.activate() is an explicit foreground recovery that may switch the focused app and Space; read fresh AX state afterward.
 
