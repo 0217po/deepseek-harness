@@ -1,0 +1,67 @@
+{
+  "repository": "https://github.com/trycua/cua",
+  "tag": "cua-driver-rs-v0.28.0",
+  "commit": "1b50c02e2d34734f64d2d22f54eb76cc97b4a663",
+  "license": "MIT",
+  "copiedFiles": [
+    {
+      "local": "src/ax/bindings.rs",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/bindings.rs",
+      "sha256": "36162047e0ad765180754d372891b6aed920739c72f17e6cf2bffb443e05ad65"
+    },
+    {
+      "local": "src/ax/tree.rs",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/tree.rs",
+      "sha256": "cead5dd54cee6da4130510ee6fc3a150df4c94cb02441a0319258968dde11ed5"
+    },
+    {
+      "local": "src/ax/window_scope.rs",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/window_scope.rs",
+      "sha256": "e01d85f0218cb8bc38004489bb444479dd4b10d29bd5068e1a94896ebe5f3f39"
+    },
+    {
+      "local": "src/ax/enablement.rs",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/enablement.rs",
+      "sha256": "822270b17167001bd9ee5e8b3c2d9018f9cf03b3b8e6bf1df15dc7aa3a790fc6"
+    },
+    {
+      "local": "src/input/skylight.rs",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/skylight.rs",
+      "sha256": "17d7fecf653261aaa35888c117f6ca2669a237f9a8ed150c3bda954f34ba1336"
+    },
+    {
+      "local": "src/input/keyboard.rs",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/keyboard.rs",
+      "sha256": "77de9f1600ade692c9c923c8bfb24e7cb59581a345188f113cb93705138ab493"
+    },
+    {
+      "local": "src/input/mouse.rs",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/mouse.rs",
+      "sha256": "271fff5e387db4808fe7af0d38ddb6c8b27e96f1dfe2a1c524e5dc1786707aee"
+    },
+    {
+      "local": "src/input/ax_actions.rs",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/ax_actions.rs",
+      "sha256": "cb1468e136d90da49b0400b329c8981c6442deebc95138eb23a0f6226145daa7"
+    },
+    {
+      "local": "src/windows.rs",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/windows.rs",
+      "sha256": "f2c5b3b22cfd5a8be3f987f1660fa11852cc3eac47ffcd800ad5da34b9af8f9d"
+    }
+  ],
+  "adaptedFiles": [
+    {
+      "local": "src/apps.rs",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/apps/mod.rs",
+      "changes": "Keep regular running applications and bundle ID lookup only; camelCase output and omit absent bundle identifiers."
+    }
+  ],
+  "localFiles": [
+    "src/main.rs",
+    "src/permissions/panel.rs",
+    "src/permissions/mod.rs",
+    "src/ax/mod.rs",
+    "src/input/mod.rs"
+  ]
+}
