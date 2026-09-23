@@ -70,7 +70,10 @@ kind: "package-reference"
 
 ```yaml
 - id: ptc-runtime
-  name: '@deepseek-ai/dsh-ptc-runtime-node/persistent'
+  disabled: true
+- insert:
+    - id: ptc-runtime-persistent
+      name: '@deepseek-ai/dsh-ptc-runtime-node/persistent'
 ```
 
 保存补丁，在启用 PTC 工具呈现的组合中使用 `dsh headless --patch <path>` 传入路径。Node 应用仍通过具名 `dsh` 配置档启动。打包为单个可执行文件的宿主需要将 `nodeExecutable` 指向 Node，将 `bootstrapPath` 指向本包构建的 `persistent-process.js`。

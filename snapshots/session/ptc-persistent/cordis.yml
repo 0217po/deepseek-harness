@@ -36,4 +36,8 @@
       Verify your work by running the code or tests. Keep answers brief and factual.
 
 - id: ptc-runtime
-  name: '@deepseek-ai/dsh-ptc-runtime-node/persistent'
+  disabled: true
+
+- insert:
+    - id: ptc-runtime-persistent
+      name: '@deepseek-ai/dsh-ptc-runtime-node/persistent'

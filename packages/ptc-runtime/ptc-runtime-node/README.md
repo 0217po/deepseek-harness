@@ -70,7 +70,10 @@ The optional `@deepseek-ai/dsh-ptc-runtime-node/persistent` entry replaces the d
 
 ```yaml
 - id: ptc-runtime
-  name: '@deepseek-ai/dsh-ptc-runtime-node/persistent'
+  disabled: true
+- insert:
+    - id: ptc-runtime-persistent
+      name: '@deepseek-ai/dsh-ptc-runtime-node/persistent'
 ```
 
 Save the patch and pass its path to `dsh headless --patch <path>` in a composition with PTC tool presentation. Node applications still launch through a named `dsh` profile. Packaged single-executable hosts require `nodeExecutable` pointing to Node and `bootstrapPath` pointing to this package's built `persistent-process.js`.

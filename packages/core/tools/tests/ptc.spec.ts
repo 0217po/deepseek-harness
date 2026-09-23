@@ -2372,3 +2372,31 @@ describe('per-program execution controls', () => {
     } finally { answer.resolve('cancelled'); await result; await ctx.fiber.dispose() }
   })
 })
+
+describe('REPL state ownership', () => {
+  it('uses the same Agent owner across calls and awaits one release on its disposal', async () => {
+    const { ctx, runtime } = await setup()
+    const agentContext = new Context()
+    const { agent } = fakeAgent()
+    Object.defineProperty(agent, 'ctx', { value: agentContext })
+    const format = vi.spyOn(runtime, 'programFormat', 'get').mockReturnValue('repl')
+    const release = vi.spyOn(runtime, 'release')
+    try {
+      expect(ctx.tools.schemas().find(tool => tool.name === 'run_code')?.description).toContain('in-memory REPL')
+      expect((await runCode(ctx, 'let value = 1', { agent })).isError).toBe(false)
+      expect((await runCode(ctx, 'value', { agent })).isError).toBe(false)
+      expect(runtime.lastRequest?.stateOwner).toBe(agent)
+      await agentContext.fiber.dispose()
+      expect(release).toHaveBeenCalledExactlyOnceWith(agent)
+      expect((await runCode(ctx, '1')).isError).toBe(false)
+      expect(runtime.lastRequest?.stateOwner).toBeUndefined()
+    } finally { format.mockRestore(); release.mockRestore(); await agentContext.fiber.dispose(); await ctx.fiber.dispose() }
+  })
+
+  it('rejects an unsupported language and REPL combination during schema assembly', async () => {
+    const { ctx, runtime } = await setup({ runtime: { language: 'python' } })
+    const format = vi.spyOn(runtime, 'programFormat', 'get').mockReturnValue('repl')
+    try { expect(() => ctx.tools.schemas()).toThrow('REPL presentation requires TypeScript') }
+    finally { format.mockRestore(); await ctx.fiber.dispose() }
+  })
+})

@@ -6,7 +6,7 @@ import { JsonChannel } from './channel.ts'
 import { captureStreamWrites, LogBuffer, makeConsoleShim, makeBindingErrorClasses, makeNamespaces, prepareCompletion, prepareException, wireReplies } from './bootstrap.ts'
 import type { BindingErrorConstructor, PendingCall, PatchableStream } from './bootstrap.ts'
 import type { DoneMessage, ProgramBootData, ProgramToHost, ReplyMessage } from './protocol.ts'
-import { STARTUP_ENVIRONMENT_NAMES } from './environment.ts'
+import { clearProgramEnvironment } from './environment.ts'
 
 /** Process state owned by the REPL child; tests supply instance-local streams and environment. */
 export interface PersistentProcess {
@@ -32,10 +32,7 @@ interface Evaluation {
  */
 export async function runPersistentMain(stream: Duplex, maxMessageBytes: number, processState: PersistentProcess): Promise<void> {
   if (!Number.isSafeInteger(maxMessageBytes) || maxMessageBytes <= 0 || maxMessageBytes > 0xffff_ffff) throw new Error('invalid control message limit')
-  for (const key of Object.keys(processState.env)) {
-    if (!STARTUP_ENVIRONMENT_NAMES.has(key.toUpperCase())) Reflect.deleteProperty(processState.env, key)
-  }
-  processState.env = Object.create(null) as NodeJS.ProcessEnv
+  clearProgramEnvironment(processState)
   const context = new AsyncLocalStorage<Evaluation>()
   const closed = Promise.withResolvers<void>()
   const pending = new Map<number, PendingCall>()

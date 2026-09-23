@@ -6,15 +6,14 @@ import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcRunRequest, PtcRunSpec, PtcRunResult, PtcRunFailure, PtcBindingNamespace, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import { MAX_TIMER_DELAY_MS, clampTimeout } from '@deepseek-ai/dsh-timeout'
 import type { SubprocessHandle } from '@deepseek-ai/dsh-subprocess'
-import { snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
 import { NodePtcRuntime, type Config } from './index.ts'
-import { validateBindings } from './bindings.ts'
+import { replyToBinding, validateBindings } from './bindings.ts'
 import { JsonChannel } from './channel.ts'
 import { bootstrapArgs } from './launch.ts'
 import { STARTUP_ENVIRONMENT_NAMES } from './environment.ts'
-import { decodePtcJsonWire, encodePtcJsonWire } from './json-wire.ts'
+import { decodePtcJsonWire } from './json-wire.ts'
 import { OutputLedger } from './output-ledger.ts'
-import { drainOutput } from './output-stream.ts'
+import { terminateProcess } from './output-stream.ts'
 import type { ProgramBootData } from './protocol.ts'
 
 export type { Config } from './index.ts'
@@ -109,14 +108,7 @@ class Kernel {
       await this.starting?.catch(() => {})
       const handle = this.handle
       if (!handle) return
-      try {
-        handle.terminate()
-        await Promise.all([handle.done.catch(() => {}), handle.waitForExit()])
-        const drained = await Promise.all([
-          drainOutput(handle.stdout, this.config.graceMs), drainOutput(handle.stderr, this.config.graceMs),
-        ])
-        if (drained.includes(false)) throw new Error('persistent Node process output did not close cleanly')
-      } finally { handle.stdout?.destroy(); handle.stderr?.destroy() }
+      if (!await terminateProcess(handle, this.config.graceMs)) throw new Error('persistent Node process output did not close cleanly')
     })()
     return this.stopped
   }
@@ -197,15 +189,10 @@ class Kernel {
         const fn = functions && Object.hasOwn(functions, payload.name) ? functions[payload.name] : undefined
         const id = payload.id
         void (async () => {
-          let reply: unknown
-          try {
-            if (!fn) throw new Error('binding is unavailable in this evaluation; reacquire the current tool')
-            const value = snapshotJsonValue(await fn(args))
-            if (value === undefined) throw new Error('binding resolution must be lossless JSON')
-            reply = { type: 'reply', id, ok: true, value: encodePtcJsonWire(value) }
-          } catch (error: unknown) {
-            reply = { type: 'reply', id, ok: false, message: messageOf(error) }
-          } finally { evaluation.pending -= 1; evaluation.pendingBytes -= bytes }
+          const reply = await replyToBinding(id, fn, args).finally(() => {
+            evaluation.pending -= 1
+            evaluation.pendingBytes -= bytes
+          })
           if (this.active === evaluation) await this.channel?.send(reply)
         })().catch((error: unknown) => this.fail('protocol', messageOf(error)))
         return

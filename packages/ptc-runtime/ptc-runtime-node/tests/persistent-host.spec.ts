@@ -4,7 +4,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
 import Subprocess from '@deepseek-ai/dsh-subprocess-local'
-import type { PtcRunRequest } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcBindingFunction, PtcRunRequest } from '@deepseek-ai/dsh-ptc-runtime'
 import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
 import PersistentRuntime, { type Config } from '../src/persistent.ts'
 import { JsonChannel } from '../src/channel.ts'
@@ -138,7 +138,8 @@ describe('persistent PTC host protocol', () => {
   })
 
   it('returns current binding successes, exceptions and unavailable bindings', async () => {
-    for (const functions of [{ test: async () => 42 }, { test: async () => { throw new Error('denied') } }, {}]) {
+    const cases: Record<string, PtcBindingFunction>[] = [{ test: async () => 42 }, { test: async () => { throw new Error('denied') } }, {}]
+    for (const functions of cases) {
       const h = await setup()
       h.receive((raw) => {
         const message = raw as Record<string, unknown>

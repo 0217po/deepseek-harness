@@ -53,4 +53,8 @@
               - id: deepseek-v4-pro
 
 - id: ptc-runtime
-  name: '@deepseek-ai/dsh-ptc-runtime-node/persistent'
+  disabled: true
+
+- insert:
+    - id: ptc-runtime-persistent
+      name: '@deepseek-ai/dsh-ptc-runtime-node/persistent'

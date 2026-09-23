@@ -216,6 +216,15 @@ describe('renderToolsSdk', () => {
     expect(renderToolsSdk([constrained])).toContain('tools.bash({ command: \'pwd\' })')
   })
 
+  it('presents REPL statements and expression output without a top-level return example', () => {
+    const text = renderToolsSdk([bash], 'repl')
+    expect(text).toContain('TypeScript REPL statements')
+    expect(text).toContain('final JSON expression')
+    expect(text).toContain('await tools.bash')
+    expect(text).not.toContain('return await tools.bash')
+    expect(text).not.toContain('body of an async TypeScript function')
+  })
+
   it('is deterministic: same tool set, byte-identical text regardless of input order', () => {
     expect(renderToolsSdk([bash, exotic])).toBe(renderToolsSdk([exotic, bash]))
     // Equal names sort stably (the comparator's equal arm).
