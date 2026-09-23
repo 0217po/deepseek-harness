@@ -19,7 +19,10 @@ fn lock_state(
     console: Option<bool>,
     logged_in: Option<bool>,
 ) -> Option<bool> {
-    locked.or_else(|| (console == Some(true) && logged_in == Some(true)).then_some(false))
+    if locked == Some(true) {
+        return Some(true);
+    }
+    (console == Some(true) && logged_in == Some(true)).then_some(false)
 }
 
 /// The screen-lock flag is absent in an unlocked, logged-in console session.
@@ -66,5 +69,7 @@ mod tests {
         assert_eq!(lock_state(None, Some(true), Some(true)), Some(false));
         assert_eq!(lock_state(None, Some(false), Some(true)), None);
         assert_eq!(lock_state(None, Some(true), None), None);
+        assert_eq!(lock_state(Some(false), Some(false), Some(true)), None);
+        assert_eq!(lock_state(Some(false), Some(true), None), None);
     }
 }
