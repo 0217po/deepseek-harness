@@ -34,7 +34,7 @@ export DSH_CUA_HELPER="$cua_native_root/target/release/dsh-cua-native"
 pnpm dsh headless --patch packages/experimental/cua/examples/macos.cordis.yml --dump-config
 ```
 
-配置输出命令不发起模型请求。执行真实任务时，将 `--dump-config` 替换为任务提示，并配置该 profile 的模型凭据。配置挂载 computer-use 注册表和本 provider；使用前需移除已有的竞争 provider。负责执行的宿主或辅助进程需要辅助功能权限来读取 AX 和输入，需要屏幕录制权限来截图。`getCapabilities` 只查询权限，不弹出系统授权窗口。目标应用需提前启动，可按名称、bundle ID、应用绝对路径或 PID 选择。
+配置输出命令不发起模型请求。执行真实任务时，将 `--dump-config` 替换为任务提示，并配置该 profile 的模型凭据。配置挂载 computer-use 注册表和本 provider；使用前需移除已有的竞争 provider。负责执行的宿主或辅助进程需要辅助功能权限来读取 AX 和输入，需要屏幕录制权限来截图。`getCapabilities` 只查询权限，不弹出系统授权窗口。目标应用需提前启动，可按名称、bundle ID、应用绝对路径或 PID 选择。`getApp` 激活选中的应用，再读取初始状态。
 
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |

@@ -397,6 +397,7 @@ impl Driver {
                 "Selector matches multiple running apps; select an exact PID from listApps",
             )?;
             let app = &matches[0];
+            apps::activate(app.pid)?;
             let handle = self.remember_app(app.pid, process_started(app.pid)?);
             let mut result = json!({"pid":app.pid,"appHandle":handle,"name":app.name});
             if let Some(bundle_id) = &app.bundle_id {

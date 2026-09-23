@@ -51,3 +51,19 @@ pub fn path_for_pid(pid: i32) -> Option<String> {
             .map(|value| value.to_string())
     }
 }
+
+pub fn activate(pid: i32) -> anyhow::Result<()> {
+    use objc2_app_kit::{NSApplicationActivationOptions, NSRunningApplication};
+    unsafe {
+        let app = NSRunningApplication::runningApplicationWithProcessIdentifier(pid)
+            .ok_or_else(|| anyhow::anyhow!("Application exited before activation"))?;
+        app.unhide();
+        anyhow::ensure!(
+            app.activateWithOptions(
+                NSApplicationActivationOptions::NSApplicationActivateIgnoringOtherApps
+            ),
+            "macOS refused application activation"
+        );
+    }
+    Ok(())
+}

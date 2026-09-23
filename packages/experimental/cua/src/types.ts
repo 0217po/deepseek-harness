@@ -163,7 +163,7 @@ export interface CuaApi {
    */
   getState(options?: CuaObservationOptions): Promise<{ apps: CuaAppInfo[]; browsers: [] }>
   /**
-   * Select an existing app and emit initial AX state.
+   * Activate an existing app and emit initial AX state.
    * @param selector - exact name, bundle ID, absolute application path or PID string.
    * @returns a handle tied to this process lifetime.
    */

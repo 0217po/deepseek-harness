@@ -34,7 +34,7 @@ export DSH_CUA_HELPER="$cua_native_root/target/release/dsh-cua-native"
 pnpm dsh headless --patch packages/experimental/cua/examples/macos.cordis.yml --dump-config
 ```
 
-The dump command checks profile composition without a model request. For a real task, replace `--dump-config` with a prompt and configure the profile’s model credentials. The overlay mounts the computer-use registry and this provider; remove an existing competing provider before using it. The responsible host/helper needs Accessibility permission for AX/input and Screen Recording permission for capture. `getCapabilities` reports permission state without opening a system dialog. Start the target application yourself. Select it by name, bundle ID, absolute application path, or PID.
+The dump command checks profile composition without a model request. For a real task, replace `--dump-config` with a prompt and configure the profile’s model credentials. The overlay mounts the computer-use registry and this provider; remove an existing competing provider before using it. The responsible host/helper needs Accessibility permission for AX/input and Screen Recording permission for capture. `getCapabilities` reports permission state without opening a system dialog. Start the target application yourself. Select it by name, bundle ID, absolute application path, or PID. `getApp` activates the selected application before reading its initial state.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
