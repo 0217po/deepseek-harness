@@ -2248,7 +2248,7 @@ export interface LaunchConfig {
 }
 ```
 
-来源： [`packages/ptc-runtime/ptc-runtime-node/src/index.ts:26`](../packages/ptc-runtime/ptc-runtime-node/src/index.ts)
+来源： [`packages/ptc-runtime/ptc-runtime-node/src/index.ts:25`](../packages/ptc-runtime/ptc-runtime-node/src/index.ts)
 
 <a id="deepseek-aidsh-pwsh-local"></a>
 
