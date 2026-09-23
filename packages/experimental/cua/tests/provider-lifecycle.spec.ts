@@ -7,7 +7,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { LlmAdapter, ToolCallId, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import Subprocess from '@deepseek-ai/dsh-subprocess'
 import { expect, it, onTestFinished, vi } from 'vitest'
@@ -31,7 +31,7 @@ const config = {
   graceMs: 10, maxElements: 64, maxDepth: 8, dragDurationMs: 200, dragSteps: 10,
 } satisfies NativeProvider.Config
 
-async function setup() {
+async function setup(model?: { provider: string; model: string }) {
   native.request.mockReset().mockResolvedValue([])
   native.dispose.mockReset()
   native.instances.length = 0
@@ -42,7 +42,7 @@ async function setup() {
   await ctx.plugin(Subprocess, [])
   const provider = await ctx.plugin(NativeProvider, config)
   await mountAgentLoopTestHarness(ctx)
-  const handle = await ctx.agents.create({ sessionId: SessionId('native-lifecycle') })
+  const handle = await ctx.agents.create({ sessionId: SessionId('native-lifecycle'), ...model ? { agentOptions: model } : {} })
   let index = 0
   const execute = (method = 'listApps', params: Record<string, unknown> = {}, signal = new AbortController().signal) => ctx.tools.execute({
     agent: handle.agent, signal, callId: ToolCallId(`lifecycle-${++index}`), name: 'cua', arguments: { method, params },
@@ -221,7 +221,14 @@ it('supplies configured resource bounds and clears registrations on unload', asy
 })
 
 it('preserves screenshot coordinates and image attachments on every host', async () => {
-  const f = await setup()
+  class ImageAdapter extends LlmAdapter {
+    override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+      return Promise.resolve({ provider, id: model, name: model, inputModalities: ['text', 'image'] })
+    }
+    stream(): AsyncIterable<StreamChunk> { throw new Error('This direct tool test does not request model generation') }
+  }
+  const f = await setup({ provider: 'image-fixture', model: 'vision' })
+  f.ctx.llm.registerAdapter(['image-fixture'], new ImageAdapter())
   const root = await mkdtemp(join(tmpdir(), 'dsh-cua-image-'))
   onTestFinished(async () => { await f.ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
   await f.ctx.plugin(LocalAttachmentStore, { dshHome: root })
