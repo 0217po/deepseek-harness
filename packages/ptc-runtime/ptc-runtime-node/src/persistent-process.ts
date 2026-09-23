@@ -98,7 +98,9 @@ export async function runPersistentMain(stream: Duplex, maxMessageBytes: number,
             Object.defineProperty(repl.context, namespace.errorClass.name, { configurable: true, value: errors.get(namespace.global) })
           }
         }
-        repl.eval(`${data.code}\n`, repl.context, 'ptc-repl', (error: Error | null, value: unknown) => {
+        // Node's REPL treats a leading brace as an object expression before transforming await.
+        const program = data.code.trimStart().startsWith('{') ? `;${data.code}` : data.code
+        repl.eval(`${program}\n`, repl.context, 'ptc-repl', (error: Error | null, value: unknown) => {
           evaluation.finish(error ? prepareException(error, logs.remainingOutputBytes(), data.maxOutputBytes)
             : prepareCompletion(value, logs.remainingOutputBytes(), data.maxOutputBytes))
         })

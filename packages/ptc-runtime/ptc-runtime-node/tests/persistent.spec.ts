@@ -45,6 +45,15 @@ describe('persistent Node REPL', () => {
     expect(second).toHaveBeenCalledTimes(1)
   })
 
+  it('runs top-level await blocks with reusable local declarations and keeps outer state', async () => {
+    const { run } = await setup()
+    await run('let total = 0;')
+    const code = '{ const amount = await tools.value({}); total += amount; console.log(amount); }'
+    expect(await run(code, { bindings: bindings(async () => 2) })).toEqual({ logs: ['2'] })
+    expect(await run(code, { bindings: bindings(async () => 3) })).toEqual({ logs: ['3'] })
+    expect(await run('({ total, local: typeof amount })')).toEqual({ logs: [], value: { total: 5, local: 'undefined' } })
+  })
+
   it('isolates owners and uses fresh state when no owner is supplied', async () => {
     const { run, runtime, cwd } = await setup()
     const temporary = (program: string) => runtime.run(runtime.resolve({ program, bindings: [], cwd }))
