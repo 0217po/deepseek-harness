@@ -62,6 +62,7 @@ export const ScreenshotResult = z.object({
 /** Permissions are reported without opening system permission dialogs. */
 export const CapabilitiesResult = z.object({
   platform: z.string(), permissions: z.object({ accessibility: z.boolean(), screenRecording: z.boolean() }),
+  sessionLocked: z.boolean().nullable(),
   methods: z.array(z.string()), coordinateSpace: z.literal('window-points'), browser: z.literal(false),
 })
 /** An action has reached native dispatch; application state was not verified. */

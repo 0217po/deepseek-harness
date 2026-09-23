@@ -12,6 +12,7 @@
 //! - Tree is walked depth-first; element_index is assigned in DFS order.
 
 use super::bindings::*;
+use super::visited::VisitedElements;
 use super::window_scope::{decide_window_scope, TopLevelCandidate, WindowScope};
 use core_foundation::base::{CFEqual, CFRelease, CFRetain, CFTypeRef};
 
@@ -192,6 +193,7 @@ pub fn walk_tree_bounded(
     let mut index_counter = 0usize;
     // Shared visited-node counter passed into walk_element to enforce the cap.
     let mut visited_count = 0usize;
+    let mut identities = VisitedElements::default();
     // Set to true only when walk_element actually stops early due to the cap —
     // avoids a false-positive when the tree naturally ends on exactly the cap.
     let mut truncated = false;
@@ -210,6 +212,7 @@ pub fn walk_tree_bounded(
             };
         }
         set_messaging_timeout(app_elem);
+        identities.insert(app_elem);
 
         // Chromium/Electron apps (Arc, VS Code, Electron shells) ship their
         // web-content AX tree OFF and only build it once an assistive client
@@ -298,6 +301,7 @@ pub fn walk_tree_bounded(
                 &mut lines,
                 &mut index_counter,
                 &mut visited_count,
+                &mut identities,
                 &mut truncated,
                 max_elements,
                 max_depth,
@@ -347,6 +351,7 @@ unsafe fn walk_element(
     lines: &mut Vec<(usize, String)>,
     counter: &mut usize,
     visited_count: &mut usize,
+    identities: &mut VisitedElements,
     truncated: &mut bool,
     max_elements: usize,
     max_depth: usize,
@@ -358,6 +363,9 @@ unsafe fn walk_element(
     // Set the truncated flag only when we actually stop early.
     if *visited_count >= max_elements {
         *truncated = true;
+        return;
+    }
+    if !identities.insert(element) {
         return;
     }
     *visited_count += 1;
@@ -386,6 +394,7 @@ unsafe fn walk_element(
                 lines,
                 counter,
                 visited_count,
+                identities,
                 truncated,
                 max_elements,
                 max_depth,
@@ -454,6 +463,7 @@ unsafe fn walk_element(
                 lines,
                 counter,
                 visited_count,
+                identities,
                 truncated,
                 max_elements,
                 max_depth,
@@ -577,6 +587,7 @@ unsafe fn walk_element(
             lines,
             counter,
             visited_count,
+            identities,
             truncated,
             max_elements,
             max_depth,

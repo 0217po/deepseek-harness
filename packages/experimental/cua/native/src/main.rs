@@ -62,6 +62,13 @@ fn require(condition: bool, code: &'static str, message: &str) -> Result<()> {
 fn invalid(message: impl Into<String>) -> anyhow::Error {
     failure("INVALID_ARGUMENT", message)
 }
+fn require_unlocked_session(locked: Option<bool>) -> Result<()> {
+    match locked {
+        Some(false) => Ok(()),
+        Some(true) => Err(failure("SESSION_LOCKED", "macOS is locked. Ask the user to unlock it, then read fresh state before resuming; do not retry UI actions while locked")),
+        None => Err(failure("SESSION_UNAVAILABLE", "No unlocked console session could be verified; restore the macOS desktop session before using CUA")),
+    }
+}
 fn error_reply(error: anyhow::Error) -> Value {
     json!({"code":error.downcast_ref::<DriverError>().map_or("NATIVE_ERROR", |error| error.code),"message":error.to_string()})
 }
@@ -226,6 +233,13 @@ fn png_dimensions(bytes: &[u8]) -> Result<(u32, u32)> {
 }
 
 impl Driver {
+    fn observe_session(&mut self) -> Option<bool> {
+        let locked = permissions::session_locked();
+        if locked != Some(false) {
+            self.snapshots.clear();
+        }
+        locked
+    }
     fn identifier(&mut self, kind: &str) -> String {
         self.sequence += 1;
         format!("{}:{kind}:{}", self.namespace, self.sequence)
@@ -369,14 +383,16 @@ impl Driver {
             "INVALID_ARGUMENT",
             "Unknown operation parameter",
         )?;
+        let session_locked = self.observe_session();
         if method == "getCapabilities" {
             return Ok(
-                json!({"platform":"macos","permissions":{"accessibility":permissions::accessibility(),"screenRecording":permissions::screen_recording()},"methods":METHODS,"coordinateSpace":"window-points","browser":false}),
+                json!({"platform":"macos","permissions":{"accessibility":permissions::accessibility(),"screenRecording":permissions::screen_recording()},"sessionLocked":session_locked,"methods":METHODS,"coordinateSpace":"window-points","browser":false}),
             );
         }
         if method == "listApps" {
             return Ok(json!(apps::list_apps()));
         }
+        require_unlocked_session(session_locked)?;
         if method == "getApp" {
             let selector = text(params, "selector")?;
             let matches: Vec<_> = apps::list_apps()
@@ -482,6 +498,7 @@ impl Driver {
                         .collect(),
                 };
                 self.validate_started(&handle, process_started(pid)?)?;
+                require_unlocked_session(self.observe_session())?;
                 if let Some(scope) = &tree.window_scope {
                     require(
                         scope.is_matched(),
@@ -681,6 +698,7 @@ impl Driver {
                 let (width, height) = png_dimensions(&bytes)?;
                 self.target(&handle)?;
                 let after = owned_window(pid, id)?;
+                require_unlocked_session(self.observe_session())?;
                 require(
                     window.bounds.x == after.bounds.x
                         && window.bounds.y == after.bounds.y

@@ -31,6 +31,8 @@ export interface CuaAxOptions extends CuaObservationOptions { disableDiffing?: b
 export interface CuaCapabilities {
   platform: string
   permissions: { accessibility: boolean; screenRecording: boolean }
+  /** Null means the helper could not verify a usable console session. */
+  sessionLocked: boolean | null
   methods: string[]
   coordinateSpace: 'window-points'
   browser: false

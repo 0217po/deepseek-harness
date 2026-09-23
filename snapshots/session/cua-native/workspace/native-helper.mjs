@@ -22,7 +22,7 @@ let value = ''
 function refuse(code, message) { throw Object.assign(new Error(message), { code }) }
 function call(method, params) {
   record('call', { method, params })
-  if (method === 'getCapabilities') return { platform: 'macos', permissions: { accessibility: true, screenRecording: true }, methods, coordinateSpace: 'window-points', browser: false }
+  if (method === 'getCapabilities') return { platform: 'macos', sessionLocked: false, permissions: { accessibility: true, screenRecording: true }, methods, coordinateSpace: 'window-points', browser: false }
   if (method === 'listApps') return [{ pid: app.pid, name: app.name, bundleId: app.bundleId }]
   if (method === 'getApp') {
     if (!['Fixture', 'test.fixture', '9'].includes(params.selector)) refuse('APP_NOT_FOUND', 'Select the running Fixture application')

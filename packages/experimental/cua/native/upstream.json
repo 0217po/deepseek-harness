@@ -10,11 +10,6 @@
       "sha256": "36162047e0ad765180754d372891b6aed920739c72f17e6cf2bffb443e05ad65"
     },
     {
-      "local": "src/ax/tree.rs",
-      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/tree.rs",
-      "sha256": "cead5dd54cee6da4130510ee6fc3a150df4c94cb02441a0319258968dde11ed5"
-    },
-    {
       "local": "src/ax/window_scope.rs",
       "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/window_scope.rs",
       "sha256": "e01d85f0218cb8bc38004489bb444479dd4b10d29bd5068e1a94896ebe5f3f39"
@@ -55,6 +50,11 @@
       "local": "src/apps.rs",
       "upstream": "libs/cua-driver/rust/crates/platform-macos/src/apps/mod.rs",
       "changes": "Keep regular running applications, bundle ID and application-path lookup; add activation, camelCase output and omit absent bundle identifiers."
+    },
+    {
+      "local": "src/ax/tree.rs",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/tree.rs",
+      "changes": "Retain and compare visited accessibility identities to skip cycles and duplicate proxy subtrees within an observation."
     }
   ],
   "localFiles": [
@@ -63,6 +63,7 @@
     "src/permissions/mod.rs",
     "src/ax/mod.rs",
     "src/input/mod.rs",
-    "src/element_input.rs"
+    "src/element_input.rs",
+    "src/ax/visited.rs"
   ]
 }
