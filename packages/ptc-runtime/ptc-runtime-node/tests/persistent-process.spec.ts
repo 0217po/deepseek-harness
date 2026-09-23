@@ -57,7 +57,11 @@ it('keeps an environment while capturing each evaluation and binding replies sep
 })
 
 it('contains directory failures and output overflow in the active evaluation', async () => {
-  const badDirectory = await setup(4096, () => { throw new Error('directory missing') })
+  const badDirectory = await setup(4096, () => {
+    const error = new Error('directory missing')
+    error.stack = 'Error: directory missing'
+    throw error
+  })
   expect(await badDirectory.run('1')).toMatchObject({ error: { kind: 'exception', message: expect.stringContaining('directory missing') } })
   const h = await setup()
   await h.run('console.log("x".repeat(100))', [], 20)
