@@ -46,11 +46,12 @@ describe('persistent Node REPL', () => {
   })
 
   it('isolates owners and uses fresh state when no owner is supplied', async () => {
-    const { run } = await setup()
+    const { run, runtime, cwd } = await setup()
+    const temporary = (program: string) => runtime.run(runtime.resolve({ program, bindings: [], cwd }))
     expect((await run('let privateValue = 7;')).error).toBeUndefined()
     expect((await run('typeof privateValue', { stateOwner: {} })).value).toBe('undefined')
-    expect((await run('let temporary = 8;', { stateOwner: undefined })).error).toBeUndefined()
-    expect((await run('typeof temporary', { stateOwner: undefined })).value).toBe('undefined')
+    expect((await temporary('let temporary = 8;')).error).toBeUndefined()
+    expect((await temporary('typeof temporary')).value).toBe('undefined')
     expect((await run('privateValue')).value).toBe(7)
   })
 
