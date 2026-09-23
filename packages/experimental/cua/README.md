@@ -29,7 +29,8 @@ Build on macOS with Rust and Xcode command-line tools, then mount the source ove
 
 ```sh
 cargo build --release --locked --manifest-path packages/experimental/cua/native/Cargo.toml
-export DSH_CUA_HELPER="$PWD/packages/experimental/cua/native/target/release/dsh-cua-native"
+cua_native_root="$PWD/packages/experimental/cua/native"
+export DSH_CUA_HELPER="$cua_native_root/target/release/dsh-cua-native"
 pnpm dsh headless --patch packages/experimental/cua/examples/macos.cordis.yml --dump-config
 ```
 

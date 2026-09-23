@@ -1,9 +1,12 @@
 /** Native helper replacement is synchronized with Agent and provider disposal. */
-import { resolve } from 'node:path'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { setImmediate } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
+import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import Subprocess from '@deepseek-ai/dsh-subprocess'
@@ -215,4 +218,22 @@ it('supplies configured resource bounds and clears registrations on unload', asy
   await f.provider.dispose()
   expect(f.ctx.tools.schemas()).toEqual([])
   expect(native.dispose).toHaveBeenCalledTimes(1)
+})
+
+it('preserves screenshot coordinates and image attachments on every host', async () => {
+  const f = await setup()
+  const root = await mkdtemp(join(tmpdir(), 'dsh-cua-image-'))
+  onTestFinished(async () => { await f.ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
+  await f.ctx.plugin(LocalAttachmentStore, { dshHome: root })
+  const data = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
+  const metadata = { pixelWidth: 1, pixelHeight: 1, bounds: { x: 2, y: 3, width: 1, height: 1 }, coordinateSpace: 'window-points', windowId: 7 }
+  native.request.mockResolvedValue({ ...metadata, mimeType: 'image/png', data })
+  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+  expect(result.isError).toBe(false)
+  expect(result.content).toContainEqual({ type: 'text', text: JSON.stringify(metadata) })
+  const image = result.content.find(block => block.type === 'image')
+  if (image?.type !== 'image') throw new Error('Screenshot attachment was not admitted')
+  const stored = await f.ctx.attachments.readImage(image.attachment)
+  expect(Buffer.from(stored.data).toString('base64')).toBe(data)
+  expect(result.value).toMatchObject({ structuredContent: { ...metadata, mimeType: 'image/png', data } })
 })

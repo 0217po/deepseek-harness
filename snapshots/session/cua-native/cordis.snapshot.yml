@@ -48,6 +48,6 @@
     - id: computer-use
       name: '@deepseek-ai/dsh-computer-use'
     - id: cua-native
-      name: '../../../packages/experimental/cua/src/index.ts'
+      name: '@deepseek-ai/dsh-experimental-cua'
       config:
         helperPath: !!js process.cwd() + '/native-helper.mjs'
