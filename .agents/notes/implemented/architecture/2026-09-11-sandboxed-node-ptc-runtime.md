@@ -34,6 +34,8 @@ Program completion, timeout, cancellation and protocol failure all close executi
 
 The default elapsed deadline is 120 seconds, capped at 600 seconds by default. Trusted service consumers may request `timeoutMs: null` to disable this timer; [workflow sandbox reuse](2026-09-13-workflow-ptc-sandbox-reuse.md) owns that caller-controlled lifetime. Omitted and numeric requests, including model-facing `run_code`, retain the numeric defaults and caps. An enabled deadline includes runtime setup and nested tool or approval waits. V8 old-generation memory, serialized outer output and control traffic have separate configured bounds. The heap limit excludes native allocations and descendant memory, and elapsed time is not a process-tree CPU budget.
 
+The separate [best-effort persistent provider](2026-09-23-best-effort-persistent-ptc.md) retains disposable memory under explicit full access; this decision continues to own the default confined provider.
+
 ## Alternatives considered
 
 **Keep the worker and add tool checks.** Tool checks cannot intercept direct Node imports or establish OS confinement. Keeping a worker inside a confined supervisor process preserves worker metering but adds another execution lifetime without supplying a process-tree CPU limit.

@@ -63,6 +63,24 @@ kind: "package-reference"
 
 直接文件系统、网络与子进程操作仍是 Node 操作，受所选 OS 沙箱约束。嵌套 Host 绑定通过控制通道调用；PTC 工具调用保留注册表的可见性、排序、日志和审批规则。运行程序不会改变 Session 的常设策略，也不会在拒绝后自动重放程序。
 
+<a id="persistent-repl"></a>
+### 持久 REPL
+
+可选入口 `@deepseek-ai/dsh-ptc-runtime-node/persistent` 替换默认提供方。它需要 `fs` 和 `subprocess`，使用同一组配置字段，不创建文件沙盒。通过配置档补丁显式启用；默认配置不会启用它：
+
+```yaml
+- id: ptc-runtime
+  name: '@deepseek-ai/dsh-ptc-runtime-node/persistent'
+```
+
+保存补丁，在启用 PTC 工具呈现的组合中使用 `dsh headless --patch <path>` 传入路径。Node 应用仍通过具名 `dsh` 配置档启动。打包为单个可执行文件的宿主需要将 `nodeExecutable` 指向 Node，将 `bootstrapPath` 指向本包构建的 `persistent-process.js`。
+
+每个存活 Agent 保留独立进程，跨 `run_code` 调用和轮次保留顶层变量、函数及导入模块。使用 `await import(...)`、`console.log(...)` 和末尾 JSON 表达式；不支持顶层 `return`。声明遵循 Node REPL 规则，包括重复声明已有词法名称时报错。保留的函数和工具方法引用调用当前执行的绑定。必须等待所有工具调用；已完成执行的回调不能在后续执行中调用工具。
+
+内存按尽力保留处理，不保存到磁盘。重启、Agent 销毁、提供方卸载、取消、超时、协议失败、输出超限或进程退出都会清除内存。缺失变量产生普通引用错误，模型需要重新获取句柄和创建声明。普通程序异常保留此前发生的修改。Session 仍记录程序、工具分派和可见结果；恢复 Session 或派生 Agent 时从空内存开始。直接 Node 访问没有沙盒约束；显式沙盒策略会被拒绝。
+
+服务消费者通过 `stateOwner` 对象复用环境，并在结束时等待 `release(owner)`。没有所有者的请求在临时进程中执行。同一所有者的并发调用会被拒绝；不同所有者可以并发。空闲环境没有过期计时器，进程保留到释放或失败为止。
+
 ### 截止时间与取消
 
 PTC 消费方按 [dsh-tools](../../core/tools/README.zh.md#ptc-mode) 的说明公开逐次超时与经审批的沙箱选择。运行时只读 `timeout` 描述符向该消费方报告有效默认值与上限。 其 `executionInstructions` 在面向模型的 schema 中说明全新 Node 状态、直接 Node API、空程序环境和文件策略。

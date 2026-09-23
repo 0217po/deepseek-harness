@@ -274,10 +274,10 @@ export class PtcWorkflowRun implements WorkflowRun {
     let result: WorkflowResult
     try {
       const outcome = await this.runtime.run(this.runtime.resolve({
-        program: PROGRAM,
+        program: this.runtime.programFormat === 'repl' ? `(async () => {\n${PROGRAM}\n})()` : PROGRAM,
         bindings: [{ global: 'workflowHost', functions: this.bindings() }],
         cwd: this.policy.workspaceRoot,
-        sandboxPolicy: this.policy,
+        ...this.runtime.sandboxMode === undefined ? {} : { sandboxPolicy: this.policy },
         timeoutMs: null,
         signal: this.controller.signal,
       }))

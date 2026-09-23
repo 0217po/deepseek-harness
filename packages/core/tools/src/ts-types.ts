@@ -268,7 +268,7 @@ function acceptsExampleString(schema: JsonSchemaNode | undefined, value: string)
 }
 
 /** Render the bash example only when its literal arguments satisfy the current parameter schema. */
-function renderBashExample(schemas: ToolSdkSchema[]): string {
+function renderBashExample(schemas: ToolSdkSchema[], format: 'function-body' | 'repl'): string {
   const bash = schemas.find(schema => schema.name === 'bash')
   if (bash === undefined) return ''
   const parameters = bash.parameters as JsonSchemaNode
@@ -279,7 +279,7 @@ function renderBashExample(schemas: ToolSdkSchema[]): string {
   const needsDescription = required.includes('description')
   if (needsDescription && !acceptsExampleString(parameters.properties?.description, 'Show current directory')) return ''
   const description = needsDescription ? ", description: 'Show current directory'" : ''
-  return ` When no separate \`bash\` schema is supplied, invoke a declared \`bash\` binding inside \`run_code\`:\n\n\`run_code({ code: "return await tools.bash({ command: 'pwd'${description} })", description: "Show current directory" })\``
+  return ` When no separate \`bash\` schema is supplied, invoke a declared \`bash\` binding inside \`run_code\`:\n\n\`run_code({ code: "${format === 'repl' ? '' : 'return '}await tools.bash({ command: 'pwd'${description} })", description: "Show current directory" })\``
 }
 
 /**
@@ -292,9 +292,10 @@ function renderBashExample(schemas: ToolSdkSchema[]): string {
  * by name, so the input never carries a duplicate.
  * @param schemas - the tool schemas to declare (the caller excludes
  *   `run_code` itself).
+ * @param format - Whether the program is an async body or REPL statements.
  * @returns the complete section text.
  */
-export function renderToolsSdk(schemas: ToolSdkSchema[]): string {
+export function renderToolsSdk(schemas: ToolSdkSchema[], format: 'function-body' | 'repl' = 'function-body'): string {
   const sorted = [...schemas].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
   const argsMembers: string[] = []
   const outputMembers: string[] = []
@@ -313,5 +314,11 @@ export function renderToolsSdk(schemas: ToolSdkSchema[]): string {
     ['declare const tools: {', '  [K in ToolName]: (args: ToolArgsMap[K]) => Promise<ToolOutputMap[K]>;', '}'].join('\n'),
   ].join('\n\n')
   const jsonValue = 'type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }'
-  return `${SDK_INSTRUCTIONS}${renderBashExample(sorted)}\n\n${SDK_PROGRAM_INSTRUCTIONS}\n\n\`\`\`ts\n${jsonValue}\n\n${declaration}\n\`\`\``
+  const instructions = format === 'repl'
+    ? '## Writing code for run_code\n\n`run_code` takes `code`, TypeScript REPL statements with erasable types and top-level `await`, and `description`, a short summary. Use `await import(...)` for modules. The declarations below describe program-only SDK bindings.'
+    : SDK_INSTRUCTIONS
+  const programInstructions = format === 'repl'
+    ? SDK_PROGRAM_INSTRUCTIONS.replace('Emit results with `return` and/or `console.log(...)`. Only what you print or return is program output.', 'Emit results with `console.log(...)` or a final JSON expression. Top-level `return` is not supported.')
+    : SDK_PROGRAM_INSTRUCTIONS
+  return `${instructions}${renderBashExample(sorted, format)}\n\n${programInstructions}\n\n\`\`\`ts\n${jsonValue}\n\n${declaration}\n\`\`\``
 }

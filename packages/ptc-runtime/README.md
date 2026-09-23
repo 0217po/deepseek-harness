@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The `ptc-runtime/` group lets a model write one program that calls host-provided functions as ordinary async calls, then returns only the program's printed output and return value. Choose the TypeScript backend for execution in a fresh Node process under the configured sandbox policy, or the experimental Python backend when a CPython process is required. Each run starts without state from earlier programs. Failures are returned as results so callers can diagnose them or provide them to the model.
+The `ptc-runtime/` group executes model programs against host-provided async functions. The default Node backend starts a fresh process under the configured sandbox policy. Its optional persistent entry keeps a separate unsandboxed REPL for each explicit state owner; memory ends with the process or owner. The experimental Python backend uses a fresh CPython process. Failures return as results for callers to diagnose or present to the model.
 
 ## Table of Contents
 

@@ -18,11 +18,18 @@ Source: [`packages/ptc-runtime/ptc-runtime/src/types.ts`](../../packages/ptc-run
 interface PtcRunRequest {
   /**
    * The program source, in the runtime's {@link ../index.ts | language}. It
-   * runs as the body of an async function: top-level `await` and `return`
-   * are available, and the completion value becomes
+   * follows the provider's programFormat: an async function body supports
+   * top-level `await` and `return`; a REPL supports top-level declarations,
+   * `await`, and a final expression. The completion value becomes
    * {@link PtcRunResult.value}.
    */
   program: string
+  /**
+   * Object-identity owner for optional in-memory state. Omission requests a fresh
+   * environment. Consumers must await runtime.release(owner) when the owner ends.
+   * Stateless providers ignore this field; retained state is never durable.
+   */
+  stateOwner?: object
   /** Host functions exposed to the program, one global object per namespace. */
   bindings: PtcBindingNamespace[]
   /** Working directory in the mounted filesystem and subprocess execution world. */
@@ -77,7 +84,7 @@ interface PtcRunResult {
   /** Applied file policy and observed denial, when the provider enforces file policy. */
   sandbox?: PtcRunSandbox
   /**
-   * The program's completion value (its top-level `return`), when it ran to
+   * The program's completion value (a return or final REPL expression), when it ran to
    * completion and the value crossed the runtime's lossless-JSON boundary.
    * Invalid or over-limit completions fail the run instead of substituting a
    * rendered string; a failed or value-less run leaves this absent.
@@ -93,6 +100,8 @@ interface PtcRunResult {
   error?: PtcRunFailure
 }
 ```
+
+`programFormat` distinguishes async function bodies from REPL statements. `stateOwner` is an in-process object identity for optional retained memory; distinct objects remain isolated. Consumers await `release(owner)` when that owner ends. Omitted owners are one-shot, and stateless providers ignore ownership. The [persistent Node provider](../../packages/ptc-runtime/ptc-runtime-node/README.md#persistent-repl) defines reset and recovery behavior; no retained object enters the durable Session format.
 
 ## Bindings: host functions as program globals
 

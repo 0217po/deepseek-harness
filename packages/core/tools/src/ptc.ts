@@ -66,6 +66,11 @@ const TYPESCRIPT_FLAVOR: RunCodeFlavor = {
  * `return`, answer via `print` and/or the returned value, matching
  * {@link ./py-types.ts}'s SDK instructions.
  */
+const REPL_FLAVOR: RunCodeFlavor = {
+  description: 'Execute TypeScript in an in-memory REPL. Top-level declarations and await are supported; use console.log or a final JSON expression for output. Top-level return is not supported. Call tools as await tools.name(args) using the declarations in the system prompt. Image-bearing subtool results are attached after the run.',
+  codeDescription: 'TypeScript REPL statements with optional top-level await and a final JSON expression.',
+}
+
 const PYTHON_FLAVOR: RunCodeFlavor = {
   description:
     'Execute a Python program against the available tools. Takes two required '
@@ -160,6 +165,10 @@ function resolveFlavor(peekRuntime: () => PtcRuntime | undefined): RunCodeFlavor
   if (!Object.hasOwn(RUN_CODE_FLAVORS, runtime.language) || flavor === undefined) {
     const known = Object.keys(RUN_CODE_FLAVORS).map(name => JSON.stringify(name)).join(', ')
     throw new Error(`dsh-tools: no run_code schema flavor registered for runtime language ${JSON.stringify(runtime.language)} (known: ${known})`)
+  }
+  if (runtime.programFormat === 'repl') {
+    if (runtime.language !== 'typescript') throw new Error('dsh-tools: REPL presentation requires TypeScript')
+    return REPL_FLAVOR
   }
   return flavor
 }
@@ -332,6 +341,7 @@ export interface RunCodeBridgeOptions {
  */
 export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeOptions): ToolDefinition {
   const { requireRuntime, peekRuntime, maxParallel, shapeDispatchLog } = options
+  const stateOwners = new WeakMap<object, WeakSet<PtcRuntime>>()
   const definition = defineTool({
     name: RUN_CODE_NAME,
     // The description and `code` parameter description are placeholders here:
@@ -694,8 +704,18 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
       try {
         let result: PtcRunResult
         try {
+          if (exec.agent !== undefined && runtime.programFormat === 'repl') {
+            const agent = exec.agent
+            let runtimes = stateOwners.get(agent)
+            if (runtimes === undefined) stateOwners.set(agent, runtimes = new WeakSet())
+            if (!runtimes.has(runtime)) {
+              agent.ctx.effect(() => () => runtime.release(agent), 'PTC retained environment')
+              runtimes.add(runtime)
+            }
+          }
           result = await runtime.run(runtime.resolve({
             program: args.code,
+            ...exec.agent === undefined ? {} : { stateOwner: exec.agent },
             bindings: [{
               global: 'tools',
               functions,

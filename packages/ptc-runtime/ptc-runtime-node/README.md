@@ -63,6 +63,24 @@ Programs are async function bodies: top-level `await` and `return` work, and onl
 
 Direct filesystem, network and subprocess operations remain Node operations, subject to the selected OS sandbox. Nested host bindings cross the control channel; PTC tool calls retain the registry's visibility, ordering, logging and approval rules. Running a program does not change the Session's standing policy or automatically replay it after a denial.
 
+<a id="persistent-repl"></a>
+### Persistent REPL
+
+The optional `@deepseek-ai/dsh-ptc-runtime-node/persistent` entry replaces the default provider. It requires `fs` and `subprocess`, uses the same configuration fields, and does not create a file sandbox. Enable it deliberately with a profile patch; it is not a shipped default:
+
+```yaml
+- id: ptc-runtime
+  name: '@deepseek-ai/dsh-ptc-runtime-node/persistent'
+```
+
+Save the patch and pass its path to `dsh headless --patch <path>` in a composition with PTC tool presentation. Node applications still launch through a named `dsh` profile. Packaged single-executable hosts require `nodeExecutable` pointing to Node and `bootstrapPath` pointing to this package's built `persistent-process.js`.
+
+Each live Agent keeps its own process and top-level variables, functions, and imported modules across `run_code` calls and turns. Use `await import(...)`, `console.log(...)`, and a final JSON expression; top-level `return` is not supported. Node REPL declaration rules apply, including errors on redeclaring existing lexical names. Retained functions and saved tool methods call the current evaluation's bindings. All tool calls must be awaited; callbacks from a completed evaluation cannot invoke tools in a later evaluation.
+
+Memory is best-effort and never saved to disk. Restart, Agent disposal, provider unload, cancellation, timeout, protocol failure, output overflow, or process exit clears it. Missing variables raise normal reference errors; reacquire handles and recreate declarations. Ordinary program exceptions preserve any earlier mutations. The Session still records programs, tool dispatches and visible results; restoring a Session or forking an Agent starts with empty memory. Direct Node access remains unsandboxed; explicit sandbox policies are rejected.
+
+Service consumers pass an object as `stateOwner` to reuse its environment and await `release(owner)` when finished. Requests without an owner run in temporary processes. Concurrent runs for one owner reject; distinct owners may run concurrently. An idle environment has no expiration timer and keeps its process until release or failure.
+
 ### Deadlines and cancellation
 
 The PTC consumer exposes per-call timeout and approved sandbox choices as described in [dsh-tools](../../core/tools/README.md#ptc-mode). The runtime's readonly `timeout` descriptor reports its effective default and maximum to that consumer. Its `executionInstructions` describes fresh Node state, direct Node APIs, the empty program environment and file policy in the model-visible schema.
