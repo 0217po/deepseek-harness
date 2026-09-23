@@ -226,7 +226,7 @@ Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and subst
  * Stateless providers have no retained resources to release.
  * @param owner - The exact object supplied as the request's state owner.
  */
-async release(owner: object): Promise<void>
+release(owner: object): Promise<void>
 
 /**
  * Resolve supported options and provider defaults before execution.

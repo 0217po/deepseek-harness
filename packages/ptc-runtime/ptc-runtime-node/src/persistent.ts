@@ -75,7 +75,7 @@ class Kernel {
         const outcome = error?.kind === 'output-limit' ? output.limit(logs)
           : error ? output.failure(logs, error) : output.success(logs, value)
         const cleanup = discard || spec.stateOwner === undefined ? this.stop() : Promise.resolve()
-        void cleanup.then(() => result.resolve(outcome), (failure: unknown) => {
+        void cleanup.then(() => { result.resolve(outcome) }, (failure: unknown) => {
           result.resolve(output.failure(logs, { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(failure)}` }))
         })
       },
@@ -86,7 +86,7 @@ class Kernel {
     else if (this.ready) this.dispatch(evaluation)
     else {
       this.starting = this.start(spec.cwd)
-      void this.starting.catch((error: unknown) => this.fail('worker-exit', messageOf(error)))
+      void this.starting.catch((error: unknown) => { this.fail('worker-exit', messageOf(error)) })
     }
     return await result.promise
   }
@@ -117,7 +117,7 @@ class Kernel {
 
   private dispatch(evaluation: Evaluation): void {
     void this.channel?.send({ type: 'run', id: evaluation.id, cwd: evaluation.spec.cwd, data: evaluation.data })
-      .catch((error: unknown) => this.fail('protocol', messageOf(error)))
+      .catch((error: unknown) => { this.fail('protocol', messageOf(error)) })
   }
 
   private async start(cwd: string): Promise<void> {
@@ -133,14 +133,15 @@ class Kernel {
     for (const stream of [handle.stdout, handle.stderr]) {
       stream.setEncoding('utf8')
       stream.on('data', () => { this.fail('protocol', 'raw process output cannot be attributed to a PTC evaluation') })
-      stream.on('error', (error: Error) => this.fail('worker-exit', error.message))
+      stream.on('error', (error: Error) => { this.fail('worker-exit', error.message) })
     }
-    this.channel = new JsonChannel(handle.control, this.config.maxMessageBytes, (raw, bytes) => this.receive(raw, bytes), (error, kind) => {
-      this.fail(kind === 'protocol' ? 'protocol' : 'worker-exit', kind === 'protocol' ? error.message : 'persistent Node process stopped')
-    })
+    this.channel = new JsonChannel(handle.control, this.config.maxMessageBytes,
+      (raw, bytes) => { this.receive(raw, bytes) }, (error, kind) => {
+        this.fail(kind === 'protocol' ? 'protocol' : 'worker-exit', kind === 'protocol' ? error.message : 'persistent Node process stopped')
+      })
     void handle.done.then(() => {
       setImmediate(() => { if (!this.closed) this.fail('worker-exit', 'persistent Node process stopped') })
-    }, (error: unknown) => this.fail('worker-exit', messageOf(error)))
+    }, (error: unknown) => { this.fail('worker-exit', messageOf(error)) })
   }
 
   private receive(raw: unknown, bytes: number): void {
@@ -191,7 +192,7 @@ class Kernel {
             evaluation.pendingBytes -= bytes
           })
           if (this.active === evaluation) await this.channel?.send(reply)
-        })().catch((error: unknown) => this.fail('protocol', messageOf(error)))
+        })().catch((error: unknown) => { this.fail('protocol', messageOf(error)) })
         return
       }
       default: this.fail('protocol', 'unknown persistent PTC message')

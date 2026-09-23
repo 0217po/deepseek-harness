@@ -62,16 +62,16 @@ const TYPESCRIPT_FLAVOR: RunCodeFlavor = {
   codeDescription: 'The program: the body of an async TypeScript function.',
 }
 
-/**
- * The Python flavor: the body of an async function, top-level `await` and
- * `return`, answer via `print` and/or the returned value, matching
- * {@link ./py-types.ts}'s SDK instructions.
- */
 const REPL_FLAVOR: RunCodeFlavor = {
   description: 'Execute TypeScript in an in-memory REPL. Top-level declarations and await are supported; use console.log or a final JSON expression for output. Top-level return is not supported. Call tools as await tools.name(args) using the declarations in the system prompt. Image-bearing subtool results are attached after the run.',
   codeDescription: 'TypeScript REPL statements with optional top-level await and a final JSON expression.',
 }
 
+/**
+ * The Python flavor: the body of an async function, top-level `await` and
+ * `return`, answer via `print` and/or the returned value, matching
+ * {@link ./py-types.ts}'s SDK instructions.
+ */
 const PYTHON_FLAVOR: RunCodeFlavor = {
   description:
     'Execute a Python program against the available tools. Takes two required '

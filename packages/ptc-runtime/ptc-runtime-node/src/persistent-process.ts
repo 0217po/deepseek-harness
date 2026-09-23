@@ -74,7 +74,7 @@ export async function runPersistentMain(stream: Duplex, maxMessageBytes: number,
     }
     if (current?.active) { channel.close(); closed.resolve(); return }
     const { id, data } = message
-    const logs = new LogBuffer(data.maxOutputBytes, text => send(id, { type: 'log', text }), () => send(id, { type: 'output-limit' }))
+    const logs = new LogBuffer(data.maxOutputBytes, (text) => { send(id, { type: 'log', text }) }, () => { send(id, { type: 'output-limit' }) })
     const evaluation: Evaluation = {
       id, logs, active: true,
       finish(result) {

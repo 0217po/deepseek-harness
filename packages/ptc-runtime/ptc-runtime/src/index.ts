@@ -129,7 +129,7 @@ export abstract class PtcRuntime extends Service {
    * Stateless providers have no retained resources to release.
    * @param owner - The exact object supplied as the request's state owner.
    */
-  async release(owner: object): Promise<void> { void owner }
+  release(owner: object): Promise<void> { void owner; return Promise.resolve() }
 
   /** Provider-owned program usage guidance for consumers to present alongside the source language. */
   get executionInstructions(): string { return '' }

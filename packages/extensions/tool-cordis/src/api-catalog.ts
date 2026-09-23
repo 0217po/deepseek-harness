@@ -1722,7 +1722,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
       },
       {
-        signature: 'async release(owner: object): Promise<void>',
+        signature: 'release(owner: object): Promise<void>',
         description: 'Release an owner\'s retained environment and await its execution resources. Stateless providers have no retained resources to release.',
         parameters: [{ name: 'owner', description: 'The exact object supplied as the request\'s state owner.' }],
       },

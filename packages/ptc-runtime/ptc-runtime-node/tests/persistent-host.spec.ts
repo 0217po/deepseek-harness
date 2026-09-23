@@ -140,6 +140,7 @@ describe('persistent PTC host protocol', () => {
   it('returns current binding successes, exceptions and unavailable bindings', async () => {
     const cases: Record<string, PtcBindingFunction>[] = [
       { test: async () => 42 }, { test: async () => { throw new Error('denied') } },
+      // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- Host bindings may reject with a non-Error value.
       { test: () => Promise.reject('denied') }, {},
     ]
     for (const functions of cases) {

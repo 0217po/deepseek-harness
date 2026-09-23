@@ -51,7 +51,9 @@ it('keeps an environment while capturing each evaluation and binding replies sep
   expect(h.seen.filter(item => item.type === 'log').map(item => item.text)).toEqual(['raw', 'value 2'])
   expect(h.state.env).toEqual({})
   expect(h.nativeEnvironment).toEqual({ PATH: '/native' })
-  expect(await h.run('throw new Error("failed")')).toMatchObject({ error: { kind: 'exception', message: expect.stringContaining('failed') } })
+  const failed = await h.run('throw new Error("failed")')
+  expect(failed).toMatchObject({ error: { kind: 'exception' } })
+  expect((failed.error as { message: string }).message).toContain('failed')
   expect(await h.run('const =')).toMatchObject({ error: { kind: 'exception' } })
   expect(decodePtcJsonWire((await h.run('count')).value)).toBe(2)
 })
@@ -62,7 +64,9 @@ it('contains directory failures and output overflow in the active evaluation', a
     error.stack = 'Error: directory missing'
     throw error
   })
-  expect(await badDirectory.run('1')).toMatchObject({ error: { kind: 'exception', message: expect.stringContaining('directory missing') } })
+  const failed = await badDirectory.run('1')
+  expect(failed).toMatchObject({ error: { kind: 'exception' } })
+  expect((failed.error as { message: string }).message).toContain('directory missing')
   const h = await setup()
   await h.run('console.log("x".repeat(100))', [], 20)
   expect(h.seen.some(item => item.type === 'output-limit')).toBe(true)
