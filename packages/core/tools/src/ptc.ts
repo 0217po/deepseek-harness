@@ -6,6 +6,7 @@
  * @module @deepseek-ai/dsh-tools/src/ptc
  */
 
+import { symbols } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createUserMessage, HarnessError } from '@deepseek-ai/dsh-llm'
 declare module '@deepseek-ai/dsh-llm' {
@@ -708,9 +709,11 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
             const agent = exec.agent
             let runtimes = stateOwners.get(agent)
             if (runtimes === undefined) stateOwners.set(agent, runtimes = new WeakSet())
-            if (!runtimes.has(runtime)) {
+            // Cordis traces service access through new proxies; disposal belongs to the underlying provider.
+            const provider = (runtime as PtcRuntime & { [symbols.original]?: PtcRuntime })[symbols.original] ?? runtime
+            if (!runtimes.has(provider)) {
               agent.ctx.effect(() => () => runtime.release(agent), 'PTC retained environment')
-              runtimes.add(runtime)
+              runtimes.add(provider)
             }
           }
           result = await runtime.run(runtime.resolve({

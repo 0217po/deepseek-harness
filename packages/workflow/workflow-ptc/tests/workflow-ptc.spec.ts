@@ -4,6 +4,9 @@ import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import FileSystem from '@deepseek-ai/dsh-fs-local'
+import Subprocess from '@deepseek-ai/dsh-subprocess-local'
+import PersistentRuntime from '@deepseek-ai/dsh-ptc-runtime-node/persistent'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import type { SubagentCapabilities, SubagentProvider, SubagentResult, SubagentRun, SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 import type { WorkflowMeta, WorkflowResult, WorkflowResultInfo, WorkflowRun, WorkflowRunInfo } from '@deepseek-ai/dsh-workflow'
@@ -123,6 +126,7 @@ function text(reply: string): SubagentResult {
 }
 
 interface SetupOptions {
+  persistent?: boolean
   config?: Config
   reply?: (request: SubagentStartRequest, index: number) => SubagentResult
   manual?: boolean
@@ -135,6 +139,11 @@ interface SetupOptions {
 async function setup(options?: SetupOptions) {
   const ctx = new Context()
   await ctx.plugin(SessionProjectionRegistry)
+  if (options?.persistent) {
+    await ctx.plugin(FileSystem)
+    await ctx.plugin(Subprocess)
+    await ctx.plugin(PersistentRuntime, {})
+  }
   await mountPtcRuntime(ctx)
   await ctx.plugin(SubagentRuntime)
   const provider = new StubProvider(
@@ -172,6 +181,16 @@ async function run(ctx: Context, parent: Agent, source: { script: string; meta: 
 // post-event assertions; explicit narrower timeouts inside stay authoritative.
 describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
   describe('script execution through the Node PTC runtime', () => {
+    it('awaits an async workflow in a temporary persistent-provider environment', async () => {
+      const { ctx, parent } = await setup({ persistent: true })
+      const execute = vi.spyOn(ctx.ptcRuntime, 'run')
+      const result = await run(ctx, parent, scripted('return await agent("hello")'))
+      expect(result.stopReason).toBe('completed')
+      expect(result.value).toBe('stub reply')
+      expect(execute.mock.calls[0]?.[0].stateOwner).toBeUndefined()
+      expect(execute.mock.calls[0]?.[0].sandboxPolicy).toBeUndefined()
+    })
+
     it('captures args at start and isolates subsequent caller and script mutations', async () => {
       const { ctx, parent } = await setup()
       const args = { values: [1] }
