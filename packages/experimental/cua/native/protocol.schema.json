@@ -1,0 +1,565 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "dsh-cua native request",
+  "description": "App handles identify one acquired process lifetime in one helper. Window observations retain separate snapshot generations. Window coordinates are top-left local macOS points. Scroll deltas use whole lines; positive Y reveals above and positive X reveals left.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "const": "getCapabilities"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {},
+          "required": []
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "const": "listApps"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {},
+          "required": []
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "const": "getApp"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "selector": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "selector"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "const": "listWindows"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "appHandle": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "appHandle"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "const": "getState"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "appHandle": {
+              "type": "string"
+            },
+            "windowId": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4294967295
+            },
+            "maxElements": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "maxDepth": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          "required": [
+            "appHandle",
+            "maxElements",
+            "maxDepth"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "const": "click"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "appHandle": {
+              "type": "string"
+            },
+            "snapshotId": {
+              "type": "string"
+            },
+            "elementIndex": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "mouseButton": {
+              "const": "left"
+            },
+            "clickCount": {
+              "const": 1
+            }
+          },
+          "required": [
+            "appHandle",
+            "snapshotId",
+            "elementIndex"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "const": "click"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "appHandle": {
+              "type": "string"
+            },
+            "windowId": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4294967295
+            },
+            "snapshotId": {
+              "type": "string"
+            },
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "mouseButton": {
+              "enum": [
+                "left",
+                "right"
+              ]
+            },
+            "clickCount": {
+              "enum": [
+                1,
+                2
+              ]
+            }
+          },
+          "required": [
+            "appHandle",
+            "windowId",
+            "x",
+            "y"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "const": "setValue"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "appHandle": {
+              "type": "string"
+            },
+            "snapshotId": {
+              "type": "string"
+            },
+            "elementIndex": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "appHandle",
+            "snapshotId",
+            "elementIndex",
+            "value"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "const": "typeText"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "appHandle": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "appHandle",
+            "text"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "const": "pressKey"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "appHandle": {
+              "type": "string"
+            },
+            "key": {
+              "type": "string"
+            },
+            "modifiers": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "command",
+                  "cmd",
+                  "shift",
+                  "option",
+                  "alt",
+                  "control",
+                  "ctrl",
+                  "fn"
+                ]
+              }
+            }
+          },
+          "required": [
+            "appHandle",
+            "key"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "const": "scroll"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "appHandle": {
+              "type": "string"
+            },
+            "windowId": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4294967295
+            },
+            "snapshotId": {
+              "type": "string"
+            },
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "deltaLinesX": {
+              "type": "integer",
+              "minimum": -10,
+              "maximum": 10
+            },
+            "deltaLinesY": {
+              "type": "integer",
+              "minimum": -10,
+              "maximum": 10
+            }
+          },
+          "required": [
+            "appHandle",
+            "windowId",
+            "x",
+            "y"
+          ],
+          "anyOf": [
+            {
+              "required": [
+                "deltaLinesX"
+              ],
+              "properties": {
+                "deltaLinesX": {
+                  "not": {
+                    "const": 0
+                  }
+                }
+              }
+            },
+            {
+              "required": [
+                "deltaLinesY"
+              ],
+              "properties": {
+                "deltaLinesY": {
+                  "not": {
+                    "const": 0
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "const": "drag"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "appHandle": {
+              "type": "string"
+            },
+            "windowId": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4294967295
+            },
+            "snapshotId": {
+              "type": "string"
+            },
+            "fromX": {
+              "type": "number"
+            },
+            "fromY": {
+              "type": "number"
+            },
+            "toX": {
+              "type": "number"
+            },
+            "toY": {
+              "type": "number"
+            },
+            "durationMs": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "steps": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 240
+            }
+          },
+          "required": [
+            "appHandle",
+            "windowId",
+            "fromX",
+            "fromY",
+            "toX",
+            "toY",
+            "durationMs",
+            "steps"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "const": "screenshot"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "appHandle": {
+              "type": "string"
+            },
+            "windowId": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4294967295
+            }
+          },
+          "required": [
+            "appHandle",
+            "windowId"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ]
+    }
+  ]
+}
