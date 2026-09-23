@@ -143,7 +143,7 @@ class Kernel {
     if (!handle.control || !handle.stdout || !handle.stderr) throw new Error('subprocess provider did not supply persistent PTC pipes')
     for (const stream of [handle.stdout, handle.stderr]) {
       stream.setEncoding('utf8')
-      stream.on('data', (text: string) => { this.active?.admit(text) })
+      stream.on('data', () => { this.fail('protocol', 'raw process output cannot be attributed to a PTC evaluation') })
       stream.on('error', (error: Error) => this.fail('worker-exit', error.message))
     }
     this.channel = new JsonChannel(handle.control, this.config.maxMessageBytes, (raw, bytes) => this.receive(raw, bytes), (error, kind) => {

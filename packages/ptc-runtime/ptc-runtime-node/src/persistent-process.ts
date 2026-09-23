@@ -4,9 +4,17 @@ import { start } from 'node:repl'
 import { PassThrough, Writable, type Duplex } from 'node:stream'
 import { JsonChannel } from './channel.ts'
 import { captureStreamWrites, LogBuffer, makeConsoleShim, makeBindingErrorClasses, makeNamespaces, prepareCompletion, prepareException, wireReplies } from './bootstrap.ts'
-import type { BindingErrorConstructor, PendingCall } from './bootstrap.ts'
+import type { BindingErrorConstructor, PendingCall, PatchableStream } from './bootstrap.ts'
 import type { DoneMessage, ProgramBootData, ProgramToHost, ReplyMessage } from './protocol.ts'
 import { STARTUP_ENVIRONMENT_NAMES } from './environment.ts'
+
+/** Process state owned by the REPL child; tests supply instance-local streams and environment. */
+export interface PersistentProcess {
+  env: NodeJS.ProcessEnv
+  stdout: PatchableStream
+  stderr: PatchableStream
+  chdir(directory: string): void
+}
 
 interface Evaluation {
   id: number
@@ -19,13 +27,15 @@ interface Evaluation {
  * Serve sequential evaluations until the owning host closes the control channel.
  * @param stream - Inherited private control endpoint.
  * @param maxMessageBytes - Maximum control frame and queued output bytes.
+ * @param processState - Environment, output streams and directory control of the child.
  * @returns After the channel closes and the REPL releases its streams.
  */
-export async function runPersistentMain(stream: Duplex, maxMessageBytes: number): Promise<void> {
-  for (const key of Object.keys(process.env)) {
-    if (!STARTUP_ENVIRONMENT_NAMES.has(key.toUpperCase())) Reflect.deleteProperty(process.env, key)
+export async function runPersistentMain(stream: Duplex, maxMessageBytes: number, processState: PersistentProcess): Promise<void> {
+  if (!Number.isSafeInteger(maxMessageBytes) || maxMessageBytes <= 0 || maxMessageBytes > 0xffff_ffff) throw new Error('invalid control message limit')
+  for (const key of Object.keys(processState.env)) {
+    if (!STARTUP_ENVIRONMENT_NAMES.has(key.toUpperCase())) Reflect.deleteProperty(processState.env, key)
   }
-  process.env = Object.create(null) as NodeJS.ProcessEnv
+  processState.env = Object.create(null) as NodeJS.ProcessEnv
   const context = new AsyncLocalStorage<Evaluation>()
   const closed = Promise.withResolvers<void>()
   const pending = new Map<number, PendingCall>()
@@ -55,8 +65,9 @@ export async function runPersistentMain(stream: Duplex, maxMessageBytes: number)
   wireReplies(port, pending)
   const logSink = { push(text: string): void { const evaluation = context.getStore(); if (evaluation?.active) evaluation.logs.push(text) } }
   repl.context.console = makeConsoleShim(logSink)
-  captureStreamWrites(logSink, process.stdout)
-  captureStreamWrites(logSink, process.stderr)
+  repl.context.process = processState
+  captureStreamWrites(logSink, processState.stdout)
+  captureStreamWrites(logSink, processState.stderr)
   const channel = new JsonChannel(stream, maxMessageBytes, (raw) => {
     // The host owns these frames. Model-written traffic is validated on the host.
     const message = raw as { type: 'run'; id: number; cwd: string; data: ProgramBootData } | ReplyMessage
@@ -80,7 +91,7 @@ export async function runPersistentMain(stream: Duplex, maxMessageBytes: number)
     current = evaluation
     context.run(evaluation, () => {
       try {
-        process.chdir(message.cwd)
+        processState.chdir(message.cwd)
         for (const [name, constructor] of makeBindingErrorClasses(data)) {
           if (!errors.has(name)) errors.set(name, constructor)
         }
