@@ -862,6 +862,38 @@ Depends on: [`McpClient`](../packages/mcp/mcp-client/src/index.ts)
 
 Source: [`packages/experimental/computer-use-cua-driver-mcp/src/index.ts:20`](../packages/experimental/computer-use-cua-driver-mcp/src/index.ts)
 
+<a id="deepseek-aidsh-experimental-cua"></a>
+
+## `@deepseek-ai/dsh-experimental-cua`
+
+Requires: `computerUse` · `tools` · `systemPrompt` · `subprocess` · `agents`
+
+```ts config-catalog
+/** Native executable and per-operation resource bounds. */
+export interface Config {
+  /** Absolute path to the locally built macOS native helper. */
+  helperPath: string
+  /** Deadline for one native operation, including capture and AX traversal. */
+  timeoutMs: number
+  /** Maximum bytes retained for one helper response frame. */
+  maxResponseBytes: number
+  /** Maximum UTF-8 bytes admitted for one helper request frame. */
+  maxRequestBytes: number
+  /** Duration in milliseconds of one same-window drag. */
+  dragDurationMs: number
+  /** Number of movement segments dispatched during a drag. */
+  dragSteps: number
+  /** Managed process termination grace in milliseconds. */
+  graceMs: number
+  /** Maximum nodes admitted by a native accessibility snapshot. */
+  maxElements: number
+  /** Maximum depth traversed by a native accessibility snapshot. */
+  maxDepth: number
+}
+```
+
+Source: [`packages/experimental/cua/src/index.ts:22`](../packages/experimental/cua/src/index.ts)
+
 <a id="deepseek-aidsh-experimental-inspector"></a>
 
 ## `@deepseek-ai/dsh-experimental-inspector`

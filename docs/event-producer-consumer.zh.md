@@ -5,8 +5,6 @@
 
 [English](event-producer-consumer.md) | 中文
 
-本矩阵展示哪些包会派发各个 harness 自有事件，以及哪些包会监听这些事件。事件之间存在多对多关系，因此密集的关系数据以表格而非一张大型关系图呈现。接收方和事件名称类型还涵盖有意绕过 `ctx.emit` 的内含派发位置，例如 subagent 生命周期封装。
-
 | Event | Mode | Declared in | Dispatchers | Listeners |
 | --- | --- | --- | --- | --- |
 | `agent-loop/config-start-failed` | `emit` | [`packages/core/agent-loop/src/index.ts:238`](../packages/core/agent-loop/src/index.ts) | [`agent-loop`](../packages/core/agent-loop) (`events.dispatch`) | - |
@@ -28,7 +26,7 @@
 | `api-session/error` | `emit` | [`packages/api/session-controller/src/types.ts:616`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
 | `api-session/removed` | `emit` | [`packages/api/session-controller/src/types.ts:595`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
 | `api-session/status` | `emit` | [`packages/api/session-controller/src/types.ts:602`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
-| `app-boot/config-reload` | `emit` | [`packages/boot/app-boot/src/index.ts:43`](../packages/boot/app-boot/src/index.ts) | [`app-boot`](../packages/boot/app-boot) (`emit`) | [`settings`](../packages/settings/settings) |
+| `app-boot/config-reload` | `emit` | [`packages/boot/app-boot/src/index.ts:45`](../packages/boot/app-boot/src/index.ts) | [`app-boot`](../packages/boot/app-boot) (`emit`) | [`settings`](../packages/settings/settings) |
 | `approval/request` | `waterfall` | [`packages/interaction/user-approval/src/types.ts:85`](../packages/interaction/user-approval/src/types.ts) | [`user-approval`](../packages/interaction/user-approval) (`waterfall`) | [`acp`](../packages/acp/acp), `remotes` |
 | `authorization/settled` | `emit` | [`packages/credentials/authorization/src/index.ts:57`](../packages/credentials/authorization/src/index.ts) | [`authorization`](../packages/credentials/authorization) (`events.dispatch`) | [`authorization`](../packages/credentials/authorization) |
 | `commands/change` | `emit` | [`packages/interaction/commands/src/types.ts:89`](../packages/interaction/commands/src/types.ts) | [`commands`](../packages/interaction/commands) (`events.dispatch`) | `remotes` |
@@ -44,9 +42,9 @@
 | `credentials/reference-updated` | `emit` | [`packages/credentials/credentials/src/types.ts:90`](../packages/credentials/credentials/src/types.ts) | [`credentials`](../packages/credentials/credentials) (`events.dispatch`) | [`credentials`](../packages/credentials/credentials), `remotes` |
 | `domain/changed` | `emit` | [`packages/storage/storage-domain/src/events.ts:46`](../packages/storage/storage-domain/src/events.ts) | [`storage-domain`](../packages/storage/storage-domain) (`emit`) | [`storage-domain`](../packages/storage/storage-domain), [`workspace`](../packages/workspace/workspace), `workspace-controller` |
 | `feedback/committed` | `parallel` | [`packages/feedback/message-feedback/src/index.ts:58`](../packages/feedback/message-feedback/src/index.ts) | [`message-feedback`](../packages/feedback/message-feedback) (`parallel`) | [`session-telemetry-otel`](../packages/session/session-telemetry-otel) |
-| `fs/edit-intent` | `waterfall` | [`packages/fs/fs/src/index.ts:66`](../packages/fs/fs/src/index.ts) | [`tool-fs`](../packages/fs/tool-fs) (`waterfall`), [`tool-str-replace-editor`](../packages/fs/tool-str-replace-editor) (`waterfall`) | [`fs-observation-policy`](../packages/fs/fs-observation-policy) |
-| `fs/observed` | `emit` | [`packages/fs/fs/src/index.ts:76`](../packages/fs/fs/src/index.ts) | [`tool-fs`](../packages/fs/tool-fs) (`emit`), [`tool-str-replace-editor`](../packages/fs/tool-str-replace-editor) (`emit`) | [`fs-observation-policy`](../packages/fs/fs-observation-policy), [`skill-filesystem`](../packages/skill/skill-filesystem), `workspace-files` |
-| `fs/write-intent` | `waterfall` | [`packages/fs/fs/src/index.ts:58`](../packages/fs/fs/src/index.ts) | [`tool-fs`](../packages/fs/tool-fs) (`waterfall`), [`tool-str-replace-editor`](../packages/fs/tool-str-replace-editor) (`waterfall`) | [`fs-observation-policy`](../packages/fs/fs-observation-policy) |
+| `fs/edit-intent` | `waterfall` | [`packages/fs/fs/src/index.ts:67`](../packages/fs/fs/src/index.ts) | [`tool-fs`](../packages/fs/tool-fs) (`waterfall`), [`tool-str-replace-editor`](../packages/fs/tool-str-replace-editor) (`waterfall`) | [`fs-observation-policy`](../packages/fs/fs-observation-policy) |
+| `fs/observed` | `emit` | [`packages/fs/fs/src/index.ts:77`](../packages/fs/fs/src/index.ts) | [`tool-fs`](../packages/fs/tool-fs) (`emit`), [`tool-str-replace-editor`](../packages/fs/tool-str-replace-editor) (`emit`) | [`fs-observation-policy`](../packages/fs/fs-observation-policy), [`skill-filesystem`](../packages/skill/skill-filesystem), `workspace-files` |
+| `fs/write-intent` | `waterfall` | [`packages/fs/fs/src/index.ts:59`](../packages/fs/fs/src/index.ts) | [`tool-fs`](../packages/fs/tool-fs) (`waterfall`), [`tool-str-replace-editor`](../packages/fs/tool-str-replace-editor) (`waterfall`) | [`fs-observation-policy`](../packages/fs/fs-observation-policy) |
 | `goal/activation-changed` | `emit` | [`packages/goal/goal/src/types.ts:150`](../packages/goal/goal/src/types.ts) | [`goal`](../packages/goal/goal) (`emit`) | `remotes` |
 | `goal/changed` | `emit` | [`packages/goal/goal/src/domain.ts:114`](../packages/goal/goal/src/domain.ts) | [`goal`](../packages/goal/goal) (`emit`) | [`goal-round-driver`](../packages/goal/goal-round-driver) |
 | `hmr/change` | `emit` | [`packages/boot/hmr/src/index.ts:30`](../packages/boot/hmr/src/index.ts) | [`hmr`](../packages/boot/hmr) (`emit`) | - |
@@ -97,7 +95,7 @@
 | `internal/service` | - | [`agent-preset-registry`](../packages/preset/agent-preset-registry), `gateway` |
 | `internal/status` | - | [`agent`](../packages/core/agent), `inspector`, [`web`](../packages/web/web) |
 | `internal/update` | - | [`app-boot`](../packages/boot/app-boot) |
-| `loader/volatile-update` | - | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai) |
+| `loader/volatile-update` | - | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), `speech-to-text` |
 | `slots/changed` | `ui-renderer` (`emit`) | - |
 
 Maintenance mode: generated: Cordis event declarations and producer/listener edges are resolved from the repository TypeScript Program.
