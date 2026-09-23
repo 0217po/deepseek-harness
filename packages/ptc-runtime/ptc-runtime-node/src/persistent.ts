@@ -37,7 +37,7 @@ interface Evaluation {
 class Kernel {
   private handle?: SubprocessHandle
   private channel?: JsonChannel
-  private active?: Evaluation
+  private active: Evaluation | undefined
   private ready = false
   private sequence = 0
   private nextCall = 1

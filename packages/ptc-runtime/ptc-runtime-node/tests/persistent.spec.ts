@@ -41,7 +41,7 @@ describe('persistent Node REPL', () => {
     expect((await run('await query()', { bindings: bindings(second) })).value).toBe('new')
     expect(first).toHaveBeenCalledTimes(1)
     expect(second).toHaveBeenCalledTimes(1)
-    expect((await run('try { await query() } catch (error) { console.log(error.toolName); "unavailable" }')).value).toBe('unavailable')
+    expect((await run('let failure; try { await query() } catch (error) { console.log(error.toolName); failure = "unavailable" }; failure')).value).toBe('unavailable')
     expect(second).toHaveBeenCalledTimes(1)
   })
 
