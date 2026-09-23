@@ -314,10 +314,12 @@ describe('input actions', () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     await app.typeText('中文\nline two')
+    await app.paste('粘贴\nplain text')
     await app.pressKey('Control_L+shift+a')
     await app.pressKey('Return')
-    expect(f.dispatch.mock.calls.slice(-3).map(([operation]) => operation)).toEqual([
+    expect(f.dispatch.mock.calls.slice(-4).map(([operation]) => operation)).toEqual([
       { method: 'typeText', params: { appHandle: 'app-17', text: '中文\nline two' } },
+      { method: 'typeText', params: { appHandle: 'app-17', text: '粘贴\nplain text' } },
       { method: 'pressKey', params: { appHandle: 'app-17', key: 'a', modifiers: ['control', 'shift'] } },
       { method: 'pressKey', params: { appHandle: 'app-17', key: 'Return', modifiers: [] } },
     ])

@@ -48,7 +48,7 @@ The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-exper
 
 ### Connect an external execution environment
 
-The caller imports the bridge and supplies the current authorized `tools.cua` binding. This integration snippet assumes an execution host has supplied `tools`; the package does not install a global object or keep variables alive:
+To run through persistent PTC, add `--patch packages/experimental/cua/examples/persistent-ptc.cordis.yml` after the macOS overlay. This provider keeps variables for the live Agent and runs without a file sandbox. The caller imports the bridge and supplies the current authorized `tools.cua` binding. This integration snippet assumes an execution host has supplied `tools`; the package does not install a global object or keep variables alive:
 
 ```javascript
 import { connectCua } from '@deepseek-ai/dsh-experimental-cua/bridge'
@@ -106,7 +106,7 @@ Use cua with method getCapabilities to inspect permissions, then listApps and ge
 
 Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording permission.
 
-The optional object API exposes getCapabilities, listApps, getState and getApp. App objects expose getWindows, getWindow(windowId), getAXState, getScreenshot, getAXStateAndScreenshot, click, setValue, scroll, drag, typeText and pressKey. Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Browser tabs, app launching and clipboard paste are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global.
+The optional object API exposes getCapabilities, listApps, getState and getApp. App objects expose getWindows, getWindow(windowId), getAXState, getScreenshot, getAXStateAndScreenshot, click, setValue, scroll, drag, typeText, paste and pressKey. Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste inserts plain text using native Unicode input without changing the clipboard; rich-text formats are unavailable. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, initialize once with const { connectCua } = await import("@deepseek-ai/dsh-experimental-cua/bridge"); const cua = connectCua(() => tools.cua, text => console.log(text)). Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.
 ```
 
 #### Token effect
@@ -121,7 +121,7 @@ Tool results append to Session history. Changing plugin configuration or tool pr
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Only the macOS native implementation is provided. Browser tabs, app launching, clipboard paste, AX diffs, separate-process Open/Save panels and accessory-only apps are unsupported.
+- Only the macOS native implementation is provided. Browser tabs, app launching, rich-text clipboard formats, AX diffs, separate-process Open/Save panels and accessory-only apps are unsupported.
 - Coordinates use window-local points including the title bar. PNG pixel dimensions can differ. Window movement, application changes and other desktop users can race observations and input.
 - Native binaries require a local build. Signing, distribution and permission onboarding remain future work.
 - Persistent PTC is an external dependency assumption, not an implementation in this package. Real-model task success requires separate evaluation beyond native and protocol fixtures.

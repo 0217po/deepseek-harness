@@ -130,6 +130,12 @@ export interface CuaApp extends CuaSurface {
    */
   typeText(text: string): Promise<CuaActionResult>
   /**
+   * Insert plain text at current focus through native Unicode input, preserving the system clipboard.
+   * @param text - Literal text; rich-text clipboard formats are unsupported.
+   * @returns Dispatch evidence; cancellation may leave a prefix entered.
+   */
+  paste(text: string): Promise<CuaActionResult>
+  /**
    * Send a key/chord at current focus.
    * @param key - xdotool-style chord such as super+c or shift+Tab.
    * @returns dispatch evidence.

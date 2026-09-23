@@ -48,7 +48,7 @@ pnpm dsh headless --patch packages/experimental/cua/examples/macos.cordis.yml --
 
 ### 接入外部执行环境
 
-调用方导入适配模块，并提供当前执行中已授权的 `tools.cua` 绑定。下面的接入代码假设执行宿主已提供 `tools`；本包不安装全局对象，也不负责保留变量：
+使用 persistent PTC 时，在 macOS 配置后追加 `--patch packages/experimental/cua/examples/persistent-ptc.cordis.yml`。该 provider 为存活的 Agent 保留变量，不启用文件沙箱。调用方导入适配模块，并提供当前执行中已授权的 `tools.cua` 绑定。下面的接入代码假设执行宿主已提供 `tools`；本包不安装全局对象，也不负责保留变量：
 
 ```javascript
 import { connectCua } from '@deepseek-ai/dsh-experimental-cua/bridge'
@@ -106,7 +106,7 @@ Use cua with method getCapabilities to inspect permissions, then listApps and ge
 
 Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording permission.
 
-The optional object API exposes getCapabilities, listApps, getState and getApp. App objects expose getWindows, getWindow(windowId), getAXState, getScreenshot, getAXStateAndScreenshot, click, setValue, scroll, drag, typeText and pressKey. Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Browser tabs, app launching and clipboard paste are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global.
+The optional object API exposes getCapabilities, listApps, getState and getApp. App objects expose getWindows, getWindow(windowId), getAXState, getScreenshot, getAXStateAndScreenshot, click, setValue, scroll, drag, typeText, paste and pressKey. Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste inserts plain text using native Unicode input without changing the clipboard; rich-text formats are unavailable. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, initialize once with const { connectCua } = await import("@deepseek-ai/dsh-experimental-cua/bridge"); const cua = connectCua(() => tools.cua, text => console.log(text)). Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.
 ```
 
 #### Token 影响
@@ -121,7 +121,7 @@ The optional object API exposes getCapabilities, listApps, getState and getApp. 
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 只提供 macOS 原生实现。不支持浏览器标签、启动应用、剪贴板粘贴、AX 差分、独立进程中的打开或保存对话框，以及仅后台辅助类型的应用。
+- 只提供 macOS 原生实现。不支持浏览器标签、启动应用、富文本剪贴板格式、AX 差分、独立进程中的打开或保存对话框，以及仅后台辅助类型的应用。
 - 坐标使用包含标题栏的窗口内部 point，可能不同于 PNG 像素尺寸。窗口移动、应用变化及其他桌面使用者的操作可能与观察和输入交错。
 - 原生二进制需要本地构建。签名、分发和权限引导尚未实现。
 - 持久 PTC 是对外部运行环境的假设，本包不实现它。真实模型任务成功率需要在原生测试和协议测试之外单独评估。
