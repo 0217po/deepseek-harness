@@ -29,10 +29,32 @@ Use the workflow tool ONLY when the user explicitly asks for a workflow or for l
 
 Use subagent in the background by default. Start independent delegations together in one assistant message and continue useful work while they run. Set `run_in_background: false` only when your next action depends on that subagent's result. When a background run settles, the runtime sends you a notice containing its outcome and any final assistant message.
 
-Use cua with method getCapabilities to inspect permissions, then listApps and getApp to select an already running application. Keep the returned appHandle; every app operation requires it. listWindows returns window IDs and point bounds. getState returns a complete AX tree and snapshotId. Use its element indices only with that snapshotId. Select a windowId explicitly for screenshots and coordinate actions. Coordinates are window-local macOS points, which may differ from screenshot pixels.
+Use cua with method getCapabilities and params {} to inspect permissions and sessionLocked. If sessionLocked is true or an operation reports SESSION_LOCKED, stop UI attempts and ask the user to unlock macOS. A null sessionLocked means no usable console session was verified. After unlocking, read fresh state; screenshots from a locked desktop are not current observations. Use listApps and getApp to select an already running application. Keep the returned appHandle; every app operation requires it. listWindows returns window IDs and point bounds. getState returns a complete AX tree and snapshotId. Use its element indices only with that snapshotId. Select a windowId explicitly for screenshots and coordinate actions. Coordinates are window-local macOS points, which may differ from screenshot pixels.
 
-getApp selects without activating the app. Prefer background actions so the user can keep working elsewhere; native apps may still change focus in response to input. Invoke performSecondaryAction with an action advertised in the AX tree, such as raise, only when that visible action is needed. Raising a window explicitly activates its app. When a hidden window or a window on another Space cannot be observed, app.activate() is an explicit foreground recovery that may switch the focused app and Space; read fresh AX state afterward.
+Initialize the object API once in persistent PTC. Reuse its variables in later calls; put temporary declarations inside { ... } blocks to avoid redeclaration errors. All object methods are async. Await getWindow before using the returned window object. getAXState returns text, not a structured state object.
+
+Object API signatures (options default to { emit: true }):
+cua.getCapabilities(options?) -> { platform, permissions, sessionLocked, methods, coordinateSpace, browser }
+cua.listApps(options?) -> Array<{ id, displayName, isRunning, pid }>
+cua.getState(options?) -> { apps, browsers: [] }
+cua.getApp(selector: string) -> App
+app.activate() -> { dispatched: true, verified: false }
+app.getWindows(options?) -> Array<{ windowId, pid, appName, title, bounds, isOnScreen, onCurrentSpace }>
+app.getWindow(windowId: number) -> Window
+app.typeText(text: string), app.paste(text: string), app.pressKey(chord: string) -> action result
+
+App and Window methods:
+getAXState(options?: { emit?: boolean, disableDiffing?: boolean }) -> string
+getScreenshot(options?: { emit?: boolean }) -> Uint8Array
+getAXStateAndScreenshot(options?) -> { state: string, screenshot: Uint8Array }
+click(target: number | [x, y], options?: { mouseButton?: "left" | "right", clickCount?: 1 | 2 }) -> action result
+setValue(elementIndex: number, value: string) -> action result
+performSecondaryAction(elementIndex: number, action: string) -> action result
+scroll({ x, y, deltaLinesX, deltaLinesY }) -> action result
+drag(from: [x, y], to: [x, y]) -> action result
+
+Raw operation tools use { method, params }, including params: {} for parameterless methods. getApp selects without activating the app. Prefer background actions so the user can keep working elsewhere; native apps may still change focus in response to input. Invoke performSecondaryAction with an action advertised in the AX tree, such as raise, only when that visible action is needed. Raising a window explicitly activates its app. When a hidden window or a window on another Space cannot be observed, app.activate() is an explicit foreground recovery that may switch the focused app and Space; read fresh AX state afterward.
 
 Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording permission.
 
-The optional object API exposes getCapabilities, listApps, getState and getApp. App objects expose activate, getWindows, getWindow(windowId), getAXState, getScreenshot, getAXStateAndScreenshot, click, setValue, performSecondaryAction, scroll, drag, typeText, paste and pressKey. Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste inserts plain text using native Unicode input without changing the clipboard; rich-text formats are unavailable. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, initialize once with const { connectCua } = await import("@deepseek-ai/dsh-experimental-cua/bridge"); const cua = connectCua(() => tools.cua, text => console.log(text)). Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.
+Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste inserts plain text using native Unicode input without changing the clipboard; rich-text formats are unavailable. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, initialize once with var { connectCua } = await import("@deepseek-ai/dsh-experimental-cua/bridge"); var cua = connectCua(() => tools.cua, text => console.log(text)). Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.
