@@ -119,6 +119,11 @@ export interface CuaApp extends CuaSurface {
   readonly pid: number
   readonly appHandle: CuaAppHandle
   /**
+   * Activate this application explicitly, potentially changing the user's focused app and Space.
+   * @returns Dispatch evidence; read fresh state before further interaction.
+   */
+  activate(): Promise<CuaActionResult>
+  /**
    * Enumerate current windows.
    * @param options - output options.
    * @returns current window records.

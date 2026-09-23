@@ -133,6 +133,7 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
       const { appHandle, pid } = AppResult.parse(await call('getApp', { selector }))
       const app: CuaApp = {
         ...surface(appHandle, pid), pid, appHandle,
+        async activate() { return action('activate', { appHandle }) },
         async getWindows(options) {
           const windows = WindowsResult.parse(await call('listWindows', { appHandle }))
           if (windows.some(window => window.pid !== pid)) throw new Error('Native windows belong to another application')

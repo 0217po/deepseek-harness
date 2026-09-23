@@ -608,6 +608,35 @@
         "method",
         "params"
       ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "const": "activate"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "appHandle": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "appHandle"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ]
     }
   ]
 }

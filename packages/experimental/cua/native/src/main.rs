@@ -21,6 +21,7 @@ const METHODS: &[&str] = &[
     "getCapabilities",
     "listApps",
     "getApp",
+    "activate",
     "listWindows",
     "getState",
     "click",
@@ -319,7 +320,7 @@ impl Driver {
         let allowed: &[&str] = match method {
             "getCapabilities" | "listApps" => &[],
             "getApp" => &["selector"],
-            "listWindows" => &["appHandle"],
+            "listWindows" | "activate" => &["appHandle"],
             "getState" => &["appHandle", "windowId", "maxElements", "maxDepth"],
             "click" => &[
                 "appHandle",
@@ -436,6 +437,10 @@ impl Driver {
             require(permissions::accessibility(), "PERMISSION_DENIED", "Accessibility permission is required for the responsible DSH host/helper; enable it in macOS Privacy & Security")?;
         }
         match method {
+            "activate" => {
+                apps::activate(pid)?;
+                Ok(json!({"dispatched":true,"verified":false}))
+            }
             "getState" => {
                 let window = if params.get("windowId").is_some() {
                     Some(window_id(params)?)
@@ -481,7 +486,7 @@ impl Driver {
                     require(
                         scope.is_matched(),
                         "WINDOW_UNAVAILABLE",
-                        "Selected window has no matching accessibility surface",
+                        "Selected window has no matching accessibility surface. If it is hidden or on another Space, activate the app explicitly before observing again",
                     )?;
                 }
                 let elements: Vec<_> = tree.nodes.iter().filter_map(|node| node.element_index.map(|index| json!({

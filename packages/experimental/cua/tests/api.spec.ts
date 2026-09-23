@@ -347,6 +347,14 @@ describe('input actions', () => {
     await expect(window.performSecondaryAction(2, '')).rejects.toThrow()
   })
 
+  it('does not activate on selection and dispatches only an explicit activation request', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    expect(f.dispatch.mock.calls.map(([call]) => call.method)).toEqual(['getApp', 'getState'])
+    await app.activate()
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'activate', params: { appHandle: 'app-17' } })
+  })
+
   it('propagates native failures once and rejects malformed delivery claims', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')

@@ -19,6 +19,7 @@ const operation = <M extends string, S extends z.ZodRawShape>(method: M, params:
 export const Request = z.discriminatedUnion('method', [
   operation('getCapabilities', {}), operation('listApps', {}),
   operation('getApp', { selector: z.string().min(1) }),
+  operation('activate', app),
   operation('listWindows', app),
   operation('getState', { ...app, windowId: id.optional() }),
   z.object({ method: z.literal('click'), params: z.union([
