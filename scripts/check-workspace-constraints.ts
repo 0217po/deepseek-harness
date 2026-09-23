@@ -174,6 +174,8 @@ export function readWorkspaceManifests(repositoryRoot: string): WorkspaceManifes
 }
 
 const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
+  // CUA publishes its client API and attributed native source for local macOS builds.
+  '@deepseek-ai/dsh-experimental-cua': ['lib/api.js', 'lib/bridge.js', 'native/Cargo.toml', 'native/Cargo.lock', 'native/src', 'native/LICENSE.cua-driver', 'native/upstream.json', 'native/README.txt', 'native/protocol.schema.json'],
   // Owned Worker bundles import this public bootstrap before their business entry.
   '@deepseek-ai/dsh-app-boot': ['lib/worker/profile-resolution-bootstrap.js'],
   // Statically linked client libraries keep their stylesheets next to the emitted
