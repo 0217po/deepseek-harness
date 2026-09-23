@@ -18,6 +18,9 @@ it('selects the private packaged bootstrap through the existing executable', () 
     Object.defineProperty(process, 'pkg', { configurable: true, value: {} })
     const fs = { processPathFromHostPath: () => { throw new Error('pkg does not expose a host bootstrap file') } } as unknown as FileSystem
     expect(bootstrapArgs(fs, {}, 2048)).toEqual(['2048'])
+    expect(() => bootstrapArgs(fs, {}, 2048, true)).toThrow('requires an explicit bootstrapPath')
+    expect(bootstrapArgs(fs, { bootstrapPath: '/remote/persistent-process.js' }, 2048, true))
+      .toEqual(['/remote/persistent-process.js', '2048'])
   } finally {
     if (prior === undefined) Reflect.deleteProperty(process, 'pkg')
     else Object.defineProperty(process, 'pkg', prior)
