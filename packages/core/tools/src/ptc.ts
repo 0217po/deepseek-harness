@@ -709,8 +709,13 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
             const agent = exec.agent
             let runtimes = stateOwners.get(agent)
             if (runtimes === undefined) stateOwners.set(agent, runtimes = new WeakSet())
-            // Cordis traces service access through new proxies; disposal belongs to the underlying provider.
-            const provider = (runtime as PtcRuntime & { [symbols.original]?: PtcRuntime })[symbols.original] ?? runtime
+            // Cordis can wrap service returns repeatedly; cleanup belongs to the original provider.
+            let provider = runtime
+            for (;;) {
+              const original = (provider as PtcRuntime & { [symbols.original]?: PtcRuntime })[symbols.original]
+              if (original === undefined) break
+              provider = original
+            }
             if (!runtimes.has(provider)) {
               agent.ctx.effect(() => () => runtime.release(agent), 'PTC retained environment')
               runtimes.add(provider)

@@ -141,8 +141,8 @@ class Kernel {
     this.channel = new JsonChannel(handle.control, this.config.maxMessageBytes, (raw, bytes) => this.receive(raw, bytes), (error, kind) => {
       if (!this.closed) this.fail(kind === 'protocol' ? 'protocol' : 'worker-exit', kind === 'protocol' ? error.message : 'persistent Node process stopped')
     })
-    void handle.done.then((outcome) => {
-      setImmediate(() => { if (!this.closed) this.fail('worker-exit', `persistent Node process exited (${String(outcome.exitCode)})`) })
+    void handle.done.then(() => {
+      setImmediate(() => { if (!this.closed) this.fail('worker-exit', 'persistent Node process stopped') })
     }, (error: unknown) => this.fail('worker-exit', messageOf(error)))
   }
 
