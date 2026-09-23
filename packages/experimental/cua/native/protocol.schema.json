@@ -566,6 +566,48 @@
         "method",
         "params"
       ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "const": "performSecondaryAction"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "appHandle": {
+              "type": "string"
+            },
+            "snapshotId": {
+              "type": "string"
+            },
+            "elementIndex": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "action": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "appHandle",
+            "snapshotId",
+            "elementIndex",
+            "action"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ]
     }
   ]
 }

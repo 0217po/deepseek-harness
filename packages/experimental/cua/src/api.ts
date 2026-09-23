@@ -96,6 +96,7 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
         return action('click', { ...snapshotParams(), windowId: windowId(), x, y, mouseButton, clickCount })
       },
       async setValue(index, value) { return action('setValue', { ...snapshotParams(), elementIndex: index, value }) },
+      async performSecondaryAction(index, name) { return action('performSecondaryAction', { ...snapshotParams(), elementIndex: index, action: name }) },
       async scroll(options) {
         if (options.deltaLinesX === 0 && options.deltaLinesY === 0) throw new Error('At least one scroll delta must be nonzero')
         return action('scroll', {

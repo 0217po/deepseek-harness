@@ -26,6 +26,7 @@ export const Request = z.discriminatedUnion('method', [
     z.object({ ...coordinate, mouseButton: z.enum(['left', 'right']).optional(), clickCount: z.union([z.literal(1), z.literal(2)]).optional() }).strict(),
   ]) }).strict(),
   operation('setValue', { ...snapshot, value: z.string() }),
+  operation('performSecondaryAction', { ...snapshot, action: z.string().min(1) }),
   operation('typeText', { ...app, text: z.string() }),
   operation('pressKey', { ...app, key: z.string().min(1), modifiers: z.array(z.enum(['command', 'control', 'option', 'shift', 'fn'])).optional() }),
   operation('scroll', { ...coordinate, deltaLinesX: z.number().int().min(-10).max(10), deltaLinesY: z.number().int().min(-10).max(10) }),

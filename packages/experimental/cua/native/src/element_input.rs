@@ -3,6 +3,35 @@ use crate::{ax::bindings::*, input, owned_window};
 use anyhow::{ensure, Context, Result};
 use core_foundation::base::{CFRelease, CFTypeRef};
 
+fn action_key(value: &str) -> String {
+    value
+        .strip_prefix("AX")
+        .unwrap_or(value)
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+pub fn secondary_action(pid: i32, pointer: usize, requested: &str) -> Result<()> {
+    let element = pointer as AXUIElementRef;
+    let actions = unsafe { copy_action_names(element) };
+    let action = actions
+        .iter()
+        .find(|action| action_key(action) == action_key(requested))
+        .context("Element does not advertise this action; refresh getAXState")?;
+    input::ax_actions::ensure_ax_action_enabled(pointer, action)?;
+    if action == "AXRaise" {
+        crate::apps::activate(pid)?;
+    }
+    let error = unsafe { perform_action(element, action) };
+    ensure!(
+        error == kAXErrorSuccess,
+        "Accessibility action {requested} failed with error {error}"
+    );
+    Ok(())
+}
+
 pub fn click(pid: i32, pointer: usize, button: &str, count: usize) -> Result<()> {
     ensure!(
         matches!((button, count), ("left", 1 | 2) | ("right", 1)),
@@ -61,5 +90,17 @@ pub fn click(pid: i32, pointer: usize, button: &str, count: usize) -> Result<()>
             &[],
             input::mouse::WindowClickDelivery::Background,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::action_key;
+
+    #[test]
+    fn observed_native_and_display_action_names_match() {
+        assert_eq!(action_key("AXRaise"), action_key("Raise"));
+        assert_eq!(action_key("AXZoomWindow"), action_key("zoom window"));
+        assert_ne!(action_key("AXRaise"), action_key("AXPress"));
     }
 }

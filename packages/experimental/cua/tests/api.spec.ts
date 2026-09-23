@@ -336,6 +336,17 @@ describe('input actions', () => {
     ])
   })
 
+  it('routes an explicit secondary action through the selected window snapshot', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    const window = await app.getWindow(23)
+    await window.performSecondaryAction(2, 'raise')
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'performSecondaryAction', params: {
+      appHandle: 'app-17', snapshotId: 'snapshot-2', elementIndex: 2, action: 'raise',
+    } })
+    await expect(window.performSecondaryAction(2, '')).rejects.toThrow()
+  })
+
   it('propagates native failures once and rejects malformed delivery claims', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')

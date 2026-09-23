@@ -59,9 +59,7 @@ pub fn activate(pid: i32) -> anyhow::Result<()> {
             .ok_or_else(|| anyhow::anyhow!("Application exited before activation"))?;
         app.unhide();
         anyhow::ensure!(
-            app.activateWithOptions(
-                NSApplicationActivationOptions::NSApplicationActivateIgnoringOtherApps
-            ),
+            app.activateWithOptions(NSApplicationActivationOptions::empty()),
             "macOS refused application activation"
         );
     }

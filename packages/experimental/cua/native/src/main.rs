@@ -25,6 +25,7 @@ const METHODS: &[&str] = &[
     "getState",
     "click",
     "setValue",
+    "performSecondaryAction",
     "typeText",
     "pressKey",
     "scroll",
@@ -331,6 +332,7 @@ impl Driver {
                 "clickCount",
             ],
             "setValue" => &["appHandle", "snapshotId", "elementIndex", "value"],
+            "performSecondaryAction" => &["appHandle", "snapshotId", "elementIndex", "action"],
             "typeText" => &["appHandle", "text"],
             "pressKey" => &["appHandle", "key", "modifiers"],
             "scroll" => &[
@@ -397,7 +399,6 @@ impl Driver {
                 "Selector matches multiple running apps; select an exact PID from listApps",
             )?;
             let app = &matches[0];
-            apps::activate(app.pid)?;
             let handle = self.remember_app(app.pid, process_started(app.pid)?);
             let mut result = json!({"pid":app.pid,"appHandle":handle,"name":app.name});
             if let Some(bundle_id) = &app.bundle_id {
@@ -579,6 +580,14 @@ impl Driver {
                 input::ax_actions::set_ax_value(
                     self.element(&handle, params)?,
                     text(params, "value")?,
+                )?;
+                Ok(json!({"dispatched":true,"verified":false}))
+            }
+            "performSecondaryAction" => {
+                element_input::secondary_action(
+                    pid,
+                    self.element(&handle, params)?,
+                    text(params, "action")?,
                 )?;
                 Ok(json!({"dispatched":true,"verified":false}))
             }

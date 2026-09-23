@@ -92,6 +92,13 @@ export interface CuaSurface {
    */
   setValue(index: number, value: string): Promise<CuaActionResult>
   /**
+   * Invoke an action advertised by an observed element; raising a window activates its app.
+   * @param index - Index from this surface's latest AX tree.
+   * @param action - Advertised action name, such as raise or zoomwindow.
+   * @returns Dispatch evidence; menu and window actions can change focus.
+   */
+  performSecondaryAction(index: number, action: string): Promise<CuaActionResult>
+  /**
    * Scroll at a window point.
    * @param options - point and line deltas; at least one delta must be nonzero.
    * @returns dispatch evidence.
@@ -163,7 +170,7 @@ export interface CuaApi {
    */
   getState(options?: CuaObservationOptions): Promise<{ apps: CuaAppInfo[]; browsers: [] }>
   /**
-   * Activate an existing app and emit initial AX state.
+   * Select an existing app and emit initial AX state without activating it.
    * @param selector - exact name, bundle ID, absolute application path or PID string.
    * @returns a handle tied to this process lifetime.
    */
