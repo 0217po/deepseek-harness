@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 mod apps;
 mod ax;
+mod element_input;
 mod input;
 mod permissions;
 mod windows;
@@ -381,6 +382,8 @@ impl Driver {
                     app.name == selector
                         || app.bundle_id.as_deref() == Some(selector)
                         || app.pid.to_string() == selector
+                        || (selector.starts_with('/')
+                            && apps::path_for_pid(app.pid).as_deref() == Some(selector))
                 })
                 .collect();
             require(
@@ -483,7 +486,7 @@ impl Driver {
                     "index":index,"role":node.role,"title":node.title,"value":node.value_state,"description":node.description,
                     "identifier":node.identifier,"bounds":node.frame,"actions":node.actions,"enabled":node.enabled,
                 }))).collect();
-                let result = json!({"appHandle":handle,"pid":pid,"windowId":window,"snapshotId":id,"tree":tree.tree_markdown,"elements":elements,
+                let result = json!({"appHandle":handle,"pid":pid,"windowId":window,"focusedWindowId":ax::bindings::focused_window_id_of_pid(pid),"snapshotId":id,"tree":tree.tree_markdown,"elements":elements,
                     "windows":windows::all_windows().into_iter().filter(|w| w.pid == pid).map(|w| window_json(&w)).collect::<Vec<_>>(),"truncated":tree.truncated});
                 self.snapshots.insert(scope, snapshot);
                 Ok(result)
@@ -497,21 +500,27 @@ impl Driver {
                         "INVALID_ARGUMENT",
                         "Element and coordinate targets cannot be combined",
                     )?;
-                    if let Some(button) = params.get("mouseButton") {
-                        require(
-                            button.as_str() == Some("left"),
-                            "INVALID_ARGUMENT",
-                            "AX click supports one left click",
-                        )?;
-                    }
-                    if let Some(count) = params.get("clickCount") {
-                        require(
-                            count.as_u64() == Some(1),
-                            "INVALID_ARGUMENT",
-                            "AX click supports one left click",
-                        )?;
-                    }
-                    input::ax_actions::perform_ax_action(self.element(&handle, params)?, "press")?;
+                    let button = params
+                        .get("mouseButton")
+                        .map(|_| text(params, "mouseButton"))
+                        .transpose()?
+                        .unwrap_or("left");
+                    let count = params
+                        .get("clickCount")
+                        .map(|_| integer(params, "clickCount"))
+                        .transpose()?
+                        .unwrap_or(1);
+                    require(
+                        matches!((button, count), ("left", 1 | 2) | ("right", 1)),
+                        "INVALID_ARGUMENT",
+                        "Unsupported mouse button or click count",
+                    )?;
+                    element_input::click(
+                        pid,
+                        self.element(&handle, params)?,
+                        button,
+                        count as usize,
+                    )?;
                 } else {
                     let id = window_id(params)?;
                     self.coordinate_snapshot(&handle, params, id)?;

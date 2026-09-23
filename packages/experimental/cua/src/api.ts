@@ -47,6 +47,8 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
     function windowId(): number {
       if (selectedWindow !== undefined) return selectedWindow
       const windows = observed?.windows.filter(window => window.isOnScreen && window.bounds.width > 0 && window.bounds.height > 0)
+      const focused = windows?.find(window => window.windowId === observed?.focusedWindowId)
+      if (focused) return focused.windowId
       const first = windows?.[0]
       if (!first || windows.length !== 1) throw new Error('Select a window with app.getWindows() and app.getWindow(windowId) before this operation')
       return first.windowId
@@ -86,8 +88,9 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
         const clickCount = options?.clickCount ?? 1
         if (mouseButton === 'right' && clickCount !== 1) throw new Error('Right double-click is unsupported')
         if (typeof target === 'number') {
-          if (mouseButton !== 'left' || clickCount !== 1) throw new Error('Element clicks support only a single left click')
-          return action('click', { ...snapshotParams(), elementIndex: target })
+          return action('click', { ...snapshotParams(), elementIndex: target,
+            ...mouseButton === 'left' ? {} : { mouseButton }, ...clickCount === 1 ? {} : { clickCount },
+          })
         }
         const [x, y] = target
         return action('click', { ...snapshotParams(), windowId: windowId(), x, y, mouseButton, clickCount })

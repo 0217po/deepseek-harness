@@ -178,10 +178,16 @@
               "minimum": 0
             },
             "mouseButton": {
-              "const": "left"
+              "enum": [
+                "left",
+                "right"
+              ]
             },
             "clickCount": {
-              "const": 1
+              "enum": [
+                1,
+                2
+              ]
             }
           },
           "required": [

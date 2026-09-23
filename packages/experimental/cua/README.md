@@ -34,7 +34,7 @@ export DSH_CUA_HELPER="$cua_native_root/target/release/dsh-cua-native"
 pnpm dsh headless --patch packages/experimental/cua/examples/macos.cordis.yml --dump-config
 ```
 
-The dump command checks profile composition without a model request. For a real task, replace `--dump-config` with a prompt and configure the profile’s model credentials. The overlay mounts the computer-use registry and this provider; remove an existing competing provider before using it. The responsible host/helper needs Accessibility permission for AX/input and Screen Recording permission for capture. `getCapabilities` reports permission state without opening a system dialog. Start the target application yourself.
+The dump command checks profile composition without a model request. For a real task, replace `--dump-config` with a prompt and configure the profile’s model credentials. The overlay mounts the computer-use registry and this provider; remove an existing competing provider before using it. The responsible host/helper needs Accessibility permission for AX/input and Screen Recording permission for capture. `getCapabilities` reports permission state without opening a system dialog. Start the target application yourself. Select it by name, bundle ID, absolute application path, or PID.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -59,11 +59,11 @@ const window = await app.getWindow(windows[0].windowId)
 await window.getScreenshot()
 ```
 
-Choose the intended window from its title and bounds. `getWindow` emits its initial AX tree. Window objects retain separate snapshots, so reading one window does not invalidate another. Re-reading the same scope invalidates old indices. App-scoped coordinate operations require exactly one visible, nonzero-size window; explicit window objects remove that ambiguity. Keyboard methods stay on `app` because input follows the app’s current focus.
+Choose the intended window from its title and bounds. `getWindow` emits its initial AX tree. Window objects retain separate snapshots, so reading one window does not invalidate another. Re-reading the same scope invalidates old indices. App-scoped screenshots and coordinates use the focused window when it appears in the latest observation, otherwise require exactly one visible, nonzero-size window. Explicit window objects select a particular target. Keyboard methods stay on `app` because input follows the app’s current focus.
 
 Retained objects resolve the current tool binding on every call. The external runtime owns persistence, imports, cancellation and completion-value serialization. Screenshots return PNG bytes; the standard tool pipeline admits the image attachment exactly once. `emit: false` suppresses facade output only. A host that uses another dispatcher can build objects through `createCuaApi` from `./api`.
 
-Actions report dispatch, not application success. Read state after input. `STALE_APP` requires acquiring the application again; `STALE_SNAPSHOT` requires a fresh AX read. Transport timeout/cancellation terminates that Agent’s helper and invalidates its handles. Never retry uncertain input automatically. Closing an Agent releases its helper and AX references, without undoing changes to applications.
+Indexed clicks support a single right click or a single/double left click. The helper uses an advertised accessibility action when available; pointer delivery resolves the element’s current bounds and verifies its owning window. Actions report dispatch, not application success. Read state after input. `STALE_APP` requires acquiring the application again; `STALE_SNAPSHOT` requires a fresh AX read. Transport timeout/cancellation terminates that Agent’s helper and invalidates its handles. Never retry uncertain input automatically. Closing an Agent releases its helper and AX references, without undoing changes to applications.
 
 -----
 

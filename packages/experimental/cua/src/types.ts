@@ -51,7 +51,7 @@ export interface CuaWindowInfo {
 }
 /** Successful input dispatch; application outcome still requires observation. */
 export interface CuaActionResult { dispatched: true; verified: false }
-/** AX element clicks support only one left click. */
+/** Indexed and coordinate clicks support left single/double clicks and right single clicks. */
 export interface CuaClickOptions { mouseButton?: 'left' | 'right'; clickCount?: 1 | 2 }
 /** Positive deltas reveal content above/left; each axis is an integer from -10 to 10. */
 export interface CuaScrollOptions { x: number; y: number; deltaLinesX: number; deltaLinesY: number }
@@ -107,7 +107,7 @@ export interface CuaSurface {
 }
 /** One explicit window; keyboard operations remain app-scoped because they follow focus. */
 export interface CuaWindow extends CuaSurface { readonly windowId: number }
-/** Native app handle; implicit coordinate operations require one observed window. */
+/** Native app handle; implicit coordinates use the focused window or the sole visible window. */
 export interface CuaApp extends CuaSurface {
   readonly pid: number
   readonly appHandle: CuaAppHandle
@@ -158,7 +158,7 @@ export interface CuaApi {
   getState(options?: CuaObservationOptions): Promise<{ apps: CuaAppInfo[]; browsers: [] }>
   /**
    * Select an existing app and emit initial AX state.
-   * @param selector - exact name, bundle ID or PID string.
+   * @param selector - exact name, bundle ID, absolute application path or PID string.
    * @returns a handle tied to this process lifetime.
    */
   getApp(selector: string): Promise<CuaApp>

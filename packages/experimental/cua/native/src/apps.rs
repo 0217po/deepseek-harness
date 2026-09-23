@@ -17,7 +17,9 @@ pub fn list_apps() -> Vec<AppInfo> {
         let running = NSWorkspace::sharedWorkspace().runningApplications();
         for index in 0..running.count() {
             let app = running.objectAtIndex(index);
-            if app.isTerminated() || app.activationPolicy() != NSApplicationActivationPolicy::Regular {
+            if app.isTerminated()
+                || app.activationPolicy() != NSApplicationActivationPolicy::Regular
+            {
                 continue;
             }
             if let Some(name) = app.localizedName() {
@@ -37,5 +39,15 @@ pub fn bundle_id_for_pid(pid: i32) -> Option<String> {
     unsafe {
         let app = NSRunningApplication::runningApplicationWithProcessIdentifier(pid)?;
         Some(app.bundleIdentifier()?.to_string())
+    }
+}
+
+pub fn path_for_pid(pid: i32) -> Option<String> {
+    use objc2_app_kit::NSRunningApplication;
+    unsafe {
+        NSRunningApplication::runningApplicationWithProcessIdentifier(pid)?
+            .bundleURL()?
+            .path()
+            .map(|value| value.to_string())
     }
 }

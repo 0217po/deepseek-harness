@@ -22,7 +22,7 @@ export const Request = z.discriminatedUnion('method', [
   operation('listWindows', app),
   operation('getState', { ...app, windowId: id.optional() }),
   z.object({ method: z.literal('click'), params: z.union([
-    z.object(snapshot).strict(),
+    z.object({ ...snapshot, mouseButton: z.enum(['left', 'right']).optional(), clickCount: z.union([z.literal(1), z.literal(2)]).optional() }).strict(),
     z.object({ ...coordinate, mouseButton: z.enum(['left', 'right']).optional(), clickCount: z.union([z.literal(1), z.literal(2)]).optional() }).strict(),
   ]) }).strict(),
   operation('setValue', { ...snapshot, value: z.string() }),
@@ -48,6 +48,7 @@ export const WindowsResult = z.array(z.object({
 export const StateResult = z.object({
   appHandle: z.string().min(1).transform(value => value as CuaAppHandle),
   pid: id, windowId: id.nullable(),
+  focusedWindowId: id.nullable().optional(),
   snapshotId: z.string().min(1).transform(value => value as CuaSnapshotId),
   tree: z.string(), windows: WindowsResult, truncated: z.boolean(),
 })

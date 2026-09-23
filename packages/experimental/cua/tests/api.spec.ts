@@ -159,6 +159,23 @@ describe('application and window observations', () => {
     expect(f.dispatch).toHaveBeenCalledTimes(calls)
   })
 
+  it('captures the focused application window when several visible windows exist', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.dispatch.mockResolvedValueOnce(state({ focusedWindowId: 24, windows: [windowInfo(23), windowInfo(24)] }))
+    await app.getAXState()
+    await app.getScreenshot()
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'screenshot', params: { appHandle: 'app-17', windowId: 24 } })
+  })
+
+  it('does not select a focused window absent from the application observation', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.dispatch.mockResolvedValueOnce(state({ focusedWindowId: 99, windows: [windowInfo(23), windowInfo(24)] }))
+    await app.getAXState()
+    await expect(app.getScreenshot()).rejects.toThrow('Select a window')
+  })
+
   const identityMismatches: Record<string, JsonValue>[] = [
     { appHandle: 'another-app' }, { pid: 18 }, { windowId: 24 },
   ]
@@ -272,8 +289,7 @@ describe('input actions', () => {
 
   const invalidActions: Array<[string, (app: CuaApp) => Promise<unknown>]> = [
     ['right double click', app => app.click([1, 2], { mouseButton: 'right', clickCount: 2 })],
-    ['right AX click', app => app.click(0, { mouseButton: 'right' })],
-    ['double AX click', app => app.click(0, { clickCount: 2 })],
+    ['right AX double click', app => app.click(0, { mouseButton: 'right', clickCount: 2 })],
     ['negative AX index', app => app.click(-1)],
     ['nonfinite coordinate', app => app.click([NaN, 0])],
     ['negative coordinate', app => app.click([-1, 0])],
@@ -304,6 +320,17 @@ describe('input actions', () => {
       { method: 'typeText', params: { appHandle: 'app-17', text: '中文\nline two' } },
       { method: 'pressKey', params: { appHandle: 'app-17', key: 'a', modifiers: ['control', 'shift'] } },
       { method: 'pressKey', params: { appHandle: 'app-17', key: 'Return', modifiers: [] } },
+    ])
+  })
+
+  it('retains the snapshot identity for indexed right and double clicks', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    await app.click(12, { mouseButton: 'right' })
+    await app.click(13, { clickCount: 2 })
+    expect(f.dispatch.mock.calls.slice(-2).map(([operation]) => operation)).toEqual([
+      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementIndex: 12, mouseButton: 'right' } },
+      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementIndex: 13, clickCount: 2 } },
     ])
   })
 

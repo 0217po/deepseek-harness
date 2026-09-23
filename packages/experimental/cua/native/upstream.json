@@ -54,7 +54,7 @@
     {
       "local": "src/apps.rs",
       "upstream": "libs/cua-driver/rust/crates/platform-macos/src/apps/mod.rs",
-      "changes": "Keep regular running applications and bundle ID lookup only; camelCase output and omit absent bundle identifiers."
+      "changes": "Keep regular running applications, bundle ID and application-path lookup; camelCase output and omit absent bundle identifiers."
     }
   ],
   "localFiles": [
@@ -62,6 +62,7 @@
     "src/permissions/panel.rs",
     "src/permissions/mod.rs",
     "src/ax/mod.rs",
-    "src/input/mod.rs"
+    "src/input/mod.rs",
+    "src/element_input.rs"
   ]
 }
