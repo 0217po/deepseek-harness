@@ -138,7 +138,10 @@ describe('persistent PTC host protocol', () => {
   })
 
   it('returns current binding successes, exceptions and unavailable bindings', async () => {
-    const cases: Record<string, PtcBindingFunction>[] = [{ test: async () => 42 }, { test: async () => { throw new Error('denied') } }, {}]
+    const cases: Record<string, PtcBindingFunction>[] = [
+      { test: async () => 42 }, { test: async () => { throw new Error('denied') } },
+      { test: () => Promise.reject('denied') }, {},
+    ]
     for (const functions of cases) {
       const h = await setup()
       h.receive((raw) => {
@@ -167,7 +170,7 @@ describe('persistent PTC host protocol', () => {
 
   it('cleans up after launch failure and cancellation during executable resolution', async () => {
     const h = await setup()
-    h.resolveExecutable.mockRejectedValue(new Error('missing executable'))
+    h.resolveExecutable.mockRejectedValue('missing executable')
     expect((await h.start(request, NO_INITIAL_FRAME)).error?.message).toContain('missing executable')
     const waiting = await setup()
     const ready = Promise.withResolvers<string>()
@@ -204,6 +207,7 @@ describe('persistent PTC host protocol', () => {
 
   it('rejects invalid resolved inputs and deployment bounds', async () => {
     const h = await setup()
+    expect(h.runtime.executionInstructions).toContain('Variables, functions, and imported modules remain in memory')
     await expect(h.runtime.run({ ...request, cwd: '.', timeoutMs: null })).rejects.toThrow('resolved inputs')
     await expect(h.runtime.run({ ...request, cwd: process.cwd(), timeoutMs: Infinity })).rejects.toThrow('resolved inputs')
     for (const config of [
@@ -213,4 +217,19 @@ describe('persistent PTC host protocol', () => {
       await expect(setup(config)).rejects.toThrow('persistent PTC')
     }
   })
+})
+
+it('rejects corrupt framed traffic before it reaches the evaluator', async () => {
+  const h = await setup()
+  h.onBoot(() => { h.control.emit('data', Buffer.from([0, 0, 0, 1, 255])) })
+  expect((await h.start()).error?.kind).toBe('protocol')
+})
+
+it('discards unsolicited idle traffic and awaits the retained process exit', async () => {
+  const h = await setup()
+  h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+  expect((await h.start()).error).toBeUndefined()
+  h.emit(frame({ type: 'log', text: 'late' }))
+  await h.direct.promise
+  expect(h.terminate).toHaveBeenCalledTimes(1)
 })

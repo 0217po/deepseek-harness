@@ -78,7 +78,6 @@ export async function runPersistentMain(stream: Duplex, maxMessageBytes: number,
     const evaluation: Evaluation = {
       id, logs, active: true,
       finish(result) {
-        if (!evaluation.active) return
         evaluation.active = false
         for (const call of pending.values()) call.reject(new Error('PTC evaluation ended before the binding completed'))
         pending.clear()
@@ -109,8 +108,10 @@ export async function runPersistentMain(stream: Duplex, maxMessageBytes: number,
     })
   }, () => { channel.close(); closed.resolve() })
   stream.once('close', () => { closed.resolve() })
-  await channel.send({ type: 'ready' })
-  try { await closed.promise } finally {
+  try {
+    await channel.send({ type: 'ready' })
+    await closed.promise
+  } finally {
     if (current) current.active = false
     repl.close()
     input.destroy()

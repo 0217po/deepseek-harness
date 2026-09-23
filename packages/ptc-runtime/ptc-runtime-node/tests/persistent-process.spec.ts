@@ -103,3 +103,9 @@ it.each([0, 1.5, 4294967296])('rejects an invalid control limit %s', async (limi
     await expect(runPersistentMain(stream, limit, { env: {}, stdout: { write: () => true }, stderr: { write: () => true }, chdir: () => {} })).rejects.toThrow('invalid control message limit')
   } finally { stream.destroy() }
 })
+
+it('shuts down an idle REPL without creating an evaluation', async () => {
+  const h = await setup()
+  await h.close()
+  expect(h.seen).toEqual([])
+})

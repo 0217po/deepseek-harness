@@ -52,7 +52,6 @@ class Kernel {
     const output = new OutputLedger(this.config.maxOutputBytes)
     const logs: string[] = []
     const result = Promise.withResolvers<PtcRunResult>()
-    let settled = false
     const timer = spec.timeoutMs === null ? undefined : setTimeout(() => {
       evaluation.finish({ kind: 'timeout', message: `execution deadline reached (${spec.timeoutMs}ms); retained variables were cleared` }, undefined, true)
     }, spec.timeoutMs)
@@ -70,8 +69,6 @@ class Kernel {
         }
       },
       finish: (error, value, discard = false) => {
-        if (settled) return
-        settled = true
         clearTimeout(timer)
         spec.signal?.removeEventListener('abort', onAbort)
         this.active = undefined
@@ -139,7 +136,7 @@ class Kernel {
       stream.on('error', (error: Error) => this.fail('worker-exit', error.message))
     }
     this.channel = new JsonChannel(handle.control, this.config.maxMessageBytes, (raw, bytes) => this.receive(raw, bytes), (error, kind) => {
-      if (!this.closed) this.fail(kind === 'protocol' ? 'protocol' : 'worker-exit', kind === 'protocol' ? error.message : 'persistent Node process stopped')
+      this.fail(kind === 'protocol' ? 'protocol' : 'worker-exit', kind === 'protocol' ? error.message : 'persistent Node process stopped')
     })
     void handle.done.then(() => {
       setImmediate(() => { if (!this.closed) this.fail('worker-exit', 'persistent Node process stopped') })
@@ -147,16 +144,16 @@ class Kernel {
   }
 
   private receive(raw: unknown, bytes: number): void {
-    if (this.closed) return
     if (!record(raw)) { this.fail('protocol', 'invalid persistent PTC frame'); return }
+    const evaluation = this.active
+    if (!evaluation) { this.fail('protocol', 'frame arrived without an active PTC evaluation'); return }
     if (!this.ready) {
       if (raw.type !== 'ready') { this.fail('protocol', 'expected persistent PTC readiness'); return }
       this.ready = true
-      if (this.active) this.dispatch(this.active)
+      this.dispatch(evaluation)
       return
     }
-    const evaluation = this.active
-    if (!evaluation || raw.id !== evaluation.id || !record(raw.payload)) { this.fail('protocol', 'frame does not belong to the active PTC evaluation'); return }
+    if (raw.id !== evaluation.id || !record(raw.payload)) { this.fail('protocol', 'frame does not belong to the active PTC evaluation'); return }
     const payload = raw.payload
     switch (payload.type) {
       case 'log':
