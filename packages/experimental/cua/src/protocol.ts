@@ -1,4 +1,5 @@
 /** JSON validation shared by model tool admission and the native object facade. */
+import { Buffer } from 'node:buffer'
 import { z } from 'zod'
 import type { CuaAppHandle, CuaSnapshotId } from './types.ts'
 
@@ -14,6 +15,11 @@ const bounds = z.object({
 const operation = <M extends string, S extends z.ZodRawShape>(method: M, params: S) => z.object({
   method: z.literal(method), params: z.object(params).strict(),
 }).strict()
+// Native responses are byte-bounded before parsing. Exact re-encoding also rejects
+// whitespace, missing padding and nonzero pad bits without a recursive regex.
+const imageBase64 = z.string().min(1).refine(value => Buffer.from(value, 'base64').toString('base64') === value, {
+  message: 'Expected canonical base64 image data',
+})
 
 /** Complete native request schema; resource bounds are supplied by the host. */
 export const Request = z.discriminatedUnion('method', [
@@ -56,7 +62,7 @@ export const StateResult = z.object({
 })
 /** PNG data and coordinate metadata; pixel dimensions do not define input coordinates. */
 export const ScreenshotResult = z.object({
-  mimeType: z.literal('image/png'), data: z.base64().min(1), pixelWidth: id, pixelHeight: id, windowId: id,
+  mimeType: z.literal('image/png'), data: imageBase64, pixelWidth: id, pixelHeight: id, windowId: id,
   bounds: bounds.extend({ width: z.number().positive(), height: z.number().positive() }), coordinateSpace: z.literal('window-points'),
 })
 /** Permissions are reported without opening system permission dialogs. */

@@ -61,6 +61,8 @@ await window.getScreenshot()
 
 Choose the intended window from its title and bounds. `getWindow` emits its initial AX tree. An owned window without an AX surface returns an empty snapshot and remains available for screenshots and coordinate input. Window objects retain separate snapshots, so reading one window does not invalidate another. Re-reading the same scope invalidates old indices. App-scoped screenshots and coordinates use the focused window when it appears in the latest observation, otherwise require exactly one visible, nonzero-size window. Explicit window objects select a particular target. Keyboard methods stay on `app` because input follows the app’s current focus.
 
+Screenshot data must use canonical Base64. Response byte limits apply before parsing, and attachment admission validates the raster and its configured capacity.
+
 Retained objects resolve the current tool binding on every call. The external runtime owns persistence, imports, cancellation and completion-value serialization. Screenshots return PNG bytes; the standard tool pipeline admits the image attachment exactly once. `emit: false` suppresses facade output only. A host that uses another dispatcher can build objects through `createCuaApi` from `./api`.
 
 AppKit sheets are selectable by their window IDs and remain visible in their document window’s tree. Keyboard input follows a system Open/Save panel only when the application’s focused sheet identifies one Apple panel-service window and that service still focuses the same panel. Unrelated or ambiguous remote recipients fail before dispatch.

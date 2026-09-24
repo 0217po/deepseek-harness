@@ -18,9 +18,21 @@ it.each(rejectedRequests)('rejects $reason at operation admission', ({ request }
   expect(Request.safeParse(request).success).toBe(false)
 })
 
-it('rejects malformed screenshot encoding before decoding bytes', () => {
+it.each([
+  '', 'not base64!', 'AQ', 'AQ===', 'AQ==\n', 'A Q==', 'AQ-_', 'AB==', 'AAF=',
+])('rejects noncanonical screenshot base64 %j', (data) => {
   expect(ScreenshotResult.safeParse({
-    mimeType: 'image/png', data: 'not base64!', pixelWidth: 1, pixelHeight: 1, windowId: 23,
+    mimeType: 'image/png', data, pixelWidth: 1, pixelHeight: 1, windowId: 23,
     bounds: { x: 0, y: 0, width: 10, height: 10 }, coordinateSpace: 'window-points',
+  }).success).toBe(false)
+})
+
+it.each([
+  { mimeType: 'image/jpeg' }, { pixelWidth: 0 }, { pixelHeight: -1 }, { windowId: 0 },
+  { bounds: { x: 0, y: 0, width: 0, height: 10 } }, { coordinateSpace: 'screen-pixels' },
+])('retains screenshot metadata validation for %j', (invalid) => {
+  expect(ScreenshotResult.safeParse({
+    mimeType: 'image/png', data: 'AQ==', pixelWidth: 1, pixelHeight: 1, windowId: 23,
+    bounds: { x: 0, y: 0, width: 10, height: 10 }, coordinateSpace: 'window-points', ...invalid,
   }).success).toBe(false)
 })
