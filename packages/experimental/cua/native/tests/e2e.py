@@ -39,6 +39,8 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
     scoped = call("getState", {**primary_params, "windowId": sheet_id})
     assert any(e["role"] == "AXSheet" for e in scoped["elements"]), scoped
     assert "Increment primary" not in scoped["tree"], scoped
+    call("activate", owner)
+    call("getState", {**primary_params, "windowId": sheet_id, "maxElements": 2000})
     call("pressKey", {**owner, "key": "g", "modifiers": ["command", "shift"]})
     goto = wait_observation(lambda observed: any(e["identifier"] == "PathTextField" for e in observed["elements"]),
                             "Command+Shift+G did not reach the system panel")

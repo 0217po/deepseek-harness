@@ -43,6 +43,8 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         window.title = "DSH CUA primary fixture"
         window.isReleasedWhenClosed = false
         window.animationBehavior = .none
+        // Keep fixture geometry stable when Stage Manager switches application sets.
+        window.collectionBehavior = [.canJoinAllApplications, .stationary]
         let content = window.contentView!
         field = NSTextField(frame: NSRect(x: 30, y: 425, width: 350, height: 28))
         field.placeholderString = "Test text"
@@ -79,6 +81,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         second.title = "DSH CUA secondary fixture"
         second.isReleasedWhenClosed = false
         second.animationBehavior = .none
+        second.collectionBehavior = [.canJoinAllApplications, .stationary]
         let secondary = NSButton(title: "Increment secondary", target: self, action: #selector(incrementSecondary))
         secondary.frame = NSRect(x: 30, y: 90, width: 240, height: 32)
         second.contentView!.addSubview(secondary)
@@ -96,6 +99,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     @objc func incrementSecondary() { secondaryCount += 1; persist() }
     @objc func openFile() {
         let panel = NSOpenPanel()
+        panel.collectionBehavior = [.canJoinAllApplications, .stationary]
         panel.directoryURL = URL(fileURLWithPath: statePath).deletingLastPathComponent()
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
