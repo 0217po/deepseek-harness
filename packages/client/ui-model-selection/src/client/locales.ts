@@ -21,6 +21,8 @@ export const zh = {
   'trigger.selectAria': '请选择模型',
   'trigger.aria': '选择模型，当前 {model}',
   'trigger.ariaEffort': '选择模型，当前 {model}，推理等级 {effort}',
+  'trigger.unconfigured': '未配置模型',
+  'trigger.unconfiguredAria': '选择模型，当前未配置模型',
   'menu.aria': '模型与推理等级',
   'menu.model': '模型',
   'menu.effort': '推理等级',
@@ -31,6 +33,8 @@ export const zh = {
   'action.reload': '重新加载',
   'warning.groupLoad': '{name} 加载失败：{message}',
   'empty.models': '没有可用的模型。',
+  'empty.unconfiguredTitle': '还没有可用的模型',
+  'empty.unconfiguredHint': '登录 DeepSeek 账号，或在「设置 → 模型」中添加 API 密钥。',
   'empty.efforts': '当前模型未提供推理等级。',
 } satisfies Record<string, string>
 
@@ -50,6 +54,8 @@ export const en = {
   'trigger.selectAria': 'Select model',
   'trigger.aria': 'Select model, current {model}',
   'trigger.ariaEffort': 'Select model, current {model}, reasoning effort {effort}',
+  'trigger.unconfigured': 'No model configured',
+  'trigger.unconfiguredAria': 'Select model, no model configured',
   'menu.aria': 'Model and reasoning effort',
   'menu.model': 'Model',
   'menu.effort': 'Effort',
@@ -60,5 +66,7 @@ export const en = {
   'action.reload': 'Reload',
   'warning.groupLoad': '{name} failed to load: {message}',
   'empty.models': 'No models available.',
+  'empty.unconfiguredTitle': 'No models available yet',
+  'empty.unconfiguredHint': 'Sign in to your DeepSeek account, or add an API key in Settings → Models.',
   'empty.efforts': 'This model provides no reasoning effort levels.',
 } satisfies Record<ModelKey, string>

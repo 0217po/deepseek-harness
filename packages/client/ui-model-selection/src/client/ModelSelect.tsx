@@ -26,7 +26,7 @@ import clsx from 'clsx'
 import type { ModelReasoningEffort, ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular,
-  IconDataOutlineRegular, IconWarningOutlineRegular, Toast,
+  IconDataOutlineRegular, IconWarningOutlineRegular, StateDot, Toast,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelSelectInjected } from './slots.ts'
@@ -94,6 +94,10 @@ export function ModelSelect(
     ? -1
     : choices.findIndex(c => c.selection.provider === state.current?.provider && c.selection.model === state.current.model)
   const currentChoice = choices[selectedIndex]
+  // A loaded catalog with no model and no provider failure to retry: no route can serve a
+  // request, so the trigger names that state instead of the saved route id.
+  const unconfigured = state.current !== null && state.error === null
+    && choices.length === 0 && state.failures.length === 0
   const reasoning = currentChoice?.model.reasoning
   const effectiveEffort = state.current?.reasoningEffort ?? reasoning?.defaultEffort
   const effortLabel = reasoning === undefined
@@ -194,8 +198,9 @@ export function ModelSelect(
 
   const show = (): void => {
     triggerRef.current?.focus()
-    if (state.current === null) paneFocus.current = 'drill'
-    setPane(state.current === null ? 'model' : 'root')
+    const direct = state.current === null || unconfigured
+    if (direct) paneFocus.current = 'drill'
+    setPane(direct ? 'model' : 'root')
     setOpen(true)
     reload()
   }
@@ -328,16 +333,21 @@ export function ModelSelect(
   const waiting = state.current === null && state.status === 'loading'
   const modelLabel = waiting
     ? t('trigger.loading')
-    : currentChoice?.model.name
-      ?? (state.current === null ? t('trigger.fallback') : `${state.current.provider}/${state.current.model}`)
-  const triggerLabel = effortLabel === undefined ? modelLabel : `${modelLabel} · ${effortLabel}`
+    : unconfigured
+      ? t('trigger.unconfigured')
+      : currentChoice?.model.name
+        ?? (state.current === null ? t('trigger.fallback') : `${state.current.provider}/${state.current.model}`)
+  const triggerEffort = unconfigured ? undefined : effortLabel
+  const triggerLabel = triggerEffort === undefined ? modelLabel : `${modelLabel} · ${triggerEffort}`
   const triggerAria = waiting
     ? t('trigger.loading')
     : state.current === null
       ? t('trigger.selectAria')
-      : effortLabel === undefined
-        ? t('trigger.aria', { model: modelLabel })
-        : t('trigger.ariaEffort', { model: modelLabel, effort: effortLabel })
+      : unconfigured
+        ? t('trigger.unconfiguredAria')
+        : triggerEffort === undefined
+          ? t('trigger.aria', { model: modelLabel })
+          : t('trigger.ariaEffort', { model: modelLabel, effort: triggerEffort })
   itemRefs.current = []
   let itemIndex = 0
   const itemRef = () => {
@@ -375,8 +385,9 @@ export function ModelSelect(
         }}
       >
         <IconDataOutlineRegular className={css.triggerIcon} size={16} />
+        {unconfigured && <StateDot state="warning" />}
         <span className={css.triggerLabel}>{modelLabel}</span>
-        {effortLabel !== undefined && <span className={css.triggerEffort}>{effortLabel}</span>}
+        {triggerEffort !== undefined && <span className={css.triggerEffort}>{triggerEffort}</span>}
         <IconChevronDownOutlineRegular className={clsx(css.chevron, open && css.chevronOpen)} />
       </button>
 
@@ -460,9 +471,14 @@ export function ModelSelect(
                   )
                 })}
               </div>
-              {state.status === 'ready' && choices.length === 0 && (
-                <div className={css.empty}>{t('empty.models')}</div>
-              )}
+              {state.status === 'ready' && choices.length === 0 && (unconfigured
+                ? (
+                  <div className={css.empty}>
+                    <div className={css.emptyTitle}>{t('empty.unconfiguredTitle')}</div>
+                    <div>{t('empty.unconfiguredHint')}</div>
+                  </div>
+                )
+                : <div className={css.empty}>{t('empty.models')}</div>)}
             </>
           )}
 

@@ -127,6 +127,11 @@
   line-height: 18px;
 }
 
+.emptyTitle {
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+}
+
 .error,
 .warning {
   display: flex;

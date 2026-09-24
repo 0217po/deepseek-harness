@@ -145,17 +145,39 @@ describe('ModelSelect reasoning effort', () => {
     expect(screen.queryByText('Fast catalog description')).toBeNull()
   })
 
-  it.each(['model', 'provider'])('keeps the saved id and effort when the selected %s disappears', (removed) => {
+  it.each(['model', 'provider'])('keeps the saved id and effort when the selected %s disappears and other models remain', (removed) => {
     const directory = createSnapshotStore(state({ retainedEffort: 'High' }))
     render(<ModelSelect locked={false} available directory={directory} load={vi.fn()} select={vi.fn()} t={t} />)
     expect(screen.getByRole('button', { name: /选择模型，当前/ }).textContent).toContain('DeepSeek-V4-Flash')
+    const remaining = { id: 'deepseek-account', name: 'DeepSeek Account', models: [{ id: 'deepseek-flash', name: 'DeepSeek Flash' }] }
     act(() => { directory.update((snapshot) => {
-      snapshot.groups = removed === 'provider' ? [] : snapshot.groups.map(group => ({ ...group, models: [] }))
+      snapshot.groups = removed === 'provider' ? [remaining] : [...snapshot.groups.map(group => ({ ...group, models: [] })), remaining]
       snapshot.routable = false
     }) })
     expect(screen.getByRole('button', { name: /选择模型，当前/ }).textContent)
       .toMatchInlineSnapshot('"deepseek-official/deepseek-v4-flashHigh"')
     expect(directory.getSnapshot().current).toEqual(state().current)
+  })
+
+  it('names an empty catalog as unconfigured and opens on its guidance', () => {
+    const directory = createSnapshotStore(state({ groups: [], routable: false, retainedEffort: 'High' }))
+    render(<ModelSelect locked={false} available directory={directory} load={vi.fn()} select={vi.fn()} t={t} />)
+    const trigger = screen.getByRole('button', { name: zh['trigger.unconfiguredAria'] })
+    expect(trigger.textContent).toBe(zh['trigger.unconfigured'])
+    fireEvent.click(trigger)
+    expect(screen.queryByRole('menuitem', { name: /模型/ })).toBeNull()
+    expect(screen.getByText(zh['empty.unconfiguredTitle'])).toBeTruthy()
+    expect(screen.getByText(zh['empty.unconfiguredHint'])).toBeTruthy()
+    expect(screen.queryByText(zh['empty.models'])).toBeNull()
+  })
+
+  it.each([
+    { reason: 'a provider failed to load', overrides: { failures: [{ id: 'deepseek-official', name: 'DeepSeek', message: 'catalog down' }] } },
+    { reason: 'the catalog failed to load', overrides: { status: 'error' as const, error: 'catalog down' } },
+  ])('keeps the saved id when $reason', ({ overrides }) => {
+    const directory = createSnapshotStore(state({ groups: [], routable: false, ...overrides }))
+    render(<ModelSelect locked={false} available directory={directory} load={vi.fn()} select={vi.fn()} t={t} />)
+    expect(screen.getByRole('button', { name: /选择模型，当前/ }).textContent).toBe('deepseek-official/deepseek-v4-flash')
   })
 
   it('shows loading until the catalog and Session projection are both ready', async () => {
@@ -532,8 +554,7 @@ it('restores the account model name after login without changing the saved route
   render(<ModelSelect locked={false} available directory={directory} load={vi.fn()} select={vi.fn()} t={t} />)
   expect(screen.getByRole('button', { name: /选择模型，当前/ }).textContent).toBe('DeepSeek FlashHigh')
   act(() => { directory.update((snapshot) => { snapshot.groups = []; snapshot.routable = false }) })
-  expect(screen.getByRole('button', { name: /选择模型，当前/ }).textContent)
-    .toMatchInlineSnapshot('"deepseek-account/deepseek-flashHigh"')
+  expect(screen.getByRole('button', { name: /选择模型，当前/ }).textContent).toBe(zh['trigger.unconfigured'])
   act(() => { directory.update((snapshot) => { snapshot.groups = groups; snapshot.routable = true }) })
   expect(screen.getByRole('button', { name: /选择模型，当前/ }).textContent).toBe('DeepSeek FlashHigh')
   expect(directory.getSnapshot().current).toEqual(selected)
