@@ -6,7 +6,7 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/clie
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
-import { MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
+import { MenuItemButton, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { MenuOpenState, SessionRowOwnerProps } from '../src/client/contract/slots.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
@@ -728,6 +728,84 @@ describe('workspace browser rows', () => {
     fireEvent.click(quick)
     expect(onQuick).toHaveBeenCalledOnce()
     expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  it.each([400, 800])('keeps the preview available when hovering More at %dms', (dwell) => {
+    vi.useFakeTimers()
+    try {
+      const node: SessionNode = {
+        id: sid('more-hover'), title: 'More hover', blank: false, running: false,
+        runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+      }
+      render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />)
+      const row = screen.getByRole('treeitem')
+      const title = screen.getByText('More hover')
+      const more = screen.getByRole('button', { name: '会话“More hover”的操作' })
+      fireEvent.pointerEnter(row)
+      act(() => { vi.advanceTimersByTime(dwell) })
+      fireEvent(title, new MouseEvent('pointerout', { bubbles: true, relatedTarget: more }))
+      fireEvent(more, new MouseEvent('pointerover', { bubbles: true, relatedTarget: title }))
+      act(() => { vi.advanceTimersByTime(800) })
+      expect(screen.getByRole('button', { name: '复制: More hover' })).toBeTruthy()
+      fireEvent.click(more)
+      expect(screen.queryByRole('button', { name: '复制: More hover' })).toBeNull()
+    } finally {
+      cleanup()
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([0, 400, 800])('dismisses the card only after the action tooltip dwell, then until row exit (%dms)', (dwell) => {
+    vi.useFakeTimers()
+    try {
+      const node: SessionNode = {
+        id: sid('action-hover'), title: 'Action hover', blank: false, running: false,
+        runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+      }
+      const renderSlot: RowRenderSlot = (name: RowSlotName) => name === 'sidebar.workspaces.session.row.action'
+        ? <Tooltip label="Archive" delayMs={500}><button type="button" aria-label="Archive" /></Tooltip>
+        : null
+      const { rerender } = render(<SessionNodeItem node={node} currentId={undefined} now={0}
+        onOpen={vi.fn()} renderSlot={renderSlot} t={t} />)
+      const row = screen.getByRole('treeitem')
+      const title = screen.getByText('Action hover')
+      const archive = screen.getByRole('button', { name: 'Archive' })
+      const card = () => screen.queryByRole('button', { name: '复制: Action hover' })
+      fireEvent.pointerEnter(row)
+      act(() => { vi.advanceTimersByTime(dwell) })
+      if (dwell === 800) expect(card()).not.toBeNull()
+
+      fireEvent(title, new MouseEvent('pointerout', { bubbles: true, relatedTarget: archive }))
+      fireEvent(archive, new MouseEvent('pointerover', { bubbles: true, relatedTarget: title }))
+      fireEvent.mouseEnter(archive)
+      if (dwell === 800) expect(card()).not.toBeNull()
+      act(() => { vi.advanceTimersByTime(499) })
+      expect(screen.queryByRole('tooltip')).toBeNull()
+      if (dwell === 0) expect(card()).toBeNull()
+      else expect(card()).not.toBeNull()
+      act(() => { vi.advanceTimersByTime(1) })
+      expect(screen.getByRole('tooltip').textContent).toBe('Archive')
+      expect(card()).toBeNull()
+
+      fireEvent(archive, new MouseEvent('pointerout', { bubbles: true, relatedTarget: title }))
+      fireEvent(title, new MouseEvent('pointerover', { bubbles: true, relatedTarget: archive }))
+      fireEvent.mouseLeave(archive, { relatedTarget: title })
+      rerender(<SessionNodeItem node={{ ...node, running: true }} currentId={undefined} now={0}
+        onOpen={vi.fn()} renderSlot={renderSlot} t={t} />)
+      act(() => { vi.advanceTimersByTime(1000) })
+      expect(screen.queryByRole('tooltip')).toBeNull()
+      expect(card()).toBeNull()
+
+      fireEvent.pointerLeave(row, { relatedTarget: document.body })
+      fireEvent.pointerEnter(row, { relatedTarget: document.body })
+      act(() => { vi.advanceTimersByTime(799) })
+      expect(card()).toBeNull()
+      act(() => { vi.advanceTimersByTime(1) })
+      expect(card()).not.toBeNull()
+    } finally {
+      cleanup()
+      vi.useRealTimers()
+    }
   })
 
   it('shows the hover card after the dwell and suppresses it while the row menu is open', () => {

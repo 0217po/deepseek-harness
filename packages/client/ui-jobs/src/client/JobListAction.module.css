@@ -39,29 +39,30 @@
 }
 
 .menu {
-  position: absolute;
-  top: calc(100% + 5px);
-  left: 0;
+  position: fixed;
   z-index: 100;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 1px;
   width: 500px;
   max-width: min(560px, calc(100vw - 32px));
   max-height: min(480px, calc(100vh - 140px));
-  margin: 0;
-  padding: 3px;
-  overflow: auto;
-  list-style: none;
-  border: 0;
-  border-radius: var(--dsw-radius-lg);
-  background: var(--dsw-specific-menu);
-  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  overflow: hidden;
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
+}
+
+.menuBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 0;
+  margin: 0;
+  padding: 3px;
+  overflow: auto;
+  list-style: none;
 }
 
 /* Section labels over the live rows and the settled tail. */

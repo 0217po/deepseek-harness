@@ -1,0 +1,47 @@
+[
+  {
+    "stage": "first-before-dwell",
+    "first": false,
+    "second": false
+  },
+  {
+    "stage": "first-shown",
+    "first": true,
+    "second": false
+  },
+  {
+    "stage": "second-instant",
+    "first": false,
+    "second": true
+  },
+  {
+    "stage": "first-instant",
+    "first": true,
+    "second": false
+  },
+  {
+    "stage": "readable-portal",
+    "first": true,
+    "second": false
+  },
+  {
+    "stage": "portal-return-before-dwell",
+    "first": false,
+    "second": false
+  },
+  {
+    "stage": "portal-return-shown",
+    "first": false,
+    "second": true
+  },
+  {
+    "stage": "list-reentry-before-dwell",
+    "first": false,
+    "second": false
+  },
+  {
+    "stage": "list-reentry-shown",
+    "first": true,
+    "second": false
+  }
+]

@@ -172,7 +172,7 @@ Row motion belongs to [AnimatedRows](src/client/rows/AnimatedRows.tsx). It measu
 
 ### Hover cards
 
-Workspace and Session hover cards copy the value their row clips: activating a Workspace card writes its full directory path, while activating a non-blank Session card writes its full display title. A provisional blank New Session card remains read-only because its localized label is a placeholder rather than session content. A Session card also renders its `sidebar.session.row.hover` seat between the relative time and the trailing status lines whenever the card is open, independent of the row's own state.
+Workspace and Session hover cards copy the value their row clips: activating a Workspace card writes its full directory path, while activating a non-blank Session card writes its full display title. A provisional blank New Session card remains read-only because its localized label is a placeholder rather than session content. A Session card also renders its `sidebar.session.row.hover` seat between the relative time and the trailing status lines whenever the card is open, independent of the row's own state. The first Session card in a physical list waits 800ms; after a card is displayed, moving to another Session in the same list replaces it immediately. Leaving the physical list resets that shared dwell, while a portaled card remains readable and copyable through the existing pointer grace. A row's action tooltip dismisses the card only after the tooltip's own dwell; returning to the title does not restore the card during that pointer visit. Hovering More preserves the card; opening its menu dismisses it. Workspace cards keep their independent dwell.
 
 </details>
 

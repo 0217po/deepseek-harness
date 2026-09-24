@@ -507,21 +507,21 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
    * blank Session from a deleted Workspace may also be visible, without actions.
    * @returns the session row locator, already present.
    */
-  async function seededSessionRow() {
-    const ungroupedRow = page.getByText('Ungrouped', { exact: true }).locator('..').locator('..')
+  async function seededSessionRow(target = page) {
+    const ungroupedRow = target.getByText('Ungrouped', { exact: true }).locator('..').locator('..')
     const ungroupedSection = ungroupedRow.locator('..')
     // Initial-current auto-expansion can race this gesture; converge on
     // expanded rather than assuming which update wins first.
     await expect.poll(async () => {
       if (await ungroupedRow.getAttribute('aria-expanded') !== 'true') {
-        await page.getByText('Ungrouped', { exact: true }).click()
-        await page.waitForTimeout(50)
+        await target.getByText('Ungrouped', { exact: true }).click()
+        await target.waitForTimeout(50)
       }
       return await ungroupedRow.getAttribute('aria-expanded')
     }, { timeout: 5_000 }).toBe('true')
     // CSS includes the actions button while it is hidden until row hover.
     const rows = ungroupedSection.locator('[role="treeitem"]')
-      .filter({ has: page.locator('button[aria-label^="Session actions for "]') })
+      .filter({ has: target.locator('button[aria-label^="Session actions for "]') })
     await expect.poll(() => rows.count(), { timeout: 10_000 }).toBe(1)
     return rows.first()
   }
@@ -559,6 +559,165 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
     await page.getByRole('button', { name: 'Settings' }).hover()
     await expect.poll(() => card.count(), { timeout: 5_000 }).toBe(0)
     expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('keeps session details dismissed after a row action until the pointer leaves the row', async () => {
+    const hoverPage = await newEnglishPage(browser)
+    try {
+      const consoleWatch = watchConsole(hoverPage)
+      await hoverPage.goto(scaffold.authenticatedUrl)
+      const row = await seededSessionRow(hoverPage)
+      const title = row.locator('[class*="title"]')
+      const card = hoverPage.getByRole('button', { name: `Copy: ${await title.innerText()}` })
+      const tooltip = hoverPage.getByRole('tooltip')
+      const observations: { stage: string; details: boolean; tooltips: string[] }[] = []
+      const observe = async (stage: string): Promise<void> => {
+        observations.push({ stage, details: await card.count() > 0, tooltips: await tooltip.allTextContents() })
+      }
+      const clockStart = Date.now()
+      await hoverPage.clock.install({ time: clockStart })
+      await hoverPage.clock.pauseAt(clockStart + 1000)
+      await title.hover()
+      await hoverPage.clock.runFor(800)
+      await card.waitFor()
+      await observe('details')
+      await row.getByRole('button', { name: /^Session actions for / }).hover()
+      await hoverPage.clock.runFor(1000)
+      expect(await card.count()).toBe(1)
+      await observe('more-hover')
+
+      await row.getByRole('button', { name: 'Archive session', exact: true }).hover()
+      await hoverPage.clock.runFor(499)
+      expect(await card.count()).toBe(1)
+      expect(await tooltip.count()).toBe(0)
+      await observe('archive-before-dwell')
+      await hoverPage.clock.runFor(1)
+      await tooltip.filter({ hasText: 'Archive' }).waitFor()
+      expect(await card.count()).toBe(0)
+      await observe('archive')
+      await row.getByRole('button', { name: 'Pin session', exact: true }).hover()
+      await hoverPage.clock.runFor(500)
+      await tooltip.filter({ hasText: 'Pin' }).waitFor()
+      expect(await card.count()).toBe(0)
+      await observe('pin')
+
+      await title.hover()
+      await tooltip.waitFor({ state: 'detached' })
+      // Advance beyond both the 800ms card dwell and the 500ms action tooltip dwell.
+      await hoverPage.clock.runFor(1600)
+      expect(await card.count()).toBe(0)
+      await observe('back-to-title')
+
+      const menu = row.getByRole('button', { name: /^Session actions for / })
+      await menu.click()
+      await hoverPage.getByRole('menu').waitFor()
+      expect(await card.count()).toBe(0)
+      await hoverPage.keyboard.press('Escape')
+      await hoverPage.getByRole('menu').waitFor({ state: 'detached' })
+      await title.hover()
+      await hoverPage.clock.runFor(1600)
+      expect(await card.count()).toBe(0)
+      await observe('menu-closed')
+
+      await hoverPage.getByRole('button', { name: 'Settings' }).hover()
+      await title.hover()
+      await hoverPage.clock.runFor(799)
+      expect(await card.count()).toBe(0)
+      await hoverPage.clock.runFor(1)
+      await card.waitFor()
+      await observe('row-reentered')
+      await compareOrRefreshGolden(
+        fileURLToPath(new URL('./expected/session-row-hover/actions.expected.json', import.meta.url)),
+        JSON.stringify(observations, null, 2), MODE,
+      )
+      expect(consoleWatch.pageErrors).toEqual([])
+    } finally {
+      await hoverPage.close()
+    }
+  }, 60_000)
+
+  it.each(['In one list', 'Workspace Tree'])('shares the first session dwell only within the physical %s list', async (layout) => {
+    const hoverScaffold = await launchWebScaffold({})
+    let hoverPage: Page | undefined
+    try {
+      const seed = await readFile(SEED, 'utf8')
+      await seedSession(hoverScaffold, seed, 'hover-first')
+      await seedSession(hoverScaffold, seed, 'hover-second')
+      await hoverScaffold.ctx.sessionController.rename({ sessionId: SessionId('hover-first'), title: 'Hover first' })
+      await hoverScaffold.ctx.sessionController.rename({ sessionId: SessionId('hover-second'), title: 'Hover second' })
+      hoverPage = await newEnglishPage(browser)
+      const ui = hoverPage
+      const consoleWatch = watchConsole(ui)
+      await ui.goto(hoverScaffold.authenticatedUrl)
+      await ui.getByRole('button', { name: 'View options' }).click()
+      await ui.getByRole('menuitem', { name: layout, exact: true }).click()
+      if (layout !== 'In one list') {
+        const header = ui.getByText('Ungrouped', { exact: true }).locator('..').locator('..')
+        await expect.poll(async () => {
+          if (await header.getAttribute('aria-expanded') !== 'true') await ui.getByText('Ungrouped', { exact: true }).click()
+          return header.getAttribute('aria-expanded')
+        }).toBe('true')
+      }
+      const first = ui.locator('[data-row-key="session:hover-first"]').getByText('Hover first', { exact: true })
+      const second = ui.locator('[data-row-key="session:hover-second"]').getByText('Hover second', { exact: true })
+      await first.waitFor()
+      await second.waitFor()
+      const firstCard = ui.getByRole('button', { name: 'Copy: Hover first', exact: true })
+      const secondCard = ui.getByRole('button', { name: 'Copy: Hover second', exact: true })
+      const observations: { stage: string; first: boolean; second: boolean }[] = []
+      const observe = async (stage: string): Promise<void> => {
+        observations.push({ stage, first: await firstCard.count() > 0, second: await secondCard.count() > 0 })
+      }
+      const clockStart = Date.now()
+      await ui.clock.install({ time: clockStart })
+      await ui.clock.pauseAt(clockStart + 1000)
+      await first.hover()
+      await ui.clock.runFor(799)
+      expect(await firstCard.count()).toBe(0)
+      await observe('first-before-dwell')
+      await ui.clock.runFor(1)
+      await firstCard.waitFor()
+      await observe('first-shown')
+      await second.hover()
+      expect(await secondCard.count()).toBe(1)
+      expect(await firstCard.count()).toBe(0)
+      await observe('second-instant')
+      await first.hover()
+      expect(await firstCard.count()).toBe(1)
+      expect(await secondCard.count()).toBe(0)
+      await observe('first-instant')
+
+      await firstCard.hover()
+      await ui.clock.runFor(500)
+      expect(await firstCard.isVisible()).toBe(true)
+      await observe('readable-portal')
+      await second.hover()
+      await ui.clock.runFor(799)
+      expect(await secondCard.count()).toBe(0)
+      await observe('portal-return-before-dwell')
+      await ui.clock.runFor(1)
+      await secondCard.waitFor()
+      await observe('portal-return-shown')
+
+      await ui.getByRole('button', { name: 'Settings' }).hover()
+      await ui.clock.runFor(300)
+      await first.hover()
+      await ui.clock.runFor(799)
+      expect(await firstCard.count()).toBe(0)
+      await observe('list-reentry-before-dwell')
+      await ui.clock.runFor(1)
+      await firstCard.waitFor()
+      await observe('list-reentry-shown')
+      const expected = layout === 'In one list' ? 'flat' : 'tree'
+      await compareOrRefreshGolden(
+        fileURLToPath(new URL(`./expected/session-row-hover/${expected}.expected.json`, import.meta.url)),
+        JSON.stringify(observations, null, 2), MODE,
+      )
+      expect(consoleWatch.pageErrors).toEqual([])
+    } finally {
+      await hoverPage?.close()
+      await hoverScaffold.close()
+    }
   }, 60_000)
 
   it('keeps an open row menu up while the pointer moves between trigger and list', async () => {
