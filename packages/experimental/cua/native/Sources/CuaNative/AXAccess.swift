@@ -40,10 +40,12 @@ final class AXAccess {
                       message: "Accessibility \(operation) failed with error \(error.rawValue)")
     }
     private func absent(_ error: AXError) -> Bool { error == .attributeUnsupported || error == .noValue || error == .notImplemented }
-    static func valueUnavailable(_ error: AXError, attribute: String) -> Bool {
-        // Some AppKit file-panel controls report failure for an optional value
-        // while their role, actions and children remain readable.
-        attribute == "AXValue" && error == .failure
+    static func optionalAttributeUnavailable(_ error: AXError, attribute: String) -> Bool {
+        // File-panel controls can lack descriptive metadata while their role
+        // and accessibility children remain readable.
+        let optional: Set<String> = ["AXValue", "AXTitle", "AXDescription", "AXIdentifier", "AXPlaceholderValue",
+                                     "AXSubrole", "AXEnabled", "AXPosition", "AXSize", "AXMain", "AXMinimized"]
+        return error == .failure && optional.contains(attribute)
     }
     static func actionsUnavailable(_ error: AXError) -> Bool {
         error == .failure || error == .actionUnsupported
@@ -52,7 +54,7 @@ final class AXAccess {
         try prepare(element)
         var value: CFTypeRef?
         let error = AXUIElementCopyAttributeValue(element, name as CFString, &value)
-        if absent(error) || Self.valueUnavailable(error, attribute: name) { return nil }
+        if absent(error) || Self.optionalAttributeUnavailable(error, attribute: name) { return nil }
         guard error == .success else { throw failure(error, "read \(name)") }
         guard let value else { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility \(name) returned no value after success") }
         return value
