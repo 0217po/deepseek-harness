@@ -25,7 +25,7 @@ Authentication resolution returns the validated API key in `x-api-key` for both 
 <a id="use-this-package"></a>
 ## Use this package
 
-`apiKeyEnv` defaults to `DEEPSEEK_API_KEY` and resolves per request. When the credentials service exists, its precedence applies; only compositions without that service read the launch environment directly. Requests with missing credentials fail with `MISSING_CREDENTIAL`; malformed credentials fail with `INVALID_CREDENTIAL`. Model discovery returns the configured catalog regardless of credentials.
+`apiKeyEnv` defaults to `DEEPSEEK_API_KEY` and resolves per request. When the credentials service exists, its precedence applies; only compositions without that service read the launch environment directly. Missing credentials fail with `MISSING_CREDENTIAL` and yield an empty catalog, so the route offers no models until its key is stored; malformed credentials fail with `INVALID_CREDENTIAL`.
 
 ```yaml
 - id: llm-deepseek
@@ -42,7 +42,7 @@ The endpoint and credential reference come from one configuration resolution. In
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-Registrations and listeners dispose with the plugin. Shared Host wiring supplies attachments, request extensions, anonymous identity, and atomic retry-policy updates; this plugin registers only its own route. No invariant companion is published: discovery derives directly from configuration without an independent copy.
+Registrations and listeners dispose with the plugin. Shared Host wiring supplies attachments, request extensions, anonymous identity, and atomic retry-policy updates; this plugin registers only its own route. No invariant companion is published: discovery derives directly from configuration and credentials without an independent copy.
 
 <a id="further-exploration"></a>
 ## Further Exploration
