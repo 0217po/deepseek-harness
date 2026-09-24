@@ -75,6 +75,7 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--helper", type=Path, help="Existing native helper executable for this run")
     parser.add_argument("--artifacts", type=Path, help="Save fixture screenshots and private JSON protocol transcript")
     parser.add_argument("--panels-only", action="store_true", help="Exercise system file panels without unrelated pointer gestures")
     args = parser.parse_args()
@@ -92,7 +93,7 @@ def main():
         helper = None
         try:
             assert line(fixture).strip() == "READY"
-            helper = NativeHelper(transcript)
+            helper = NativeHelper(transcript, args.helper)
             call = helper.call
 
             def wait_state(predicate, description):

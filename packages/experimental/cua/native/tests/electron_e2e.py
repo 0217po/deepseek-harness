@@ -18,6 +18,7 @@ from native_test_support import ROOT, NativeHelper, line, stop_group
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--helper", type=Path, help="Existing native helper executable for this run")
     parser.add_argument('--electron', type=Path, help='Existing Electron executable; no download is attempted')
     parser.add_argument('--artifacts', type=Path, help='Save fixture-only PNG and private protocol transcript')
     args = parser.parse_args()
@@ -45,7 +46,7 @@ def main():
                 assert ready.startswith('READY '), ready
                 runtime = json.loads(ready.removeprefix('READY '))
                 assert runtime['pid'] == fixture.pid
-                helper = NativeHelper(transcript)
+                helper = NativeHelper(transcript, args.helper)
                 call = helper.call
                 permission = call('getCapabilities', {})['permissions']
                 assert permission == {'accessibility': True, 'screenRecording': True}, permission

@@ -10,7 +10,7 @@ Computer-use programs need consistent app and window operations. Coupling those 
 
 ## Decision
 
-The experimental CUA package owns a native-app subset of the Codex-style object interface and selected MIT-licensed macOS primitives copied from Cua Driver. A source manifest records copied files and local integration. The helper is locally compiled; the package has no external Cua Driver runtime dependency. The existing [provider registration](2026-09-12-computer-use-provider-registration.md) prevents competing computer-use providers within one composition.
+The experimental CUA package owns a native-app subset of the Codex-style object interface and selected MIT-licensed macOS behavior adapted from Cua Driver in a Swift helper. A source manifest records the adapted upstream files and local implementation. The helper is locally compiled; the package has no external Cua Driver runtime dependency. The existing [provider registration](2026-09-12-computer-use-provider-registration.md) prevents competing computer-use providers within one composition.
 
 The facade accepts an operation dispatcher. Its tool adapter resolves the current tool binding for each operation, preserving normal authorization, logging and image admission. The execution host owns variable persistence and completion serialization. CUA defines no persistence directive, worker or run_code replacement.
 

@@ -56,6 +56,14 @@ function fixture(options: {
 }
 
 describe('native helper transport', () => {
+  it('passes host byte limits and deadlines into the helper process', () => {
+    const f = fixture({ maxRequestBytes: 4096, maxResponseBytes: 8192, timeoutMs: 1234 })
+    expect(f.spawn).toHaveBeenCalledWith(expect.objectContaining({ argv: [
+      '/fixture/helper', '--max-request-bytes', '4096', '--max-response-bytes', '8192',
+      '--ax-timeout-ms', '1234', '--shutdown-grace-ms', '10',
+    ] }))
+  })
+
   it('uses the logged tool invocation ID for the native request and its matching reply', async () => {
     const f = fixture()
     const pending = f.client.request('activate', { appHandle: 'app-one' }, new AbortController().signal, ToolCallId('foreground-call'))
@@ -144,6 +152,17 @@ describe('native helper transport', () => {
     f.finish()
     await rejected
     expect(f.terminate).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves a producer response-limit diagnostic and awaits helper invalidation', async () => {
+    const f = fixture()
+    const pending = f.client.request('screenshot', {}, new AbortController().signal)
+    const rejected = expect(pending).rejects.toMatchObject({ code: 'NATIVE_RESPONSE_LIMIT' })
+    f.reply({ id: f.id(), error: { code: 'NATIVE_RESPONSE_LIMIT', message: 'Reply exceeded helper byte limit' } })
+    expect(f.client.disposed).toBe(true)
+    expect(f.terminate).toHaveBeenCalledTimes(1)
+    f.finish()
+    await rejected
   })
 
   it('cancellation waits for the complete managed process range', async () => {

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-检查 macOS 权限，选择运行中的应用和窗口，读取辅助功能树、截图并发送输入。外部持久执行环境可以保留这些对象。原生辅助进程从选取的 MIT 许可 Cua Driver 源码本地构建。本包不提供 PTC 运行时或变量持久化。
+检查 macOS 权限，选择运行中的应用和窗口，读取辅助功能树、截图并发送输入。外部持久执行环境可以保留这些对象。Swift 辅助进程直接使用 macOS 框架，并改写选取的 MIT 许可 Cua Driver 行为。本包不提供 PTC 运行时或变量持久化。
 
 ## 目录
 
@@ -25,12 +25,12 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在 macOS 上使用 Rust 和 Xcode 命令行工具构建，然后从仓库根目录挂载源码配置：
+在 macOS 14 或更高版本上使用 Swift 6 和 Xcode 命令行工具构建，然后从仓库根目录挂载源码配置：
 
 ```sh
-cargo build --release --locked --manifest-path packages/experimental/cua/native/Cargo.toml
+swift build --package-path packages/experimental/cua/native --configuration release
 cua_native_root="$PWD/packages/experimental/cua/native"
-export DSH_CUA_HELPER="$cua_native_root/target/release/dsh-cua-native"
+export DSH_CUA_HELPER="$cua_native_root/.build/release/dsh-cua-native"
 pnpm dsh headless --patch packages/experimental/cua/examples/macos.cordis.yml --dump-config
 ```
 
@@ -81,7 +81,7 @@ AppKit sheet 可以通过其窗口 ID 单独选择，也会出现在所属文档
 
 原生请求 ID 与工具日志中的调用 ID 一致。成功的激活和窗口抬起操作会在原始工具结果中保留前台操作信息，以及操作前后的即时焦点观察。应用已在前台时跳过重复激活；窗口抬起还要求该窗口正是焦点主窗口、未最小化且位于可见普通窗口的最前方，才会跳过。无法确认时保留原请求。这些观察不能确认其他焦点切换的发起者，也不代表操作已经完成。
 
-AX 遍历对每个原生身份只访问一次，包括表示同一元素的不同代理引用，避免循环子节点重复展开整个子树。[源码清单](native/upstream.json)区分未修改的上游文件和本地接入代码。本包不发布 invariant 入口，因为没有需要对照的独立注册表投影或持久执行器状态。协议验证、目标身份和资源清理由对应实现负责。
+AX 遍历对每个原生身份只访问一次，包括表示同一元素的不同代理引用，避免循环子节点重复展开整个子树。[源码清单](native/upstream.json)记录改写的上游行为和本地 Swift 模块。AppKit 使用主事件循环，独立串行执行器持有 AX 引用并发送同步输入。一条请求在截图和结果发送期间仍独占执行。本包不发布 invariant 入口，因为没有需要对照的独立注册表投影或持久执行器状态。协议验证、目标身份和资源清理由对应实现负责。
 
 </details>
 

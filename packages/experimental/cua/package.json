@@ -33,9 +33,9 @@
     "lib/index.js",
     "lib/api.js",
     "lib/bridge.js",
-    "native/Cargo.toml",
-    "native/Cargo.lock",
-    "native/src",
+    "native/Package.swift",
+    "native/Sources",
+    "native/tests/swift",
     "native/LICENSE.cua-driver",
     "native/upstream.json",
     "native/README.txt",
@@ -83,6 +83,6 @@
     "sharp": "^0.35.3"
   },
   "scripts": {
-    "build:native": "cargo build --release --manifest-path native/Cargo.toml"
+    "build:native": "swift build --package-path native --configuration release"
   }
 }

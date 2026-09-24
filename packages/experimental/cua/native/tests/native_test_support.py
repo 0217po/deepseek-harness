@@ -8,7 +8,7 @@ import subprocess
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-BINARY = ROOT / "target" / "release" / "dsh-cua-native"
+BINARY = ROOT / ".build" / "release" / "dsh-cua-native"
 
 
 def line(process, timeout=15):
@@ -64,8 +64,9 @@ def stop_group(process):
 
 class NativeHelper:
     """One serial helper whose request transcript remains available on failure."""
-    def __init__(self, transcript):
-        self.process = subprocess.Popen([str(BINARY)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+    def __init__(self, transcript, helper_path=None):
+        binary = Path(helper_path).resolve() if helper_path is not None else BINARY
+        self.process = subprocess.Popen([str(binary)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                         text=True, start_new_session=True)
         self.sequence = 0
         self.transcript = transcript

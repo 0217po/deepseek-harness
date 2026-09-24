@@ -3,6 +3,7 @@
 Build the helper first. This runner compiles only its owned AppKit fixture,
 changes no system permission settings, and controls no user applications.
 """
+import argparse
 import base64
 import json
 import os
@@ -16,9 +17,12 @@ from native_test_support import ROOT, NativeHelper, line, stop_group
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--helper", type=Path, help="Existing native helper executable for this run")
+    args = parser.parse_args()
     if os.uname().sysname != 'Darwin':
         raise RuntimeError('this opt-in check requires macOS')
-    helper = NativeHelper([])
+    helper = NativeHelper([], args.helper)
     fixture = None
     try:
         capabilities = helper.call('getCapabilities', {})

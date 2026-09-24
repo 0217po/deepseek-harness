@@ -10,7 +10,7 @@ Computer-use 程序需要一致的应用和窗口操作。将这些操作与 CUA
 
 ## 决策
 
-实验 CUA 包提供 Codex 风格的原生应用对象接口，并复制 Cua Driver 中选取的 MIT 许可 macOS 原语。源码清单记录复制文件和本地接入实现。辅助进程在本地编译，本包不依赖外部 Cua Driver 运行时。已有的 [provider 注册机制](2026-09-12-computer-use-provider-registration.zh.md)防止同一组合中出现竞争 provider。
+实验 CUA 包提供 Codex 风格的原生应用对象接口，并在 Swift 辅助进程中改写 Cua Driver 中选取的 MIT 许可 macOS 行为。源码清单记录改写的上游文件和本地实现。辅助进程在本地编译，本包不依赖外部 Cua Driver 运行时。已有的 [provider 注册机制](2026-09-12-computer-use-provider-registration.zh.md)防止同一组合中出现竞争 provider。
 
 对象接口接收操作分派器。工具适配模块每次操作都获取当前工具绑定，保留标准授权、日志和图片接入。执行宿主负责变量持久化和最终表达式值的序列化。CUA 不定义持久化指令、执行 worker 或 run_code 替代实现。
 

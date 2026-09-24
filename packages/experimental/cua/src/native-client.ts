@@ -45,7 +45,13 @@ export class NativeClient {
   constructor(owner: { subprocess: Pick<SubprocessRuntime, 'spawn'> }, config: NativeClientConfig) {
     this.config = config
     this.handle = owner.subprocess.spawn({
-      argv: [config.helperPath], cwd: config.cwd, graceMs: config.graceMs,
+      argv: [
+        config.helperPath,
+        '--max-request-bytes', String(config.maxRequestBytes),
+        '--max-response-bytes', String(config.maxResponseBytes),
+        '--ax-timeout-ms', String(config.timeoutMs),
+        '--shutdown-grace-ms', String(config.graceMs),
+      ], cwd: config.cwd, graceMs: config.graceMs,
       stdio: { stdin: 'pipe', stdout: 'pipe', stderr: { maxBytes: 8192 } },
     })
     this.handle.stdout?.on('data', (chunk: Buffer) => { this.receive(chunk) })
@@ -152,8 +158,11 @@ export class NativeClient {
       if (!active || reply.id !== active.id) throw new Error('Helper reply has no matching request')
       this.tail = Buffer.alloc(0)
       this.active = undefined
-      if ('error' in reply) active.reject(new NativeError(reply.error.code, reply.error.message))
-      else active.resolve(reply.result)
+      if ('error' in reply) {
+        const error = new NativeError(reply.error.code, reply.error.message)
+        if (reply.error.code === 'NATIVE_RESPONSE_LIMIT') this.fail(error)
+        active.reject(error)
+      } else active.resolve(reply.result)
     } catch (error) {
       this.fail(new NativeError('NATIVE_PROTOCOL', 'Helper returned an invalid response; acquire fresh application handles', { cause: error }))
     }

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Inspect macOS permissions, select running applications and windows, read accessibility trees, capture screenshots and send input. The object API can be retained by an external persistent execution environment. The native helper is built locally from selected MIT-licensed Cua Driver source. This package owns neither a PTC runtime nor variable persistence.
+Inspect macOS permissions, select running applications and windows, read accessibility trees, capture screenshots and send input. The object API can be retained by an external persistent execution environment. The Swift helper uses macOS frameworks directly and adapts selected MIT-licensed Cua Driver behavior. This package owns neither a PTC runtime nor variable persistence.
 
 ## Table of Contents
 
@@ -25,12 +25,12 @@ Inspect macOS permissions, select running applications and windows, read accessi
 <a id="use-this-package"></a>
 ## Use this package
 
-Build on macOS with Rust and Xcode command-line tools, then mount the source overlay from the repository root:
+Build with Swift 6 and Xcode command-line tools on macOS 14 or later, then mount the source overlay from the repository root:
 
 ```sh
-cargo build --release --locked --manifest-path packages/experimental/cua/native/Cargo.toml
+swift build --package-path packages/experimental/cua/native --configuration release
 cua_native_root="$PWD/packages/experimental/cua/native"
-export DSH_CUA_HELPER="$cua_native_root/target/release/dsh-cua-native"
+export DSH_CUA_HELPER="$cua_native_root/.build/release/dsh-cua-native"
 pnpm dsh headless --patch packages/experimental/cua/examples/macos.cordis.yml --dump-config
 ```
 
@@ -81,7 +81,7 @@ The object facade translates app/window methods into JSON operations. The bridge
 
 Native request IDs match the logged tool call IDs. Successful activation and window-raise results retain foreground request details and immediate before/after focus observations in the raw tool result. An already-frontmost app skips redundant activation; a window raise is skipped only when the exact window is also focused, main, unminimized and first among visible normal windows. Unknown observations retain the requested operation. These observations do not establish who caused an unrelated focus change or verify completion.
 
-AX traversal visits each native identity once, including proxy references that compare equal, so cyclic accessibility children cannot repeat whole subtrees. The [source manifest](native/upstream.json) identifies unchanged copied files and local integration code. No invariant companion is published: there is no independently projected registry or durable evaluator state to reconcile. Protocol validation, target identity and resource cleanup are checked by their owning implementations.
+AX traversal visits each native identity once, including proxy references that compare equal, so cyclic accessibility children cannot repeat whole subtrees. The [source manifest](native/upstream.json) records adapted upstream behavior and local Swift modules. AppKit runs on the main event loop; a separate serial executor owns AX references and synchronous input. A request retains exclusive execution through capture and response delivery. No invariant companion is published: there is no independently projected registry or durable evaluator state to reconcile. Protocol validation, target identity and resource cleanup are checked by their owning implementations.
 
 </details>
 

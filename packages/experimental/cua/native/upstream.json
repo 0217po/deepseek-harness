@@ -3,69 +3,53 @@
   "tag": "cua-driver-rs-v0.28.0",
   "commit": "1b50c02e2d34734f64d2d22f54eb76cc97b4a663",
   "license": "MIT",
-  "copiedFiles": [
-    {
-      "local": "src/ax/bindings.rs",
-      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/bindings.rs",
-      "sha256": "36162047e0ad765180754d372891b6aed920739c72f17e6cf2bffb443e05ad65"
-    },
-    {
-      "local": "src/ax/enablement.rs",
-      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/enablement.rs",
-      "sha256": "822270b17167001bd9ee5e8b3c2d9018f9cf03b3b8e6bf1df15dc7aa3a790fc6"
-    },
-    {
-      "local": "src/input/skylight.rs",
-      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/skylight.rs",
-      "sha256": "17d7fecf653261aaa35888c117f6ca2669a237f9a8ed150c3bda954f34ba1336"
-    },
-    {
-      "local": "src/input/ax_actions.rs",
-      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/ax_actions.rs",
-      "sha256": "cb1468e136d90da49b0400b329c8981c6442deebc95138eb23a0f6226145daa7"
-    },
-    {
-      "local": "src/windows.rs",
-      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/windows.rs",
-      "sha256": "f2c5b3b22cfd5a8be3f987f1660fa11852cc3eac47ffcd800ad5da34b9af8f9d"
-    }
-  ],
+  "copiedFiles": [],
   "adaptedFiles": [
     {
-      "local": "src/apps.rs",
-      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/apps/mod.rs",
-      "changes": "Keep regular running applications, bundle ID and application-path lookup; add activation, camelCase output and omit absent bundle identifiers. Skip activation when WindowServer already reports the target frontmost, and record immediate foreground observations with activation results."
-    },
-    {
-      "local": "src/ax/tree.rs",
-      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/tree.rs",
-      "changes": "Retain and compare visited accessibility identities to skip cycles and duplicate proxy subtrees within an observation. Discover focused and nested AppKit sheets as independently selectable windows. Preserve window-discovery AX failures and return empty scoped trees only when the requested app-owned CG window has no matching AX surface."
-    },
-    {
-      "local": "src/ax/window_scope.rs",
-      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/window_scope.rs",
-      "changes": "Recognize nested AXSheet window IDs and exclude sibling sheets and menu bars from sheet-scoped observations."
-    },
-    {
-      "local": "src/input/mouse.rs",
-      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/mouse.rs",
-      "changes": "Post each background mouse event once through SkyLight, using the public PID-targeted API only when the private API is unavailable."
-    },
-    {
-      "local": "src/input/keyboard.rs",
+      "local": "Sources/CuaNative/KeyboardInput.swift",
       "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/keyboard.rs",
-      "changes": "Send press_key chords through authenticated PID-targeted modifier transitions, with reverse-order cleanup and implicit Shift for plus. Preserve existing single-key and Unicode typing paths. Original upstream file SHA-256: 77de9f1600ade692c9c923c8bfb24e7cb59581a345188f113cb93705138ab493."
+      "changes": "Reimplement the exposed PID keyboard path in Swift, including key aliases, explicit modifier transitions, reverse release and Unicode-scalar typing. Add preconstructed event pairs and cooperative cancellation; omit unreachable global and Screen Sharing paths."
+    },
+    {
+      "local": "Sources/CuaNative/WindowPointerInput.swift",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/mouse.rs",
+      "changes": "Reimplement the exposed window-directed click, drag and line-scroll paths in Swift. Preserve routing fields and gesture timing, post each event once, and release this operation’s held button on cooperative cancellation."
+    },
+    {
+      "local": "Sources/CuaNative/PIDEventPoster.swift",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/skylight.rs",
+      "changes": "Use instance-owned dynamic function references for PID posting and window-routing fields. Use public PID delivery only when the private posting function is unavailable. Do not copy private CGEvent memory offsets, authentication objects, global HID delivery or focus restoration."
+    },
+    {
+      "local": "Sources/CuaNative/WindowSpaces.swift",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/windows.rs",
+      "changes": "Reimplement read-only multi-Space membership using the same SkyLight queries from input/skylight.rs. Preserve unknown results and per-window display selection; add the DSH WindowServer front-process observation."
+    },
+    {
+      "local": "Sources/CuaNative/AXAccess.swift",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/tree.rs",
+      "changes": "Reimplement AX traversal, selected-window filtering and display projection in Swift. Retain CFEqual identity handling, scoped AX references, checked discovery failures, AX-less owned windows and DSH system-panel ownership validation."
+    },
+    {
+      "local": "Sources/CuaNative/NativePlatform.swift",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/apps/mod.rs",
+      "changes": "Reimplement application and window discovery using Swift AppKit/CoreGraphics, preserve process-lifetime checks, and isolate AppKit access on the main actor."
     }
   ],
   "localFiles": [
-    "src/main.rs",
-    "src/permissions/panel.rs",
-    "src/permissions/mod.rs",
-    "src/ax/mod.rs",
-    "src/input/mod.rs",
-    "src/element_input.rs",
-    "src/ax/visited.rs",
-    "src/panels.rs",
-    "src/ax/discovery.rs"
+    "Sources/CuaNative/AXWorker.swift",
+    "Sources/CuaNative/Main.swift",
+    "Sources/CuaNative/Protocol.swift",
+    "Sources/CuaNative/RequestAdmission.swift",
+    "Sources/CuaNative/RequestCoordinator.swift",
+    "Sources/CuaNative/Runtime.swift",
+    "Sources/CuaNative/WindowCapture.swift"
+  ],
+  "references": [
+    {
+      "repository": "https://github.com/steipete/Peekaboo",
+      "commit": "d58100100123a2ab63376e86e2b78f9f81aac61e",
+      "use": "Cross-check Swift C function signatures and public CoreGraphics calls; no implementation code copied."
+    }
   ]
 }
