@@ -43,9 +43,10 @@ final class AXAccess {
     static func optionalAttributeUnavailable(_ error: AXError, attribute: String) -> Bool {
         // File-panel controls can lack descriptive metadata while their role
         // and accessibility children remain readable.
+        guard error == .failure else { return false }
         let optional: Set<String> = ["AXValue", "AXTitle", "AXDescription", "AXIdentifier", "AXPlaceholderValue",
                                      "AXSubrole", "AXEnabled", "AXPosition", "AXSize", "AXMain", "AXMinimized"]
-        return error == .failure && optional.contains(attribute)
+        return optional.contains(attribute)
     }
     static func actionsUnavailable(_ error: AXError) -> Bool {
         error == .failure || error == .actionUnsupported
@@ -60,12 +61,18 @@ final class AXAccess {
         return value
     }
     func string(_ element: AXUIElement, _ name: String) throws -> String? {
-        guard let value = try attribute(element, name) else { return nil }
+        try stringValue(try attribute(element, name), attribute: name)
+    }
+    private func stringValue(_ raw: CFTypeRef?, attribute name: String) throws -> String? {
+        guard let value = raw else { return nil }
         guard CFGetTypeID(value) == CFStringGetTypeID() else { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility \(name) is not a string") }
         return value as? String
     }
     func boolean(_ element: AXUIElement, _ name: String) throws -> Bool? {
-        guard let value = try attribute(element, name) else { return nil }
+        try booleanValue(try attribute(element, name), attribute: name)
+    }
+    private func booleanValue(_ raw: CFTypeRef?, attribute name: String) throws -> Bool? {
+        guard let value = raw else { return nil }
         guard CFGetTypeID(value) == CFBooleanGetTypeID() else { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility \(name) is not a boolean") }
         return (value as? NSNumber)?.boolValue
     }
@@ -78,7 +85,10 @@ final class AXAccess {
         return try elementValue(value, name)
     }
     func children(_ element: AXUIElement, _ name: String = "AXChildren") throws -> [AXUIElement] {
-        guard let value = try attribute(element, name) else { return [] }
+        try childValues(try attribute(element, name), attribute: name)
+    }
+    private func childValues(_ raw: CFTypeRef?, attribute name: String) throws -> [AXUIElement] {
+        guard let value = raw else { return [] }
         guard CFGetTypeID(value) == CFArrayGetTypeID(), let array = value as? [AnyObject] else {
             throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility \(name) is not an array")
         }
@@ -131,7 +141,11 @@ final class AXAccess {
         guard error == .success else { throw failure(error, "set AXValue") }
     }
     func bounds(_ element: AXUIElement) throws -> WindowBounds? {
-        guard let position = try attribute(element, "AXPosition"), let size = try attribute(element, "AXSize") else { return nil }
+        guard let position = try attribute(element, "AXPosition") else { return nil }
+        return try bounds(position: position, size: attribute(element, "AXSize"))
+    }
+    private func bounds(position: CFTypeRef?, size: CFTypeRef?) throws -> WindowBounds? {
+        guard let position, let size else { return nil }
         guard CFGetTypeID(position) == AXValueGetTypeID(), CFGetTypeID(size) == AXValueGetTypeID() else { return nil }
         let positionValue = unsafeDowncast(position, to: AXValue.self)
         let sizeValue = unsafeDowncast(size, to: AXValue.self)
@@ -141,13 +155,46 @@ final class AXAccess {
               point.x.isFinite, point.y.isFinite, dimensions.width.isFinite, dimensions.height.isFinite else { return nil }
         return WindowBounds(x: point.x, y: point.y, width: dimensions.width, height: dimensions.height)
     }
-    private func stringValue(_ element: AXUIElement) throws -> String? {
-        guard let value = try attribute(element, "AXValue") else { return nil }
+    private func controlValue(_ raw: CFTypeRef?) -> String? {
+        guard let value = raw else { return nil }
         if CFGetTypeID(value) == CFStringGetTypeID() { return value as? String }
         if CFGetTypeID(value) == CFBooleanGetTypeID() { return ((value as? NSNumber)?.boolValue == true) ? "1" : "0" }
         if CFGetTypeID(value) == CFNumberGetTypeID() { return (value as? NSNumber)?.stringValue }
         return nil
     }
+    // A node's values are retained only for this observation. Input always reads
+    // live attributes, and unsupported batch APIs retain the individual read path.
+    private func metadata(_ element: AXUIElement) throws -> [String: CFTypeRef]? {
+        try prepare(element)
+        let names = ["AXTitle", "AXValue", "AXPlaceholderValue", "AXDescription", "AXEnabled",
+                     "AXIdentifier", "AXPosition", "AXSize", "AXChildren"]
+        var output: CFArray?
+        let error = AXUIElementCopyMultipleAttributeValues(element, names as CFArray, [], &output)
+        if error == .notImplemented || error == .attributeUnsupported { return nil }
+        guard error == .success else { throw failure(error, "read node attributes") }
+        guard let output, let values = output as? [AnyObject], values.count == names.count else {
+            throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility batch returned mismatched attribute values")
+        }
+        return Dictionary(uniqueKeysWithValues: zip(names, values))
+    }
+    static func batchAttribute(_ value: CFTypeRef, name: String) throws -> CFTypeRef? {
+        if CFGetTypeID(value) == CFNullGetTypeID() { return nil }
+        if CFGetTypeID(value) == AXValueGetTypeID() {
+            let wrapped = unsafeDowncast(value, to: AXValue.self)
+            if AXValueGetType(wrapped) == .axError {
+                var error = AXError.success
+                guard AXValueGetValue(wrapped, .axError, &error), error != .success else {
+                    throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility batch returned an invalid attribute error")
+                }
+                if error == .attributeUnsupported || error == .noValue || error == .notImplemented
+                    || optionalAttributeUnavailable(error, attribute: name) { return nil }
+                throw NativeFailure(code: error == .apiDisabled ? "PERMISSION_DENIED" : "NATIVE_ERROR",
+                                    message: "Accessibility read \(name) failed with error \(error.rawValue)")
+            }
+        }
+        return value
+    }
+
     private func enableAX(_ app: AXUIElement, identity: ProcessIdentity) throws {
         let key = ProcessIdentityKey(identity)
         if enabledProcesses.contains(key) { return }
@@ -227,21 +274,27 @@ final class AXAccess {
                 for child in try children(element) { try walk(child, level: level, depth: depth + 1) }
                 return
             }
-            let title = try string(element, "AXTitle")
-            let rawValue = try stringValue(element)
+            let attributes = try metadata(element)
+            func observed(_ name: String) throws -> CFTypeRef? {
+                guard let attributes else { return try attribute(element, name) }
+                guard let value = attributes[name] else { throw NativeFailure(code: "NATIVE_ERROR", message: "Missing requested observation attribute") }
+                return try Self.batchAttribute(value, name: name)
+            }
+            let title = try stringValue(observed("AXTitle"), attribute: "AXTitle")
+            let rawValue = try controlValue(observed("AXValue"))
             let value: String?
             if let rawValue, !rawValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { value = rawValue }
-            else { value = try string(element, "AXPlaceholderValue") }
-            let description = try string(element, "AXDescription")
+            else { value = try stringValue(observed("AXPlaceholderValue"), attribute: "AXPlaceholderValue") }
+            let description = try stringValue(observed("AXDescription"), attribute: "AXDescription")
             let actionNames = try self.actions(element)
             let valueWritable: Bool
             if valueRoles.contains(role) { valueWritable = try writable(element, "AXValue") }
             else { valueWritable = false }
-            let enabled = try boolean(element, "AXEnabled")
+            let enabled = try booleanValue(observed("AXEnabled"), attribute: "AXEnabled")
             let addressable = enabled != false && (!actionNames.isEmpty || valueWritable)
             let meaningful = [title, value, description].contains { !($0?.isEmpty ?? true) }
             if !addressable && !meaningful && role != "AXWindow" && role != "AXSheet" {
-                for child in try children(element) { try walk(child, level: level, depth: depth + 1) }
+                for child in try childValues(observed("AXChildren"), attribute: "AXChildren") { try walk(child, level: level, depth: depth + 1) }
                 return
             }
             let index: Int? = addressable ? indexed.count : nil
@@ -254,16 +307,18 @@ final class AXAccess {
             if !actionNames.isEmpty { line += " actions=[\(actionNames.joined(separator: ", "))]" }
             lines.append(line)
             if let index {
-                let frame = try bounds(element)
+                let frame: WindowBounds?
+                if let position = try observed("AXPosition") { frame = try bounds(position: position, size: observed("AXSize")) }
+                else { frame = nil }
                 let frameJSON: JSONValue = frame.map { .array([.number($0.x), .number($0.y), .number($0.width), .number($0.height)]) } ?? .null
                 elements.append(.object([
                     "index": .number(Double(index)), "role": .string(role), "title": title.map(JSONValue.string) ?? .null,
                     "value": value.map(JSONValue.string) ?? .null, "description": description.map(JSONValue.string) ?? .null,
-                    "identifier": try string(element, "AXIdentifier").map(JSONValue.string) ?? .null,
+                    "identifier": try stringValue(observed("AXIdentifier"), attribute: "AXIdentifier").map(JSONValue.string) ?? .null,
                     "bounds": frameJSON, "actions": .array(actionNames.map(JSONValue.string)), "enabled": enabled.map(JSONValue.bool) ?? .null,
                 ]))
             }
-            for child in try children(element) { try walk(child, level: level + 1, depth: depth + 1) }
+            for child in try childValues(observed("AXChildren"), attribute: "AXChildren") { try walk(child, level: level + 1, depth: depth + 1) }
         }
         for root in roots { try walk(root, level: 0, depth: 0) }
         if truncated { lines.append("Accessibility tree truncated; observe another window or use screenshot coordinates for unlisted elements.") }

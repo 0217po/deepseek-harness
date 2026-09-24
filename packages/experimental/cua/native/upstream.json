@@ -28,7 +28,7 @@
     {
       "local": "Sources/CuaNative/AXAccess.swift",
       "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/tree.rs",
-      "changes": "Reimplement AX traversal, selected-window filtering and display projection in Swift. Retain CFEqual identity handling, scoped AX references, checked discovery failures, AX-less owned windows and DSH system-panel ownership validation."
+      "changes": "Reimplement AX traversal, selected-window filtering and display projection in Swift. Retain CFEqual identity handling, scoped AX references, checked discovery failures, AX-less owned windows and DSH system-panel ownership validation. Batch per-node observation attributes while retaining per-attribute errors and individual reads for unsupported batch APIs."
     },
     {
       "local": "Sources/CuaNative/NativePlatform.swift",
