@@ -38,12 +38,10 @@ pub fn enclosing_window(pid: i32, pointer: usize) -> Result<windows::WindowInfo>
             element.string("AXRole").as_deref(),
             Some("AXWindow" | "AXSheet")
         ) {
-            if let Some(window) = element
-                .window_id()
-                .and_then(|id| owned_window(pid, id).ok())
-            {
-                return Ok(window);
-            }
+            let id = element.window_id().ok_or_else(|| {
+                anyhow::anyhow!("Element window or sheet is unavailable; refresh getAXState")
+            })?;
+            return owned_window(pid, id);
         }
         current = element.attribute("AXParent");
     }
