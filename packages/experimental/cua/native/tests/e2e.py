@@ -22,8 +22,10 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
     selected_file.write_text("Owned file picker fixture\n")
     call("click", button_target(call("getState", primary_params), "Open fixture file"))
 
+    # A remote AX traversal can consume the helper's 15-second response budget.
+    # Allow two completed observations rather than timing out after the first.
     def wait_observation(predicate, description, params={**primary_params, "maxElements": 2000}):
-        deadline = time.monotonic() + 5
+        deadline = time.monotonic() + 30
         while True:
             observed = call("getState", params)
             if predicate(observed):
@@ -41,7 +43,7 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
     assert "Increment primary" not in scoped["tree"], scoped
     call("activate", owner)
     call("getState", {**primary_params, "windowId": sheet_id, "maxElements": 2000})
-    deadline = time.monotonic() + 5
+    deadline = time.monotonic() + 30
     while True:
         try:
             call("pressKey", {**owner, "key": "g", "modifiers": ["command", "shift"]})
