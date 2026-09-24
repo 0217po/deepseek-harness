@@ -45,6 +45,9 @@ final class AXAccess {
         // while their role, actions and children remain readable.
         attribute == "AXValue" && error == .failure
     }
+    static func actionsUnavailable(_ error: AXError) -> Bool {
+        error == .failure || error == .actionUnsupported
+    }
     func attribute(_ element: AXUIElement, _ name: String) throws -> CFTypeRef? {
         try prepare(element)
         var value: CFTypeRef?
@@ -96,7 +99,7 @@ final class AXAccess {
         try prepare(element)
         var names: CFArray?
         let error = AXUIElementCopyActionNames(element, &names)
-        if absent(error) || error == .actionUnsupported { return [] }
+        if absent(error) || Self.actionsUnavailable(error) { return [] }
         guard error == .success else { throw failure(error, "read actions") }
         guard let names else { return [] }
         guard let result = names as? [String] else { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility actions are not strings") }
