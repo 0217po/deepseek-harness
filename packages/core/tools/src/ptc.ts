@@ -63,7 +63,7 @@ const TYPESCRIPT_FLAVOR: RunCodeFlavor = {
 }
 
 const REPL_FLAVOR: RunCodeFlavor = {
-  description: 'Execute TypeScript in an in-memory REPL. Top-level declarations and await are supported; use console.log or a final JSON expression for output. Top-level return is not supported. Call tools as await tools.name(args) using the declarations in the system prompt. Image-bearing subtool results are attached after the run.',
+  description: 'Execute TypeScript in an in-memory REPL. Top-level declarations and await are supported; only erasable TypeScript is accepted, with no enum or namespaces. Use console.log or a final JSON expression for output. Only printed values and that final expression become program output; curate them. Top-level return is not supported. Call tools as await tools.name(args) using the declarations in the system prompt. Image-bearing subtool results are attached after the run.',
   codeDescription: 'TypeScript REPL statements with optional top-level await and a final JSON expression.',
 }
 
@@ -705,7 +705,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
       try {
         let result: PtcRunResult
         try {
-          if (exec.agent !== undefined && runtime.programFormat === 'repl') {
+          if (exec.agent !== undefined) {
             const agent = exec.agent
             let runtimes = stateOwners.get(agent)
             if (runtimes === undefined) stateOwners.set(agent, runtimes = new WeakSet())

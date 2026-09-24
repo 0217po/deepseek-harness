@@ -184,17 +184,40 @@ describe('persistent PTC host protocol', () => {
     expect(waiting.spawn).not.toHaveBeenCalled()
   })
 
-  it('reports raw pipe output, stream errors and process failures without retaining state', async () => {
-    for (const action of ['raw', 'stream', 'exit', 'rejection'] as const) {
+  it('captures active raw output and ignores bytes arriving while the environment is idle', async () => {
+    const h = await setup()
+    h.onBoot(() => {
+      h.stdout.write('stdout')
+      h.stderr.write('stderr')
+      h.emit(frame({ type: 'done' }))
+    })
+    expect(await h.start()).toEqual({ logs: ['stdout', 'stderr'] })
+    h.stdout.write('idle stdout')
+    h.stderr.write('idle stderr')
+    h.onBoot(() => { h.emit(frame({ type: 'done' }, 2)) })
+    expect(await h.start(request, NO_INITIAL_FRAME)).toEqual({ logs: [] })
+    expect(h.terminate).not.toHaveBeenCalled()
+  })
+
+  it('clears retained resources when final diagnostic accounting detects an overflow', async () => {
+    const h = await setup({ maxOutputBytes: 100 })
+    h.onBoot(() => { h.emit(frame({ type: 'done', error: { kind: 'exception', message: 'x'.repeat(1000) } })) })
+    const result = await h.start()
+    expect(result.error?.kind).toBe('output-limit')
+    expect(result.error?.message).toContain('retained variables were cleared')
+    expect(h.terminate).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports stream errors and process failures without retaining state', async () => {
+    for (const action of ['stream', 'exit', 'rejection'] as const) {
       const h = await setup()
       h.onBoot(() => {
-        if (action === 'raw') h.stdout.write('unattributed')
-        else if (action === 'stream') h.stderr.emit('error', new Error('pipe failed'))
-        else if (action === 'exit') h.direct.resolve({ exitCode: 7, signal: null })
+        if (action === 'stream') h.stderr.emit('error', new Error('pipe failed'))
+        else if (action === 'exit') { h.stdout.end(); h.stderr.end(); h.direct.resolve({ exitCode: 7, signal: null }) }
         else h.direct.reject(new Error('process failed'))
       })
       const result = await h.start()
-      expect(result.error?.kind).toBe(action === 'raw' ? 'protocol' : 'worker-exit')
+      expect(result.error?.kind).toBe('worker-exit')
       expect(result.logs).toEqual([])
     }
   })
@@ -215,7 +238,7 @@ describe('persistent PTC host protocol', () => {
       { timeoutMs: 0 }, { maxMessageBytes: 0x1_0000_0000 }, { maxOutputBytes: 3 }, { graceMs: 2_147_483_648 },
       { nodeExecutable: '' }, { bootstrapPath: 'relative' },
     ]) {
-      await expect(setup(config)).rejects.toThrow('persistent PTC')
+      await expect(setup(config)).rejects.toThrow('ptc-runtime-node')
     }
   })
 })

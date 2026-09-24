@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { setImmediate } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
 import Subprocess from '@deepseek-ai/dsh-subprocess-local'
@@ -52,6 +53,47 @@ describe('persistent Node REPL', () => {
     expect(await run(code, { bindings: bindings(async () => 2) })).toEqual({ logs: ['2'] })
     expect(await run(code, { bindings: bindings(async () => 3) })).toEqual({ logs: ['3'] })
     expect(await run('({ total, local: typeof amount })')).toEqual({ logs: [], value: { total: 5, local: 'undefined' } })
+  })
+
+  it('settles an asynchronous exception once while a later evaluation awaits a tool', async () => {
+    const { run } = await setup()
+    const failed = await run('let retained = 17; let resume; const paused = new Promise(resolve => { resume = resolve }); setImmediate(() => { throw new Error("async failure") }); await paused; retained')
+    expect(failed.error?.message).toContain('async failure')
+    const next = await run('resume(); await tools.value({})', { bindings: bindings(async () => { await setImmediate(); return 42 }) })
+    expect(next).toEqual({ logs: [], value: 42 })
+    expect((await run('retained')).value).toBe(17)
+  })
+
+  it('rejects a completed evaluation callback without consuming the next real binding identity', async () => {
+    const { run } = await setup()
+    const called = vi.fn(async () => 42)
+    const options = { bindings: bindings(called) }
+    await run('let retained = 17; let trigger; let rejection; const expired = new Promise(resolve => { trigger = resolve }); void expired.then(async () => { try { await tools.value({}) } catch (error) { rejection = error.message } });', options)
+    expect((await run('trigger(); await new Promise(resolve => setImmediate(resolve)); rejection', options)).value).toContain('evaluation has ended')
+    expect(called).not.toHaveBeenCalled()
+    expect(await run('({ retained, answer: await tools.value({}) })', options)).toEqual({ logs: [], value: { retained: 17, answer: 42 } })
+    expect(called).toHaveBeenCalledTimes(1)
+  })
+
+  it('captures inherited child stdout and stderr without losing retained variables', async () => {
+    const { run } = await setup()
+    const childProgram = 'process.stdout.write("stdout marker"); process.stderr.write("stderr marker")'
+    const result = await run(`let retained = 17; const child = await import("node:child_process"); child.execFileSync(process.execPath, ["-e", ${JSON.stringify(childProgram)}], { stdio: "inherit" }); retained`)
+    expect(result.error).toBeUndefined()
+    expect(result.value).toBe(17)
+    expect(result.logs.join('')).toContain('stdout marker')
+    expect(result.logs.join('')).toContain('stderr marker')
+    expect((await run('retained')).value).toBe(17)
+  })
+
+  it('reports direct process exit status and stderr after draining raw output', async () => {
+    const { run } = await setup()
+    const result = await run('const nativeFs = await import("node:fs"); nativeFs.writeSync(2, "fatal fixture"); process.exit(7)')
+    expect(result.error?.kind).toBe('worker-exit')
+    expect(result.error?.message).toContain('7')
+    expect(result.error?.message).toContain('fatal fixture')
+    expect(result.logs.join('')).toContain('fatal fixture')
+    expect((await run('42')).value).toBe(42)
   })
 
   it('isolates owners and uses fresh state when no owner is supplied', async () => {
@@ -117,6 +159,7 @@ describe('persistent Node REPL', () => {
     try {
       await entered.promise
       await expect(run('1')).rejects.toThrow('concurrent runs')
+      await expect(run('const =')).rejects.toThrow('concurrent runs')
       expect((await run('2', { stateOwner: {} })).value).toBe(2)
     } finally { proceed.resolve(null) }
     expect((await pending).value).toBeNull()
@@ -145,6 +188,40 @@ describe('persistent Node REPL', () => {
     await expect(run('1', { bindings: [{ global: 'console', functions: {} }] })).rejects.toThrow('reserved')
     expect((await run('1', { signal: AbortSignal.abort() })).error?.kind).toBe('abort')
     expect((await run('42', { timeoutMs: null })).value).toBe(42)
+  })
+
+  it.each(['throw new Error("long diagnostic ".repeat(1000))', '"large completion".repeat(1000)'])('clears retained state after a final output overflow: %s', async (program) => {
+    const { run } = await setup({ maxOutputBytes: 100 })
+    await run('let retained = true;')
+    const result = await run(program)
+    expect(result.error?.kind).toBe('output-limit')
+    expect(result.error?.message).toContain('retained variables were cleared')
+    const outputBytes = Buffer.byteLength(JSON.stringify(result.logs)) + Buffer.byteLength(JSON.stringify(result.error?.message))
+    expect(outputBytes).toBeLessThanOrEqual(100)
+    expect((await run('typeof retained')).value).toBe('undefined')
+  })
+
+  it('bounds type-stripping diagnostics and clears the owner after a parse-output overflow', async () => {
+    const { run } = await setup({ maxOutputBytes: 32 })
+    await run('let retained = true;')
+    const result = await run('const =')
+    expect(result.error?.kind).toBe('output-limit')
+    const outputBytes = Buffer.byteLength(JSON.stringify(result.logs)) + Buffer.byteLength(JSON.stringify(result.error?.message))
+    expect(outputBytes).toBeLessThanOrEqual(32)
+    expect((await run('typeof retained')).value).toBe('undefined')
+  })
+
+  it('rejects a packaged host without a persistent bootstrap during provider loading', async () => {
+    const previous = Object.getOwnPropertyDescriptor(process, 'pkg')
+    try {
+      Object.defineProperty(process, 'pkg', { configurable: true, value: {} })
+      await expect(setup()).rejects.toThrow('requires an explicit bootstrapPath')
+      const { runtime } = await setup({ bootstrapPath: join(process.cwd(), 'persistent-process.js') })
+      expect(runtime.programFormat).toBe('repl')
+    } finally {
+      if (previous === undefined) Reflect.deleteProperty(process, 'pkg')
+      else Object.defineProperty(process, 'pkg', previous)
+    }
   })
 
   it('bounds output and clears state after an overflow', async () => {

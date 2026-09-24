@@ -2373,16 +2373,16 @@ describe('per-program execution controls', () => {
   })
 })
 
-describe('REPL state ownership', () => {
-  it('uses the same Agent owner across calls and awaits one release on its disposal', async () => {
+describe('PTC state ownership', () => {
+  it.each(['function-body', 'repl'] as const)('uses one Agent owner and releases %s provider state on disposal', async (programFormat) => {
     const { ctx, runtime } = await setup()
     const agentContext = new Context()
     const { agent } = fakeAgent()
     Object.defineProperty(agent, 'ctx', { value: agentContext })
-    const format = vi.spyOn(runtime, 'programFormat', 'get').mockReturnValue('repl')
+    const format = vi.spyOn(runtime, 'programFormat', 'get').mockReturnValue(programFormat)
     const release = vi.spyOn(runtime, 'release')
     try {
-      expect(ctx.tools.schemas().find(tool => tool.name === 'run_code')?.description).toContain('in-memory REPL')
+      expect(ctx.tools.schemas().find(tool => tool.name === 'run_code')?.description).toContain(programFormat === 'repl' ? 'in-memory REPL' : 'async function')
       expect((await runCode(ctx, 'let value = 1', { agent })).isError).toBe(false)
       expect((await runCode(ctx, 'value', { agent })).isError).toBe(false)
       expect(runtime.lastRequest?.stateOwner).toBe(agent)

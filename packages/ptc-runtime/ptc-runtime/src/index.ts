@@ -121,7 +121,7 @@ export abstract class PtcRuntime extends Service {
    */
   abstract readonly isolation: string
 
-  /** Source evaluation form; REPL providers retain declarations for an explicitly supplied state owner. */
+  /** Source evaluation form, independent of whether the provider retains state for an owner. */
   get programFormat(): 'function-body' | 'repl' { return 'function-body' }
 
   /**

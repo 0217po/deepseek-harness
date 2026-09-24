@@ -4,22 +4,25 @@ import { isAbsolute } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcRunRequest, PtcRunSpec, PtcRunResult, PtcRunFailure, PtcBindingNamespace, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
-import { MAX_TIMER_DELAY_MS, clampTimeout } from '@deepseek-ai/dsh-timeout'
+import { clampTimeout } from '@deepseek-ai/dsh-timeout'
 import type { SubprocessHandle } from '@deepseek-ai/dsh-subprocess'
-import { NodePtcRuntime, type Config } from './index.ts'
+import { Config, validateConfig, type ResolvedConfig } from './config.ts'
 import { replyToBinding, validateBindings } from './bindings.ts'
 import { JsonChannel } from './channel.ts'
 import { bootstrapArgs } from './launch.ts'
 import { STARTUP_ENVIRONMENT_NAMES } from './environment.ts'
 import { decodePtcJsonWire } from './json-wire.ts'
 import { OutputLedger } from './output-ledger.ts'
-import { terminateProcess } from './output-stream.ts'
+import { drainOutput, terminateProcess } from './output-stream.ts'
 import type { ProgramBootData } from './protocol.ts'
 
-export type { Config } from './index.ts'
-type ResolvedConfig = Required<Omit<Config, 'bootstrapPath'>> & Pick<Config, 'bootstrapPath'>
+export type { Config } from './config.ts'
 const messageOf = (error: unknown): string => error instanceof Error ? error.message : String(error)
 const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
+
+function persistentOutput(maxBytes: number): OutputLedger {
+  return new OutputLedger(maxBytes, `retained variables were cleared; outer output exceeded ${maxBytes} bytes`)
+}
 
 interface Evaluation {
   id: number
@@ -40,6 +43,7 @@ class Kernel {
   private ready = false
   private sequence = 0
   private nextCall = 1
+  private stderr = ''
   private stopped?: Promise<void>
   private starting?: Promise<void>
   private readonly controller = new AbortController()
@@ -47,9 +51,14 @@ class Kernel {
 
   constructor(private readonly ctx: Context, private readonly config: ResolvedConfig) {}
 
-  async run(spec: PtcRunSpec, bindings: Map<string, PtcBindingNamespace>, code: string): Promise<PtcRunResult> {
+  assertIdle(): void {
     if (this.active) throw new Error('persistent PTC does not accept concurrent runs for one state owner')
-    const output = new OutputLedger(this.config.maxOutputBytes)
+  }
+
+  async run(spec: PtcRunSpec, bindings: Map<string, PtcBindingNamespace>, code: string): Promise<PtcRunResult> {
+    this.assertIdle()
+    this.stderr = ''
+    const output = persistentOutput(this.config.maxOutputBytes)
     const logs: string[] = []
     const result = Promise.withResolvers<PtcRunResult>()
     const timer = spec.timeoutMs === null ? undefined : setTimeout(() => {
@@ -69,12 +78,13 @@ class Kernel {
         }
       },
       finish: (error, value, discard = false) => {
+        if (this.active !== evaluation) return
         clearTimeout(timer)
         spec.signal?.removeEventListener('abort', onAbort)
         this.active = undefined
         const outcome = error?.kind === 'output-limit' ? output.limit(logs)
           : error ? output.failure(logs, error) : output.success(logs, value)
-        const cleanup = discard || spec.stateOwner === undefined ? this.stop() : Promise.resolve()
+        const cleanup = discard || outcome.error?.kind === 'output-limit' || spec.stateOwner === undefined ? this.stop() : Promise.resolve()
         void cleanup.then(() => { result.resolve(outcome) }, (failure: unknown) => {
           result.resolve(output.failure(logs, { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(failure)}` }))
         })
@@ -132,15 +142,26 @@ class Kernel {
     if (!handle.control || !handle.stdout || !handle.stderr) throw new Error('subprocess provider did not supply persistent PTC pipes')
     for (const stream of [handle.stdout, handle.stderr]) {
       stream.setEncoding('utf8')
-      stream.on('data', () => { this.fail('protocol', 'raw process output cannot be attributed to a PTC evaluation') })
+      stream.on('data', (text: string) => {
+        if (!this.active) return
+        if (stream === handle.stderr) this.stderr = (this.stderr + text).slice(-this.config.maxOutputBytes)
+        this.active.admit(text)
+      })
       stream.on('error', (error: Error) => { this.fail('worker-exit', error.message) })
     }
+    let exited = false
     this.channel = new JsonChannel(handle.control, this.config.maxMessageBytes,
       (raw, bytes) => { this.receive(raw, bytes) }, (error, kind) => {
-        this.fail(kind === 'protocol' ? 'protocol' : 'worker-exit', kind === 'protocol' ? error.message : 'persistent Node process stopped')
+        if (kind === 'protocol') this.fail('protocol', error.message)
+        else setImmediate(() => { if (!this.closed && !exited) handle.terminate() })
       })
-    void handle.done.then(() => {
-      setImmediate(() => { if (!this.closed) this.fail('worker-exit', 'persistent Node process stopped') })
+    void handle.done.then(async (outcome) => {
+      exited = true
+      await Promise.all([drainOutput(handle.stdout, this.config.graceMs), drainOutput(handle.stderr, this.config.graceMs)])
+      // The terminal control frame can already be queued when process exit arrives.
+      setImmediate(() => {
+        if (!this.closed) this.fail('worker-exit', `Node process exited (${String(outcome.exitCode)}, signal ${String(outcome.signal)})${this.stderr ? `: ${this.stderr}` : ''}`)
+      })
     }, (error: unknown) => { this.fail('worker-exit', messageOf(error)) })
   }
 
@@ -168,10 +189,14 @@ class Kernel {
           if (!record(error) || typeof error.message !== 'string' || (error.kind !== 'exception' && error.kind !== 'invalid-output' && error.kind !== 'output-limit')) {
             this.fail('protocol', 'invalid persistent PTC failure'); return
           }
-          evaluation.finish({ kind: error.kind, message: error.message }, undefined, error.kind === 'output-limit')
+          const failure = { kind: error.kind, message: error.message } as PtcRunFailure
+          setImmediate(() => { evaluation.finish(failure, undefined, failure.kind === 'output-limit') })
         } else {
           const value = payload.value === undefined ? undefined : decodePtcJsonWire(payload.value)
-          evaluation.finish(payload.value !== undefined && value === undefined ? { kind: 'invalid-output', message: 'program completion must be lossless JSON' } : undefined, value)
+          const failure: PtcRunFailure | undefined = payload.value !== undefined && value === undefined
+            ? { kind: 'invalid-output', message: 'program completion must be lossless JSON' } : undefined
+          // Raw stdio may be queued beside the terminal control frame on separate pipes.
+          setImmediate(() => { evaluation.finish(failure, value) })
         }
         return
       }
@@ -203,12 +228,12 @@ class Kernel {
 /** Unsandboxed, best-effort retained state; restart, disposal, and interrupted execution clear it. */
 export class PersistentNodePtcRuntime extends PtcRuntime {
   static inject = ['fs', 'subprocess']
-  static Config = NodePtcRuntime.Config
+  static Config = Config
   readonly language = 'typescript'
   readonly isolation = 'process'
   override get programFormat(): 'repl' { return 'repl' }
   override get executionInstructions(): string {
-    return 'Variables, functions, and imported modules remain in memory for this Agent across calls. Use await import(...) for modules. This environment has full host access without a file sandbox; process.env starts empty. Restart, Agent disposal, cancellation, timeout, or process failure clears the environment. If a variable is undefined, recreate it and reacquire its resources. State is not restored from the conversation, and failed evaluations can leave earlier mutations in memory. Await all tool calls; background callbacks cannot call tools after their evaluation ends.'
+    return 'Variables, functions, and imported modules remain in memory for this Agent across calls. Use await import(...) for modules. This environment has full host access without a file sandbox; process.env starts empty. Restart, Agent disposal, cancellation, timeout, output overflow, or process failure clears the environment. If a variable is undefined, recreate it and reacquire its resources. State is not restored from the conversation, and failed evaluations can leave earlier mutations in memory. Redeclaring an existing let, const, or class name fails; assign to a mutable binding or use a new name. Await all tool calls; background callbacks cannot call tools after their evaluation ends.'
   }
   override get timeout(): { defaultMs: number; maxMs: number } {
     return { defaultMs: Math.min(this.config.timeoutMs, this.config.maxTimeoutMs), maxMs: this.config.maxTimeoutMs }
@@ -221,12 +246,8 @@ export class PersistentNodePtcRuntime extends PtcRuntime {
   constructor(ctx: Context, config: Config) {
     super(ctx)
     this.config = { ...config, nodeExecutable: config.nodeExecutable ?? process.execPath } as ResolvedConfig
-    for (const [name, value] of Object.entries(this.config)) {
-      if (typeof value === 'number' && (!Number.isSafeInteger(value) || value <= 0)) throw new Error(`persistent PTC: ${name} must be a positive safe integer`)
-    }
-    if (this.config.maxOutputBytes < 4 || this.config.maxMessageBytes > 0xffff_ffff) throw new Error('persistent PTC: invalid output or frame limit')
-    if ([this.config.timeoutMs, this.config.maxTimeoutMs, this.config.graceMs].some(value => value > MAX_TIMER_DELAY_MS)) throw new Error('persistent PTC: timeout exceeds the supported timer range')
-    if (!this.config.nodeExecutable || (this.config.bootstrapPath !== undefined && !isAbsolute(this.config.bootstrapPath))) throw new Error('persistent PTC: invalid executable or bootstrap path')
+    validateConfig(this.config)
+    if ('pkg' in process && this.config.bootstrapPath === undefined) throw new Error('Persistent PTC requires an explicit bootstrapPath in a packaged executable')
     ctx.effect(() => async () => {
       this.disposed = true
       await Promise.all([...this.kernels].map(kernel => kernel.dispose()))
@@ -256,14 +277,19 @@ export class PersistentNodePtcRuntime extends PtcRuntime {
     if (this.disposed) throw new Error('persistent PTC: run after disposal')
     if (spec.sandboxPolicy !== undefined || !isAbsolute(spec.cwd) || (spec.timeoutMs !== null && (!Number.isFinite(spec.timeoutMs) || spec.timeoutMs <= 0 || spec.timeoutMs > this.config.maxTimeoutMs))) throw new Error('persistent PTC: run requires resolved inputs without a sandbox policy')
     const bindings = validateBindings(spec)
-    let code: string
-    try { code = stripTypeScriptTypes(spec.program) } catch (error: unknown) { return { logs: [], error: { kind: 'exception', message: messageOf(error) } } }
     let kernel = spec.stateOwner === undefined ? undefined : this.owners.get(spec.stateOwner)
+    kernel?.assertIdle()
+    let code: string
+    try { code = stripTypeScriptTypes(spec.program) } catch (error: unknown) {
+      const outcome = persistentOutput(this.config.maxOutputBytes).failure([], { kind: 'exception', message: messageOf(error) })
+      if (outcome.error?.kind === 'output-limit' && spec.stateOwner !== undefined) await this.release(spec.stateOwner)
+      return outcome
+    }
     if (!kernel || kernel.closed) {
       if (kernel) this.kernels.delete(kernel)
       kernel = new Kernel(this.ctx, this.config)
       this.kernels.add(kernel)
-      if (spec.stateOwner) this.owners.set(spec.stateOwner, kernel)
+      if (spec.stateOwner !== undefined) this.owners.set(spec.stateOwner, kernel)
     }
     try { return await kernel.run(spec, bindings, code) } finally {
       if (spec.stateOwner === undefined) this.kernels.delete(kernel)
