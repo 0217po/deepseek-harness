@@ -442,6 +442,15 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                   {row.entry.declared === true
                     ? <span className={styles['rowTag']}>{t('customTag')}</span>
                     : null}
+                  {/* The store keeps the account row only while the account lists models. */}
+                  {row.entry.provider === 'deepseek-account'
+                    ? (
+                      <span className={styles['accountStatus']}>
+                        <span className={`${styles['credentialDot']} ${styles['credentialDotConfigured']}`} aria-hidden="true" />
+                        {t('accountSignedIn')}
+                      </span>
+                    )
+                    : null}
                   {credentialConfigured
                     ? (
                       <span

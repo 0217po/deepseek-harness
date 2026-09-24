@@ -1883,7 +1883,7 @@ describe('apiKeyFailure', () => {
   })
 })
 
-it('renders the localized account row without an edit action', async () => {
+it('renders the localized account row as signed in without an edit action', async () => {
   const scripted = scriptedFace({})
   const { controller } = await mountFace(scripted)
   const row = controller.store.getSnapshot().rows[0]!
@@ -1891,5 +1891,6 @@ it('renders the localized account row without an edit action', async () => {
     state.rows = [{ ...row, accountAvailable: true, entry: { ...row.entry, provider: 'deepseek-account' } }]
   }) })
   const item = screen.getByText(en.deepSeekAccount).closest('li')!
+  expect(within(item).getByText(en.accountSignedIn)).toBeTruthy()
   expect(within(item).queryByText(en.edit)).toBeNull()
 })
