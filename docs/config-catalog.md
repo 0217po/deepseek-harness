@@ -1547,12 +1547,27 @@ export interface Config {
 ## `@deepseek-ai/dsh-llm-deepseek-account`
 
 - `inject`: `llm`
-- `refs`: [`ProtocolConfig`](../packages/llm/llm-deepseek/src/index.ts)
-- `source`: [`packages/llm/llm-deepseek-account/src/config.ts:5`](../packages/llm/llm-deepseek-account/src/config.ts)
+- `refs`: [`DeepSeekCatalogModel`](../packages/llm/llm-deepseek/src/index.ts) · [`ProtocolConfig`](../packages/llm/llm-deepseek/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/llm/llm-deepseek-account/src/config.ts:19`](../packages/llm/llm-deepseek-account/src/config.ts)
 
 ```ts config-catalog
 /** Account route configuration; authentication comes exclusively from the account service. */
-export type Config = ProtocolConfig
+export interface Config extends Omit<ProtocolConfig, 'models'> {
+  /** Model-listing endpoint; defaults to `/models` at the Messages `baseURL` origin, which it must share. */
+  modelsURL: Volatile<string | undefined>
+  /** Deadline of one listing request, which also bounds a first-use wait (default five seconds). */
+  modelsTimeoutMs: Volatile<number>
+  /**
+   * Listing age after which the next access refreshes it in the background;
+   * a failed load retries after the same age (default ten minutes).
+   */
+  modelsMaxAgeMs: Volatile<number>
+  /** Field overrides by model id, layered over the account listing and this build's model knowledge. */
+  modelOverrides: Volatile<Record<string, ModelOverride>>
+}
+
+/** Field overrides for one model; unset fields and empty lists inherit the underlying entry. */
+export type ModelOverride = Omit<DeepSeekCatalogModel, 'id'>
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-llm-deepseek-account -->
 

@@ -4,10 +4,10 @@ import type { Context } from '@deepseek-ai/cordis'
 import { LlmError } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-deepseek-account'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
-import { plainOptions, resolveAdapterOptions, registerDeepSeekProvider, catalogModelInfo } from '@deepseek-ai/dsh-llm-deepseek'
+import { registerDeepSeekProvider, catalogModelInfo } from '@deepseek-ai/dsh-llm-deepseek'
 import type { DeepSeekRequestAuth, ResolvedDeepSeekOptions } from '@deepseek-ai/dsh-llm-deepseek'
 
-import { Config } from './config.ts'
+import { Config, plainAccountOptions, resolveAccountOptions } from './config.ts'
 export { Config } from './config.ts'
 export const name = 'llm-deepseek-account'
 export const inject = ['llm']
@@ -15,7 +15,7 @@ export const inject = ['llm']
 const PROVIDER = 'deepseek-account'
 
 export function apply(ctx: Context, config: Config): void {
-  const options = () => resolveAdapterOptions(plainOptions(config), launchEnvironmentOf(ctx))
+  const options = () => resolveAccountOptions(plainAccountOptions(config), launchEnvironmentOf(ctx)).protocol
   options()
   const resolveAuth = async (connection: ResolvedDeepSeekOptions): Promise<DeepSeekRequestAuth> => {
     const account = ctx.get('deepseekAccount')

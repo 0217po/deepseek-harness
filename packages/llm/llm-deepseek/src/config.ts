@@ -65,17 +65,26 @@ export function plainOptions(config: Config): Options {
   return Object.fromEntries(Object.entries(config).map(([key, value]) => [key, isVolatile(value) ? value.get() : value]))
 }
 
-const catalogModel: z<DeepSeekCatalogModel> = z.object({
-  id: z.string().required(),
+/**
+ * Schemas of the catalog-entry fields other than `id` and `inputModalities`,
+ * whose requiredness and defaults differ between a `models` entry and a
+ * provider's per-model overrides.
+ */
+export const catalogModelFields = {
   name: z.string(),
   description: z.string(),
   contextWindow: z.number().step(1).min(1),
   maxTokens: z.number().step(1).min(1),
-  inputModalities: z.array(z.union(MODEL_MODALITIES)).min(1).default(['text']),
   imagePixelBudget: z.union([z.number().step(1).min(1), 'low']),
   imageMaxBytes: z.number().step(1).min(1),
   systemPromptUpdate: z.const('in-history'),
   toolUpdate: z.union(['in-history', 'addition-only'] as const),
+}
+
+const catalogModel: z<DeepSeekCatalogModel> = z.object({
+  id: z.string().required(),
+  ...catalogModelFields,
+  inputModalities: z.array(z.union(MODEL_MODALITIES)).min(1).default(['text']),
 })
 
 /** Shared schema fields for Messages protocol options. */

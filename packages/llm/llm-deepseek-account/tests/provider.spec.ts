@@ -19,12 +19,12 @@ it('keeps discovery and disposal independent across the two credential routes', 
   await ctx.plugin(LlmRuntime)
   let token: string | undefined = 'fixture-account-token'
   ctx.provide('deepseekAccount', { resolveToken: async (_baseURL: string): Promise<string | undefined> => token } as DeepSeekAccount)
-  const account = ctx.plugin(Account, { models: [{ id: 'account-model', name: 'Account model' }] })
+  const account = ctx.plugin(Account, {})
   await account
   expect(ctx.llm.listProviders().map(row => row.id)).toEqual(['deepseek-account'])
   const official = ctx.plugin(ApiKey, { models: [{ id: 'api-key-model', name: 'API-key model' }] })
   await official
-  expect((await ctx.llm.listModels('deepseek-account')).map(row => row.id)).toEqual(['account-model'])
+  expect((await ctx.llm.listModels('deepseek-account')).map(row => row.id)).toEqual(['deepseek-flash', 'deepseek-v4-pro'])
   expect((await ctx.llm.listModels('deepseek-official')).map(row => row.id)).toEqual(['api-key-model'])
   expect(ctx.llm.listConfigurableProviders().map(row => [row.provider, row.settingsNs])).toEqual([
     ['deepseek-account', 'llm-deepseek-account'], ['deepseek-official', 'llm-deepseek-api-key'],
@@ -34,7 +34,7 @@ it('keeps discovery and disposal independent across the two credential routes', 
   expect(await ctx.llm.listModels('deepseek-account')).toEqual([])
   expect(await ctx.llm.listModels('deepseek-official')).toHaveLength(1)
   token = 'new-account-token'
-  expect(await ctx.llm.listModels('deepseek-account')).toHaveLength(1)
+  expect(await ctx.llm.listModels('deepseek-account')).toHaveLength(2)
   await account.dispose()
   expect(ctx.llm.listProviders().map(row => row.id)).toEqual(['deepseek-official'])
   expect(ctx.llm.listConfigurableProviders().map(row => row.provider)).toEqual(['deepseek-official'])
