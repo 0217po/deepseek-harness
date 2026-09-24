@@ -79,7 +79,11 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
     call("click", {**owner, "snapshotId": ready["snapshotId"], "elementIndex": open_button["index"]})
     wait_state(lambda state: bool(state["selectedFile"]) and Path(state["selectedFile"]).samefile(selected_file),
                "File picker did not return the intended file")
-    call("getState", {**primary_params, "windowId": sheet_id}, "WINDOW_UNAVAILABLE")
+    # AppKit can retain the dismissed panel's hidden WindowServer window after
+    # its completion handler. Modal dismissal does not imply window destruction.
+    wait_observation(lambda observed: observed["focusedWindowId"] == primary["windowId"]
+                     and not any(e["identifier"] == "open-panel" for e in observed["elements"]),
+                     "File panel did not dismiss and return focus to the primary window")
 
 
 def main():
@@ -239,6 +243,8 @@ def main():
         finally:
             if artifacts is not None:
                 (artifacts / "transcript.json").write_text(json.dumps(transcript, ensure_ascii=False, indent=2) + "\n")
+                if state_path.exists():
+                    (artifacts / "fixture-state.json").write_bytes(state_path.read_bytes())
             if helper is not None:
                 helper.stop()
             stop(fixture)
