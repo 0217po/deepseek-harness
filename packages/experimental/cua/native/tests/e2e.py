@@ -146,7 +146,7 @@ def main():
             selected_file.write_text("Owned file picker fixture\n")
             call("click", button_target(call("getState", primary_params), "Open fixture file"))
 
-            def wait_observation(predicate, description, params=primary_params):
+            def wait_observation(predicate, description, params={**primary_params, "maxElements": 2000}):
                 deadline = time.monotonic() + 5
                 while True:
                     observed = call("getState", params)
