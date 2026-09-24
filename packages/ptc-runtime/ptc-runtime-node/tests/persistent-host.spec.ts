@@ -184,17 +184,74 @@ describe('persistent PTC host protocol', () => {
     expect(waiting.spawn).not.toHaveBeenCalled()
   })
 
-  it('reports raw pipe output, stream errors and process failures without retaining state', async () => {
-    for (const action of ['raw', 'stream', 'exit', 'rejection'] as const) {
+  it('captures active raw output and ignores bytes arriving while the environment is idle', async () => {
+    const h = await setup()
+    h.onBoot(() => {
+      h.stdout.write('stdout')
+      h.stderr.write('stderr')
+      h.emit(frame({ type: 'done' }))
+    })
+    expect(await h.start()).toEqual({ logs: ['stdout', 'stderr'] })
+    h.stdout.write('idle stdout')
+    h.stderr.write('idle stderr')
+    h.onBoot(() => { h.emit(frame({ type: 'done' }, 2)) })
+    expect(await h.start(request, NO_INITIAL_FRAME)).toEqual({ logs: [] })
+    expect(h.terminate).not.toHaveBeenCalled()
+  })
+
+  it('clears retained resources when final diagnostic accounting detects an overflow', async () => {
+    const h = await setup({ maxOutputBytes: 100 })
+    h.onBoot(() => { h.emit(frame({ type: 'done', error: { kind: 'exception', message: 'x'.repeat(1000) } })) })
+    const result = await h.start()
+    expect(result.error?.kind).toBe('output-limit')
+    expect(result.error?.message).toContain('retained variables were cleared')
+    expect(h.terminate).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the first outcome when raw output overflows beside a terminal frame', async () => {
+    const h = await setup({ maxOutputBytes: 100 })
+    h.onBoot(() => {
+      h.emit(frame({ type: 'done', value: encodePtcJsonWire(42) }))
+      queueMicrotask(() => { h.stdout.write('x'.repeat(1000)) })
+    })
+    expect((await h.start()).error?.kind).toBe('output-limit')
+    await setImmediate()
+    expect(h.terminate).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports the exit result when the control pipe ends beside process completion', async () => {
+    const h = await setup()
+    h.onBoot(() => {
+      h.stdout.end()
+      h.stderr.end('fatal output')
+      h.direct.resolve({ exitCode: 7, signal: null })
+      h.control.push(null)
+    })
+    const result = await h.start()
+    expect(result.error?.kind).toBe('worker-exit')
+    expect(result.error?.message).toContain('7')
+    expect(result.error?.message).toContain('fatal output')
+  })
+
+  it('terminates when a binding result exceeds the control write budget', async () => {
+    const h = await setup({ maxMessageBytes: 1024 })
+    h.onBoot(() => { h.emit(call()) })
+    const result = await h.start({ ...request, bindings: [{ global: 'tools', functions: { test: async () => 'x'.repeat(2000) } }] })
+    expect(result.error?.kind).toBe('protocol')
+    expect(result.error?.message).toContain('control output exceeds')
+    expect(h.terminate).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports stream errors and process failures without retaining state', async () => {
+    for (const action of ['stream', 'exit', 'rejection'] as const) {
       const h = await setup()
       h.onBoot(() => {
-        if (action === 'raw') h.stdout.write('unattributed')
-        else if (action === 'stream') h.stderr.emit('error', new Error('pipe failed'))
-        else if (action === 'exit') h.direct.resolve({ exitCode: 7, signal: null })
+        if (action === 'stream') h.stderr.emit('error', new Error('pipe failed'))
+        else if (action === 'exit') { h.stdout.end(); h.stderr.end(); h.direct.resolve({ exitCode: 7, signal: null }) }
         else h.direct.reject(new Error('process failed'))
       })
       const result = await h.start()
-      expect(result.error?.kind).toBe(action === 'raw' ? 'protocol' : 'worker-exit')
+      expect(result.error?.kind).toBe('worker-exit')
       expect(result.logs).toEqual([])
     }
   })
@@ -215,7 +272,7 @@ describe('persistent PTC host protocol', () => {
       { timeoutMs: 0 }, { maxMessageBytes: 0x1_0000_0000 }, { maxOutputBytes: 3 }, { graceMs: 2_147_483_648 },
       { nodeExecutable: '' }, { bootstrapPath: 'relative' },
     ]) {
-      await expect(setup(config)).rejects.toThrow('persistent PTC')
+      await expect(setup(config)).rejects.toThrow('ptc-runtime-node')
     }
   })
 })

@@ -334,7 +334,7 @@ export function makeNamespaces(
             return Promise.reject(bindingFailure(errorClass, name, 'binding arguments must be lossless JSON'))
           }
           return new Promise((resolve, reject) => {
-            const id = nextId.value++
+            const id = nextId.value
             pending.set(id, {
               resolve,
               reject: (error) => {
@@ -343,9 +343,10 @@ export function makeNamespaces(
             })
             try {
               port.postMessage({ type: 'call', id, global, name, args: encodePtcJsonWire(detached) })
+              nextId.value += 1
             } catch (error: unknown) {
               pending.delete(id)
-              const message = `binding arguments must be structured-cloneable: ${error instanceof CapturedError ? error.message : String(error)}`
+              const message = `binding call could not be sent: ${error instanceof CapturedError ? error.message : String(error)}`
               reject(bindingFailure(errorClass, name, message))
             }
           })

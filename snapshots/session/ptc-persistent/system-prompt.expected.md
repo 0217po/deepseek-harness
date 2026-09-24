@@ -33,7 +33,7 @@ Use subagent in the background by default. Start independent delegations togethe
 
 ## Writing code for run_code
 
-`run_code` takes `code`, TypeScript REPL statements with erasable types and top-level `await`, and `description`, a short summary. Use `await import(...)` for modules. The declarations below describe program-only SDK bindings. When no separate `bash` schema is supplied, invoke a declared `bash` binding inside `run_code`:
+`run_code` takes `code`, TypeScript REPL statements with erasable types (no `enum` or namespaces) and top-level `await`, and `description`, a short summary. Use `await import(...)` for modules. The declarations below describe program-only SDK bindings. When no separate `bash` schema is supplied, invoke a declared `bash` binding inside `run_code`:
 
 `run_code({ code: "await tools.bash({ command: 'pwd', description: 'Show current directory' })", description: "Show current directory" })`
 
@@ -42,7 +42,7 @@ Inside the program:
 - Call tools as `await tools.name(args)` — quoted access for exotic names: `tools["my-tool"](args)`. Every call resolves to the tool's typed canonical JSON value. Tool arguments must be lossless JSON.
 - A FAILED tool call rejects with `ToolCallError`, whose `toolName` identifies the failed tool and whose `message` is human-readable — `try/catch` it to handle and continue.
 - Independent read-only calls MAY overlap under `Promise.all` (safe calls run concurrently; mutating calls run alone, in submission order). Sequence dependent work with `await`.
-- Emit results with `console.log(...)` or a final JSON expression. Top-level `return` is not supported. A successful tool result containing an image is attached after the run so you can inspect it on the next step; every other intermediate result stays out of the conversation, so extract just what you need.
+- Emit results with `console.log(...)` or a final JSON expression. Top-level `return` is not supported. Only printed values and that final expression become program output; curate them. A successful tool result containing an image is attached after the run so you can inspect it on the next step; every other intermediate result stays out of the conversation, so extract just what you need.
 
 Program-only SDK bindings:
 

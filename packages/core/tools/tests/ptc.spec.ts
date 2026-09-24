@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage, ToolCallId  } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
@@ -76,7 +76,7 @@ async function setup(options: SetupOptions = {}) {
 
 /** Mint an agent scope configured like production that can register scoped tool policy. */
 async function mintAgentScope(ctx: Context, name = 'scoped'): Promise<{ scope: Scope; agent: Agent }> {
-  const agent = { id: SessionId(name), session: { header: {}, append: () => {} } } as unknown as Agent
+  const agent = { ctx, id: SessionId(name), session: { header: {}, append: () => {} } } as unknown as Agent
   let scope!: Scope
   await ctx.plugin(Object.assign((inner: Context) => { scope = createScope(inner, agent) },
     { inject: ['tools', 'systemPrompt'] }))
@@ -105,7 +105,10 @@ function registerEcho(ctx: Context, name = 'echo'): unknown[] {
 /** A structural fake of the owning agent: captures session appends. */
 function fakeAgent(): { agent: Agent; events: { type: string; data: unknown }[] } {
   const events: { type: string; data: unknown }[] = []
+  const ctx = new Context()
+  onTestFinished(async () => { await ctx.fiber.dispose() })
   const agent = {
+    ctx,
     session: {
       header: { cwd: '/workspace' },
       append: (type: string, data: unknown) => { events.push({ type, data }) },
@@ -1727,7 +1730,7 @@ describe('the run_code dispatch bridge', () => {
       },
     }))
     const session = Session.create(SessionId('deep-code-arguments'))
-    const agent = { session } as Agent
+    const agent = { ctx, session } as Agent
     runtime.behavior = async (request) => {
       let nested: JsonValue = 'leaf'
       for (let index = 0; index < depth; index++) nested = [nested]
@@ -2202,7 +2205,7 @@ describe('per-program execution controls', () => {
     })
     const session = Session.create(SessionId('program-controls'))
     session.append('turn/start', { turn: 1 })
-    const agent = { session } as unknown as Agent
+    const agent = { ctx: state.ctx, session } as unknown as Agent
     const execute = (args: Record<string, unknown>, signal = testToolSignal) => state.tools.execute({
       callId: ToolCallId('program-controls'), name: RUN_CODE_NAME,
       arguments: { code: 'program', description: 'Test execution controls', ...args }, agent, signal,
@@ -2373,16 +2376,16 @@ describe('per-program execution controls', () => {
   })
 })
 
-describe('REPL state ownership', () => {
-  it('uses the same Agent owner across calls and awaits one release on its disposal', async () => {
+describe('PTC state ownership', () => {
+  it.each(['function-body', 'repl'] as const)('uses one Agent owner and releases %s provider state on disposal', async (programFormat) => {
     const { ctx, runtime } = await setup()
     const agentContext = new Context()
     const { agent } = fakeAgent()
     Object.defineProperty(agent, 'ctx', { value: agentContext })
-    const format = vi.spyOn(runtime, 'programFormat', 'get').mockReturnValue('repl')
+    const format = vi.spyOn(runtime, 'programFormat', 'get').mockReturnValue(programFormat)
     const release = vi.spyOn(runtime, 'release')
     try {
-      expect(ctx.tools.schemas().find(tool => tool.name === 'run_code')?.description).toContain('in-memory REPL')
+      expect(ctx.tools.schemas().find(tool => tool.name === 'run_code')?.description).toContain(programFormat === 'repl' ? 'in-memory REPL' : 'async function')
       expect((await runCode(ctx, 'let value = 1', { agent })).isError).toBe(false)
       expect((await runCode(ctx, 'value', { agent })).isError).toBe(false)
       expect(runtime.lastRequest?.stateOwner).toBe(agent)

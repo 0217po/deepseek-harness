@@ -58,6 +58,26 @@ it('keeps an environment while capturing each evaluation and binding replies sep
   expect(decodePtcJsonWire((await h.run('count')).value)).toBe(2)
 })
 
+it('does not let an old asynchronous exception finish a later evaluation', async () => {
+  const h = await setup()
+  const declarations = [{ global: 'tools', names: ['echo'] }]
+  const first = await h.run('let count = 1; let resume; const pause = new Promise(resolve => { resume = resolve }); setImmediate(() => { throw new Error("async failure") }); await pause; count', declarations)
+  expect(first).toMatchObject({ error: { kind: 'exception' } })
+  const second = await h.run('resume(); await tools.echo({})', declarations)
+  expect(decodePtcJsonWire(second.value)).toBe(42)
+  expect(decodePtcJsonWire((await h.run('count')).value)).toBe(1)
+  expect(h.seen.filter(item => item.type === 'done')).toHaveLength(3)
+})
+
+it('treats leading braces as a statement block with reusable local declarations', async () => {
+  const h = await setup()
+  await h.run('let count = 0;')
+  const block = '{ const local = await Promise.resolve(2); count += local; }'
+  await h.run(block)
+  await h.run(block)
+  expect(decodePtcJsonWire((await h.run('({ count, local: typeof local })')).value)).toEqual({ count: 4, local: 'undefined' })
+})
+
 it('contains directory failures and output overflow in the active evaluation', async () => {
   const badDirectory = await setup(4096, () => {
     const error = new Error('directory missing')
@@ -92,6 +112,8 @@ it('ignores output and rejects tool calls from a completed evaluation', async ()
   const result = await h.run('finish(); await new Promise(resolve => setImmediate(resolve)); old', declarations)
   expect(decodePtcJsonWire(result.value)).toContain('evaluation has ended')
   expect(h.seen.some(item => item.type === 'log' || item.type === 'call')).toBe(false)
+  expect(decodePtcJsonWire((await h.run('await tools.echo({})', declarations)).value)).toBe(42)
+  expect(h.seen.find(item => item.type === 'call')?.id).toBe(1)
 })
 
 it('rejects unfinished binding waits when a program returns', async () => {

@@ -2,10 +2,9 @@
 import { stripTypeScriptTypes } from 'node:module'
 import { isAbsolute } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import z from '@deepseek-ai/schemastery'
 import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcBindingNamespace, PtcJsonValue, PtcRunFailure, PtcRunRequest, PtcRunResult, PtcRunSandbox, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
-import { MAX_TIMER_DELAY_MS, clampTimeout } from '@deepseek-ai/dsh-timeout'
+import { clampTimeout } from '@deepseek-ai/dsh-timeout'
 import { SandboxUnavailableError, classifyRunnerFailure, isRunnerSpawnFailure } from '@deepseek-ai/dsh-sandbox'
 import type { ConfinedArgv, SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
@@ -14,32 +13,15 @@ import type {} from '@deepseek-ai/dsh-fs'
 import { replyToBinding, validateBindings } from './bindings.ts'
 import { JsonChannel } from './channel.ts'
 import { bootstrapArgs } from './launch.ts'
-import type { LaunchConfig } from './launch.ts'
+import { NodeConfig, validateConfig } from './config.ts'
+import type { Config, ResolvedConfig } from './config.ts'
+export type { Config } from './config.ts'
 import { OutputLedger } from './output-ledger.ts'
 import { terminateProcess } from './output-stream.ts'
 import { STARTUP_ENVIRONMENT_NAMES } from './environment.ts'
 import { decodePtcJsonWire } from './json-wire.ts'
 import type { ProgramBootData } from './protocol.ts'
 
-/** Deployment-varying runtime bounds and launch choices. */
-export interface Config extends LaunchConfig {
-  /** Default elapsed deadline, including nested tool and approval waits. */
-  timeoutMs?: number
-  /** Maximum numeric elapsed budget accepted by resolve. */
-  maxTimeoutMs?: number
-  /** Combined serialized logs, completion and diagnostic byte cap. */
-  maxOutputBytes?: number
-  /** V8 old-generation heap limit in MiB; native allocations are excluded. */
-  maxOldGenerationSizeMb?: number
-  /** Maximum control frame, outstanding argument and queued control-output bytes. */
-  maxMessageBytes?: number
-  /** Maximum simultaneous host binding calls accepted from a program. */
-  maxPendingCalls?: number
-  /** Managed process termination and output-drain grace in milliseconds. */
-  graceMs?: number
-}
-
-type ResolvedConfig = Required<Omit<Config, 'bootstrapPath'>> & Pick<Config, 'bootstrapPath'>
 interface LiveRun { controller: AbortController; finished: Promise<void> }
 const STRIP_PREFIX = 'async function __dsh_program__() {\n'
 const STRIP_SUFFIX = '\n}'
@@ -50,17 +32,7 @@ function record(value: unknown): value is Record<string, unknown> { return typeo
 /** Node provider; direct file effects use the same sandbox service as Bash. */
 export class NodePtcRuntime extends PtcRuntime {
   static inject = ['fs', 'subprocess', 'sandbox', 'sandboxPolicy']
-  static Config: z<Config> = z.object({
-    timeoutMs: z.number().default(120_000),
-    maxTimeoutMs: z.number().default(600_000),
-    maxOutputBytes: z.number().default(67_108_864),
-    maxOldGenerationSizeMb: z.number().default(512),
-    maxMessageBytes: z.number().default(134_217_728),
-    maxPendingCalls: z.number().default(128),
-    graceMs: z.number().default(3_000),
-    nodeExecutable: z.string(),
-    bootstrapPath: z.string(),
-  })
+  static Config = NodeConfig
   readonly language = 'typescript'
   readonly isolation = 'process'
   override get executionInstructions(): string {
@@ -73,18 +45,7 @@ export class NodePtcRuntime extends PtcRuntime {
   constructor(ctx: Context, config: Config) {
     super(ctx)
     this.config = { ...config, nodeExecutable: config.nodeExecutable ?? process.execPath } as ResolvedConfig
-    for (const [key, value] of Object.entries(this.config)) {
-      if (typeof value === 'number' && (!Number.isFinite(value) || value <= 0)) throw new Error(`ptc-runtime-node: ${key} must be positive and finite`)
-    }
-    for (const key of ['timeoutMs', 'maxTimeoutMs', 'graceMs'] as const) {
-      if (this.config[key] > MAX_TIMER_DELAY_MS) throw new Error(`ptc-runtime-node: ${key} exceeds the supported timer range`)
-    }
-    if (!Number.isSafeInteger(this.config.maxOutputBytes) || this.config.maxOutputBytes < 4) throw new Error('ptc-runtime-node: maxOutputBytes must be an integer of at least 4')
-    if (!Number.isSafeInteger(this.config.maxMessageBytes) || this.config.maxMessageBytes > 0xffff_ffff) throw new Error('ptc-runtime-node: maxMessageBytes must fit an unsigned 32-bit frame length')
-    if (!Number.isSafeInteger(this.config.maxPendingCalls)) throw new Error('ptc-runtime-node: maxPendingCalls must be an integer')
-    if (!Number.isSafeInteger(this.config.maxOldGenerationSizeMb)) throw new Error('ptc-runtime-node: maxOldGenerationSizeMb must be an integer')
-    if (this.config.nodeExecutable.length === 0) throw new Error('ptc-runtime-node: nodeExecutable must be non-empty')
-    if (this.config.bootstrapPath !== undefined && !isAbsolute(this.config.bootstrapPath)) throw new Error('ptc-runtime-node: bootstrapPath must be absolute')
+    validateConfig(this.config)
     ctx.effect(() => async () => {
       this.disposed = true
       const active = [...this.live]

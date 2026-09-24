@@ -19,6 +19,7 @@ export interface PersistentProcess {
 interface Evaluation {
   id: number
   logs: LogBuffer
+  maxOutputBytes: number
   active: boolean
   finish(result: Omit<DoneMessage, 'type'>): void
 }
@@ -43,7 +44,7 @@ export async function runPersistentMain(stream: Duplex, maxMessageBytes: number,
   const output = new Writable({ write(chunk: Buffer, _encoding, callback) {
     const current = context.getStore()
     const message = chunk.toString().trim()
-    if (current?.active && message) current.finish({ error: { kind: 'exception', message } })
+    if (current?.active && message) current.finish(prepareException(message, current.logs.remainingOutputBytes(), current.maxOutputBytes))
     callback()
   } })
   const repl = start({ input, output, terminal: false, prompt: '', useGlobal: false, ignoreUndefined: true })
@@ -76,8 +77,9 @@ export async function runPersistentMain(stream: Duplex, maxMessageBytes: number,
     const { id, data } = message
     const logs = new LogBuffer(data.maxOutputBytes, (text) => { send(id, { type: 'log', text }) }, () => { send(id, { type: 'output-limit' }) })
     const evaluation: Evaluation = {
-      id, logs, active: true,
+      id, logs, maxOutputBytes: data.maxOutputBytes, active: true,
       finish(result) {
+        if (!evaluation.active) return
         evaluation.active = false
         for (const call of pending.values()) call.reject(new Error('PTC evaluation ended before the binding completed'))
         pending.clear()

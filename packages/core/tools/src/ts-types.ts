@@ -251,14 +251,16 @@ const SDK_INSTRUCTIONS = `## Writing code for run_code
 
 \`run_code\` takes two required arguments: \`code\` — the body of an async TypeScript function (erasable syntax only — no \`enum\` or namespaces; type annotations are advisory, the code runs type-stripped) — and \`description\`, a short summary of what the program does. The declarations below are SDK bindings for this program. A declaration does not make its name a directly callable tool; only names supplied as separate tool schemas may be called directly.`
 
-const SDK_PROGRAM_INSTRUCTIONS = `Inside the program:
+function programInstructions(output: string): string {
+  return `Inside the program:
 
 - Call tools as \`await tools.name(args)\` — quoted access for exotic names: \`tools["my-tool"](args)\`. Every call resolves to the tool's typed canonical JSON value. Tool arguments must be lossless JSON.
 - A FAILED tool call rejects with \`ToolCallError\`, whose \`toolName\` identifies the failed tool and whose \`message\` is human-readable — \`try/catch\` it to handle and continue.
 - Independent read-only calls MAY overlap under \`Promise.all\` (safe calls run concurrently; mutating calls run alone, in submission order). Sequence dependent work with \`await\`.
-- Emit results with \`return\` and/or \`console.log(...)\`. Only what you print or return is program output. A successful tool result containing an image is attached after the run so you can inspect it on the next step; every other intermediate result stays out of the conversation, so extract just what you need.
+- ${output} A successful tool result containing an image is attached after the run so you can inspect it on the next step; every other intermediate result stays out of the conversation, so extract just what you need.
 
 Program-only SDK bindings:`
+}
 
 /** Whether one string schema accepts the literal used by the bash example. */
 function acceptsExampleString(schema: JsonSchemaNode | undefined, value: string): boolean {
@@ -315,10 +317,10 @@ export function renderToolsSdk(schemas: ToolSdkSchema[], format: 'function-body'
   ].join('\n\n')
   const jsonValue = 'type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }'
   const instructions = format === 'repl'
-    ? '## Writing code for run_code\n\n`run_code` takes `code`, TypeScript REPL statements with erasable types and top-level `await`, and `description`, a short summary. Use `await import(...)` for modules. The declarations below describe program-only SDK bindings.'
+    ? '## Writing code for run_code\n\n`run_code` takes `code`, TypeScript REPL statements with erasable types (no `enum` or namespaces) and top-level `await`, and `description`, a short summary. Use `await import(...)` for modules. The declarations below describe program-only SDK bindings.'
     : SDK_INSTRUCTIONS
-  const programInstructions = format === 'repl'
-    ? SDK_PROGRAM_INSTRUCTIONS.replace('Emit results with `return` and/or `console.log(...)`. Only what you print or return is program output.', 'Emit results with `console.log(...)` or a final JSON expression. Top-level `return` is not supported.')
-    : SDK_PROGRAM_INSTRUCTIONS
-  return `${instructions}${renderBashExample(sorted, format)}\n\n${programInstructions}\n\n\`\`\`ts\n${jsonValue}\n\n${declaration}\n\`\`\``
+  const outputInstructions = programInstructions(format === 'repl'
+    ? 'Emit results with `console.log(...)` or a final JSON expression. Top-level `return` is not supported. Only printed values and that final expression become program output; curate them.'
+    : 'Emit results with `return` and/or `console.log(...)`. Only what you print or return is program output.')
+  return `${instructions}${renderBashExample(sorted, format)}\n\n${outputInstructions}\n\n\`\`\`ts\n${jsonValue}\n\n${declaration}\n\`\`\``
 }
