@@ -7,9 +7,11 @@ import argparse
 import json
 import math
 import os
+import select
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 
 from native_test_support import BINARY, stop_group
 
@@ -122,6 +124,43 @@ def exercise(helper, directory, payload, expected, timeout):
         raise cleanup_error
 
 
+def exercise_live_pipe(helper, directory, timeout):
+    environment = {key: value for key, value in os.environ.items() if key in {"PATH", "LANG", "LC_ALL"}}
+    environment["TMPDIR"] = str(directory)
+    process = subprocess.Popen([str(helper)], cwd=directory, env=environment, start_new_session=True,
+                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
+    deadline = time.monotonic() + timeout
+    try:
+        for identifier in ["live-first", "live-second"]:
+            method = "protocol-live-absent"
+            wire = request(identifier, method, {})
+            process.stdin.write(wire + b"\n")
+            process.stdin.flush()
+            frame = b""
+            while b"\n" not in frame:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0 or not select.select([process.stdout], [], [], remaining)[0]:
+                    raise AssertionError("Helper waited for EOF or more bytes instead of replying on its live stdin pipe")
+                chunk = os.read(process.stdout.fileno(), 65536)
+                if not chunk:
+                    raise AssertionError("Helper exited before replying on the live stdin pipe")
+                frame += chunk
+                assert len(frame) <= 1024 * 1024, "Admission response exceeded the fixture byte budget"
+            validate(frame, b"", [(wire, identifier, "UNSUPPORTED", f"Unsupported native operation: {method}")])
+        process.stdin.close()
+        process.stdin = None
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise AssertionError("Live-pipe validation exhausted its deadline before EOF cleanup")
+        stdout, stderr = process.communicate(timeout=remaining)
+        assert process.returncode == 0 and stdout == b"", (process.returncode, stdout, stderr)
+    finally:
+        stop_group(process)
+        for stream in (process.stdin, process.stdout, process.stderr):
+            if stream is not None and not stream.closed:
+                stream.close()
+
+
 def main():
     if not __debug__:
         raise RuntimeError("Run this assertion-based regression without Python -O")
@@ -147,7 +186,10 @@ def main():
             directory = root / name
             directory.mkdir(mode=0o700)
             exercise(helper, directory, wire, replies, args.timeout)
-    print(f"PASS: {len(expected) + len(malformed)} admission errors, ordered JSONL responses, "
+        live = root / "live-pipe"
+        live.mkdir(mode=0o700)
+        exercise_live_pipe(helper, live, args.timeout)
+    print(f"PASS: {len(expected) + len(malformed) + 2} admission errors, live stdin replies, ordered JSONL responses, "
           "separate stdout/stderr, unterminated EOF frames and normal helper exit")
 
 

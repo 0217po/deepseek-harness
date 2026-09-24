@@ -64,13 +64,20 @@ final class JSONLInput: Sendable {
                         continue
                     }
                     guard buffer.count <= self.limit else { throw NativeFailure(code: "NATIVE_REQUEST_LIMIT", message: "Request exceeded helper byte limit") }
-                    let chunk = try FileHandle.standardInput.read(upToCount: min(65536, self.limit + 1 - buffer.count)) ?? Data()
-                    if chunk.isEmpty {
+                    // Foundation's counted read can wait for EOF/full capacity on a pipe.
+                    // POSIX read returns the available request bytes while stdin stays open.
+                    var chunk = [UInt8](repeating: 0, count: min(65536, self.limit + 1 - buffer.count))
+                    let count = chunk.withUnsafeMutableBytes { bytes in
+                        Darwin.read(STDIN_FILENO, bytes.baseAddress, bytes.count)
+                    }
+                    if count < 0 && errno == EINTR { continue }
+                    guard count >= 0 else { throw NativeFailure(code: "NATIVE_IO", message: "Reading helper stdin failed (errno \(errno))") }
+                    if count == 0 {
                         if !buffer.isEmpty { onFrame(buffer); self.permit.wait() }
                         onEOF()
                         return
                     }
-                    buffer.append(chunk)
+                    buffer.append(contentsOf: chunk.prefix(count))
                 }
             } catch let error as NativeFailure { onFailure(error) }
             catch { onFailure(NativeFailure(code: "NATIVE_IO", message: "Reading helper stdin failed: \(error.localizedDescription)")) }
