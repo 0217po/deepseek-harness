@@ -30,6 +30,7 @@ final class CountingScrollView: NSScrollView {
 /// Every assertion reads this application's own state file after real OS input.
 final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     let statePath: String
+    let rowCount: Int
     var window: NSWindow!
     var second: NSWindow!
     var field: NSTextField!
@@ -40,7 +41,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     var secondaryCount = 0
     var selectedFile = ""
 
-    init(statePath: String) { self.statePath = statePath }
+    init(statePath: String, rowCount: Int = 35) { self.statePath = statePath; self.rowCount = rowCount }
     func applicationDidFinishLaunching(_ notification: Notification) {
         let menu = NSMenu()
         let editItem = NSMenuItem()
@@ -78,8 +79,8 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         scroll = CountingScrollView(frame: NSRect(x: 30, y: 30, width: 350, height: 180))
         scroll.changed = { [weak self] in self?.persist() }
         scroll.hasVerticalScroller = true
-        let document = ScrollDocument(frame: NSRect(x: 0, y: 0, width: 330, height: 1400))
-        for index in 0..<35 {
+        let document = ScrollDocument(frame: NSRect(x: 0, y: 0, width: 330, height: CGFloat(rowCount * 40)))
+        for index in 0..<rowCount {
             let label = NSTextField(labelWithString: "Scroll row \(index + 1)")
             label.frame = NSRect(x: 15, y: CGFloat(index * 40), width: 270, height: 24)
             document.addSubview(label)
@@ -129,6 +130,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     }
     func persist() {
         let state: [String: Any] = ["count": count, "secondaryCount": secondaryCount, "text": field.stringValue, "selectedFile": selectedFile,
+            "rowCount": rowCount, "primaryWindowId": window.windowNumber,
             "dragDownCount": dragPad.dragDownCount, "dragCount": dragPad.dragCount, "dragPoint": [dragPad.lastPoint.x, dragPad.lastPoint.y],
             "rightDownCount": dragPad.rightDownCount, "rightUpCount": dragPad.rightUpCount,
             "scrollEventCount": scroll.eventCount, "scrollY": scroll.contentView.bounds.origin.y, "dragBounds": windowPoints(dragPad), "scrollBounds": windowPoints(scroll),
@@ -138,8 +140,14 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         try! data.write(to: URL(fileURLWithPath: statePath), options: .atomic)
     }
 }
+let arguments = CommandLine.arguments
+guard (2...3).contains(arguments.count), let rowCount = arguments.count == 3 ? Int(arguments[2]) : 35,
+      (1...1000).contains(rowCount) else {
+    fputs("usage: Fixture STATE_PATH [ROW_COUNT:1...1000]\n", stderr)
+    exit(2)
+}
 let application = NSApplication.shared
 application.setActivationPolicy(.regular)
-let fixture = Fixture(statePath: CommandLine.arguments[1])
+let fixture = Fixture(statePath: arguments[1], rowCount: rowCount)
 application.delegate = fixture
 application.run()
