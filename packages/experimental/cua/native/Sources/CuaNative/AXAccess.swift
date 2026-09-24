@@ -61,7 +61,7 @@ final class AXAccess {
     }
     func elementValue(_ value: CFTypeRef, _ name: String) throws -> AXUIElement {
         guard CFGetTypeID(value) == AXUIElementGetTypeID() else { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility \(name) is not an element") }
-        return unsafeBitCast(value, to: AXUIElement.self)
+        return unsafeDowncast(value, to: AXUIElement.self)
     }
     func element(_ element: AXUIElement, _ name: String) throws -> AXUIElement? {
         guard let value = try attribute(element, name) else { return nil }
@@ -123,8 +123,8 @@ final class AXAccess {
     func bounds(_ element: AXUIElement) throws -> WindowBounds? {
         guard let position = try attribute(element, "AXPosition"), let size = try attribute(element, "AXSize") else { return nil }
         guard CFGetTypeID(position) == AXValueGetTypeID(), CFGetTypeID(size) == AXValueGetTypeID() else { return nil }
-        let positionValue = unsafeBitCast(position, to: AXValue.self)
-        let sizeValue = unsafeBitCast(size, to: AXValue.self)
+        let positionValue = unsafeDowncast(position, to: AXValue.self)
+        let sizeValue = unsafeDowncast(size, to: AXValue.self)
         var point = CGPoint.zero
         var dimensions = CGSize.zero
         guard AXValueGetValue(positionValue, .cgPoint, &point), AXValueGetValue(sizeValue, .cgSize, &dimensions),

@@ -183,9 +183,7 @@ actor AXWorker {
             try NativePlatform.requireAccessibility()
             if let window { _ = try NativePlatform.ownedWindow(identity.pid, window) }
             try cancellation.check()
-            let observedWindows: [WindowInfo]
-            if let window { observedWindows = [try NativePlatform.ownedWindow(identity.pid, window)] }
-            else { observedWindows = NativePlatform.windows().filter { $0.pid == identity.pid } }
+            let observedWindows = NativePlatform.windows().filter { $0.pid == identity.pid }
             let id = try identifier("snapshot")
             let scope = SnapshotScope(appHandle: handle, windowID: window)
             snapshots[scope] = NativeSnapshot(id: id, scope: scope, elements: projection.indexed)

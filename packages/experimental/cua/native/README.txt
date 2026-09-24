@@ -30,7 +30,7 @@ Element clicks prefer advertised AX actions and otherwise use pointer delivery. 
 
 The responsible host/helper needs macOS Accessibility permission for AX state and input, and Screen Recording permission for screenshots. Capability preflight and permission errors do not grant permissions. Capture refuses a window that moves or resizes while the image is being read. Unassociated system panels and accessory-only applications are not selectable.
 
-Use `swift test --package-path packages/experimental/cua/native` for offline unit checks and `python3 packages/experimental/cua/native/tests/protocol_e2e.py` for JSONL admission, ordered replies and EOF shutdown without desktop operations. All Python native checks accept `--helper` to select a separately built comparison binary.
+Use `python3 packages/experimental/cua/native/tests/test_swift.py` for offline unit checks with the selected Apple toolchain’s Swift Testing framework/runtime paths and `python3 packages/experimental/cua/native/tests/protocol_e2e.py` for JSONL admission, ordered replies and EOF shutdown without desktop operations. All Python native checks accept `--helper` to select a separately built comparison binary.
 
 Run `python3 packages/experimental/cua/native/tests/axless_e2e.py` after building and unlocking the Mac to verify an owned window whose application removes and later restores its AX roots. The check requires existing Accessibility/Screen Recording grants, rejects stale element indices, captures the AXless window, verifies a coordinate click in the fixture state file, and checks restoration. It never changes system permission settings.
 
