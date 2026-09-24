@@ -6,6 +6,8 @@ Build with `cargo build --release --locked --manifest-path packages/experimental
 
 Each stdin line is `{ "id": "opaque request id", "method": "method name", "params": {} }`. Each stdout line contains the same ID and exactly one of `result` or `error: {code, message}`. Malformed envelopes return `INVALID_REQUEST` with a null ID. Requests execute serially. Diagnostics must not be written to stdout. `protocol.schema.json` defines request fields.
 
+Successful `activate` and `performSecondaryAction` AXRaise results include `foreground` alongside `{dispatched: true, verified: false}`. It records `requestId`, `operation`, `targetPid`, nullable `targetWindowId`, `activationRequested`, `raiseRequested`, and immediate `before`/`after` observations. `frontPid` comes from WindowServer; `focusedWindowId` is the target app's AX-focused window; `frontWindowId` and `frontWindowPid` identify the first visible normal window. Unknown values are null. Observations are sequential, not atomic or proof of causality. Tool-owned requests use the logged tool call ID. Failed operations retain the existing error response and may have partial effects.
+
 | Method | Result |
 | --- | --- |
 | `getCapabilities` | `{platform: "macos", permissions: {accessibility, screenRecording}, methods, coordinateSpace: "window-points", browser: false}`. Permission values are boolean preflight observations; no system prompt opens. |

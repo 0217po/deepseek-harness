@@ -74,6 +74,15 @@ fn error_reply(error: anyhow::Error) -> Value {
     json!({"code":error.downcast_ref::<DriverError>().map_or("NATIVE_ERROR", |error| error.code),"message":error.to_string()})
 }
 
+fn action_reply(request_id: &str, foreground: Option<apps::ForegroundAction>) -> Value {
+    let mut result = json!({"dispatched":true,"verified":false});
+    if let Some(foreground) = foreground {
+        result["foreground"] = json!(foreground);
+        result["foreground"]["requestId"] = json!(request_id);
+    }
+    result
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Request {
@@ -405,7 +414,7 @@ impl Driver {
         Ok(result)
     }
 
-    fn call(&mut self, method: &str, params: &Value) -> Result<Value> {
+    fn call(&mut self, request_id: &str, method: &str, params: &Value) -> Result<Value> {
         let object = params
             .as_object()
             .ok_or_else(|| invalid("params must be an object"))?;
@@ -532,8 +541,8 @@ impl Driver {
         }
         match method {
             "activate" => {
-                apps::activate(pid)?;
-                Ok(json!({"dispatched":true,"verified":false}))
+                let foreground = apps::activate(pid)?;
+                Ok(action_reply(request_id, Some(foreground)))
             }
             "getState" => {
                 let window = if params.get("windowId").is_some() {
@@ -674,12 +683,12 @@ impl Driver {
                 Ok(json!({"dispatched":true,"verified":false}))
             }
             "performSecondaryAction" => {
-                element_input::secondary_action(
+                let foreground = element_input::secondary_action(
                     pid,
                     self.element(&handle, params)?,
                     text(params, "action")?,
                 )?;
-                Ok(json!({"dispatched":true,"verified":false}))
+                Ok(action_reply(request_id, foreground))
             }
             "typeText" => {
                 input::keyboard::type_text(panels::keyboard_pid(pid)?, text(params, "text")?)?;
@@ -800,7 +809,7 @@ fn main() -> Result<()> {
     for line in stdin.lock().lines() {
         let line = line?;
         let response = match serde_json::from_str::<Request>(&line) {
-            Ok(request) => match driver.call(&request.method, &request.params) {
+            Ok(request) => match driver.call(&request.id, &request.method, &request.params) {
                 Ok(result) => json!({"id":request.id,"result":result}),
                 Err(error) => json!({"id":request.id,"error":error_reply(error)}),
             },
@@ -818,6 +827,51 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn foreground_action_reply_correlates_requests_without_claiming_verified_effects() {
+        let before = apps::ForegroundObservation {
+            front_pid: None,
+            focused_window_id: Some(7),
+            front_window_id: Some(8),
+            front_window_pid: Some(99),
+        };
+        let after = apps::ForegroundObservation {
+            front_pid: Some(42),
+            focused_window_id: Some(7),
+            front_window_id: Some(7),
+            front_window_pid: Some(42),
+        };
+        let result = action_reply(
+            "tool-call-7",
+            Some(apps::ForegroundAction {
+                operation: "AXRaise",
+                target_pid: 42,
+                target_window_id: Some(7),
+                before,
+                after,
+                activation_requested: true,
+                raise_requested: true,
+            }),
+        );
+        assert_eq!(
+            result,
+            json!({
+                "dispatched":true,"verified":false,
+                "foreground":{
+                    "requestId":"tool-call-7","operation":"AXRaise","targetPid":42,"targetWindowId":7,
+                    "before":{"frontPid":null,"focusedWindowId":7,"frontWindowId":8,"frontWindowPid":99},
+                    "after":{"frontPid":42,"focusedWindowId":7,"frontWindowId":7,"frontWindowPid":42},
+                    "activationRequested":true,"raiseRequested":true,
+                },
+            })
+        );
+        assert_eq!(
+            action_reply("ordinary-action", None),
+            json!({"dispatched":true,"verified":false})
+        );
+    }
+
     fn snapshot(id: &str, window_id: Option<u32>) -> Snapshot {
         Snapshot {
             id: id.to_owned(),
@@ -1133,13 +1187,17 @@ mod tests {
         assert_eq!(
             error_reply(
                 driver
-                    .call("listApps", &json!({"launch":true}))
+                    .call("invalid-params", "listApps", &json!({"launch":true}))
                     .unwrap_err()
             )["code"],
             "INVALID_ARGUMENT"
         );
         assert_eq!(
-            error_reply(driver.call("absent", &json!({})).unwrap_err())["code"],
+            error_reply(
+                driver
+                    .call("unknown-method", "absent", &json!({}))
+                    .unwrap_err()
+            )["code"],
             "UNSUPPORTED"
         );
         assert!(window_id(&json!({"windowId":-1})).is_err());

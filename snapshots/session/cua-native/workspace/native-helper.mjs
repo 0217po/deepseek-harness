@@ -16,15 +16,17 @@ const bounds = { x: 40, y: 60, width: 320, height: 200 }
 const window = { windowId: 7, pid: 9, appName: 'Fixture', title: 'CUA fixture', bounds, isOnScreen: true, onCurrentSpace: true }
 const axlessWindow = { ...window, windowId: 8, title: 'AXless canvas' }
 const snapshots = new Map()
-const methods = ['getCapabilities', 'listApps', 'getApp', 'listWindows', 'getState', 'click', 'setValue', 'typeText', 'pressKey', 'scroll', 'drag', 'screenshot']
+const methods = ['getCapabilities', 'listApps', 'getApp', 'activate', 'listWindows', 'getState', 'click', 'setValue', 'typeText', 'pressKey', 'scroll', 'drag', 'screenshot']
 let acquired = false
 let generation = 0
 let count = 0
 let value = ''
 let visualCount = 0
+let frontPid = 42
+let frontWindowId = 99
 function refuse(code, message) { throw Object.assign(new Error(message), { code }) }
-function call(method, params) {
-  record('call', { method, params })
+function call(requestId, method, params) {
+  record('call', { requestId, method, params })
   if (method === 'getCapabilities') return { platform: 'macos', sessionLocked: false, permissions: { accessibility: true, screenRecording: true }, methods, coordinateSpace: 'window-points', browser: false }
   if (method === 'listApps') return [{ pid: app.pid, name: app.name, bundleId: app.bundleId }]
   if (method === 'getApp') {
@@ -33,6 +35,19 @@ function call(method, params) {
     return app
   }
   if (!acquired || params.appHandle !== app.appHandle) refuse('APP_NOT_FOUND', 'Acquire an application in this helper first')
+  if (method === 'activate') {
+    const before = { frontPid, focusedWindowId: window.windowId, frontWindowId, frontWindowPid: frontPid }
+    const activationRequested = frontPid !== app.pid
+    if (activationRequested) {
+      frontPid = app.pid
+      frontWindowId = window.windowId
+    }
+    const after = { frontPid, focusedWindowId: window.windowId, frontWindowId, frontWindowPid: frontPid }
+    return { dispatched: true, verified: false, foreground: {
+      requestId, operation: 'activate', targetPid: app.pid, targetWindowId: null,
+      before, after, activationRequested, raiseRequested: false,
+    } }
+  }
   if (method === 'listWindows') return [window, axlessWindow]
   if (method === 'getState') {
     generation++
@@ -66,7 +81,7 @@ input.once('close', () => process.exit(0))
 input.on('line', (line) => {
   const request = JSON.parse(line)
   let response
-  try { response = { id: request.id, result: call(request.method, request.params) } }
+  try { response = { id: request.id, result: call(request.id, request.method, request.params) } }
   catch (error) { response = { id: request.id, error: { code: error.code ?? 'FIXTURE_ERROR', message: error.message } } }
   process.stdout.write(JSON.stringify(response) + '\n')
 })

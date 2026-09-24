@@ -79,6 +79,8 @@ Indexed clicks support a single right click or a single/double left click. The h
 
 The object facade translates app/window methods into JSON operations. The bridge routes them through the normal tool pipeline, preserving authorization, nested logs and image admission. A separate serial helper belongs to each Agent. Native handles bind a process identity to its kernel start time, and snapshots retain native AX references only inside that helper. The same operation protocol can serve a future platform provider without adding platform logic to the object API.
 
+Native request IDs match the logged tool call IDs. Successful activation and window-raise results retain foreground request details and immediate before/after focus observations in the raw tool result. An already-frontmost app skips redundant activation; a window raise is skipped only when the exact window is also focused, main, unminimized and first among visible normal windows. Unknown observations retain the requested operation. These observations do not establish who caused an unrelated focus change or verify completion.
+
 AX traversal visits each native identity once, including proxy references that compare equal, so cyclic accessibility children cannot repeat whole subtrees. The [source manifest](native/upstream.json) identifies unchanged copied files and local integration code. No invariant companion is published: there is no independently projected registry or durable evaluator state to reconcile. Protocol validation, target identity and resource cleanup are checked by their owning implementations.
 
 </details>

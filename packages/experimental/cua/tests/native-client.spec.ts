@@ -1,5 +1,6 @@
 /** Controlled process streams exercise the platform-independent native protocol client. */
 import { PassThrough, Writable } from 'node:stream'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
@@ -55,6 +56,14 @@ function fixture(options: {
 }
 
 describe('native helper transport', () => {
+  it('uses the logged tool invocation ID for the native request and its matching reply', async () => {
+    const f = fixture()
+    const pending = f.client.request('activate', { appHandle: 'app-one' }, new AbortController().signal, ToolCallId('foreground-call'))
+    expect(f.id()).toBe('foreground-call')
+    f.reply({ id: 'foreground-call', result: { dispatched: true, verified: false } })
+    await expect(pending).resolves.toEqual({ dispatched: true, verified: false })
+  })
+
   it('accepts split UTF-8 replies and preserves native refusal codes without replacing the helper', async () => {
     const f = fixture()
     const first = f.client.request('listApps', {}, new AbortController().signal)

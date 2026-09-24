@@ -56,6 +56,12 @@ it('rejects a relative helper path before publishing computer-use operations', (
   expect(() => { NativeProvider.apply(ctx, { ...config, helperPath: 'relative-helper' }) }).toThrow('helperPath must be absolute')
 })
 
+it('correlates a native request with its logged tool invocation', async () => {
+  const f = await setup()
+  expect((await f.execute()).isError).toBe(false)
+  expect(native.request).toHaveBeenCalledExactlyOnceWith('listApps', {}, expect.any(AbortSignal), ToolCallId('lifecycle-1'))
+})
+
 it('rejects helper acquisition when Agent disposal begins during replacement cleanup', async () => {
   const f = await setup()
   await f.execute()

@@ -56,7 +56,7 @@ class VisualModel extends LlmAdapter {
 
 const AuditEvent = z.object({
   event: z.string(), pid: z.number(), method: z.string().optional(), count: z.number().optional(),
-  params: z.record(z.string(), z.json()).optional(),
+  requestId: z.string().optional(), params: z.record(z.string(), z.json()).optional(),
 })
 
 // The fixture uses a POSIX executable shebang; stream/protocol unit tests run on every host.
@@ -118,6 +118,8 @@ it.skipIf(process.platform === 'win32')('loads the native provider, records veri
   const events = await readEvents()
   expect(events.filter(event => event.event === 'start')).toHaveLength(1)
   expect(events.filter(event => event.event === 'call').map(event => event.method)).toEqual(calls.map(call => call.method))
+  const toolCalls = agent.session.snapshotEvents().filter(event => event.type === 'tool/call')
+  expect(events.filter(event => event.event === 'call').map(event => event.requestId)).toEqual(toolCalls.map(event => event.data.callId))
   expect(events.find(event => event.event === 'state')?.count).toBe(1)
   expect(events.find(event => event.method === 'getState')?.params).toMatchObject({ maxElements: 2000, maxDepth: 25 })
 
@@ -127,6 +129,25 @@ it.skipIf(process.platform === 'win32')('loads the native provider, records veri
   expect(direct.isError).toBe(false)
   expect(direct.value).toMatchObject({ structuredContent: { mimeType: 'image/png', data: png } })
   expect(context.computerUse.providerName).toBe('dsh-cua')
+  for (const [callId, activationRequested, beforePid, beforeWindowId] of [
+    ['activate-first', true, 42, 99], ['activate-repeat', false, 9, 7],
+  ] as const) {
+    const activated = await context.tools.execute({
+      agent, signal: new AbortController().signal, callId: ToolCallId(callId), name: 'cua',
+      arguments: { method: 'activate', params: { appHandle: 'fixture-app' } },
+    })
+    expect(activated.isError).toBe(false)
+    expect(activated.value).toMatchObject({ structuredContent: {
+      dispatched: true, verified: false, foreground: {
+        requestId: callId, operation: 'activate', targetPid: 9, targetWindowId: null, activationRequested, raiseRequested: false,
+        before: { frontPid: beforePid, focusedWindowId: 7, frontWindowId: beforeWindowId, frontWindowPid: beforePid },
+        after: { frontPid: 9, focusedWindowId: 7, frontWindowId: 7, frontWindowPid: 9 },
+      },
+    } })
+    expect(JSON.stringify(activated.content)).toContain(callId)
+  }
+  const directCalls = (await readEvents()).filter(event => event.event === 'call').slice(-3)
+  expect(directCalls.map(event => event.requestId)).toEqual(['programmatic-window', 'activate-first', 'activate-repeat'])
   await handle.dispose()
   expect((await readEvents()).filter(event => event.event === 'exit')).toHaveLength(1)
 

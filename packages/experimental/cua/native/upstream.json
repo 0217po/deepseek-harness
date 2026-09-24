@@ -34,7 +34,7 @@
     {
       "local": "src/apps.rs",
       "upstream": "libs/cua-driver/rust/crates/platform-macos/src/apps/mod.rs",
-      "changes": "Keep regular running applications, bundle ID and application-path lookup; add activation, camelCase output and omit absent bundle identifiers."
+      "changes": "Keep regular running applications, bundle ID and application-path lookup; add activation, camelCase output and omit absent bundle identifiers. Skip activation when WindowServer already reports the target frontmost, and record immediate foreground observations with activation results."
     },
     {
       "local": "src/ax/tree.rs",

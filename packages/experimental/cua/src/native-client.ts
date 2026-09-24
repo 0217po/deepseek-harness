@@ -1,6 +1,7 @@
 /** Bounded JSON-line transport to one owned native helper process. */
 import { randomUUID } from 'node:crypto'
 import type { SubprocessHandle, SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
+import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
 
@@ -63,16 +64,17 @@ export class NativeClient {
    * @param method - Helper operation name.
    * @param params - JSON operation parameters.
    * @param signal - Cancellation kills this helper and invalidates its retained handles.
+   * @param callId - Logged tool invocation ID, when this request belongs to a tool execution.
    * @returns The validated helper result, after failure cleanup when needed.
    */
-  async request(method: string, params: Record<string, JsonValue>, signal: AbortSignal): Promise<JsonValue> {
+  async request(method: string, params: Record<string, JsonValue>, signal: AbortSignal, callId?: ToolExecution['callId']): Promise<JsonValue> {
     if (signal.aborted) throw new NativeError('NATIVE_CANCELLED', 'Operation was cancelled before dispatch')
     if (this.disposed) {
       await this.dispose()
       throw new NativeError('NATIVE_CLOSED', 'Helper is closed; acquire fresh application handles', { cause: this.failure })
     }
     if (this.active) throw new NativeError('NATIVE_BUSY', 'Await native operations sequentially')
-    const id = randomUUID()
+    const id = callId ?? randomUUID()
     const frame = `${JSON.stringify({ id, method, params })}\n`
     if (Buffer.byteLength(frame) > this.config.maxRequestBytes) {
       throw new NativeError('NATIVE_REQUEST_LIMIT', 'Request exceeded the configured byte limit before dispatch')

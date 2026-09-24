@@ -154,7 +154,7 @@ export function apply(ctx: Context, config: Config): void {
           return client.request(method, method === 'getState'
             ? { ...params, maxElements: config.maxElements, maxDepth: config.maxDepth }
             : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
-              : params, signal)
+              : params, signal, execution.callId)
         })()
         pending.set(operation, agent)
         try {
