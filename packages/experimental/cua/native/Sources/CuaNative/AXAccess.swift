@@ -172,9 +172,10 @@ final class AXAccess {
         let error = AXUIElementCopyMultipleAttributeValues(element, names as CFArray, [], &output)
         if error == .notImplemented || error == .attributeUnsupported { return nil }
         guard error == .success else { throw failure(error, "read node attributes") }
-        guard let output, let values = output as? [AnyObject], values.count == names.count else {
+        guard let output, CFArrayGetCount(output) == names.count else {
             throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility batch returned mismatched attribute values")
         }
+        let values = output as [AnyObject]
         return Dictionary(uniqueKeysWithValues: zip(names, values))
     }
     static func batchAttribute(_ value: CFTypeRef, name: String) throws -> CFTypeRef? {

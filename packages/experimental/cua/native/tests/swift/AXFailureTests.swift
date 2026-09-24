@@ -30,7 +30,7 @@ private func wrappedAXError(_ code: AXError) throws -> AXValue {
     let position = try #require(AXValueCreate(.cgPoint, &point))
     let values: [CFTypeRef] = ["Title" as CFString, kCFBooleanTrue, NSNumber(value: 7), [] as CFArray, position]
     for value in values {
-        let decoded = try #require(AXAccess.batchAttribute(value, name: "AXValue"))
+        let decoded = try #require(try AXAccess.batchAttribute(value, name: "AXValue"))
         #expect(CFGetTypeID(decoded) == CFGetTypeID(value))
         #expect(CFEqual(decoded, value))
     }
