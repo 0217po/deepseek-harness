@@ -94,7 +94,7 @@ func rejectsInvalidWindowIDs(_ value: String) throws {
 }
 
 @Test func resolvesTextEventIntervalFromHelperArguments() throws {
-    #expect(try HelperConfiguration(arguments: []).textEventIntervalSeconds == 0.008)
+    #expect(try HelperConfiguration(arguments: []).textEventIntervalSeconds == 0.00025)
     #expect(try HelperConfiguration(arguments: ["--text-event-interval-ms", "0.5"]).textEventIntervalSeconds == 0.0005)
     #expect(try HelperConfiguration(arguments: ["--text-event-interval-ms", "0"]).textEventIntervalSeconds == 0)
     #expect(try HelperConfiguration(arguments: ["--text-event-interval-ms", "1000"]).textEventIntervalSeconds == 1)

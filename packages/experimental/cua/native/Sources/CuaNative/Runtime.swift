@@ -19,7 +19,7 @@ struct HelperConfiguration: Sendable {
     var maxResponseBytes = 32 * 1024 * 1024
     var axTimeoutSeconds: Float = 30
     var shutdownGraceSeconds: Double = 3
-    var textEventIntervalSeconds: Double = 0.008
+    var textEventIntervalSeconds: Double = 0.00025
     init(arguments: [String]) throws {
         var index = 0
         while index < arguments.count {
