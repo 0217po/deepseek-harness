@@ -19,7 +19,7 @@ use foreign_types::ForeignType;
 
 #[derive(Clone, Copy)]
 enum MousePostMode {
-    Both,
+    PrivateWithFallback,
     PublicOnly,
 }
 
@@ -51,7 +51,16 @@ pub fn click_at_xy(
     count: usize,
     modifiers: &[&str],
 ) -> anyhow::Result<()> {
-    click_at_xy_inner(pid, x, y, None, None, count, modifiers, MousePostMode::Both)
+    click_at_xy_inner(
+        pid,
+        x,
+        y,
+        None,
+        None,
+        count,
+        modifiers,
+        MousePostMode::PrivateWithFallback,
+    )
 }
 
 /// Screen-absolute click posted to the GLOBAL HID tap (`CGEventTapLocation::HID`),
@@ -488,12 +497,7 @@ pub fn click_at_xy_chromium(
         }
     };
 
-    let post = |event: &CGEvent| {
-        let ptr = event.as_ptr() as *mut std::ffi::c_void;
-        if !crate::input::skylight::post_to_pid(pid as libc::pid_t, ptr, false) {
-            event.post_to_pid(pid as libc::pid_t);
-        }
-    };
+    let post = |event: &CGEvent| post_mouse_event_to_pid(pid, event);
 
     // Step 1: mouseMoved at target (phase=2, clickState=0).
     let move_event = CGEvent::new_mouse_event(
@@ -914,8 +918,8 @@ pub enum DragButton {
 /// Middle-click at `(x, y)` with optional modifier keys.
 ///
 /// Posts an `OtherMouseDown` / `OtherMouseUp` pair with `CGMouseButton::Center`
-/// to the target pid through the same SkyLight + public-API postBoth path the
-/// left- and right-click primitives use. Window-local stamping mirrors
+/// to the target pid through SkyLight, with public posting only when the private
+/// API is unavailable. Window-local stamping mirrors
 /// `right_click_at_xy_with_window_local`.
 pub fn middle_click_at_xy(pid: i32, x: f64, y: f64, modifiers: &[&str]) -> anyhow::Result<()> {
     middle_click_at_xy_inner(pid, x, y, None, modifiers)
@@ -1030,7 +1034,7 @@ fn right_click_at_xy_inner(
         window_local,
         wid,
         click_group_id,
-        MousePostMode::Both,
+        MousePostMode::PrivateWithFallback,
     );
     std::thread::sleep(std::time::Duration::from_millis(12));
 
@@ -1066,12 +1070,8 @@ fn right_click_at_xy_inner(
 
 /// Post a mouse event to `pid`.
 ///
-/// Matches Swift's `MouseInput.postBoth(_:toPid:)`:
-/// - Fires `SLEventPostToPid` (SkyLight path — reaches backgrounded Chromium/Catalyst).
-/// - Also fires `CGEvent::post_to_pid` (public path — lands on AppKit targets where
-///   SkyLight mouse delivery drops).
-///
-/// Both are always posted in sequence regardless of whether the other succeeded.
+/// Uses SkyLight when available, otherwise the public PID-targeted API.
+/// Each event is posted once; application delivery remains unverified.
 ///
 /// Field stamps applied (always):
 /// - f40 = `pid`  (Chromium's synthetic-event filter)
@@ -1110,7 +1110,7 @@ pub(super) fn post_mouse_event(
         click_state,
         button_number,
         subtype,
-        MousePostMode::Both,
+        MousePostMode::PrivateWithFallback,
     );
 }
 
@@ -1152,12 +1152,15 @@ fn post_mouse_event_with_mode(
     crate::input::skylight::set_integer_field(event_ptr, 40, pid as i64);
 
     match mode {
-        MousePostMode::Both => {
-            // Preserve the established transport for non-left-click callers.
-            crate::input::skylight::post_to_pid(pid as libc::pid_t, event_ptr, false);
-            event.post_to_pid(pid as libc::pid_t);
-        }
+        MousePostMode::PrivateWithFallback => post_mouse_event_to_pid(pid, event),
         MousePostMode::PublicOnly => event.post_to_pid(pid as libc::pid_t),
+    }
+}
+
+fn post_mouse_event_to_pid(pid: i32, event: &CGEvent) {
+    let event_ptr = event.as_ptr() as *mut std::ffi::c_void;
+    if !crate::input::skylight::post_to_pid(pid as libc::pid_t, event_ptr, false) {
+        event.post_to_pid(pid as libc::pid_t);
     }
 }
 
@@ -1253,7 +1256,7 @@ pub fn scroll_wheel_at_xy(
                 .unwrap_or_default()
                 .subsec_nanos() as i64,
         ),
-        MousePostMode::Both,
+        MousePostMode::PrivateWithFallback,
     );
     std::thread::sleep(std::time::Duration::from_millis(12));
 
@@ -1292,10 +1295,7 @@ pub fn scroll_wheel_at_xy(
         // f40 = target pid (Chromium synthetic-event filter).
         crate::input::skylight::set_integer_field(event_ptr, 40, pid as i64);
 
-        // Belt+suspenders post: SkyLight reaches backgrounded Chromium/Catalyst;
-        // the public path lands on AppKit/WKWebView. Mouse-class → no auth envelope.
-        crate::input::skylight::post_to_pid(pid as libc::pid_t, event_ptr, false);
-        event.post_to_pid(pid as libc::pid_t);
+        post_mouse_event_to_pid(pid, &event);
 
         std::thread::sleep(std::time::Duration::from_millis(30));
     }

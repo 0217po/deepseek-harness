@@ -2,13 +2,18 @@ import AppKit
 
 final class DragPad: NSView {
     var changed: (() -> Void)?
+    var dragDownCount = 0
     var dragCount = 0
+    var rightDownCount = 0
+    var rightUpCount = 0
     var lastPoint = NSPoint.zero
     override var isFlipped: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-    override func mouseDown(with event: NSEvent) { lastPoint = convert(event.locationInWindow, from: nil) }
+    override func mouseDown(with event: NSEvent) { lastPoint = convert(event.locationInWindow, from: nil); dragDownCount += 1; changed?() }
     override func mouseDragged(with event: NSEvent) { lastPoint = convert(event.locationInWindow, from: nil); needsDisplay = true }
     override func mouseUp(with event: NSEvent) { lastPoint = convert(event.locationInWindow, from: nil); dragCount += 1; needsDisplay = true; changed?() }
+    override func rightMouseDown(with event: NSEvent) { rightDownCount += 1; changed?() }
+    override func rightMouseUp(with event: NSEvent) { rightUpCount += 1; changed?() }
     override func draw(_ dirtyRect: NSRect) {
         NSColor.systemBlue.withAlphaComponent(0.12).setFill(); bounds.fill()
         ("Drag across this area" as NSString).draw(at: NSPoint(x: 12, y: 12), withAttributes: [.font: NSFont.systemFont(ofSize: 15)])
@@ -16,6 +21,11 @@ final class DragPad: NSView {
     }
 }
 final class ScrollDocument: NSView { override var isFlipped: Bool { true } }
+final class CountingScrollView: NSScrollView {
+    var changed: (() -> Void)?
+    var eventCount = 0
+    override func scrollWheel(with event: NSEvent) { eventCount += 1; super.scrollWheel(with: event); changed?() }
+}
 
 /// Every assertion reads this application's own state file after real OS input.
 final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
@@ -25,7 +35,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     var field: NSTextField!
     var countLabel: NSTextField!
     var dragPad: DragPad!
-    var scroll: NSScrollView!
+    var scroll: CountingScrollView!
     var count = 0
     var secondaryCount = 0
     var selectedFile = ""
@@ -65,7 +75,8 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         let open = NSButton(title: "Open fixture file", target: self, action: #selector(openFile))
         open.frame = NSRect(x: 30, y: 212, width: 350, height: 30)
         content.addSubview(open)
-        scroll = NSScrollView(frame: NSRect(x: 30, y: 30, width: 350, height: 180))
+        scroll = CountingScrollView(frame: NSRect(x: 30, y: 30, width: 350, height: 180))
+        scroll.changed = { [weak self] in self?.persist() }
         scroll.hasVerticalScroller = true
         let document = ScrollDocument(frame: NSRect(x: 0, y: 0, width: 330, height: 1400))
         for index in 0..<35 {
@@ -118,8 +129,9 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     }
     func persist() {
         let state: [String: Any] = ["count": count, "secondaryCount": secondaryCount, "text": field.stringValue, "selectedFile": selectedFile,
-            "dragCount": dragPad.dragCount, "dragPoint": [dragPad.lastPoint.x, dragPad.lastPoint.y],
-            "scrollY": scroll.contentView.bounds.origin.y, "dragBounds": windowPoints(dragPad), "scrollBounds": windowPoints(scroll),
+            "dragDownCount": dragPad.dragDownCount, "dragCount": dragPad.dragCount, "dragPoint": [dragPad.lastPoint.x, dragPad.lastPoint.y],
+            "rightDownCount": dragPad.rightDownCount, "rightUpCount": dragPad.rightUpCount,
+            "scrollEventCount": scroll.eventCount, "scrollY": scroll.contentView.bounds.origin.y, "dragBounds": windowPoints(dragPad), "scrollBounds": windowPoints(scroll),
             "primaryWindowSize": [window.frame.width, window.frame.height],
             "secondaryWindowSize": second != nil ? [second.frame.width, second.frame.height] : []]
         let data = try! JSONSerialization.data(withJSONObject: state)

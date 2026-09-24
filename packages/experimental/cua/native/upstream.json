@@ -25,11 +25,6 @@
       "sha256": "77de9f1600ade692c9c923c8bfb24e7cb59581a345188f113cb93705138ab493"
     },
     {
-      "local": "src/input/mouse.rs",
-      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/mouse.rs",
-      "sha256": "271fff5e387db4808fe7af0d38ddb6c8b27e96f1dfe2a1c524e5dc1786707aee"
-    },
-    {
       "local": "src/input/ax_actions.rs",
       "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/ax_actions.rs",
       "sha256": "cb1468e136d90da49b0400b329c8981c6442deebc95138eb23a0f6226145daa7"
@@ -55,6 +50,11 @@
       "local": "src/ax/window_scope.rs",
       "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/window_scope.rs",
       "changes": "Recognize nested AXSheet window IDs and exclude sibling sheets and menu bars from sheet-scoped observations."
+    },
+    {
+      "local": "src/input/mouse.rs",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/mouse.rs",
+      "changes": "Post each background mouse event once through SkyLight, using the public PID-targeted API only when the private API is unavailable."
     }
   ],
   "localFiles": [

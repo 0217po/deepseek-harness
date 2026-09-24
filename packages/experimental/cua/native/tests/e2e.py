@@ -185,15 +185,27 @@ def main():
             call("typeText", {**owner, "text": "第二次 CUA"})
             call("pressKey", {**owner, "key": "tab"})
             state = wait_state(lambda state: state["text"] == "第二次 CUA", "Command+A replacement or key dispatch was not received")
+            expected_pointer_counts = {key: state[key] + 1 for key in
+                                       ["scrollEventCount", "rightDownCount", "rightUpCount", "dragDownCount", "dragCount"]}
             x, y, width, height = state["scrollBounds"]
             initial_scroll = state["scrollY"]
             call("scroll", {**owner, "windowId": primary["windowId"], "x": x + width / 2, "y": y + height / 2, "deltaLinesY": -3})
             state = wait_state(lambda state: state["scrollY"] > initial_scroll, "line scroll did not move the actual document")
+            assert state["scrollEventCount"] == expected_pointer_counts["scrollEventCount"], state
             x, y, width, height = state["dragBounds"]
+            call("click", {**owner, "windowId": primary["windowId"], "x": x + width / 2,
+                           "y": y + height / 2, "mouseButton": "right"})
+            state = wait_state(lambda state: state["rightUpCount"] >= expected_pointer_counts["rightUpCount"],
+                               "right click release was not received")
+            assert state["rightDownCount"] == expected_pointer_counts["rightDownCount"], state
+            assert state["rightUpCount"] == expected_pointer_counts["rightUpCount"], state
             call("drag", {**owner, "windowId": primary["windowId"], "fromX": x + 20, "fromY": y + height / 2,
                           "toX": x + width - 20, "toY": y + height / 2, "durationMs": 250, "steps": 12})
-            wait_state(lambda state: state["dragCount"] >= 1 and abs(state["dragPoint"][0] - (width - 20)) < 3,
-                       "drag release did not reach the intended document point")
+            state = wait_state(lambda state: state["dragCount"] >= expected_pointer_counts["dragCount"]
+                               and abs(state["dragPoint"][0] - (width - 20)) < 3,
+                               "drag release did not reach the intended document point")
+            assert state["dragDownCount"] == expected_pointer_counts["dragDownCount"], state
+            assert state["dragCount"] == expected_pointer_counts["dragCount"], state
             capture(primary, "02-input-scroll-drag.png")
             call("scroll", {**owner, "windowId": primary["windowId"], "x": 10, "y": 10, "deltaLinesY": 0}, "INVALID_ARGUMENT")
             call("listWindows", {"appHandle": "invalid"}, "STALE_APP")
@@ -207,11 +219,13 @@ def main():
             call("click", button_target(second, "Increment secondary"), "STALE_SNAPSHOT")
 
             check_file_panel(call, owner, primary_params, primary, directory, wait_state, button_target)
+            state = json.loads(state_path.read_text())
+            assert {key: state[key] for key in expected_pointer_counts} == expected_pointer_counts, state
             stop(fixture)
             call("listWindows", owner, "APP_UNAVAILABLE")
             call("listWindows", owner, "STALE_APP")
             helper.eof()
-            print("PASS: capability preflight, two-window snapshots, scoped invalidation, AX readback, Unicode input, real scrolling/drag release, image dimensions, system file panel, stale app cleanup, EOF")
+            print("PASS: capability preflight, two-window snapshots, scoped invalidation, AX readback, Unicode input, single scroll/right-click/drag dispatch, image dimensions, system file panel, stale app cleanup, EOF")
         finally:
             if artifacts is not None:
                 (artifacts / "transcript.json").write_text(json.dumps(transcript, ensure_ascii=False, indent=2) + "\n")
