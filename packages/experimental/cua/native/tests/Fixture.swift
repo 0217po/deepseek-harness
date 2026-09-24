@@ -28,6 +28,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     var scroll: NSScrollView!
     var count = 0
     var secondaryCount = 0
+    var selectedFile = ""
 
     init(statePath: String) { self.statePath = statePath }
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -59,6 +60,9 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         dragPad = DragPad(frame: NSRect(x: 30, y: 245, width: 350, height: 90))
         dragPad.changed = { [weak self] in self?.persist() }
         content.addSubview(dragPad)
+        let open = NSButton(title: "Open fixture file", target: self, action: #selector(openFile))
+        open.frame = NSRect(x: 30, y: 212, width: 350, height: 30)
+        content.addSubview(open)
         scroll = NSScrollView(frame: NSRect(x: 30, y: 30, width: 350, height: 180))
         scroll.hasVerticalScroller = true
         let document = ScrollDocument(frame: NSRect(x: 0, y: 0, width: 330, height: 1400))
@@ -90,6 +94,16 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     }
     @objc func increment() { count += 1; countLabel.stringValue = "Count: \(count)"; persist() }
     @objc func incrementSecondary() { secondaryCount += 1; persist() }
+    @objc func openFile() {
+        let panel = NSOpenPanel()
+        panel.directoryURL = URL(fileURLWithPath: statePath).deletingLastPathComponent()
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.beginSheetModal(for: window) { [weak self] response in
+            if response == .OK { self?.selectedFile = panel.url?.path ?? "" }
+            self?.persist()
+        }
+    }
     @objc func closeSecondary() { second.close(); second = nil; persist() }
     @objc func scrolled() { if field != nil && dragPad != nil && scroll != nil { persist() } }
     func controlTextDidChange(_ notification: Notification) { persist() }
@@ -99,7 +113,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         return [rect.minX, window.frame.height - rect.maxY, rect.width, rect.height]
     }
     func persist() {
-        let state: [String: Any] = ["count": count, "secondaryCount": secondaryCount, "text": field.stringValue,
+        let state: [String: Any] = ["count": count, "secondaryCount": secondaryCount, "text": field.stringValue, "selectedFile": selectedFile,
             "dragCount": dragPad.dragCount, "dragPoint": [dragPad.lastPoint.x, dragPad.lastPoint.y],
             "scrollY": scroll.contentView.bounds.origin.y, "dragBounds": windowPoints(dragPad), "scrollBounds": windowPoints(scroll),
             "primaryWindowSize": [window.frame.width, window.frame.height],

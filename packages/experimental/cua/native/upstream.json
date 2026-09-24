@@ -10,11 +10,6 @@
       "sha256": "36162047e0ad765180754d372891b6aed920739c72f17e6cf2bffb443e05ad65"
     },
     {
-      "local": "src/ax/window_scope.rs",
-      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/window_scope.rs",
-      "sha256": "e01d85f0218cb8bc38004489bb444479dd4b10d29bd5068e1a94896ebe5f3f39"
-    },
-    {
       "local": "src/ax/enablement.rs",
       "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/enablement.rs",
       "sha256": "822270b17167001bd9ee5e8b3c2d9018f9cf03b3b8e6bf1df15dc7aa3a790fc6"
@@ -54,7 +49,12 @@
     {
       "local": "src/ax/tree.rs",
       "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/tree.rs",
-      "changes": "Retain and compare visited accessibility identities to skip cycles and duplicate proxy subtrees within an observation."
+      "changes": "Retain and compare visited accessibility identities to skip cycles and duplicate proxy subtrees within an observation. Discover focused and nested AppKit sheets as independently selectable windows."
+    },
+    {
+      "local": "src/ax/window_scope.rs",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/window_scope.rs",
+      "changes": "Recognize nested AXSheet window IDs and exclude sibling sheets and menu bars from sheet-scoped observations."
     }
   ],
   "localFiles": [
@@ -64,6 +64,7 @@
     "src/ax/mod.rs",
     "src/input/mod.rs",
     "src/element_input.rs",
-    "src/ax/visited.rs"
+    "src/ax/visited.rs",
+    "src/panels.rs"
   ]
 }

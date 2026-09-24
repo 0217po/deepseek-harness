@@ -133,7 +133,9 @@ where
     let matched: Vec<usize> = candidates
         .iter()
         .enumerate()
-        .filter(|(_, c)| c.role == "AXWindow" && c.ax_window_id == Some(requested))
+        .filter(|(_, c)| {
+            matches!(c.role.as_str(), "AXWindow" | "AXSheet") && c.ax_window_id == Some(requested)
+        })
         .map(|(i, _)| i)
         .collect();
 
@@ -165,7 +167,9 @@ where
         .iter()
         .enumerate()
         .filter(|(i, c)| {
-            (c.role != "AXWindow" || matched.contains(i))
+            (!matches!(c.role.as_str(), "AXWindow" | "AXSheet")
+                || matched.contains(i)
+                || (c.role == "AXSheet" && c.ax_window_id.is_none() && !dialog_scope))
                 && !(dialog_scope && c.role == "AXMenuBar")
         })
         .map(|(i, _)| i)
@@ -179,6 +183,21 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn selected_sheet_excludes_document_siblings_and_menu_bar() {
+        let candidates = [
+            TopLevelCandidate::new("AXWindow", Some(11)),
+            TopLevelCandidate::new("AXSheet", Some(22)).with_identifier("open-panel"),
+            TopLevelCandidate::new("AXSheet", Some(33)).with_identifier("GoToWindow"),
+            TopLevelCandidate::new("AXMenuBar", None),
+        ];
+        for (requested, index) in [(22, 1), (33, 2)] {
+            let decision = decide_window_scope(&candidates, requested, never_called);
+            assert!(decision.scope.is_matched());
+            assert_eq!(decision.walk, vec![index]);
+        }
+    }
 
     fn panel_service_owner() -> WindowOwner {
         WindowOwner::ForeignPid {

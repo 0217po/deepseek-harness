@@ -248,6 +248,42 @@ pub fn walk_tree_bounded(
             }
         }
 
+        // AppKit sheets have their own CGWindowID while remaining children of
+        // the document window. The focused sheet can also be absent from AXWindows.
+        if let Some(focused) = copy_element_attr(app_elem, "AXFocusedWindow") {
+            if top_level
+                .iter()
+                .any(|&e| CFEqual(e as CFTypeRef, focused as CFTypeRef) != 0)
+            {
+                CFRelease(focused as CFTypeRef);
+            } else {
+                top_level.push(focused);
+            }
+        }
+        let mut cursor = 0;
+        while cursor < top_level.len() && cursor < max_elements {
+            let parent = top_level[cursor];
+            cursor += 1;
+            if !matches!(
+                copy_string_attr(parent, "AXRole").as_deref(),
+                Some("AXWindow" | "AXSheet")
+            ) {
+                continue;
+            }
+            for child in copy_children(parent) {
+                if top_level.len() < max_elements
+                    && copy_string_attr(child, "AXRole").as_deref() == Some("AXSheet")
+                    && !top_level
+                        .iter()
+                        .any(|&e| CFEqual(e as CFTypeRef, child as CFTypeRef) != 0)
+                {
+                    top_level.push(child);
+                } else {
+                    CFRelease(child as CFTypeRef);
+                }
+            }
+        }
+
         // Scope: keep non-window children (menu bar) + the target window —
         // but ONLY once the target window has actually been identified. When
         // nothing claims the requested id, `decide_window_scope` reports why
@@ -261,9 +297,7 @@ pub fn walk_tree_bounded(
                     let role = copy_string_attr(child, "AXRole").unwrap_or_default();
                     let subrole = copy_string_attr(child, "AXSubrole");
                     let identifier = copy_string_attr(child, "AXIdentifier");
-                    // Match AX window element → CGWindowID via private SPI.
-                    // Only windows carry one, so skip the round-trip elsewhere.
-                    let ax_window_id = if role == "AXWindow" {
+                    let ax_window_id = if matches!(role.as_str(), "AXWindow" | "AXSheet") {
                         ax_get_window_id(child)
                     } else {
                         None

@@ -63,7 +63,9 @@ Choose the intended window from its title and bounds. `getWindow` emits its init
 
 Retained objects resolve the current tool binding on every call. The external runtime owns persistence, imports, cancellation and completion-value serialization. Screenshots return PNG bytes; the standard tool pipeline admits the image attachment exactly once. `emit: false` suppresses facade output only. A host that uses another dispatcher can build objects through `createCuaApi` from `./api`.
 
-Indexed clicks support a single right click or a single/double left click. The helper uses an advertised accessibility action when available; pointer delivery resolves the element’s current bounds and verifies its owning window. Actions report dispatch, not application success. Read state after input. `STALE_APP` requires acquiring the application again; `STALE_SNAPSHOT` requires a fresh AX read. Transport timeout/cancellation terminates that Agent’s helper and invalidates its handles. Never retry uncertain input automatically. Closing an Agent releases its helper and AX references, without undoing changes to applications.
+AppKit sheets are selectable by their window IDs and remain visible in their document window’s tree. Keyboard input follows a system Open/Save panel only when the application’s focused sheet identifies one Apple panel-service window and that service still focuses the same panel. Unrelated or ambiguous remote recipients fail before dispatch.
+
+Indexed clicks support a single right click or a single/double left click. The helper uses an advertised accessibility action when available; pointer delivery resolves the element’s current bounds and verifies its owning window. Actions report dispatch, not application success. A visual pointer or click marker can be rendered independently of input; AX actions do not require moving the system cursor. Window-directed mouse input can still change application focus, selection or dialogs. Read state after input. `STALE_APP` requires acquiring the application again; `STALE_SNAPSHOT` requires a fresh AX read. Transport timeout/cancellation terminates that Agent’s helper and invalidates its handles. Never retry uncertain input automatically. Closing an Agent releases its helper and AX references, without undoing changes to applications.
 
 -----
 
@@ -147,7 +149,7 @@ Tool results append to Session history. Changing plugin configuration or tool pr
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Only the macOS native implementation is provided. Browser tabs, app launching, rich-text clipboard formats, AX diffs, separate-process Open/Save panels and accessory-only apps are unsupported.
+- Only the macOS native implementation is provided. Browser tabs, app launching, rich-text clipboard formats, AX diffs, unassociated system panels and accessory-only apps are unsupported.
 - Coordinates use window-local points including the title bar. PNG pixel dimensions can differ. Window movement, application changes and other desktop users can race observations and input.
 - Native binaries require a local build. Signing, distribution and permission onboarding remain future work.
 - Persistent PTC is an external dependency assumption, not an implementation in this package. Real-model task success requires separate evaluation beyond native and protocol fixtures.

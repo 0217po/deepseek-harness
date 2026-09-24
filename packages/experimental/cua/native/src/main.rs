@@ -4,6 +4,7 @@ mod apps;
 mod ax;
 mod element_input;
 mod input;
+mod panels;
 mod permissions;
 mod windows;
 
@@ -614,13 +615,17 @@ impl Driver {
                 Ok(json!({"dispatched":true,"verified":false}))
             }
             "typeText" => {
-                input::keyboard::type_text(pid, text(params, "text")?)?;
+                input::keyboard::type_text(panels::keyboard_pid(pid)?, text(params, "text")?)?;
                 Ok(json!({"dispatched":true,"verified":false}))
             }
             "pressKey" => {
                 let modifiers = modifiers(params)?;
                 let refs: Vec<_> = modifiers.iter().map(String::as_str).collect();
-                input::keyboard::press_key(pid, text(params, "key")?, &refs)?;
+                input::keyboard::press_key(
+                    panels::keyboard_pid(pid)?,
+                    text(params, "key")?,
+                    &refs,
+                )?;
                 Ok(json!({"dispatched":true,"verified":false}))
             }
             "scroll" => {

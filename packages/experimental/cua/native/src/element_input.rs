@@ -1,7 +1,6 @@
 //! Indexed clicks use advertised AX actions or the observed element's live window bounds.
-use crate::{ax::bindings::*, input, owned_window};
+use crate::{ax::bindings::*, input, panels};
 use anyhow::{ensure, Context, Result};
-use core_foundation::base::{CFRelease, CFTypeRef};
 
 fn action_key(value: &str) -> String {
     value
@@ -57,11 +56,7 @@ pub fn click(pid: i32, pointer: usize, button: &str, count: usize) -> Result<()>
     }
     let [x, y, width, height] = unsafe { element_screen_rect(element) }
         .context("Element has no pointer bounds; refresh getAXState")?;
-    let window_element = unsafe { copy_element_attr(element, "AXWindow") }
-        .context("Element has no owning window; refresh getAXState")?;
-    let id = unsafe { ax_get_window_id(window_element) };
-    unsafe { CFRelease(window_element as CFTypeRef) };
-    let window = owned_window(pid, id.context("Element window is not available")?)?;
+    let window = panels::enclosing_window(pid, pointer)?;
     let x = x + width / 2.0;
     let y = y + height / 2.0;
     let wx = x - window.bounds.x;
