@@ -78,19 +78,27 @@ final class KeyboardInput {
         try checkCancellation()
     }
 
-    /// Send each Unicode scalar as one UTF-16 down/up pair with explicit empty modifiers.
+    /// Send Unicode scalars as down/up pairs; line breaks and tabs use their physical keys.
     func typeText(_ text: String, to pid: Int32) throws {
         try checkCancellation()
         let source = try Self.source()
-        for scalar in text.unicodeScalars {
+        for scalar in text.replacingOccurrences(of: "\r\n", with: "\n").unicodeScalars {
             try checkCancellation()
-            let down = try Self.keyEvent(source: source, code: 0, down: true, flags: [])
-            let up = try Self.keyEvent(source: source, code: 0, down: false, flags: [])
-            let units = Array(String(scalar).utf16)
-            units.withUnsafeBufferPointer { buffer in
-                // A Unicode scalar always has one or two UTF-16 code units.
-                down.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: buffer.baseAddress!)
-                up.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: buffer.baseAddress!)
+            let code: CGKeyCode
+            switch scalar.value {
+            case 10, 13: code = try Self.keyCode("Return")
+            case 9: code = try Self.keyCode("Tab")
+            default: code = 0
+            }
+            let down = try Self.keyEvent(source: source, code: code, down: true, flags: [])
+            let up = try Self.keyEvent(source: source, code: code, down: false, flags: [])
+            if code == 0 {
+                let units = Array(String(scalar).utf16)
+                units.withUnsafeBufferPointer { buffer in
+                    // A Unicode scalar always has one or two UTF-16 code units.
+                    down.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: buffer.baseAddress!)
+                    up.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: buffer.baseAddress!)
+                }
             }
             var keyHeld = false
             do {
