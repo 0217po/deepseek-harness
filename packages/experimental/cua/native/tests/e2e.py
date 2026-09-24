@@ -17,10 +17,53 @@ import time
 from native_test_support import ROOT, NativeHelper, line, stop
 
 
+def check_file_panel(call, owner, primary_params, primary, directory, wait_state, button_target):
+    selected_file = Path(directory) / "sheet-target.txt"
+    selected_file.write_text("Owned file picker fixture\n")
+    call("click", button_target(call("getState", primary_params), "Open fixture file"))
+
+    def wait_observation(predicate, description, params={**primary_params, "maxElements": 2000}):
+        deadline = time.monotonic() + 5
+        while True:
+            observed = call("getState", params)
+            if predicate(observed):
+                return observed
+            if time.monotonic() >= deadline:
+                raise AssertionError(description + ": " + observed["tree"])
+            time.sleep(0.025)
+
+    sheet = wait_observation(lambda observed: any(e["identifier"] == "open-panel" for e in observed["elements"]),
+                             "File panel did not appear")
+    sheet_id = sheet["focusedWindowId"]
+    assert sheet_id != primary["windowId"], sheet
+    scoped = call("getState", {**primary_params, "windowId": sheet_id})
+    assert any(e["role"] == "AXSheet" for e in scoped["elements"]), scoped
+    assert "Increment primary" not in scoped["tree"], scoped
+    call("pressKey", {**owner, "key": "g", "modifiers": ["command", "shift"]})
+    goto = wait_observation(lambda observed: any(e["identifier"] == "PathTextField" for e in observed["elements"]),
+                            "Command+Shift+G did not reach the system panel")
+    path_field = next(e for e in goto["elements"] if e["identifier"] == "PathTextField")
+    call("click", {**owner, "snapshotId": goto["snapshotId"], "elementIndex": path_field["index"]})
+    call("pressKey", {**owner, "key": "a", "modifiers": ["command"]})
+    call("typeText", {**owner, "text": str(selected_file)})
+    wait_observation(lambda observed: any(e["identifier"] == "PathTextField" and e["value"] == str(selected_file)
+                                         for e in observed["elements"]), "Panel text input did not arrive")
+    call("pressKey", {**owner, "key": "Return"})
+    ready = wait_observation(lambda observed: not any(e["identifier"] == "PathTextField" for e in observed["elements"])
+                             and any(e["identifier"] == "OKButton" and e["enabled"] for e in observed["elements"]),
+                             "Go to folder did not select the requested file")
+    open_button = next(e for e in ready["elements"] if e["identifier"] == "OKButton")
+    call("click", {**owner, "snapshotId": ready["snapshotId"], "elementIndex": open_button["index"]})
+    wait_state(lambda state: state["selectedFile"] == str(selected_file), "File picker did not return the intended URL")
+    call("getState", {**primary_params, "windowId": sheet_id}, "WINDOW_UNAVAILABLE")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifacts", type=Path, help="Save fixture screenshots and private JSON protocol transcript")
-    artifacts = parser.parse_args().artifacts
+    parser.add_argument("--panels-only", action="store_true", help="Exercise system file panels without unrelated pointer gestures")
+    args = parser.parse_args()
+    artifacts = args.artifacts
     if artifacts is not None:
         artifacts.mkdir(parents=True, exist_ok=True)
     transcript = []
@@ -106,6 +149,12 @@ def main():
                     (artifacts / name).write_bytes(pixels)
                 return result
 
+            if args.panels_only:
+                check_file_panel(call, owner, primary_params, primary, directory, wait_state, button_target)
+                helper.eof()
+                print("PASS: sheet window scope, system-panel keyboard routing, pointer field focus, selected file URL")
+                return
+
             before = capture(primary, "00-primary.png")
             other = capture(secondary, "01-secondary.png")
             assert before["pixelWidth"] != other["pixelWidth"]
@@ -142,44 +191,7 @@ def main():
             call("screenshot", {**owner, "windowId": secondary["windowId"]}, "WINDOW_UNAVAILABLE")
             call("click", button_target(second, "Increment secondary"), "STALE_SNAPSHOT")
 
-            selected_file = Path(directory) / "sheet-target.txt"
-            selected_file.write_text("Owned file picker fixture\n")
-            call("click", button_target(call("getState", primary_params), "Open fixture file"))
-
-            def wait_observation(predicate, description, params={**primary_params, "maxElements": 2000}):
-                deadline = time.monotonic() + 5
-                while True:
-                    observed = call("getState", params)
-                    if predicate(observed):
-                        return observed
-                    if time.monotonic() >= deadline:
-                        raise AssertionError(description + ": " + observed["tree"])
-                    time.sleep(0.025)
-
-            sheet = wait_observation(lambda observed: any(e["identifier"] == "open-panel" for e in observed["elements"]),
-                                     "File panel did not appear")
-            sheet_id = sheet["focusedWindowId"]
-            assert sheet_id != primary["windowId"], sheet
-            scoped = call("getState", {**primary_params, "windowId": sheet_id})
-            assert any(e["role"] == "AXSheet" for e in scoped["elements"]), scoped
-            assert "Increment primary" not in scoped["tree"], scoped
-            call("pressKey", {**owner, "key": "g", "modifiers": ["command", "shift"]})
-            goto = wait_observation(lambda observed: any(e["identifier"] == "PathTextField" for e in observed["elements"]),
-                                    "Command+Shift+G did not reach the system panel")
-            path_field = next(e for e in goto["elements"] if e["identifier"] == "PathTextField")
-            call("click", {**owner, "snapshotId": goto["snapshotId"], "elementIndex": path_field["index"]})
-            call("pressKey", {**owner, "key": "a", "modifiers": ["command"]})
-            call("typeText", {**owner, "text": str(selected_file)})
-            wait_observation(lambda observed: any(e["identifier"] == "PathTextField" and e["value"] == str(selected_file)
-                                                 for e in observed["elements"]), "Panel text input did not arrive")
-            call("pressKey", {**owner, "key": "Return"})
-            ready = wait_observation(lambda observed: not any(e["identifier"] == "PathTextField" for e in observed["elements"])
-                                     and any(e["identifier"] == "OKButton" and e["enabled"] for e in observed["elements"]),
-                                     "Go to folder did not select the requested file")
-            open_button = next(e for e in ready["elements"] if e["identifier"] == "OKButton")
-            call("click", {**owner, "snapshotId": ready["snapshotId"], "elementIndex": open_button["index"]})
-            wait_state(lambda state: state["selectedFile"] == str(selected_file), "File picker did not return the intended URL")
-            call("getState", {**primary_params, "windowId": sheet_id}, "WINDOW_UNAVAILABLE")
+            check_file_panel(call, owner, primary_params, primary, directory, wait_state, button_target)
             stop(fixture)
             call("listWindows", owner, "APP_UNAVAILABLE")
             call("listWindows", owner, "STALE_APP")
