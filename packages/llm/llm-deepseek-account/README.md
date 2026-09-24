@@ -64,6 +64,8 @@ The settings namespace is the Cordis entry id, or the plugin name without an ent
 
 Registrations and listeners dispose with the plugin, and disposal aborts an in-flight listing request. Shared Host wiring supplies attachments, request extensions, anonymous identity, and atomic retry-policy updates; this plugin registers only its own route and uses the transport's `connect` and `admit` hooks for the catalog and the gate. The listing cache lives in memory and is keyed by endpoint and a SHA-256 of the token. No invariant companion is published: the cache is the only copy of the remote catalog, and offered models and refusals derive from one resolution of it.
 
+A failed request the shared transport classifies as `QUOTA` is rewritten to `ACCOUNT_QUOTA` before it leaves this provider, covering an HTTP 402 response and an in-band SSE error alike. The shared transport and the `deepseek-official` route keep `QUOTA`, so the account route's top-up action never appears for an API-key or third-party failure.
+
 <a id="further-exploration"></a>
 ## Further Exploration
 
