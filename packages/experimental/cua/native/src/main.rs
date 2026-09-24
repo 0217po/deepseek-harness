@@ -87,6 +87,11 @@ struct Target {
     pid: i32,
     started: (u64, u64),
 }
+struct ObservationMetadata {
+    windows: Vec<Value>,
+    focused_window_id: Option<u32>,
+}
+
 struct Snapshot {
     id: String,
     window_id: Option<u32>,
@@ -155,8 +160,11 @@ fn process_started(pid: i32) -> Result<(u64, u64)> {
         Ok((info.pbi_start_tvsec, info.pbi_start_tvusec))
     }
 }
-fn owned_window(pid: i32, id: u32) -> Result<windows::WindowInfo> {
-    let window = windows::window_info_by_id(id).ok_or_else(|| {
+fn require_owned_window(
+    pid: i32,
+    window: Option<windows::WindowInfo>,
+) -> Result<windows::WindowInfo> {
+    let window = window.ok_or_else(|| {
         failure(
             "WINDOW_UNAVAILABLE",
             "Window closed or is unavailable; refresh getWindows",
@@ -169,6 +177,10 @@ fn owned_window(pid: i32, id: u32) -> Result<windows::WindowInfo> {
     )?;
     Ok(window)
 }
+fn owned_window(pid: i32, id: u32) -> Result<windows::WindowInfo> {
+    require_owned_window(pid, windows::window_info_by_id(id))
+}
+
 fn window_json(window: &windows::WindowInfo) -> Value {
     json!({"windowId":window.window_id,"pid":window.pid,"appName":window.app_name,"title":window.title,"bounds":window.bounds,"isOnScreen":window.is_on_screen,"onCurrentSpace":window.on_current_space})
 }
@@ -328,6 +340,71 @@ impl Driver {
         }
         Ok(())
     }
+    /// Publish one observation only after its OS identity and permission checks finish.
+    fn finish_observation(
+        &mut self,
+        handle: &str,
+        pid: i32,
+        window: Option<u32>,
+        tree: ax::tree::TreeWalkResult,
+        recheck: impl FnOnce(&mut Self) -> Result<ObservationMetadata>,
+    ) -> Result<Value> {
+        let id = self.identifier("snapshot");
+        let snapshot = Snapshot {
+            id: id.clone(),
+            window_id: window,
+            elements: tree
+                .nodes
+                .iter()
+                .filter_map(|node| node.element_index.map(|index| (index, node.element_ptr)))
+                .collect(),
+        };
+        // This owner releases retained AX nodes on every validation error below.
+        let metadata = recheck(self)?;
+        if let Some(error) = &tree.discovery_error {
+            return Err(failure(
+                if error.is_permission_denied() {
+                    "PERMISSION_DENIED"
+                } else {
+                    "NATIVE_ERROR"
+                },
+                error.to_string(),
+            ));
+        }
+        use ax::window_scope::WindowScope;
+        match (window, tree.window_scope.as_ref()) {
+            (None, None) | (Some(_), Some(WindowScope::Matched)) => {}
+            (Some(_), Some(WindowScope::AxUnresolved { .. })) => {
+                ensure!(
+                    tree.nodes.is_empty() && tree.tree_markdown.is_empty() && !tree.truncated,
+                    "Unresolved accessibility window returned elements or text"
+                );
+            }
+            (_, Some(WindowScope::NotFound)) => {
+                return Err(failure(
+                    "WINDOW_UNAVAILABLE",
+                    "Selected window is unavailable",
+                ));
+            }
+            (_, Some(WindowScope::OwnerPidMismatch { .. })) => {
+                return Err(failure(
+                    "WINDOW_UNAVAILABLE",
+                    "Selected window belongs to another application",
+                ));
+            }
+            _ => bail!("Accessibility observation has an inconsistent window scope"),
+        }
+        let elements: Vec<_> = tree.nodes.iter().filter_map(|node| node.element_index.map(|index| json!({
+            "index":index,"role":node.role,"title":node.title,"value":node.value_state,"description":node.description,
+            "identifier":node.identifier,"bounds":node.frame,"actions":node.actions,"enabled":node.enabled,
+        }))).collect();
+        let result = json!({"appHandle":handle,"pid":pid,"windowId":window,
+            "focusedWindowId":metadata.focused_window_id,"snapshotId":id,"tree":tree.tree_markdown,
+            "elements":elements,"windows":metadata.windows,"truncated":tree.truncated});
+        self.snapshots.insert((handle.to_owned(), window), snapshot);
+        Ok(result)
+    }
+
     fn call(&mut self, method: &str, params: &Value) -> Result<Value> {
         let object = params
             .as_object()
@@ -464,7 +541,6 @@ impl Driver {
                 } else {
                     None
                 };
-                let scope = (handle.clone(), window);
                 if let Some(id) = window {
                     owned_window(pid, id)?;
                 }
@@ -486,35 +562,26 @@ impl Driver {
                     max_elements as usize,
                     max_depth as usize,
                 );
-                let id = self.identifier("snapshot");
-                let snapshot = Snapshot {
-                    id: id.clone(),
-                    window_id: window,
-                    elements: tree
-                        .nodes
-                        .iter()
-                        .filter_map(|node| {
-                            node.element_index.map(|index| (index, node.element_ptr))
-                        })
-                        .collect(),
-                };
-                self.validate_started(&handle, process_started(pid)?)?;
-                require_unlocked_session(self.observe_session())?;
-                if let Some(scope) = &tree.window_scope {
+                self.finish_observation(&handle, pid, window, tree, |driver| {
+                    driver.target(&handle)?;
+                    require_unlocked_session(driver.observe_session())?;
                     require(
-                        scope.is_matched(),
-                        "WINDOW_UNAVAILABLE",
-                        "Selected window has no matching accessibility surface. If it is hidden or on another Space, activate the app explicitly before observing again",
+                        permissions::accessibility(),
+                        "PERMISSION_DENIED",
+                        "Accessibility permission is required for the responsible DSH host/helper",
                     )?;
-                }
-                let elements: Vec<_> = tree.nodes.iter().filter_map(|node| node.element_index.map(|index| json!({
-                    "index":index,"role":node.role,"title":node.title,"value":node.value_state,"description":node.description,
-                    "identifier":node.identifier,"bounds":node.frame,"actions":node.actions,"enabled":node.enabled,
-                }))).collect();
-                let result = json!({"appHandle":handle,"pid":pid,"windowId":window,"focusedWindowId":ax::bindings::focused_window_id_of_pid(pid),"snapshotId":id,"tree":tree.tree_markdown,"elements":elements,
-                    "windows":windows::all_windows().into_iter().filter(|w| w.pid == pid).map(|w| window_json(&w)).collect::<Vec<_>>(),"truncated":tree.truncated});
-                self.snapshots.insert(scope, snapshot);
-                Ok(result)
+                    if let Some(id) = window {
+                        owned_window(pid, id)?;
+                    }
+                    Ok(ObservationMetadata {
+                        windows: windows::all_windows()
+                            .into_iter()
+                            .filter(|w| w.pid == pid)
+                            .map(|w| window_json(&w))
+                            .collect(),
+                        focused_window_id: ax::bindings::focused_window_id_of_pid(pid),
+                    })
+                })
             }
             "click" => {
                 if params.get("elementIndex").is_some() {
@@ -758,6 +825,263 @@ mod tests {
             elements: HashMap::new(),
         }
     }
+    fn observation(scope: ax::window_scope::WindowScope) -> ax::tree::TreeWalkResult {
+        ax::tree::TreeWalkResult {
+            tree_markdown: String::new(),
+            nodes: Vec::new(),
+            truncated: false,
+            window_scope: Some(scope),
+            discovery_error: None,
+        }
+    }
+    fn metadata() -> ObservationMetadata {
+        ObservationMetadata {
+            windows: vec![json!({"windowId":7,"pid":42})],
+            focused_window_id: Some(7),
+        }
+    }
+    fn fixture_window(pid: i32) -> windows::WindowInfo {
+        windows::WindowInfo {
+            window_id: 7,
+            pid,
+            app_name: "Fixture".into(),
+            title: "Window".into(),
+            bounds: windows::WindowBounds {
+                x: 0.0,
+                y: 0.0,
+                width: 400.0,
+                height: 300.0,
+            },
+            layer: 0,
+            z_index: 1,
+            is_on_screen: true,
+            current_space_id: None,
+            on_current_space: None,
+            space_ids: None,
+        }
+    }
+
+    #[test]
+    fn unresolved_owned_window_replaces_indices_without_borrowing_other_surfaces() {
+        use ax::window_scope::{decide_window_scope, TopLevelCandidate, WindowScope};
+        let mut driver = Driver::default();
+        let pointer =
+            unsafe { ax::bindings::AXUIElementCreateApplication(std::process::id() as i32) };
+        assert!(!pointer.is_null());
+        driver.snapshots.insert(
+            ("app".into(), Some(7)),
+            Snapshot {
+                id: "old".into(),
+                window_id: Some(7),
+                elements: HashMap::from([(5, pointer as usize)]),
+            },
+        );
+        driver
+            .snapshots
+            .insert(("app".into(), Some(8)), snapshot("other-window", Some(8)));
+        assert!(driver
+            .element("app", &json!({"snapshotId":"old","elementIndex":5}))
+            .is_ok());
+        let decision = decide_window_scope(
+            &[
+                TopLevelCandidate::new("AXMenuBar", None),
+                TopLevelCandidate::new("AXWindow", Some(8)),
+                TopLevelCandidate::new("AXSheet", None),
+            ],
+            7,
+            || windows::WindowOwner::SamePid,
+        );
+        assert!(decision.walk.is_empty());
+        let result = driver
+            .finish_observation("app", 42, Some(7), observation(decision.scope), |_| {
+                require_owned_window(42, Some(fixture_window(42)))?;
+                Ok(metadata())
+            })
+            .unwrap();
+        let id = result["snapshotId"].as_str().unwrap();
+        assert_eq!(result["tree"], "");
+        assert_eq!(result["elements"], json!([]));
+        assert_eq!(result["truncated"], false);
+        assert_eq!(
+            error_reply(
+                driver
+                    .element("app", &json!({"snapshotId":"old","elementIndex":5}))
+                    .unwrap_err()
+            )["code"],
+            "STALE_SNAPSHOT"
+        );
+        assert_eq!(
+            error_reply(
+                driver
+                    .element("app", &json!({"snapshotId":id,"elementIndex":5}))
+                    .unwrap_err()
+            )["code"],
+            "INVALID_ARGUMENT"
+        );
+        assert!(driver
+            .coordinate_snapshot("app", &json!({"snapshotId":id}), 7)
+            .is_ok());
+        assert!(driver
+            .coordinate_snapshot("app", &json!({"snapshotId":id}), 8)
+            .is_err());
+        assert!(driver
+            .snapshot("app", &json!({"snapshotId":"other-window"}))
+            .is_ok());
+        let recovered = driver
+            .finish_observation(
+                "app",
+                42,
+                Some(7),
+                observation(WindowScope::Matched),
+                |_| Ok(metadata()),
+            )
+            .unwrap();
+        assert_ne!(recovered["snapshotId"], result["snapshotId"]);
+        assert!(driver.snapshot("app", &json!({"snapshotId":id})).is_err());
+    }
+
+    #[test]
+    fn missing_foreign_and_changed_owner_windows_cannot_publish_empty_snapshots() {
+        use ax::window_scope::{decide_window_scope, WindowScope};
+        for owner in [
+            windows::WindowOwner::Unknown,
+            windows::WindowOwner::ForeignPid {
+                owner_pid: 99,
+                owner_app_name: "Other".into(),
+            },
+        ] {
+            let mut driver = Driver::default();
+            let decision = decide_window_scope(&[], 7, || owner);
+            let error = driver
+                .finish_observation("app", 42, Some(7), observation(decision.scope), |_| {
+                    Ok(metadata())
+                })
+                .unwrap_err();
+            assert_eq!(error_reply(error)["code"], "WINDOW_UNAVAILABLE");
+            assert!(driver.snapshots.is_empty());
+        }
+        // AX discovery saw this app; the mandatory read-back now sees a closed or foreign window.
+        for after in [None, Some(fixture_window(99))] {
+            let mut driver = Driver::default();
+            let error = driver
+                .finish_observation(
+                    "app",
+                    42,
+                    Some(7),
+                    observation(WindowScope::AxUnresolved { ax_window_count: 0 }),
+                    |_| {
+                        require_owned_window(42, after)?;
+                        Ok(metadata())
+                    },
+                )
+                .unwrap_err();
+            assert_eq!(error_reply(error)["code"], "WINDOW_UNAVAILABLE");
+            assert!(driver.snapshots.is_empty());
+        }
+    }
+
+    #[test]
+    fn discovery_permission_errors_are_not_replaced_by_empty_success() {
+        use ax::window_scope::WindowScope;
+        for (code, expected) in [
+            (ax::bindings::kAXErrorAPIDisabled, "PERMISSION_DENIED"),
+            (-25204, "NATIVE_ERROR"),
+        ] {
+            let mut driver = Driver::default();
+            let mut tree = observation(WindowScope::AxUnresolved { ax_window_count: 0 });
+            tree.discovery_error = Some(ax::discovery::DiscoveryError {
+                operation: "AXWindows",
+                code: Some(code),
+            });
+            let error = driver
+                .finish_observation("app", 42, Some(7), tree, |_| Ok(metadata()))
+                .unwrap_err();
+            assert_eq!(error_reply(error)["code"], expected);
+            assert!(driver.snapshots.is_empty());
+        }
+    }
+
+    #[test]
+    fn unresolved_window_still_requires_post_read_session_permission_and_process_identity() {
+        use ax::window_scope::WindowScope;
+        for locked in [Some(true), None] {
+            let mut driver = Driver::default();
+            let error = driver
+                .finish_observation(
+                    "app",
+                    42,
+                    Some(7),
+                    observation(WindowScope::AxUnresolved { ax_window_count: 0 }),
+                    |_| {
+                        require_unlocked_session(locked)?;
+                        Ok(metadata())
+                    },
+                )
+                .unwrap_err();
+            assert_eq!(
+                error_reply(error)["code"],
+                if locked == Some(true) {
+                    "SESSION_LOCKED"
+                } else {
+                    "SESSION_UNAVAILABLE"
+                }
+            );
+            assert!(driver.snapshots.is_empty());
+        }
+        let mut driver = Driver::default();
+        let handle = driver.remember_app(42, (10, 0));
+        let error = driver
+            .finish_observation(
+                &handle,
+                42,
+                Some(7),
+                observation(WindowScope::AxUnresolved { ax_window_count: 0 }),
+                |driver| {
+                    driver.validate_started(&handle, (11, 0))?;
+                    Ok(metadata())
+                },
+            )
+            .unwrap_err();
+        assert_eq!(error_reply(error)["code"], "STALE_APP");
+        assert!(driver.snapshots.is_empty());
+        assert!(!driver.targets.contains_key(&handle));
+        let error = driver
+            .finish_observation(
+                "app",
+                42,
+                Some(7),
+                observation(WindowScope::AxUnresolved { ax_window_count: 0 }),
+                |_| {
+                    require(
+                        false,
+                        "PERMISSION_DENIED",
+                        "Accessibility permission was revoked",
+                    )?;
+                    Ok(metadata())
+                },
+            )
+            .unwrap_err();
+        assert_eq!(error_reply(error)["code"], "PERMISSION_DENIED");
+        assert!(driver.snapshots.is_empty());
+    }
+
+    #[test]
+    fn unresolved_snapshot_cannot_publish_menu_text_or_app_wide_scope() {
+        use ax::window_scope::WindowScope;
+        let mut driver = Driver::default();
+        let mut tree = observation(WindowScope::AxUnresolved { ax_window_count: 1 });
+        tree.tree_markdown = "[0] AXMenuBarItem other window".into();
+        assert!(driver
+            .finish_observation("app", 42, Some(7), tree, |_| Ok(metadata()))
+            .is_err());
+        let mut tree = observation(WindowScope::Matched);
+        tree.window_scope = None;
+        assert!(driver
+            .finish_observation("app", 42, Some(7), tree, |_| Ok(metadata()))
+            .is_err());
+        assert!(driver.snapshots.is_empty());
+    }
+
     #[test]
     fn reused_pid_invalidates_old_handle_and_can_be_acquired_again() {
         let mut driver = Driver::default();

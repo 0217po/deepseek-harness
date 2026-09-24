@@ -13,8 +13,8 @@
 
 use super::bindings::*;
 use super::visited::VisitedElements;
-use super::window_scope::{decide_window_scope, TopLevelCandidate, WindowScope};
-use core_foundation::base::{CFEqual, CFRelease, CFRetain, CFTypeRef};
+use super::window_scope::{decide_window_scope, WindowScope};
+use core_foundation::base::{CFRelease, CFRetain, CFTypeRef};
 
 /// Default maximum depth for AX tree walks. Deep menus and complex web views
 /// can nest deeply; 25 covers realistic app chrome without exploding on
@@ -147,6 +147,8 @@ pub struct TreeWalkResult {
     /// [`WindowScope::Matched`] comes with an EMPTY walk, so `nodes` never
     /// describes a window other than the requested one.
     pub window_scope: Option<WindowScope>,
+    /// Fatal window-discovery failure; the caller must reject this observation.
+    pub discovery_error: Option<super::discovery::DiscoveryError>,
 }
 
 /// Walk the AX tree of `pid`, optionally filtered to a specific window.
@@ -200,128 +202,37 @@ pub fn walk_tree_bounded(
     let mut window_scope: Option<WindowScope> = None;
 
     unsafe {
-        let app_elem = AXUIElementCreateApplication(pid);
-        if app_elem.is_null() {
-            return TreeWalkResult {
-                tree_markdown: String::new(),
-                nodes,
-                truncated: false,
-                // No application AX element at all, so a requested window
-                // certainly did not resolve.
-                window_scope: window_id.map(|_| WindowScope::AxUnresolved { ax_window_count: 0 }),
-            };
-        }
-        set_messaging_timeout(app_elem);
-        identities.insert(app_elem);
-
-        // Chromium/Electron apps (Arc, VS Code, Electron shells) ship their
-        // web-content AX tree OFF and only build it once an assistive client
-        // asks for it. Without this, the first walk of such an app returns an
-        // empty/title-bar-only tree (#1616). Flip the enablement attribute,
-        // then — only when the flip actually took and only the first time we
-        // see this process lifetime — let the asynchronously-built tree settle
-        // before we read it. Native Cocoa apps reject the attribute, so they
-        // pay no settle cost. This relies on the MAX_ELEMENTS node cap to keep
-        // the now-materialized (potentially large) tree bounded.
-        super::enablement::ensure_chromium_ax_enabled(pid, app_elem);
-
-        // Union AXChildren + AXWindows — the only way to see background windows.
-        // AXChildren omits windows when the app isn't frontmost (AppKit limitation).
-        // AXWindows returns the window list regardless of activation state.
-        let from_children = copy_children(app_elem);
-        let from_windows = copy_ax_windows(app_elem);
-
-        let mut top_level = from_children;
-        for w in from_windows {
-            // AXChildren and AXWindows can return different proxy pointers for
-            // the same native window. CFEqual compares their AX identity;
-            // pointer equality alone duplicates the whole subtree and can turn
-            // one exact dialog action into a false ambiguity.
-            if !top_level
-                .iter()
-                .any(|&e| CFEqual(e as CFTypeRef, w as CFTypeRef) != 0)
-            {
-                top_level.push(w);
-            } else {
-                // Already present — release the extra retain from copy_ax_windows.
-                CFRelease(w as CFTypeRef);
-            }
-        }
-
-        // AppKit sheets have their own CGWindowID while remaining children of
-        // the document window. The focused sheet can also be absent from AXWindows.
-        if let Some(focused) = copy_element_attr(app_elem, "AXFocusedWindow") {
-            if top_level
-                .iter()
-                .any(|&e| CFEqual(e as CFTypeRef, focused as CFTypeRef) != 0)
-            {
-                CFRelease(focused as CFTypeRef);
-            } else {
-                top_level.push(focused);
-            }
-        }
-        let mut cursor = 0;
-        while cursor < top_level.len() && cursor < max_elements {
-            let parent = top_level[cursor];
-            cursor += 1;
-            if !matches!(
-                copy_string_attr(parent, "AXRole").as_deref(),
-                Some("AXWindow" | "AXSheet")
-            ) {
-                continue;
-            }
-            for child in copy_children(parent) {
-                if top_level.len() < max_elements
-                    && copy_string_attr(child, "AXRole").as_deref() == Some("AXSheet")
-                    && !top_level
-                        .iter()
-                        .any(|&e| CFEqual(e as CFTypeRef, child as CFTypeRef) != 0)
-                {
-                    top_level.push(child);
-                } else {
-                    CFRelease(child as CFTypeRef);
+        let discovery = match super::discovery::discover(
+            pid,
+            window_id.is_some(),
+            max_elements,
+            AX_MESSAGING_TIMEOUT_SECONDS,
+        ) {
+            Ok(discovery) => discovery,
+            Err(error) => {
+                return TreeWalkResult {
+                    tree_markdown: String::new(),
+                    nodes,
+                    truncated: false,
+                    window_scope: None,
+                    discovery_error: Some(error),
                 }
             }
-        }
-
-        // Scope: keep non-window children (menu bar) + the target window —
-        // but ONLY once the target window has actually been identified. When
-        // nothing claims the requested id, `decide_window_scope` reports why
-        // and walks nothing; it must never fall back to "everything that isn't
-        // a window", which is how issue #2237 returned menu bars as panels.
+        };
+        identities.insert(discovery.application.pointer());
         let walk_these: Vec<AXUIElementRef> = if let Some(wid) = window_id {
-            let candidates: Vec<TopLevelCandidate> = top_level
-                .iter()
-                .map(|&child| {
-                    set_messaging_timeout(child);
-                    let role = copy_string_attr(child, "AXRole").unwrap_or_default();
-                    let subrole = copy_string_attr(child, "AXSubrole");
-                    let identifier = copy_string_attr(child, "AXIdentifier");
-                    let ax_window_id = if matches!(role.as_str(), "AXWindow" | "AXSheet") {
-                        ax_get_window_id(child)
-                    } else {
-                        None
-                    };
-                    TopLevelCandidate {
-                        role,
-                        subrole,
-                        identifier,
-                        ax_window_id,
-                    }
-                })
-                .collect();
-            let decision = decide_window_scope(&candidates, wid, || {
+            let decision = decide_window_scope(&discovery.candidates, wid, || {
                 crate::windows::resolve_window_owner(pid, wid)
             });
             let walk = decision
                 .walk
                 .iter()
-                .map(|&index| top_level[index])
+                .map(|&index| discovery.roots[index].pointer())
                 .collect();
             window_scope = Some(decision.scope);
             walk
         } else {
-            top_level.to_vec()
+            discovery.roots.iter().map(|root| root.pointer()).collect()
         };
 
         // Walk each top-level child at depth 0.
@@ -341,13 +252,6 @@ pub fn walk_tree_bounded(
                 max_depth,
             );
         }
-
-        // Release all top-level elements (copy_children / copy_ax_windows both retain).
-        for child in top_level {
-            CFRelease(child as CFTypeRef);
-        }
-
-        CFRelease(app_elem as CFTypeRef);
     }
 
     let truncated_flag = truncated;
@@ -372,6 +276,7 @@ pub fn walk_tree_bounded(
         nodes,
         truncated: truncated_flag,
         window_scope,
+        discovery_error: None,
     }
 }
 

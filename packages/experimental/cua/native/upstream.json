@@ -39,7 +39,7 @@
     {
       "local": "src/ax/tree.rs",
       "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/tree.rs",
-      "changes": "Retain and compare visited accessibility identities to skip cycles and duplicate proxy subtrees within an observation. Discover focused and nested AppKit sheets as independently selectable windows."
+      "changes": "Retain and compare visited accessibility identities to skip cycles and duplicate proxy subtrees within an observation. Discover focused and nested AppKit sheets as independently selectable windows. Preserve window-discovery AX failures and return empty scoped trees only when the requested app-owned CG window has no matching AX surface."
     },
     {
       "local": "src/ax/window_scope.rs",
@@ -65,6 +65,7 @@
     "src/input/mod.rs",
     "src/element_input.rs",
     "src/ax/visited.rs",
-    "src/panels.rs"
+    "src/panels.rs",
+    "src/ax/discovery.rs"
   ]
 }

@@ -14,11 +14,14 @@ const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG
 const app = { appHandle: 'fixture-app', pid: 9, name: 'Fixture', bundleId: 'test.fixture' }
 const bounds = { x: 40, y: 60, width: 320, height: 200 }
 const window = { windowId: 7, pid: 9, appName: 'Fixture', title: 'CUA fixture', bounds, isOnScreen: true, onCurrentSpace: true }
+const axlessWindow = { ...window, windowId: 8, title: 'AXless canvas' }
+const snapshots = new Map()
 const methods = ['getCapabilities', 'listApps', 'getApp', 'listWindows', 'getState', 'click', 'setValue', 'typeText', 'pressKey', 'scroll', 'drag', 'screenshot']
 let acquired = false
 let generation = 0
 let count = 0
 let value = ''
+let visualCount = 0
 function refuse(code, message) { throw Object.assign(new Error(message), { code }) }
 function call(method, params) {
   record('call', { method, params })
@@ -30,19 +33,28 @@ function call(method, params) {
     return app
   }
   if (!acquired || params.appHandle !== app.appHandle) refuse('APP_NOT_FOUND', 'Acquire an application in this helper first')
-  if (method === 'listWindows') return [window]
+  if (method === 'listWindows') return [window, axlessWindow]
   if (method === 'getState') {
     generation++
+    const axless = params.windowId === 8
+    const snapshotId = `fixture-snapshot-${generation}`
+    snapshots.set(params.windowId ?? null, { snapshotId, windowId: params.windowId ?? null, axless })
+    if (axless) return { appHandle: app.appHandle, pid: 9, windowId: 8, snapshotId,
+      tree: '', elements: [], windows: [axlessWindow], truncated: false }
     return { appHandle: app.appHandle, pid: 9, windowId: params.windowId ?? null,
       snapshotId: `fixture-snapshot-${generation}`, tree: `0 AXButton Increment\n1 AXTextField value: ${value}\n2 AXStaticText Count: ${count}`,
       elements: [{ index: 0, role: 'AXButton', title: 'Increment', bounds: { x: 60, y: 80, width: 100, height: 20 } }], windows: [window], truncated: false }
   }
-  if (method === 'screenshot') return { windowId: 7, mimeType: 'image/png', data: png, pixelWidth: 1, pixelHeight: 1, bounds, coordinateSpace: 'window-points' }
+  if (method === 'screenshot') return { windowId: params.windowId, mimeType: 'image/png', data: png, pixelWidth: 1, pixelHeight: 1, bounds, coordinateSpace: 'window-points' }
   if (method === 'click' || method === 'setValue') {
-    if (params.snapshotId !== `fixture-snapshot-${generation}`) refuse('STALE_SNAPSHOT', 'Read fresh state before acting')
-    if (method === 'click') count++
+    const observed = [...snapshots.values()].find(snapshot => snapshot.snapshotId === params.snapshotId)
+    if (!observed) refuse('STALE_SNAPSHOT', 'Read fresh state before acting')
+    if (params.windowId !== undefined && observed.windowId !== null && observed.windowId !== params.windowId) refuse('STALE_SNAPSHOT', 'Snapshot belongs to another window')
+    if (observed.axless && params.elementIndex !== undefined) refuse('INVALID_ARGUMENT', 'Element index is absent from the selected snapshot')
+    if (method === 'click' && params.windowId === 8) visualCount++
+    else if (method === 'click') count++
     else value = params.value
-    record('state', { count, value })
+    record('state', { count, value, visualCount })
     return { dispatched: true, verified: false }
   }
   if (method === 'typeText') value += params.text

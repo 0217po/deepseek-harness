@@ -113,6 +113,32 @@ describe('application and window observations', () => {
     expect(f.sink.text).toHaveBeenCalledTimes(3)
   })
 
+  it('keeps a validated AXless window usable for screenshots and coordinate input', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.dispatch.mockResolvedValueOnce(state({ windowId: 23, snapshotId: 'axless', tree: '', elements: [] }))
+    const window = await app.getWindow(23)
+    expect(f.sink.text).toHaveBeenLastCalledWith('')
+    await expect(window.getScreenshot()).resolves.toEqual(Uint8Array.from(Buffer.from(PNG, 'base64')))
+    await window.click([10, 20])
+    await window.scroll({ x: 10, y: 20, deltaLinesX: 0, deltaLinesY: -1 })
+    await window.drag([10, 20], [30, 40])
+    expect(f.dispatch.mock.calls.slice(-4).map(([operation]) => operation.method)).toEqual(['screenshot', 'click', 'scroll', 'drag'])
+    for (const [operation] of f.dispatch.mock.calls.slice(-3)) {
+      expect(operation.params).toMatchObject({ appHandle: 'app-17', windowId: 23, snapshotId: 'axless' })
+    }
+  })
+
+  it.each(['WINDOW_UNAVAILABLE', 'PERMISSION_DENIED', 'STALE_APP', 'SESSION_LOCKED'])('propagates %s while selecting a window without attempting image or input fallback', async (code) => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    const failure = new Error(code)
+    f.dispatch.mockRejectedValueOnce(failure)
+    const calls = f.dispatch.mock.calls.length
+    await expect(app.getWindow(23)).rejects.toBe(failure)
+    expect(f.dispatch.mock.calls.slice(calls).map(([operation]) => operation.method)).toEqual(['getState'])
+  })
+
   it.each([{ ids: [] }, { ids: [23, 24] }])('requires an explicit window when discovery yields $ids', async ({ ids }) => {
     const f = fixture()
     f.setWindows(ids)
