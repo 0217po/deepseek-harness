@@ -164,6 +164,16 @@ def exercise(args, artifacts, transcript, summary):
                             raise AssertionError("Expected one owned Blender document window: " + json.dumps(windows))
                         time.sleep(0.025)
 
+                    observed = call("getState", {**owner, "windowId": window["windowId"],
+                                                  "maxElements": 2000, "maxDepth": 25})
+                    window_elements = [element for element in observed["elements"] if element["role"] == "AXWindow"]
+                    assert len(window_elements) == 1, observed
+                    call("performSecondaryAction", {**owner, "snapshotId": observed["snapshotId"],
+                        "elementIndex": window_elements[0]["index"], "action": "raise"})
+                    observed = call("getState", {**owner, "windowId": window["windowId"],
+                                                  "maxElements": 2000, "maxDepth": 25})
+                    window = next(value for value in observed["windows"] if value["windowId"] == window["windowId"])
+
                     # Blender region coordinates can be Retina backing pixels while native
                     # bounds use macOS points. Choose inside the fixture's large left editor;
                     # the received Blender event independently verifies the actual region.
