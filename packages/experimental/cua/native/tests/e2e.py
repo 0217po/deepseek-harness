@@ -43,7 +43,6 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
     assert "Increment primary" not in scoped["tree"], scoped
     panel = next(e for e in scoped["elements"] if e["identifier"] == "open-panel")
     call("performSecondaryAction", {**owner, "snapshotId": scoped["snapshotId"], "elementIndex": panel["index"], "action": "raise"})
-    call("getState", {**primary_params, "windowId": sheet_id, "maxElements": 2000})
     deadline = time.monotonic() + 30
     while True:
         try:
@@ -54,7 +53,6 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
             reply = error.args[0] if error.args else None
             if not isinstance(reply, dict) or reply.get("error", {}).get("code") != "PANEL_NOT_READY" or time.monotonic() >= deadline:
                 raise
-            call("getState", {**primary_params, "windowId": sheet_id, "maxElements": 2000})
             time.sleep(0.025)
     goto = wait_observation(lambda observed: any(e["identifier"] == "PathTextField" for e in observed["elements"]),
                             "Command+Shift+G did not reach the system panel")
