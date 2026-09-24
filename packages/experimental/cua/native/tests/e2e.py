@@ -68,7 +68,8 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
                              "Go to folder did not select the requested file")
     open_button = next(e for e in ready["elements"] if e["identifier"] == "OKButton")
     call("click", {**owner, "snapshotId": ready["snapshotId"], "elementIndex": open_button["index"]})
-    wait_state(lambda state: state["selectedFile"] == str(selected_file), "File picker did not return the intended URL")
+    wait_state(lambda state: bool(state["selectedFile"]) and Path(state["selectedFile"]).samefile(selected_file),
+               "File picker did not return the intended file")
     call("getState", {**primary_params, "windowId": sheet_id}, "WINDOW_UNAVAILABLE")
 
 
