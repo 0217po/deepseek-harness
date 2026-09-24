@@ -41,7 +41,8 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
     scoped = call("getState", {**primary_params, "windowId": sheet_id})
     assert any(e["role"] == "AXSheet" for e in scoped["elements"]), scoped
     assert "Increment primary" not in scoped["tree"], scoped
-    call("activate", owner)
+    panel = next(e for e in scoped["elements"] if e["identifier"] == "open-panel")
+    call("performSecondaryAction", {**owner, "snapshotId": scoped["snapshotId"], "elementIndex": panel["index"], "action": "raise"})
     call("getState", {**primary_params, "windowId": sheet_id, "maxElements": 2000})
     deadline = time.monotonic() + 30
     while True:
