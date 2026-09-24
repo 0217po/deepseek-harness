@@ -43,7 +43,7 @@ export const Config = z.object({
   modelsURL: z.string().volatile(),
   modelsTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_MODELS_TIMEOUT_MS).volatile(),
   modelsMaxAgeMs: z.number().step(1).min(0).max(Number.MAX_SAFE_INTEGER).default(DEFAULT_MODELS_MAX_AGE_MS).volatile(),
-  modelOverrides: z.dict(modelOverride).volatile(),
+  modelOverrides: z.dict(modelOverride).default({}).volatile(),
 })
 
 /** Plain account options accepted by {@link resolveAccountOptions}. */
