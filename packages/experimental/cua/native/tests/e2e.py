@@ -24,7 +24,7 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
 
     # A remote AX traversal can consume the helper's 15-second response budget.
     # Allow two completed observations rather than timing out after the first.
-    def wait_observation(predicate, description, params={**primary_params, "maxElements": 2000}):
+    def wait_observation(predicate, description, params={**owner, "maxElements": 2000, "maxDepth": 25}):
         deadline = time.monotonic() + 30
         while True:
             observed = call("getState", params)
