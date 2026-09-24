@@ -164,12 +164,11 @@ def exercise(args, artifacts, transcript, summary):
                             raise AssertionError("Expected one owned Blender document window: " + json.dumps(windows))
                         time.sleep(0.025)
 
-                    # Blender reports bottom-left editor coordinates. A central point has
-                    # margin for the title bar; the received click must confirm it landed
-                    # inside the actual Text Editor region before keyboard assertions start.
-                    region, viewport = initial["region"], initial["window"]
-                    x = (region["x"] + region["width"] / 2) / viewport["width"] * window["bounds"]["width"]
-                    y = (1 - (region["y"] + region["height"] / 2) / viewport["height"]) * window["bounds"]["height"]
+                    # Blender region coordinates can be Retina backing pixels while native
+                    # bounds use macOS points. Choose inside the fixture's large left editor;
+                    # the received Blender event independently verifies the actual region.
+                    x = window["bounds"]["width"] / 3
+                    y = window["bounds"]["height"] / 2
                     before_click = initial["event_sequence"]
                     call("click", {**owner, "windowId": window["windowId"], "x": x, "y": y})
 
