@@ -13,6 +13,11 @@ struct AXProjection {
     let truncated: Bool
 }
 
+enum AXNodeObservation {
+    case children([AXUIElement])
+    case element(role: String, attribute: (String) throws -> CFTypeRef?)
+}
+
 final class AXAccess {
     let timeout: Float
     let cancellation: CancellationLatch
@@ -166,7 +171,7 @@ final class AXAccess {
     // live attributes, and unsupported batch APIs retain the individual read path.
     private func metadata(_ element: AXUIElement) throws -> [String: CFTypeRef]? {
         try prepare(element)
-        let names = ["AXTitle", "AXValue", "AXPlaceholderValue", "AXDescription", "AXEnabled",
+        let names = ["AXRole", "AXTitle", "AXValue", "AXPlaceholderValue", "AXDescription", "AXEnabled",
                      "AXIdentifier", "AXPosition", "AXSize", "AXChildren"]
         var output: CFArray?
         let error = AXUIElementCopyMultipleAttributeValues(element, names as CFArray, [], &output)
@@ -194,6 +199,21 @@ final class AXAccess {
             }
         }
         return value
+    }
+
+    // Only consumed attributes are decoded: transparent containers require role
+    // and children even when optional metadata carries an accessibility error.
+    func nodeObservation(attributes: [String: CFTypeRef]?, fallback: @escaping (String) throws -> CFTypeRef?) throws -> AXNodeObservation {
+        func observed(_ name: String) throws -> CFTypeRef? {
+            guard let attributes else { return try fallback(name) }
+            guard let value = attributes[name] else { throw NativeFailure(code: "NATIVE_ERROR", message: "Missing requested observation attribute") }
+            return try Self.batchAttribute(value, name: name)
+        }
+        let role = try stringValue(observed("AXRole"), attribute: "AXRole") ?? "AXUnknown"
+        if role == "AXGroup" || role == "AXScrollArea" {
+            return .children(try childValues(observed("AXChildren"), attribute: "AXChildren"))
+        }
+        return .element(role: role, attribute: observed)
     }
 
     private func enableAX(_ app: AXUIElement, identity: ProcessIdentity) throws {
@@ -270,16 +290,15 @@ final class AXAccess {
             guard count < maxElements, depth <= maxDepth else { truncated = true; return }
             visited[hash, default: []].append(element)
             count += 1
-            let role = try string(element, "AXRole") ?? "AXUnknown"
-            if role == "AXGroup" || role == "AXScrollArea" {
-                for child in try children(element) { try walk(child, level: level, depth: depth + 1) }
+            let role: String
+            let observed: (String) throws -> CFTypeRef?
+            switch try nodeObservation(attributes: metadata(element), fallback: { try self.attribute(element, $0) }) {
+            case .children(let children):
+                for child in children { try walk(child, level: level, depth: depth + 1) }
                 return
-            }
-            let attributes = try metadata(element)
-            func observed(_ name: String) throws -> CFTypeRef? {
-                guard let attributes else { return try attribute(element, name) }
-                guard let value = attributes[name] else { throw NativeFailure(code: "NATIVE_ERROR", message: "Missing requested observation attribute") }
-                return try Self.batchAttribute(value, name: name)
+            case .element(let value, let read):
+                role = value
+                observed = read
             }
             let title = try stringValue(observed("AXTitle"), attribute: "AXTitle")
             let rawValue = try controlValue(observed("AXValue"))
