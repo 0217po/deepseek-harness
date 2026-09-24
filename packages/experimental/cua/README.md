@@ -59,7 +59,7 @@ const window = await app.getWindow(windows[0].windowId)
 await window.getScreenshot()
 ```
 
-Choose the intended window from its title and bounds. `getWindow` emits its initial AX tree. An owned window without an AX surface returns an empty snapshot and remains available for screenshots and coordinate input. Window objects retain separate snapshots, so reading one window does not invalidate another. Re-reading the same scope invalidates old indices. App-scoped screenshots and coordinates use the focused window when it appears in the latest observation, otherwise require exactly one visible, nonzero-size window. Explicit window objects select a particular target. Keyboard methods stay on `app` because input follows the app’s current focus.
+Choose the intended window from its title and bounds. `getWindow` emits its initial AX tree. An owned window without an AX surface returns an empty snapshot and remains available for screenshots and coordinate input. Window objects retain separate snapshots, so reading one window does not invalidate another. Re-reading the same scope invalidates old indices. An AX node removed during observation rejects the read with `STALE_SNAPSHOT` and publishes no partial tree; read again without repeating the preceding input. App-scoped screenshots and coordinates use the focused window when it appears in the latest observation, otherwise require exactly one visible, nonzero-size window. Explicit window objects select a particular target. Keyboard methods stay on `app` because input follows the app’s current focus.
 
 Screenshot data must use canonical Base64. Response byte limits apply before parsing, and attachment admission validates the raster and its configured capacity.
 

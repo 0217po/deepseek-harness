@@ -434,6 +434,237 @@
       {
         "type": "block-start",
         "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-native-transition",
+          "name": "cua",
+          "arguments": "{\"method\":\"pressKey\",\"params\":{\"appHandle\":\"fixture-app\",\"key\":\"Return\"}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-native-stale-read",
+          "name": "cua",
+          "arguments": "{\"method\":\"getState\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-native-stale-index",
+          "name": "cua",
+          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"snapshotId\":\"fixture-snapshot-2\",\"elementIndex\":0}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-native-other-window",
+          "name": "cua",
+          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":8,\"snapshotId\":\"fixture-snapshot-4\",\"x\":20,\"y\":20}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-native-fresh-read",
+          "name": "cua",
+          "arguments": "{\"method\":\"getState\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-native-fresh-click",
+          "name": "cua",
+          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"snapshotId\":\"fixture-snapshot-5\",\"elementIndex\":0}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-native-verify",
+          "name": "cua",
+          "arguments": "{\"method\":\"getState\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
         "blockType": "text"
       },
       {
@@ -441,7 +672,7 @@
         "index": 0,
         "block": {
           "type": "text",
-          "text": "Observed Count: 1. Captured the AXless window and dispatched one coordinate click; its fresh AX state is still empty."
+          "text": "Observed Count: 2. A modal transition rejected one observation and its old indices; a fresh read allowed the next click. The other window kept its snapshot. Return was dispatched once."
         }
       },
       {

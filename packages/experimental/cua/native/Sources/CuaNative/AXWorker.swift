@@ -134,6 +134,15 @@ actor AXWorker {
     }
     static var actionResult: JSONValue { .object(["dispatched": .bool(true), "verified": .bool(false)]) }
 
+    // Only observation failures allow a fresh read. Input failures can follow
+    // partial effects and keep their original classification.
+    static func observationFailure(_ failure: NativeFailure) -> NativeFailure {
+        guard failure.accessibilityError == AXError.invalidUIElement.rawValue else { return failure }
+        return NativeFailure(code: "STALE_SNAPSHOT",
+                             message: "Accessibility tree changed during observation; read fresh getAXState",
+                             accessibilityError: failure.accessibilityError)
+    }
+
     func execute(_ request: NativeRequest, catalog: ApplicationCatalogSnapshot) throws -> DriverOutcome {
         try cancellation.check()
         guard !closed else { throw NativeFailure(code: "NATIVE_CLOSED", message: "Helper is closing") }
@@ -176,8 +185,13 @@ actor AXWorker {
         case "getState":
             let window = try params.optionalWindowID()
             if let window { _ = try NativePlatform.ownedWindow(identity.pid, window) }
-            let projection = try ax().project(identity: identity, windowID: window,
-                maxElements: params.integer("maxElements", in: 1...10000), maxDepth: params.integer("maxDepth", in: 1...100))
+            let projection: AXProjection
+            do {
+                projection = try ax().project(identity: identity, windowID: window,
+                    maxElements: params.integer("maxElements", in: 1...10000), maxDepth: params.integer("maxDepth", in: 1...100))
+            } catch let failure as NativeFailure {
+                throw Self.observationFailure(failure)
+            }
             _ = try validateIdentity(handle)
             try NativePlatform.requireUnlocked(observeSession())
             try NativePlatform.requireAccessibility()

@@ -37,7 +37,7 @@ final class AXAccess {
     }
     func failure(_ error: AXError, _ operation: String) -> NativeFailure {
         NativeFailure(code: error == .apiDisabled ? "PERMISSION_DENIED" : "NATIVE_ERROR",
-                      message: "Accessibility \(operation) failed with error \(error.rawValue)")
+                      message: "Accessibility \(operation) failed with error \(error.rawValue)", accessibilityError: error.rawValue)
     }
     private func absent(_ error: AXError) -> Bool { error == .attributeUnsupported || error == .noValue || error == .notImplemented }
     static func optionalAttributeUnavailable(_ error: AXError, attribute: String) -> Bool {
@@ -190,7 +190,7 @@ final class AXAccess {
                 if error == .attributeUnsupported || error == .noValue || error == .notImplemented
                     || optionalAttributeUnavailable(error, attribute: name) { return nil }
                 throw NativeFailure(code: error == .apiDisabled ? "PERMISSION_DENIED" : "NATIVE_ERROR",
-                                    message: "Accessibility read \(name) failed with error \(error.rawValue)")
+                                    message: "Accessibility read \(name) failed with error \(error.rawValue)", accessibilityError: error.rawValue)
             }
         }
         return value

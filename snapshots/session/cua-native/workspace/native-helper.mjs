@@ -21,6 +21,7 @@ let acquired = false
 let generation = 0
 let count = 0
 let value = ''
+let observationChanged = false
 let visualCount = 0
 let frontPid = 42
 let frontWindowId = 99
@@ -50,6 +51,11 @@ function call(requestId, method, params) {
   }
   if (method === 'listWindows') return [window, axlessWindow]
   if (method === 'getState') {
+    snapshots.delete(params.windowId ?? null)
+    if (observationChanged) {
+      observationChanged = false
+      refuse('STALE_SNAPSHOT', 'Accessibility tree changed during observation; read fresh getAXState')
+    }
     generation++
     const axless = params.windowId === 8
     const snapshotId = `fixture-snapshot-${generation}`
@@ -72,6 +78,7 @@ function call(requestId, method, params) {
     record('state', { count, value, visualCount })
     return { dispatched: true, verified: false }
   }
+  if (method === 'pressKey' && params.key === 'Return') observationChanged = true
   if (method === 'typeText') value += params.text
   else if (!['pressKey', 'scroll', 'drag'].includes(method)) refuse('UNSUPPORTED_OPERATION', method)
   return { dispatched: true, verified: false }

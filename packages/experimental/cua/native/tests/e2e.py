@@ -27,7 +27,16 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
     def wait_observation(predicate, description, params={**owner, "maxElements": 2000, "maxDepth": 25}):
         deadline = time.monotonic() + 30
         while True:
-            observed = call("getState", params)
+            try:
+                observed = call("getState", params)
+            except AssertionError as error:
+                # A closing modal can invalidate an enumerated AX node. The
+                # failed read publishes no snapshot; only this read is repeated.
+                reply = error.args[0] if error.args else None
+                if not isinstance(reply, dict) or reply.get("error", {}).get("code") != "STALE_SNAPSHOT" or time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.025)
+                continue
             if predicate(observed):
                 return observed
             if time.monotonic() >= deadline:

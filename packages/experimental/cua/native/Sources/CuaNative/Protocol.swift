@@ -49,6 +49,13 @@ indirect enum JSONValue: Codable, Sendable, Equatable {
 struct NativeFailure: Error, Sendable {
     let code: String
     let message: String
+    let accessibilityError: Int32?
+
+    init(code: String, message: String, accessibilityError: Int32? = nil) {
+        self.code = code
+        self.message = message
+        self.accessibilityError = accessibilityError
+    }
 }
 
 struct NativeRequest: Sendable {
