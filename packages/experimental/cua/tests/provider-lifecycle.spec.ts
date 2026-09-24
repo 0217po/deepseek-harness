@@ -218,9 +218,9 @@ it('rejects malformed and unowned operations before acquiring a helper', async (
 it('supplies configured resource bounds and clears registrations on unload', async () => {
   const f = await setup()
   await f.execute('getState', { appHandle: 'app-one' })
-  expect(native.request).toHaveBeenLastCalledWith('getState', { appHandle: 'app-one', maxElements: 64, maxDepth: 8 }, expect.any(AbortSignal))
+  expect(native.request).toHaveBeenLastCalledWith('getState', { appHandle: 'app-one', maxElements: 64, maxDepth: 8 }, expect.any(AbortSignal), ToolCallId('lifecycle-1'))
   await f.execute('drag', { appHandle: 'app-one', windowId: 7, fromX: 1, fromY: 2, toX: 3, toY: 4 })
-  expect(native.request).toHaveBeenLastCalledWith('drag', expect.objectContaining({ durationMs: 200, steps: 10 }), expect.any(AbortSignal))
+  expect(native.request).toHaveBeenLastCalledWith('drag', expect.objectContaining({ durationMs: 200, steps: 10 }), expect.any(AbortSignal), ToolCallId('lifecycle-2'))
   await f.provider.dispose()
   expect(f.ctx.tools.schemas()).toEqual([])
   expect(native.dispose).toHaveBeenCalledTimes(1)

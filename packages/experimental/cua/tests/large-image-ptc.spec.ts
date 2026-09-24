@@ -147,7 +147,7 @@ createInterface({ input: process.stdin }).on('line', line => {
   const stop = context.on('agent/status', ({ agent, status }) => {
     if (agent === handle.agent && status === 'idle') idle.resolve()
   })
-  onTestFinished(stop)
+  onTestFinished(() => { stop() })
   handle.agent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'Inspect the generated screenshot.' }] }))
   await idle.promise
   stop()
