@@ -208,6 +208,40 @@ describe('persistent PTC host protocol', () => {
     expect(h.terminate).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps the first outcome when raw output overflows beside a terminal frame', async () => {
+    const h = await setup({ maxOutputBytes: 100 })
+    h.onBoot(() => {
+      h.emit(frame({ type: 'done', value: encodePtcJsonWire(42) }))
+      queueMicrotask(() => { h.stdout.write('x'.repeat(1000)) })
+    })
+    expect((await h.start()).error?.kind).toBe('output-limit')
+    await setImmediate()
+    expect(h.terminate).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports the exit result when the control pipe ends beside process completion', async () => {
+    const h = await setup()
+    h.onBoot(() => {
+      h.stdout.end()
+      h.stderr.end('fatal output')
+      h.direct.resolve({ exitCode: 7, signal: null })
+      h.control.push(null)
+    })
+    const result = await h.start()
+    expect(result.error?.kind).toBe('worker-exit')
+    expect(result.error?.message).toContain('7')
+    expect(result.error?.message).toContain('fatal output')
+  })
+
+  it('terminates when a binding result exceeds the control write budget', async () => {
+    const h = await setup({ maxMessageBytes: 1024 })
+    h.onBoot(() => { h.emit(call()) })
+    const result = await h.start({ ...request, bindings: [{ global: 'tools', functions: { test: async () => 'x'.repeat(2000) } }] })
+    expect(result.error?.kind).toBe('protocol')
+    expect(result.error?.message).toContain('control output exceeds')
+    expect(h.terminate).toHaveBeenCalledTimes(1)
+  })
+
   it('reports stream errors and process failures without retaining state', async () => {
     for (const action of ['stream', 'exit', 'rejection'] as const) {
       const h = await setup()
