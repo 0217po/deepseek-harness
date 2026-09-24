@@ -25,7 +25,7 @@ it.each([
   [{ modelOverrides: { 'deepseek-flash': { contextWindow: 0 } } }, /modelOverrides\.deepseek-flash is invalid: .*contextWindow must be a positive integer/],
   [{ modelOverrides: { 'deepseek-flash': { inputModalities: ['text'], imageMaxBytes: 1 } } }, /modelOverrides\.deepseek-flash is invalid: .*cannot declare image request limits/],
 ])('rejects %j', (options, message) => {
-  expect(() => Reflect.apply(resolveAccountOptions, undefined, [options])).toThrow(message)
+  expect(() => { Reflect.apply(resolveAccountOptions, undefined, [options]) }).toThrow(message)
 })
 
 it('keeps the fields an override declares and drops inherited empty lists', () => {

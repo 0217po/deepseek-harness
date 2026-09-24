@@ -119,7 +119,7 @@ it('hides and refuses listed models this build cannot serve before any inference
   await expect(ctx.llm.prepareCall({ provider: 'deepseek-account', model: 'deepseek-v5' })).rejects.toMatchObject({ code: 'MODEL_UNSUPPORTED' })
   await expect(ctx.llm.prepareCall({ provider: 'deepseek-account', model: 'deepseek-v4-pro' })).rejects.toMatchObject({ code: 'MODEL_UNSUPPORTED' })
   await expect(ctx.llm.prepareCall({ provider: 'deepseek-account', model: 'deepseek-v5-next' }))
-    .rejects.toMatchObject({ code: 'CLIENT_UPGRADE_REQUIRED', message: expect.stringContaining('99.0.0-alpha.1') })
+    .rejects.toMatchObject({ code: 'CLIENT_UPGRADE_REQUIRED', message: expect.stringContaining('99.0.0-alpha.1') as string })
   await expect(ctx.llm.prepareCall({ provider: 'deepseek-account', model: 'unlisted-pass-through' })).resolves.toBeDefined()
   expect(server.requests.map(request => request.url)).toEqual(['/models'])
 })

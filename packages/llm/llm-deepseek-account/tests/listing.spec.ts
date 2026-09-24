@@ -4,6 +4,7 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import { afterEach, describe, expect, it } from 'vitest'
 import { APP_IDENTITY } from '@deepseek-ai/dsh-llm'
 import { parseModelListing, requestModelListing } from '../src/listing.ts'
+import type { ListedCapabilities } from '../src/listing.ts'
 
 /** The account listing the service returned on 2026-09-24. */
 const LISTING = {
@@ -50,7 +51,7 @@ describe('parseModelListing', () => {
   it('skips rows without a usable id and repeated ids', () => {
     const listing = parseModelListing({ data: [null, 1, { id: '' }, { id: 'a', name: '' }, { id: 'a' }] })
     expect(listing.skipped).toBe(4)
-    expect(listing.entries).toEqual([{ id: 'a', requirement: { kind: 'none' }, capabilities: expect.objectContaining({ usable: false }) }])
+    expect(listing.entries).toEqual([{ id: 'a', requirement: { kind: 'none' }, capabilities: expect.objectContaining({ usable: false }) as ListedCapabilities }])
   })
 
   it.each([{}, [], null, { data: {} }, { data: [] }, { data: [{ id: '' }] }])('rejects %j as a listing', (body) => {
@@ -118,7 +119,7 @@ describe('requestModelListing', () => {
     expect(headers).toMatchObject({
       'accept': 'application/json',
       'x-dsh-auth-token': 'fixture-token',
-      'user-agent': expect.stringContaining(`${APP_IDENTITY.product}/${APP_IDENTITY.version}`),
+      'user-agent': expect.stringContaining(`${APP_IDENTITY.product}/${APP_IDENTITY.version}`) as string,
     })
   })
 

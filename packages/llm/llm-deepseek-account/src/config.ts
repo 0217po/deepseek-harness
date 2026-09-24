@@ -100,7 +100,8 @@ function listingEndpoint(explicit: string | undefined, baseURL: string): string 
   return url.href
 }
 
-function resolveOverride(id: string, override: ModelOverride): ModelOverride {
+/** Keep an override's declared fields: parsed configuration carries unset fields as `undefined` and unset arrays as `[]`. */
+function resolveOverride(id: string, override: Readonly<Record<string, unknown>>): ModelOverride {
   if (id.length === 0) throw new Error('llm-deepseek-account: modelOverrides keys must be non-empty model ids')
   if (Object.hasOwn(override, 'id')) throw new Error(`llm-deepseek-account: modelOverrides.${id} sets "id", which is its key`)
   const declared: ModelOverride = {}
