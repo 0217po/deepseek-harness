@@ -54,6 +54,17 @@ describe('with a listing', () => {
     expect(catalog.offered[0]?.description).toContain('agentic coding')
   })
 
+  it('keeps this build\'s values for fields a listing omits', () => {
+    const [pro] = resolve([{ id: 'deepseek-v4-pro', api_capabilities: { anthropic_messages: {} } }]).offered
+    expect(pro).toMatchObject({ name: 'DeepSeek-V4-Pro', contextWindow: 1_000_000, inputModalities: ['text'] })
+    expect(pro).not.toHaveProperty('maxTokens')
+  })
+
+  it('serves a minimally declared vouched model with request defaults only', () => {
+    expect(resolve([{ id: 'deepseek-v5', api_capabilities: { anthropic_messages: {} }, ...requires('0.1.0') }]).offered)
+      .toEqual([{ id: 'deepseek-v5', inputModalities: ['text'] }])
+  })
+
   it('bounds the request default by a smaller output capability', () => {
     expect(resolve([{ ...PRO, max_output_tokens: 100_000 }]).offered[0]?.maxTokens).toBe(100_000)
   })
