@@ -43,6 +43,7 @@ pnpm dsh headless --patch packages/experimental/cua/examples/macos.cordis.yml --
 | `maxRequestBytes` / `maxResponseBytes` | `1048576` / `33554432` | UTF-8 请求与响应字节限制。 |
 | `maxElements` / `maxDepth` | `2000` / `25` | 辅助功能树遍历限制。 |
 | `dragDurationMs` / `dragSteps` | `400` / `20` | 拖动时长和移动分段数。 |
+| `textEventIntervalMs` | `8` | 每个 Unicode 按下或抬起事件后的间隔，范围为 0 至 1000 毫秒。组合键的节奏独立。 |
 
 [配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-cua)列出全部字段。原生工具调用使用 `{method, params}`，模型可以看到每个方法的完整参数定义。例如，`getApp` 返回 `listWindows`、`getState` 和输入操作所需的 `appHandle`。
 

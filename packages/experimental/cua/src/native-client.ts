@@ -31,6 +31,7 @@ export interface NativeClientConfig {
   maxRequestBytes: number
   maxResponseBytes: number
   graceMs: number
+  textEventIntervalMs: number
 }
 
 /** Serial helper calls retain native handles until helper disposal or replacement. */
@@ -51,6 +52,7 @@ export class NativeClient {
         '--max-response-bytes', String(config.maxResponseBytes),
         '--ax-timeout-ms', String(config.timeoutMs),
         '--shutdown-grace-ms', String(config.graceMs),
+        '--text-event-interval-ms', String(config.textEventIntervalMs),
       ], cwd: config.cwd, graceMs: config.graceMs,
       stdio: { stdin: 'pipe', stdout: 'pipe', stderr: { maxBytes: 8192 } },
     })

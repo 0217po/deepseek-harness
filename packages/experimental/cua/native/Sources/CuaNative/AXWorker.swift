@@ -58,12 +58,17 @@ actor AXWorker {
     private var snapshots: [SnapshotScope: NativeSnapshot] = [:]
     private let cancellation: CancellationLatch
     private let axTimeout: Float
+    private let textEventInterval: Double
     private var access: AXAccess?
     private var keyboard: KeyboardInput?
     private var pointer: WindowPointerInput?
     private var closed = false
 
-    init(cancellation: CancellationLatch, axTimeout: Float) { self.cancellation = cancellation; self.axTimeout = axTimeout }
+    init(cancellation: CancellationLatch, axTimeout: Float, textEventInterval: Double) {
+        self.cancellation = cancellation
+        self.axTimeout = axTimeout
+        self.textEventInterval = textEventInterval
+    }
     private func identifier(_ kind: String) throws -> String {
         guard generation < UInt64.max else { throw NativeFailure(code: "NATIVE_ERROR", message: "Native identity space exhausted") }
         generation += 1
@@ -79,7 +84,7 @@ actor AXWorker {
         if let keyboard, let pointer { return (keyboard, pointer) }
         let poster = PIDEventPoster()
         let latch = cancellation
-        let key = KeyboardInput(poster: poster, checkCancellation: { try latch.check() })
+        let key = KeyboardInput(poster: poster, textEventInterval: textEventInterval, checkCancellation: { try latch.check() })
         let mouse = WindowPointerInput(poster: poster, checkCancellation: { try latch.check() })
         keyboard = key; pointer = mouse
         return (key, mouse)

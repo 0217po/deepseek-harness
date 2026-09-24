@@ -43,6 +43,7 @@ The dump command checks profile composition without a model request. For a real 
 | `maxRequestBytes` / `maxResponseBytes` | `1048576` / `33554432` | UTF-8 request and response limits. |
 | `maxElements` / `maxDepth` | `2000` / `25` | Accessibility traversal limits. |
 | `dragDurationMs` / `dragSteps` | `400` / `20` | Duration and movement segments for a drag. |
+| `textEventIntervalMs` | `8` | Delay after each Unicode down/up event, from 0 to 1000 ms. Chord timing is independent. |
 
 The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-cua) lists all fields. Native tool calls use `{method, params}`; the complete method-specific schema is exposed to the model. For example, `getApp` returns the `appHandle` needed by `listWindows`, `getState` and input operations.
 

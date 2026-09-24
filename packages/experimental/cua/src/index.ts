@@ -32,6 +32,8 @@ export interface Config {
   dragDurationMs: number
   /** Number of movement segments dispatched during a drag. */
   dragSteps: number
+  /** Delay in milliseconds after each Unicode key-down or key-up event. */
+  textEventIntervalMs: number
   /** Managed process termination grace in milliseconds. */
   graceMs: number
   /** Maximum nodes admitted by a native accessibility snapshot. */
@@ -48,6 +50,7 @@ export const Config: Schema<Config> = Schema.object({
   dragDurationMs: Schema.number().step(1).min(1).max(5000).default(400),
   dragSteps: Schema.number().step(1).min(1).max(240).default(20),
   maxResponseBytes: Schema.number().step(1).min(1024).default(32 * 1024 * 1024),
+  textEventIntervalMs: Schema.number().min(0).max(1000).default(8),
   graceMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(3000),
   maxElements: Schema.number().step(1).min(1).max(10000).default(2000),
   maxDepth: Schema.number().step(1).min(1).max(100).default(25),
@@ -148,6 +151,7 @@ export function apply(ctx: Context, config: Config): void {
             client = new NativeClient(ctx, {
               helperPath: config.helperPath, cwd: process.cwd(), timeoutMs: config.timeoutMs,
               maxRequestBytes: config.maxRequestBytes, maxResponseBytes: config.maxResponseBytes, graceMs: config.graceMs,
+              textEventIntervalMs: config.textEventIntervalMs,
             })
             clients.set(agent, client)
           }

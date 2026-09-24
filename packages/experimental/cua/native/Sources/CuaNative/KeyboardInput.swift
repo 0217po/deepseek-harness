@@ -15,10 +15,12 @@ final class KeyboardInput {
     }
 
     private let poster: PIDEventPoster
+    private let textEventInterval: Double
     private let checkCancellation: @Sendable () throws -> Void
 
-    init(poster: PIDEventPoster, checkCancellation: @escaping @Sendable () throws -> Void = {}) {
+    init(poster: PIDEventPoster, textEventInterval: Double, checkCancellation: @escaping @Sendable () throws -> Void = {}) {
         self.poster = poster
+        self.textEventInterval = textEventInterval
         self.checkCancellation = checkCancellation
     }
 
@@ -95,17 +97,17 @@ final class KeyboardInput {
                 defer {
                     if keyHeld {
                         poster.post(up, to: pid)
-                        Thread.sleep(forTimeInterval: 0.008)
+                        Thread.sleep(forTimeInterval: textEventInterval)
                     }
                 }
                 try checkCancellation()
                 poster.post(down, to: pid)
                 keyHeld = true
-                Thread.sleep(forTimeInterval: 0.008)
+                Thread.sleep(forTimeInterval: textEventInterval)
                 try checkCancellation()
                 poster.post(up, to: pid)
                 keyHeld = false
-                Thread.sleep(forTimeInterval: 0.008)
+                Thread.sleep(forTimeInterval: textEventInterval)
             }
         }
         try checkCancellation()

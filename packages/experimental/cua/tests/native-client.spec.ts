@@ -37,7 +37,7 @@ function fixture(options: {
   const client = new NativeClient({ subprocess: { spawn } }, {
     helperPath: '/fixture/helper', cwd: '/fixture', timeoutMs: options.timeoutMs ?? 60_000,
     maxRequestBytes: options.maxRequestBytes ?? 1024,
-    maxResponseBytes: options.maxResponseBytes ?? 1024, graceMs: 10,
+    maxResponseBytes: options.maxResponseBytes ?? 1024, graceMs: 10, textEventIntervalMs: 0.5,
   })
   function finish() { done.resolve({ exitCode: 0, signal: null }); gone.resolve(true) }
   function reply(value: unknown) { stdout.write(Buffer.from(JSON.stringify(value) + '\n')) }
@@ -60,7 +60,7 @@ describe('native helper transport', () => {
     const f = fixture({ maxRequestBytes: 4096, maxResponseBytes: 8192, timeoutMs: 1234 })
     expect(f.spawn).toHaveBeenCalledWith(expect.objectContaining({ argv: [
       '/fixture/helper', '--max-request-bytes', '4096', '--max-response-bytes', '8192',
-      '--ax-timeout-ms', '1234', '--shutdown-grace-ms', '10',
+      '--ax-timeout-ms', '1234', '--shutdown-grace-ms', '10', '--text-event-interval-ms', '0.5',
     ] }))
   })
 

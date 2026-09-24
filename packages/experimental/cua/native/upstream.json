@@ -8,7 +8,7 @@
     {
       "local": "Sources/CuaNative/KeyboardInput.swift",
       "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/keyboard.rs",
-      "changes": "Reimplement the exposed PID keyboard path in Swift, including key aliases, explicit modifier transitions, reverse release and Unicode-scalar typing. Add preconstructed event pairs and cooperative cancellation; omit unreachable global and Screen Sharing paths."
+      "changes": "Reimplement the exposed PID keyboard path in Swift, including key aliases, explicit modifier transitions, reverse release and Unicode-scalar typing. Add preconstructed event pairs, cooperative cancellation and configurable Unicode event spacing; omit unreachable global and Screen Sharing paths."
     },
     {
       "local": "Sources/CuaNative/WindowPointerInput.swift",

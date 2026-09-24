@@ -92,3 +92,15 @@ func rejectsInvalidWindowIDs(_ value: String) throws {
     #expect(request.id == "call")
     #expect(request.params["nested"] == .array([.number(1), .object(["x": .number(2), "y": .number(3)])]))
 }
+
+@Test func resolvesTextEventIntervalFromHelperArguments() throws {
+    #expect(try HelperConfiguration(arguments: []).textEventIntervalSeconds == 0.008)
+    #expect(try HelperConfiguration(arguments: ["--text-event-interval-ms", "0.5"]).textEventIntervalSeconds == 0.0005)
+    #expect(try HelperConfiguration(arguments: ["--text-event-interval-ms", "0"]).textEventIntervalSeconds == 0)
+    #expect(try HelperConfiguration(arguments: ["--text-event-interval-ms", "1000"]).textEventIntervalSeconds == 1)
+    for invalid in ["-1", "1000.1", "nan", "inf", "absent"] {
+        #expect(throws: NativeFailure.self) {
+            try HelperConfiguration(arguments: ["--text-event-interval-ms", invalid])
+        }
+    }
+}

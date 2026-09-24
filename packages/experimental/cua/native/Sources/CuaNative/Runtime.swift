@@ -19,6 +19,7 @@ struct HelperConfiguration: Sendable {
     var maxResponseBytes = 32 * 1024 * 1024
     var axTimeoutSeconds: Float = 30
     var shutdownGraceSeconds: Double = 3
+    var textEventIntervalSeconds: Double = 0.008
     init(arguments: [String]) throws {
         var index = 0
         while index < arguments.count {
@@ -32,6 +33,11 @@ struct HelperConfiguration: Sendable {
             case "--ax-timeout-ms":
                 guard let value = Float(text), value.isFinite, value > 0 else { throw RequestParameters.invalid("AX timeout must be positive") }
                 axTimeoutSeconds = value / 1000
+            case "--text-event-interval-ms":
+                guard let value = Double(text), value.isFinite, (0...1000).contains(value) else {
+                    throw RequestParameters.invalid("Text event interval must be between 0 and 1000 milliseconds")
+                }
+                textEventIntervalSeconds = value / 1000
             case "--shutdown-grace-ms":
                 guard let value = Double(text), value.isFinite, value > 0 else { throw RequestParameters.invalid("Shutdown grace must be positive") }
                 shutdownGraceSeconds = value / 1000

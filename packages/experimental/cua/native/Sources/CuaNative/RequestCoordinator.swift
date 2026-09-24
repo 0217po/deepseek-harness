@@ -21,7 +21,8 @@ import Darwin
         self.configuration = configuration
         let cancellation = CancellationLatch()
         self.cancellation = cancellation
-        worker = AXWorker(cancellation: cancellation, axTimeout: configuration.axTimeoutSeconds)
+        worker = AXWorker(cancellation: cancellation, axTimeout: configuration.axTimeoutSeconds,
+                          textEventInterval: configuration.textEventIntervalSeconds)
         input = JSONLInput(limit: configuration.maxRequestBytes, cancellation: cancellation)
         writer = JSONLWriter(limit: configuration.maxResponseBytes)
     }

@@ -883,6 +883,8 @@ export interface Config {
   dragDurationMs: number
   /** Number of movement segments dispatched during a drag. */
   dragSteps: number
+  /** Delay in milliseconds after each Unicode key-down or key-up event. */
+  textEventIntervalMs: number
   /** Managed process termination grace in milliseconds. */
   graceMs: number
   /** Maximum nodes admitted by a native accessibility snapshot. */

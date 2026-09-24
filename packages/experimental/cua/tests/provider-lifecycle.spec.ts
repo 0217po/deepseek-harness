@@ -28,7 +28,7 @@ vi.mock('../src/native-client.ts', async importOriginal => ({
 
 const config = {
   helperPath: resolve('fixture-helper'), timeoutMs: 10_000, maxRequestBytes: 1024, maxResponseBytes: 4096,
-  graceMs: 10, maxElements: 64, maxDepth: 8, dragDurationMs: 200, dragSteps: 10,
+  graceMs: 10, textEventIntervalMs: 8, maxElements: 64, maxDepth: 8, dragDurationMs: 200, dragSteps: 10,
 } satisfies NativeProvider.Config
 
 async function setup(model?: { provider: string; model: string }) {
