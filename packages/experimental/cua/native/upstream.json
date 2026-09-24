@@ -20,11 +20,6 @@
       "sha256": "17d7fecf653261aaa35888c117f6ca2669a237f9a8ed150c3bda954f34ba1336"
     },
     {
-      "local": "src/input/keyboard.rs",
-      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/keyboard.rs",
-      "sha256": "77de9f1600ade692c9c923c8bfb24e7cb59581a345188f113cb93705138ab493"
-    },
-    {
       "local": "src/input/ax_actions.rs",
       "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/ax_actions.rs",
       "sha256": "cb1468e136d90da49b0400b329c8981c6442deebc95138eb23a0f6226145daa7"
@@ -55,6 +50,11 @@
       "local": "src/input/mouse.rs",
       "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/mouse.rs",
       "changes": "Post each background mouse event once through SkyLight, using the public PID-targeted API only when the private API is unavailable."
+    },
+    {
+      "local": "src/input/keyboard.rs",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/keyboard.rs",
+      "changes": "Send press_key chords through authenticated PID-targeted modifier transitions, with reverse-order cleanup and implicit Shift for plus. Preserve existing single-key and Unicode typing paths. Original upstream file SHA-256: 77de9f1600ade692c9c923c8bfb24e7cb59581a345188f113cb93705138ab493."
     }
   ],
   "localFiles": [

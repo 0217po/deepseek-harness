@@ -30,25 +30,23 @@ pub fn is_screen_sharing_pid(pid: i32) -> bool {
         .is_some_and(is_screen_sharing_bundle_id)
 }
 
-/// Press and release a single key, delivered to `pid` without stealing focus.
+/// Press and release one PID-targeted chord with balanced modifier transitions.
 pub fn press_key(pid: i32, key: &str, modifiers: &[&str]) -> anyhow::Result<()> {
-    // Handle "+" / "plus" → Shift+= (US keyboard layout).
-    if key == "+" || key.to_lowercase() == "plus" {
-        let flags = modifier_flags(&["shift"]);
-        let eq_code = key_name_to_code("=")?;
-        post_key(pid, eq_code, true, modifier_flags(modifiers) | flags)?;
+    let mut chord_modifiers = modifiers.to_vec();
+    let base_key = if key == "+" || key.eq_ignore_ascii_case("plus") {
+        chord_modifiers.push("shift");
+        "="
+    } else {
+        key
+    };
+    // Validate the base key before pressing any modifier.
+    let key_code = key_name_to_code(base_key)?;
+    let flags = modifier_flags(&chord_modifiers);
+    with_pid_modifier_keys(pid, &chord_modifiers, || {
+        post_key(pid, key_code, true, flags)?;
         std::thread::sleep(std::time::Duration::from_millis(8));
-        post_key(pid, eq_code, false, modifier_flags(modifiers) | flags)?;
-        return Ok(());
-    }
-
-    let key_code = key_name_to_code(key)?;
-    let flags = modifier_flags(modifiers);
-
-    post_key(pid, key_code, true, flags)?;
-    std::thread::sleep(std::time::Duration::from_millis(8));
-    post_key(pid, key_code, false, flags)?;
-    Ok(())
+        post_key(pid, key_code, false, flags)
+    })
 }
 
 /// Type a string character-by-character to `pid`.
