@@ -13,7 +13,8 @@ import type {} from '@deepseek-ai/dsh-fs'
 import { replyToBinding, validateBindings } from './bindings.ts'
 import { JsonChannel } from './channel.ts'
 import { bootstrapArgs } from './launch.ts'
-import { Config, validateConfig, type ResolvedConfig } from './config.ts'
+import { NodeConfig, validateConfig } from './config.ts'
+import type { Config, ResolvedConfig } from './config.ts'
 export type { Config } from './config.ts'
 import { OutputLedger } from './output-ledger.ts'
 import { terminateProcess } from './output-stream.ts'
@@ -31,7 +32,7 @@ function record(value: unknown): value is Record<string, unknown> { return typeo
 /** Node provider; direct file effects use the same sandbox service as Bash. */
 export class NodePtcRuntime extends PtcRuntime {
   static inject = ['fs', 'subprocess', 'sandbox', 'sandboxPolicy']
-  static Config = Config
+  static Config = NodeConfig
   readonly language = 'typescript'
   readonly isolation = 'process'
   override get executionInstructions(): string {

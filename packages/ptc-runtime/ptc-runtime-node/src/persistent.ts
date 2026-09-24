@@ -6,7 +6,8 @@ import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcRunRequest, PtcRunSpec, PtcRunResult, PtcRunFailure, PtcBindingNamespace, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import { clampTimeout } from '@deepseek-ai/dsh-timeout'
 import type { SubprocessHandle } from '@deepseek-ai/dsh-subprocess'
-import { Config, validateConfig, type ResolvedConfig } from './config.ts'
+import { NodeConfig, validateConfig } from './config.ts'
+import type { Config, ResolvedConfig } from './config.ts'
 import { replyToBinding, validateBindings } from './bindings.ts'
 import { JsonChannel } from './channel.ts'
 import { bootstrapArgs } from './launch.ts'
@@ -228,7 +229,7 @@ class Kernel {
 /** Unsandboxed, best-effort retained state; restart, disposal, and interrupted execution clear it. */
 export class PersistentNodePtcRuntime extends PtcRuntime {
   static inject = ['fs', 'subprocess']
-  static Config = Config
+  static Config = NodeConfig
   readonly language = 'typescript'
   readonly isolation = 'process'
   override get programFormat(): 'repl' { return 'repl' }

@@ -25,7 +25,7 @@ export interface Config extends LaunchConfig {
 /** Configuration after Loader defaults and executable selection. */
 export type ResolvedConfig = Required<Omit<Config, 'bootstrapPath'>> & Pick<Config, 'bootstrapPath'>
 /** Loader defaults shared by both Node providers. */
-export const Config: z<Config> = z.object({
+export const NodeConfig: z<Config> = z.object({
   timeoutMs: z.number().default(120_000),
   maxTimeoutMs: z.number().default(600_000),
   maxOutputBytes: z.number().default(67_108_864),

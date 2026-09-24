@@ -2246,7 +2246,7 @@ export interface LaunchConfig {
 }
 ```
 
-Source: [`packages/ptc-runtime/ptc-runtime-node/src/index.ts:25`](../packages/ptc-runtime/ptc-runtime-node/src/index.ts)
+Source: [`packages/ptc-runtime/ptc-runtime-node/src/config.ts:8`](../packages/ptc-runtime/ptc-runtime-node/src/config.ts)
 
 <a id="deepseek-aidsh-pwsh-local"></a>
 

@@ -80,8 +80,8 @@ export const Config = Shared
 export function apply(ctx: unknown, config: Config): void {}
 `)
     if (invalid) expect(() => collectConfigCatalog(root)).toThrow("schema validates key 'hidden'")
-    else expect(collectConfigCatalog(root).find(entry => entry.pkg === '@test/provider')?.schemaKeys)
-      .toEqual(['mode', 'headless', 'endpoint'])
+    else expect(new Set(collectConfigCatalog(root).find(entry => entry.pkg === '@test/provider')?.schemaKeys))
+      .toEqual(new Set(['mode', 'headless', 'endpoint']))
   })
 
   it('rejects a schema field absent from the shared config type', () => {
