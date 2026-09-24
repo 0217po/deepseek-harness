@@ -550,8 +550,11 @@ describe('tool execution', () => {
     expect(textAt(result.content, 1)).toContain('not canonical base64')
   })
 
-  it.each(['AB==', 'AQ', 'AQ=', 'AQ===', 'AQ==AA==', 'AQ==\n', 'A Q==', '_w==', '-w==', 'A?Q=='])(
-    'rejects unsupported media and base64 alias %j as one atomic batch', async (invalidBase64) => {
+  it.each([
+    ['AB==', false], ['AQ', false], ['AQ=', true], ['AQ===', true], ['AQ==AA==', true],
+    ['AQ==\n', false], ['A Q==', false], ['_w==', true], ['-w==', true], ['A?Q==', true],
+  ] as const)(
+    'rejects base64 alias %j with protocol rejection %j before storing the batch', async (invalidBase64, protocolInvalid) => {
       const rich = await mountRichRegistry()
       try {
         const client = createMockClient(
@@ -571,11 +574,16 @@ describe('tool execution', () => {
           agent: agentOn() as never,
         })
 
-        expect(result.isError).toBe(false)
+        expect(result.isError).toBe(protocolInvalid)
         expect(rich.attachments.saved).toEqual([])
-        expect(result.content).toHaveLength(2)
-        expect(textAt(result.content, 0)).toContain('not PNG, JPEG, WebP, or GIF')
-        expect(textAt(result.content, 1)).toContain('not canonical base64')
+        if (protocolInvalid) {
+          expect(result.content).toHaveLength(1)
+          expect(textAt(result.content, 0)).toContain('returned an invalid MCP result')
+        } else {
+          expect(result.content).toHaveLength(2)
+          expect(textAt(result.content, 0)).toContain('not PNG, JPEG, WebP, or GIF')
+          expect(textAt(result.content, 1)).toContain('not canonical base64')
+        }
       } finally {
         await rich.ctx.fiber.dispose()
       }
