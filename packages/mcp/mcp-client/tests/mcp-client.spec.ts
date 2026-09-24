@@ -550,33 +550,37 @@ describe('tool execution', () => {
     expect(textAt(result.content, 1)).toContain('not canonical base64')
   })
 
-  it('rejects unsupported media and base64 aliases as one atomic batch', async () => {
-    const rich = await mountRichRegistry()
-    const invalidBase64 = ['AB==', 'AQ', 'AQ=', 'AQ===', 'AQ==AA==', 'AQ==\n', 'A Q==', '_w==', '-w==', 'A?Q==']
-    const client = createMockClient(
-      [{ name: 'img', inputSchema: { type: 'object' } }],
-      { content: [
-        { type: 'image', mimeType: 'image/tiff', data: 'AQ==' },
-        ...invalidBase64.map(data => ({ type: 'image', mimeType: 'image/png', data })),
-      ] },
-    )
+  it.each(['AB==', 'AQ', 'AQ=', 'AQ===', 'AQ==AA==', 'AQ==\n', 'A Q==', '_w==', '-w==', 'A?Q=='])(
+    'rejects unsupported media and base64 alias %j as one atomic batch', async (invalidBase64) => {
+      const rich = await mountRichRegistry()
+      try {
+        const client = createMockClient(
+          [{ name: 'img', inputSchema: { type: 'object' } }],
+          { content: [
+            { type: 'image', mimeType: 'image/tiff', data: 'AQ==' },
+            { type: 'image', mimeType: 'image/png', data: invalidBase64 },
+          ] },
+        )
 
-    await syncTools(client as never, rich.ctx, defaultOpts, new Map())
-    const result = await rich.ctx.tools.execute({
-      signal: testToolSignal,
-      callId: ToolCallId('strict-batch'),
-      name: 'mcp__srv__img',
-      arguments: {},
-      agent: agentOn() as never,
-    })
+        await syncTools(client as never, rich.ctx, defaultOpts, new Map())
+        const result = await rich.ctx.tools.execute({
+          signal: testToolSignal,
+          callId: ToolCallId('strict-batch'),
+          name: 'mcp__srv__img',
+          arguments: {},
+          agent: agentOn() as never,
+        })
 
-    expect(rich.attachments.saved).toEqual([])
-    expect(result.content).toHaveLength(1 + invalidBase64.length)
-    expect(textAt(result.content, 0)).toContain('not PNG, JPEG, WebP, or GIF')
-    for (let index = 0; index < invalidBase64.length; index++) {
-      expect(textAt(result.content, index + 1)).toContain('not canonical base64')
-    }
-  })
+        expect(result.isError).toBe(false)
+        expect(rich.attachments.saved).toEqual([])
+        expect(result.content).toHaveLength(2)
+        expect(textAt(result.content, 0)).toContain('not PNG, JPEG, WebP, or GIF')
+        expect(textAt(result.content, 1)).toContain('not canonical base64')
+      } finally {
+        await rich.ctx.fiber.dispose()
+      }
+    },
+  )
 
   it('does not admit images for a route without declared image input', async () => {
     const rich = await mountRichRegistry()
