@@ -41,7 +41,18 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
     assert "Increment primary" not in scoped["tree"], scoped
     call("activate", owner)
     call("getState", {**primary_params, "windowId": sheet_id, "maxElements": 2000})
-    call("pressKey", {**owner, "key": "g", "modifiers": ["command", "shift"]})
+    deadline = time.monotonic() + 5
+    while True:
+        try:
+            call("pressKey", {**owner, "key": "g", "modifiers": ["command", "shift"]})
+            break
+        except AssertionError as error:
+            # PANEL_NOT_READY guarantees no key was dispatched while ViewBridge starts.
+            reply = error.args[0] if error.args else None
+            if not isinstance(reply, dict) or reply.get("error", {}).get("code") != "PANEL_NOT_READY" or time.monotonic() >= deadline:
+                raise
+            call("getState", {**primary_params, "windowId": sheet_id, "maxElements": 2000})
+            time.sleep(0.025)
     goto = wait_observation(lambda observed: any(e["identifier"] == "PathTextField" for e in observed["elements"]),
                             "Command+Shift+G did not reach the system panel")
     path_field = next(e for e in goto["elements"] if e["identifier"] == "PathTextField")

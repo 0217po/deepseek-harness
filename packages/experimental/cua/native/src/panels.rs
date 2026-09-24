@@ -106,7 +106,10 @@ pub fn keyboard_pid(pid: i32) -> Result<i32> {
                 })
                 .collect();
             let Some((recipient, remote_window)) = panel_keyboard_target(pid, &targets)? else {
-                return Ok(pid);
+                return Err(crate::failure(
+                    "PANEL_NOT_READY",
+                    "System file panel has no ready input recipient; read fresh state before input",
+                ));
             };
             let service = Element(unsafe { AXUIElementCreateApplication(recipient) });
             let mut focus = service.attribute("AXFocusedWindow");
@@ -117,7 +120,10 @@ pub fn keyboard_pid(pid: i32) -> Result<i32> {
                 }
                 focus = focused.attribute("AXParent");
             }
-            bail!("System file panel focus changed; activate the application and read fresh state");
+            return Err(crate::failure(
+                "PANEL_NOT_READY",
+                "System file panel focus changed; activate the application and read fresh state",
+            ));
         }
         current = element.attribute("AXParent");
     }
