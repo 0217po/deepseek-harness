@@ -34,7 +34,7 @@ export DSH_CUA_HELPER="$cua_native_root/target/release/dsh-cua-native"
 pnpm dsh headless --patch packages/experimental/cua/examples/macos.cordis.yml --dump-config
 ```
 
-配置输出命令不发起模型请求。执行真实任务时，将 `--dump-config` 替换为任务提示，并配置该 profile 的模型凭据。配置挂载 computer-use 注册表和本 provider；使用前需移除已有的竞争 provider。负责执行的宿主或辅助进程需要辅助功能权限来读取 AX 和输入，需要屏幕录制权限来截图。`getCapabilities` 查询权限和锁屏状态，不弹出系统授权窗口。桌面会话锁定或不可用时，界面观察与输入会在分派前拒绝，需由用户解锁 macOS 后继续。目标应用需提前启动，可按名称、bundle ID、应用绝对路径或 PID 选择。`getApp` 读取选中的应用，不自动激活它。需要前台操作时，对观察到的窗口调用 `performSecondaryAction(index, "raise")`。窗口隐藏或位于其他桌面空间而无法观察时，可显式调用 `app.activate()`，这可能切换焦点应用和桌面空间，之后需要重新读取状态。应用收到输入后仍可能改变焦点，后台投递不保证用户操作始终不受干扰。
+配置输出命令不发起模型请求。执行真实任务时，将 `--dump-config` 替换为任务提示，并配置该 profile 的模型凭据。配置挂载 computer-use 注册表和本 provider；使用前需移除已有的竞争 provider。负责执行的宿主或辅助进程需要辅助功能权限来读取 AX 和输入，需要屏幕录制权限来截图。`getCapabilities` 查询权限和锁屏状态，不弹出系统授权窗口。桌面会话锁定或不可用时，界面观察与输入会在分派前拒绝，需由用户解锁 macOS 后继续。目标应用需提前启动，可按名称、bundle ID、应用绝对路径或 PID 选择。`getApp` 读取选中的应用，不自动激活它。模型指引要求先在后台观察和输入，不在初始化或每次动作前激活应用。窗口隐藏、位于其他桌面空间或被台前调度缩为缩略图而无法观察时，先说明需要前台的步骤，再显式调用 `app.activate()` 或窗口的 `raise` 动作，之后重新读取状态。应用收到输入后仍可能改变焦点，后台投递不保证用户操作始终不受干扰。
 
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
@@ -130,7 +130,7 @@ App and Window methods:
 - scroll({ x, y, deltaLinesX, deltaLinesY }) -> action result
 - drag(from: [x, y], to: [x, y]) -> action result
 
-Raw operation tools use { method, params }, including params: {} for parameterless methods. getApp selects without activating the app. Prefer background actions so the user can keep working elsewhere; native apps may still change focus in response to input. Invoke performSecondaryAction with an action advertised in the AX tree, such as raise, only when that visible action is needed. Raising a window explicitly activates its app. When a hidden window or a window on another Space cannot be observed, app.activate() is an explicit foreground recovery that may switch the focused app and Space; read fresh AX state afterward.
+Raw operation tools use { method, params }, including params: {} for parameterless methods. getApp selects without activating the app. Keep applications in the background for observation and routine input. Do not activate or raise an app during initialization, before each action, or merely because another app is foreground. Prefer advertised AX actions. If a hidden window, another Space or Stage Manager prevents usable observation, explain the foreground-dependent step before app.activate() or an advertised raise action, then read fresh state. Avoid repeated activation when the user switches away; continue background-capable steps and report what requires foreground access. Applications may still change focus in response to input.
 
 Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording permission.
 
@@ -151,6 +151,7 @@ Window objects expose observation and pointer/AX actions; keyboard input remains
 
 - 只提供 macOS 原生实现。不支持浏览器标签、启动应用、富文本剪贴板格式、AX 差分、无法确认应用归属的系统面板，以及仅后台辅助类型的应用。
 - 坐标使用包含标题栏的窗口内部 point，可能不同于 PNG 像素尺寸。窗口移动、应用变化及其他桌面使用者的操作可能与观察和输入交错。
+- macOS 台前调度可能将后台窗口的尺寸与截图变为缩略图，当前无法保证这种状态下的完整画面与坐标输入；模型指引要求说明前台需求并避免反复抢回焦点。
 - 原生二进制需要本地构建。签名、分发和权限引导尚未实现。
 - 持久 PTC 是对外部运行环境的假设，本包不实现它。真实模型任务成功率需要在原生测试和协议测试之外单独评估。
 
