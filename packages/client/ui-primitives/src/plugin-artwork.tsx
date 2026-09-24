@@ -12,7 +12,7 @@ import type { IconProps } from './icons/props.ts'
  */
 const useArtworkId = (): string => `dsh_plugin_art_${useId().replaceAll(':', '')}`
 
-/** Terminal prompt artwork in a muted cyan-to-blue palette. */
+/** Muted cyan-to-blue terminal artwork shared by plugin cards and sidebar guides. */
 export const PluginArtworkTerminal = ({ size = 36, className }: IconProps) => {
   const uid = useArtworkId()
   return (

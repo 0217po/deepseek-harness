@@ -108,5 +108,6 @@ export * from './icons/index.tsx'
 export {
   PluginArtworkTerminal, PluginArtworkLoop, PluginArtworkSubagent, PluginArtworkSearch, PluginArtworkDefault,
 } from './plugin-artwork.tsx'
+export { GuideArtworkBrowser, GuideArtworkFiles } from './guide-artwork.tsx'
 export { ImageLightbox } from './ImageLightbox.tsx'
 export type { ImageLightboxLabels } from './ImageLightbox.tsx'
