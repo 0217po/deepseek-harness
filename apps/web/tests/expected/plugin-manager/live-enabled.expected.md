@@ -3,8 +3,12 @@
 - button "刷新"
 - button "添加插件"
 - heading "官方" [level=3]
-- text: "7"
+- text: "8"
 - list:
+  - listitem:
+    - button "查看 Computer Use": Computer Use
+    - text: 实验性 操作 macOS 应用。启用后当前配置档切换为 persistent PTC，代码变量跨调用保留，不提供文件沙箱。首次开启会准备本机组件，后续项目构建会检查更新。关闭会清除保留的变量。
+    - switch "启用 Computer Use"
   - listitem:
     - button "查看 智能体团队": 智能体团队
     - text: 实验性 启用团队协作、团队工具、成员列表和共享任务看板。
