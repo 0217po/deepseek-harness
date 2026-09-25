@@ -48,6 +48,19 @@ describe('persistent Node REPL', () => {
     expect(await run('console.log("second call"); ({ count: increment(), same: box === alias, dir: path.basename(process.cwd()), env: Object.keys(process.env) })')).toEqual({ logs: ['second call'], value: { count: 2, same: true, dir: cwd.split(/[\\/]/).at(-1), env: [] } })
   })
 
+  it('retains implicit REPL globals and does not attribute a completed callback exception to a later evaluation', async () => {
+    const { run } = await setup()
+    expect((await run('implicitValue = 7')).value).toBe(7)
+    await run(`
+      let fireLate; let acknowledge;
+      const fired = new Promise(resolve => { fireLate = resolve });
+      const acknowledged = new Promise(resolve => { acknowledge = resolve });
+      void fired.then(() => setImmediate(() => { acknowledge(); throw new Error('completed callback failure') }));
+    `)
+    expect(await run('fireLate(); await acknowledged; implicitValue')).toEqual({ logs: [], value: 7 })
+    expect(await run('implicitValue')).toEqual({ logs: [], value: 7 })
+  })
+
   it('uses current host bindings through retained functions and saved method references', async () => {
     const { run } = await setup()
     const first = vi.fn(async () => 'old')
