@@ -65,7 +65,7 @@ pnpm dsh web
 
 开启时模型获得 CUA 操作工具、使用指引和 persistent PTC 的执行说明；关闭时撤回这些贡献。完整接口与输出约定由 [CUA](../cua/README.zh.md) 和 [PTC](../../ptc-runtime/ptc-runtime-node/README.zh.md#persistent-repl) 说明。
 
-#### Token impact
+#### Token effect
 
 启用时添加 CUA 指引，并更新 `run_code` 说明。关闭时撤回这些贡献。
 

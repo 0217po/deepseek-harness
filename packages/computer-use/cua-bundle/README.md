@@ -65,7 +65,7 @@ Disabling unloads CUA and its persistent runtime, cancels and awaits owned opera
 
 Enabling contributes the CUA tool, guidance and persistent PTC execution instructions; disabling withdraws them. [CUA](../cua/README.md) and [PTC](../../ptc-runtime/ptc-runtime-node/README.md#persistent-repl) own the full interfaces and output semantics.
 
-#### Token impact
+#### Token effect
 
 Enabling adds CUA guidance and changes the `run_code` description. Disabling withdraws these contributions.
 
