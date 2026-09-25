@@ -236,6 +236,20 @@ it('supplies configured resource bounds and clears registrations on unload', asy
   expect(native.dispose).toHaveBeenCalledTimes(1)
 })
 
+it('keeps native element diagnostics out of model-visible state and structured tool values', async () => {
+  const f = await setup()
+  const visible = { appHandle: 'app-one', pid: 17, windowId: null, focusedWindowId: null,
+    snapshotId: 'state-one', tree: '- [0] AXButton "Save"', windows: [], truncated: false }
+  native.request.mockResolvedValue({ ...visible, elements: [{ index: 0, role: 'AXButton', bounds: [10, 20, 30, 40] }] })
+  const result = await f.execute('getState', { appHandle: 'app-one' })
+  expect(result.isError).toBe(false)
+  expect(result.value).toMatchObject({ structuredContent: visible })
+  expect(result.value).not.toHaveProperty('structuredContent.elements')
+  const content = result.content.find(block => block.type === 'text')
+  if (content?.type !== 'text') throw new Error('State text was not projected')
+  expect(JSON.parse(content.text)).toEqual(visible)
+})
+
 it('preserves screenshot coordinates and image attachments on every host', async () => {
   const f = await setup({ provider: 'image-fixture', model: 'vision' })
   f.ctx.llm.registerAdapter(['image-fixture'], new ImageAdapter())

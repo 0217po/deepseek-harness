@@ -7,7 +7,7 @@ import { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/brand'
 import { createMcpToolDefinition } from '@deepseek-ai/dsh-mcp-client'
 import { z } from 'zod'
 import { NativeClient } from './native-client.ts'
-import { Request, ScreenshotResult } from './protocol.ts'
+import { Request, ScreenshotResult, StateResult } from './protocol.ts'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-subprocess'
@@ -170,7 +170,8 @@ export function apply(ctx: Context, config: Config): void {
           const { data, mimeType, ...metadata } = ScreenshotResult.parse(result)
           return { content: [{ type: 'text', text: JSON.stringify(metadata) }, { type: 'image', mimeType, data }], structuredContent: result }
         }
-        return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result }
+        const visible = method === 'getState' ? StateResult.parse(result) : result
+        return { content: [{ type: 'text', text: JSON.stringify(visible) }], structuredContent: visible }
       },
     })
     yield ctx.tools.register({

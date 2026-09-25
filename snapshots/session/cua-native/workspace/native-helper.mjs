@@ -65,7 +65,9 @@ function call(requestId, method, params) {
       tree: '', elements: [], windows: [axlessWindow], truncated: false }
     return { appHandle: app.appHandle, pid: 9, windowId: params.windowId ?? null,
       snapshotId: `fixture-snapshot-${generation}`, tree: `0 AXButton Increment\n1 AXTextField value: ${value}\n2 AXStaticText Count: ${count}`,
-      elements: [{ index: 0, role: 'AXButton', title: 'Increment', bounds: { x: 60, y: 80, width: 100, height: 20 } }], windows: [params.windowId === 9 ? transformedWindow : window], truncated: false }
+      elements: [{ index: 0, role: 'AXButton', title: 'Increment', value: null, description: null,
+        identifier: null, bounds: [60, 80, 100, 20], actions: ['AXPress'], enabled: true }],
+      windows: [params.windowId === 9 ? transformedWindow : window], truncated: false }
   }
   if (params.windowId === 9 && ['screenshot', 'click', 'scroll', 'drag'].includes(method) && params.elementIndex === undefined) {
     refuse('WINDOW_CHANGED', 'Window display and accessibility bounds disagree. Read fresh state; if unchanged, use AX actions or explicitly restore the window before capture or coordinate input')
