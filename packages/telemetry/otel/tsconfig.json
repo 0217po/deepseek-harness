@@ -9,16 +9,13 @@
   ],
   "references": [
     {
-      "path": "../../../vendor/cosmokit"
-    },
-    {
       "path": "../../../vendor/cordis"
     },
     {
-      "path": "../../../vendor/schemastery"
+      "path": "../../../vendor/cosmokit"
     },
     {
-      "path": "../../telemetry/otel"
+      "path": "../../core/session"
     }
   ]
 }
