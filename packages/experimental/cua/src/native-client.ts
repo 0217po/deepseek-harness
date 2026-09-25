@@ -1,4 +1,4 @@
-/** Bounded JSON-line transport to one owned native helper process. */
+/** Byte-bounded JSON-line transport with linear frame assembly for one owned helper. */
 import { randomUUID } from 'node:crypto'
 import type { SubprocessHandle, SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
@@ -38,7 +38,8 @@ export interface NativeClientConfig {
 export class NativeClient {
   private readonly handle: SubprocessHandle
   private readonly config: NativeClientConfig
-  private tail = Buffer.alloc(0)
+  private readonly chunks: Buffer[] = []
+  private bufferedBytes = 0
   private failure: NativeError | undefined
   private disposal: Promise<void> | undefined
   private active: { id: string; resolve: (value: JsonValue) => void; reject: (error: NativeError) => void } | undefined
@@ -137,7 +138,8 @@ export class NativeClient {
   private fail(error: NativeError): void {
     if (this.failure) return
     this.failure = error
-    this.tail = Buffer.alloc(0)
+    this.chunks.length = 0
+    this.bufferedBytes = 0
     this.active?.reject(error)
     this.active = undefined
     this.handle.terminate()
@@ -145,20 +147,24 @@ export class NativeClient {
 
   private receive(chunk: Buffer): void {
     if (this.failure) return
-    if (this.tail.length + chunk.length > this.config.maxResponseBytes) {
+    if (this.bufferedBytes + chunk.length > this.config.maxResponseBytes) {
       this.fail(new NativeError('NATIVE_RESPONSE_LIMIT', 'Helper response exceeded the configured byte limit'))
       return
     }
-    this.tail = Buffer.concat([this.tail, chunk])
-    const newline = this.tail.indexOf(10)
+    if (chunk.length === 0) return
+    this.chunks.push(chunk)
+    this.bufferedBytes += chunk.length
+    const newline = chunk.indexOf(10)
     if (newline < 0) return
     try {
-      if (newline !== this.tail.length - 1) throw new Error('One request must produce exactly one response frame')
-      const line = new TextDecoder('utf-8', { fatal: true }).decode(this.tail.subarray(0, newline))
+      if (newline !== chunk.length - 1) throw new Error('One request must produce exactly one response frame')
+      const frame = Buffer.concat(this.chunks, this.bufferedBytes)
+      const line = new TextDecoder('utf-8', { fatal: true }).decode(frame.subarray(0, frame.length - 1))
       const reply = Reply.parse(JSON.parse(line))
       const active = this.active
       if (!active || reply.id !== active.id) throw new Error('Helper reply has no matching request')
-      this.tail = Buffer.alloc(0)
+      this.chunks.length = 0
+      this.bufferedBytes = 0
       this.active = undefined
       if ('error' in reply) {
         const error = new NativeError(reply.error.code, reply.error.message)

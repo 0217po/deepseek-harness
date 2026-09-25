@@ -127,6 +127,27 @@ describe('native helper transport', () => {
     await rejected
   })
 
+  it('assembles fragmented large responses without repeatedly copying their prefixes', async () => {
+    const f = fixture({ maxResponseBytes: 1024 * 1024 })
+    const pending = f.client.request('listApps', {}, new AbortController().signal)
+    const value = 'x'.repeat(512 * 1024)
+    const bytes = Buffer.from(JSON.stringify({ id: f.id(), result: value }) + '\n')
+    const concatenate = Buffer.concat.bind(Buffer)
+    let copiedBytes = 0
+    const copying = vi.spyOn(Buffer, 'concat').mockImplementation((chunks, length) => {
+      copiedBytes += length ?? chunks.reduce((total, chunk) => total + chunk.byteLength, 0)
+      return concatenate(chunks, length)
+    })
+    try {
+      f.stdout.emit('data', Buffer.alloc(0))
+      for (let offset = 0; offset < bytes.length; offset += 64 * 1024) f.stdout.write(bytes.subarray(offset, offset + 64 * 1024))
+    } finally { copying.mockRestore() }
+    expect(await pending === value).toBe(true)
+    // Permit an ownership copy plus one complete-frame assembly, independent of pipe chunk count.
+    expect(copiedBytes).toBeLessThanOrEqual(bytes.length * 2)
+    expect(f.client.disposed).toBe(false)
+  })
+
   it('bounds request bytes before dispatch and keeps acquired handles after a rejected request', async () => {
     const f = fixture({ maxRequestBytes: 128 })
     const envelope = JSON.stringify({ id: '0'.repeat(36), method: 'typeText', params: { text: '' } }) + '\n'
