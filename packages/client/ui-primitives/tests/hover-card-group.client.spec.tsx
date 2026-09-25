@@ -23,6 +23,34 @@ function Card({ name, grouped = true, disabled = false }: { name: string; groupe
 }
 
 describe('HoverCardGroup', () => {
+  it('does not warm the next pointer visit when keyboard focus displays an inline card outside a pointer visit', () => {
+    const view = render(<>
+      <button type="button">outside</button>
+      <HoverCardGroup>
+        <HoverCard inline grouped openDelayMs={800} anchor={<button type="button">A</button>}
+          content={<span>details A</span>} />
+        <Card name="B" />
+      </HoverCardGroup>
+    </>)
+    const outside = screen.getByRole('button', { name: 'outside' })
+    const a = screen.getByRole('button', { name: 'A' })
+    act(() => { outside.focus() })
+    fireEvent.keyDown(outside, { key: 'Tab' })
+    // jsdom does not move focus for Tab, so apply its native focus transition without a pointer event.
+    act(() => { a.focus() })
+    expect(document.activeElement).toBe(a)
+    expect(screen.getByText('details A')).toBeTruthy()
+    move(document.body, screen.getByText('B'))
+    expect(screen.queryByText('details B')).toBeNull()
+    tick(799)
+    expect(screen.queryByText('details B')).toBeNull()
+    tick(1)
+    expect(screen.getByText('details B')).toBeTruthy()
+    expect(screen.queryByText('details A')).toBeNull()
+    view.unmount()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('waits for the first actual display, then switches instantly within one physical list', () => {
     render(<HoverCardGroup><Card name="A" /><span>gap</span><Card name="B" /></HoverCardGroup>)
     const a = screen.getByText('A')

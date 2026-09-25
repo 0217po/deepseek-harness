@@ -66,7 +66,7 @@ kind: "package-library"
 | `TerminalBlock`、`ReadBlock`、`DiffBlock`、`SearchBlock`、`WebBlock` | 与各类工具结果意图对应的 agent 输出卡片。 |
 | `icons/*`、`FishLogo`、`BrandWordmark`、`ReferenceIconRegular`/`ReferenceIconMedium`、`LinkIconRegular`/`LinkIconMedium` | 字形与品牌标识。`LinkIconMedium` 用于 14px 的可点击链接分类及已知站点标记。 |
 | `PermissionIconReadOnlyRegular`/`Medium`、`PermissionIconWorkspaceWriteRegular`/`Medium`、`PermissionIconFullAccessRegular`/`Medium` | 只读、工作区写入与完全访问选项使用的权限模式图形。 |
-| `PluginArtworkTerminal`/`Loop`/`Subagent`/`Search`/`Default` | 固定配色的 36×36 插件插画；`Terminal` 为插件卡片和侧边栏开始页入口提供柔和的青蓝渐变提示符。`Default` 用于没有自有插画的插件。def id 按实例生成，同一插画可在一页中安全重复。 |
+| `PluginArtworkTerminal`/`Loop`/`Subagent`/`Search`/`Default` | 固定配色的 36×36 插件插画；`Terminal` 为插件卡片和侧边栏开始页入口提供浅蓝色提示符。`Default` 用于没有自有插画的插件。def id 按实例生成，同一插画可在一页中安全重复。 |
 | `GuideArtworkBrowser`/`Files` | 固定配色的 36×36 浏览器与文件夹插画，用于侧栏引导入口。 |
 | `FileTypeIcon`、`classifyFileType`、`fileExtension` | 按类别着色的 28px 文件或文件夹图形，以及它背后共享的不区分大小写文件名映射。代码与配置文件使用细分的全彩技术图形；链接前置图形使用 `LinkIconMedium`，图片内容使用图片预览。 |
 | `languageForPath`、`CODE_HIGHLIGHT_EXTENSIONS`、`useCodeHighlighter` | 代码预览与 diff review 共用的惰性逐行 token 高亮。文件名 grammar 选择再导出自 `@deepseek-ai/dsh-util-code-language`，即 read 卡片持久化短 id `lang` 提示背后的同一张扩展名表。 |
@@ -86,7 +86,7 @@ kind: "package-library"
 
 `Tooltip` 在悬停或键盘聚焦时读取锚点位置，再根据 `ResizeObserver` 提供的边框盒尺寸调整气泡。首次定位前气泡保持隐藏；横向移入视口留白，仅在另一侧容得下时上下翻转。标签尺寸与视口变化复用锚点坐标；定位不会同步测量气泡，也不会触发 React 渲染。
 
-`HoverCardGroup` 为一个已挂载的物理列表持有私有状态。设置 `grouped` 的 `HoverCard` 共享首张实际显示卡片的等待：之后的卡片立即替换当前卡片，直到指针离开列表。离开物理列表（包括进入 portal 卡片）会重置共享等待，但不会绕过该卡片的指针宽限或复制行为。未设置 `grouped` 的卡片保持独立。`dismissOnTooltip` 可单独选择仅在锚点 tooltip 激活后关闭卡片；即使 tooltip 隐藏，卡片也保持关闭直到指针离开锚点。不设置时，tooltip 仍只暂时遮蔽卡片。
+`HoverCardGroup` 为一个已挂载的物理列表持有私有状态。设置 `grouped` 的 `HoverCard` 共享首张实际显示卡片的等待：之后的卡片立即替换当前卡片，直到指针离开列表。指针位于列表外时，通过键盘聚焦打开行内卡片不会让下一次指针进入跳过等待。离开物理列表（包括进入 portal 卡片）会重置共享等待，但不会绕过该卡片的指针宽限或复制行为。未设置 `grouped` 的卡片保持独立。`dismissOnTooltip` 可单独选择仅在锚点 tooltip 激活后关闭卡片；即使 tooltip 隐藏，卡片也保持关闭直到指针离开锚点。不设置时，tooltip 仍只暂时遮蔽卡片。
 
 ### 渲染 agent 输出
 

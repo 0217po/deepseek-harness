@@ -1,7 +1,7 @@
 /** An independent, expandable notice explaining a non-human Turn trigger. */
 import { useId, useState, type ComponentType } from 'react'
 import {
-  IconAgentPresetOutlineRegular, IconClockOutlineRegular, IconBranchOutlineRegular,
+  IconAgentPresetOutlineRegular, IconAlarmClockOutlineRegular, IconBranchOutlineRegular,
   IconChevronDownOutlineRegular, IconContextInjectionOutlineRegular, IconCordisPluginOutlineRegular,
   IconGoalOutlineRegular, IconGlobeOutlineRegular, IconPaperPlaneOutlineRegular, IconQueueOutlineRegular,
   type IconProps,
@@ -20,7 +20,7 @@ const TRIGGER_ICONS: Record<TurnTriggerIcon, ComponentType<IconProps>> = {
   subagent: IconAgentPresetOutlineRegular,
   github: IconBranchOutlineRegular,
   webhook: IconGlobeOutlineRegular,
-  schedule: IconClockOutlineRegular,
+  schedule: IconAlarmClockOutlineRegular,
   job: IconQueueOutlineRegular,
   plugin: IconCordisPluginOutlineRegular,
 }
