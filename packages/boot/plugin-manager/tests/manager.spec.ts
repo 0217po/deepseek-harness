@@ -1404,6 +1404,7 @@ it.each([true, false])('projects the explicit experimental flag %s independently
   expect((await manager.listBundles()).find(row => row.name === 'extra')).toMatchObject({ experimental })
   manifest.dsh.bundle.experimental = 'yes'
   writeFileSync(path, JSON.stringify(manifest))
-  expect((await manager.listBundles()).find(row => row.name === 'extra')?.error)
-    .toMatchObject({ code: 'operation-error', diagnostic: expect.stringContaining('must be a boolean') })
+  const error = (await manager.listBundles()).find(row => row.name === 'extra')?.error
+  expect(error?.code).toBe('operation-error')
+  expect(error?.diagnostic).toContain('must be a boolean')
 })
