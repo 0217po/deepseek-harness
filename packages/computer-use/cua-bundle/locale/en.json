@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Computer Use",
-    "description": "Operate macOS apps. Enabling switches this profile to persistent PTC, retaining code variables across calls without a file sandbox. First activation prepares local components; later project builds check for updates. Disabling clears retained variables."
+    "description": "macOS only. Enables persistent PTC for this profile (retained variables, no file sandbox). Activation and project builds prepare local components; disabling clears variables."
   }
 }
