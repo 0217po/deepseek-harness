@@ -3,7 +3,7 @@ import { constants } from 'node:fs'
 import { access, mkdir, readFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
-import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
+import type { SubprocessOutcome, SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 
 /** Architecture names used by the platform-specific native payload. */
 export type NativeArchitecture = 'arm64' | 'x64'
@@ -81,11 +81,12 @@ async function compileNative(spec: NativeBuildSpec, signal: AbortSignal, executa
     cwd: spec.packageRoot, signal, graceMs: spec.graceMs,
     stdio: { stdin: 'ignore', stdout: { maxBytes: 65_536 }, stderr: { maxBytes: 65_536 } },
   })
-  const outcome = await handle.done.finally(async () => {
+  let outcome: SubprocessOutcome
+  try { outcome = await handle.done } finally {
     try { handle.terminate() } finally {
       if (!await handle.waitForExit()) throw new Error('Computer Use preparation process did not exit cleanly')
     }
-  })
+  }
   signal.throwIfAborted()
   if (outcome.exitCode !== 0 || outcome.signal !== null) {
     const diagnostics = `${handle.collected.stdout?.readFrom(0).text ?? ''}${handle.collected.stderr?.readFrom(0).text ?? ''}`

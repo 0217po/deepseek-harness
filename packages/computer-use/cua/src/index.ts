@@ -111,7 +111,8 @@ function executionAgent(execution: Readonly<ToolExecution>): Agent {
 export function apply(ctx: Context, config: Config): void | Promise<void> {
   if (config.helperPath !== undefined) {
     if (!isAbsolute(config.helperPath)) throw new Error('dsh-cua helperPath must be absolute')
-    return mount(ctx, { ...config, helperPath: config.helperPath })
+    mount(ctx, { ...config, helperPath: config.helperPath })
+    return
   }
   const architecture = nativeHostArchitecture(process.platform, process.arch)
   const controller = new AbortController()
