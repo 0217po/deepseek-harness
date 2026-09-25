@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/ptc-runtime/README.md
-README.md: 48af8ef445fbe5e43a04aeaf6d2e7356111967a1
-README.zh.md: 5ace3e3175db42f3d0ba046eb1ad2347f8ff48fd
+/:
+  en: 1bb0d1f590789f43
+  zh: 2297f7fb333c7212
+/ptc-runtime-ptc-execution-capability-family:
+  en: d487c8e1301e1d5a
+  zh: a03fbc7abe89f9f8
+/ptc-runtime-ptc-execution-capability-family/summary:
+  en: 0c36d4c8f5d82c51
+  zh: a8b49c7d177b34e6
+/ptc-runtime-ptc-execution-capability-family/table-of-contents:
+  en: 1eb35b015a6c423f
+  zh: a8a3dceee2c9e943
+/ptc-runtime-ptc-execution-capability-family/packages:
+  en: bc3268bd79908a8a
+  zh: c60ad4273375a919
+/ptc-runtime-ptc-execution-capability-family/related-documentation:
+  en: e31269015498917b
+  zh: 5298d3f5c02d20e5
+/ptc-runtime-ptc-execution-capability-family/dev-note:
+  en: 5de1d6304e00c58f
+  zh: 8d8225361cfa29e5

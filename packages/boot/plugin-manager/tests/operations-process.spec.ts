@@ -1,5 +1,6 @@
 /** The bounded drain and the tree stop are measured against real child processes. */
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -111,7 +112,7 @@ function fixture(child: string, descendant: string) {
 describe.skipIf(process.platform === 'win32')('a run with descendants', () => {
   it('settles a run whose pipes a descendant keeps open', async () => {
     const { context, pidFile, options } = fixture(DRAIN_CHILD, HOLDER_SCRIPT)
-    const outcome = await runProfilePnpm(context, ['add', 'held'], options)
+    const outcome = await runProfilePnpm(context, ['add', './held'], options)
     const descendant = await readPid(pidFile)
     expect(outcome).toMatchObject({ exitCode: 0 })
     expect(outcome.output).toContain('dsh: pnpm output was cut short after its process exited')
@@ -121,7 +122,7 @@ describe.skipIf(process.platform === 'win32')('a run with descendants', () => {
 
   it('surfaces an output consumer failure that the bounded drain cuts short', async () => {
     const { context, options } = fixture(DRAIN_CHILD, HOLDER_SCRIPT)
-    const run = runProfilePnpm(context, ['add', 'held'], {
+    const run = runProfilePnpm(context, ['add', './held'], {
       ...options,
       onOutput() { throw new Error('output destination closed') },
     })
@@ -130,7 +131,7 @@ describe.skipIf(process.platform === 'win32')('a run with descendants', () => {
 
   it('stops the whole tree of a stalled run before returning', async () => {
     const { context, pidFile, lateFile, options } = fixture(STALLED_CHILD, LATE_SCRIPT)
-    const outcome = await runProfilePnpm(context, ['add', 'stalled'], { ...options, idleTimeoutMs: 300 })
+    const outcome = await runProfilePnpm(context, ['add', './stalled'], { ...options, idleTimeoutMs: 300 })
     const descendant = await readPid(pidFile)
     expect(outcome).toMatchObject({ timedOut: true })
     // The descendant is gone, so the marker it would have written 1.5s in never appears.
@@ -138,4 +139,24 @@ describe.skipIf(process.platform === 'win32')('a run with descendants', () => {
     await sleep(2_000)
     expect(existsSync(lateFile)).toBe(false)
   })
+})
+
+it('waits for a run recorded by an exited operation before starting its own', async () => {
+  const { context, lateFile, options } = fixture(
+    // The run reports whether the recorded run had finished writing when it started.
+    'console.log(require("node:fs").existsSync(process.env.DSH_LATE_FILE) ? "started after" : "started before")', '',
+  )
+  const orphan = spawn(process.execPath, ['-e', `setTimeout(() => { require('node:fs').writeFileSync(${JSON.stringify(lateFile)}, 'late') }, 500)`], {
+    stdio: 'ignore',
+  })
+  onTestFinished(async () => {
+    try { orphan.kill('SIGKILL') } catch { /* the recorded run already exited */ }
+    await awaitGone(orphan.pid as number)
+  })
+  const dir = join(context.home, 'profiles', 'test')
+  mkdirSync(join(dir, '.plugin-manager'), { recursive: true })
+  writeFileSync(join(dir, '.plugin-manager', 'run.json'), JSON.stringify({ pid: orphan.pid, grouped: false }))
+  const outcome = await runProfilePnpm(context, ['list'], options)
+  expect(outcome).toMatchObject({ exitCode: 0, output: 'started after\n' })
+  expect(existsSync(join(dir, '.plugin-manager', 'run.json'))).toBe(false)
 })

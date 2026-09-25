@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-23-best-effort-persistent-ptc.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-23-best-effort-persistent-ptc.md
-2026-09-23-best-effort-persistent-ptc.md: ab35a716ff6c0c7330e0c62500b84ee6173b988a
-2026-09-23-best-effort-persistent-ptc.zh.md: 0ec7ae1f7c789eadd87c80365354f914fc720b98
+/agent-note-best-effort-persistent-ptc-memory:
+  en: 002038f955af77c1
+  zh: 4a49c3f5a2b7cb43
+/agent-note-best-effort-persistent-ptc-memory/problem:
+  en: e42db40b879fdbf4
+  zh: 3018bd35363e7051
+/agent-note-best-effort-persistent-ptc-memory/decision:
+  en: 3d3f7d0ff75dfe1c
+  zh: 10c12e18dc348896
+/agent-note-best-effort-persistent-ptc-memory/alternatives-considered:
+  en: 20e0ec55331dbcf6
+  zh: e9eb7e0339c9a545
+/agent-note-best-effort-persistent-ptc-memory/consequences:
+  en: 544f61693ab010d5
+  zh: 4c24fbd7fe849c0f
