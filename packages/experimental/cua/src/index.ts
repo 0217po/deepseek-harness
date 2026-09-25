@@ -24,6 +24,8 @@ export interface Config {
   helperPath: string
   /** Deadline for one native operation, including capture and AX traversal. */
   timeoutMs: number
+  /** Deadline for each individual Accessibility system call. */
+  axTimeoutMs: number
   /** Maximum bytes retained for one helper response frame. */
   maxResponseBytes: number
   /** Maximum UTF-8 bytes admitted for one helper request frame. */
@@ -46,6 +48,7 @@ export interface Config {
 export const Config: Schema<Config> = Schema.object({
   helperPath: Schema.string().required(),
   timeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(30_000),
+  axTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(3000),
   maxRequestBytes: Schema.number().step(1).min(1024).default(1024 * 1024),
   dragDurationMs: Schema.number().step(1).min(1).max(5000).default(400),
   dragSteps: Schema.number().step(1).min(1).max(240).default(20),
@@ -85,7 +88,7 @@ App and Window methods:
 
 Raw operation tools use { method, params }, including params: {} for parameterless methods. getApp selects without activating the app. Keep applications in the background for observation and routine input. Do not activate or raise an app during initialization, before each action, or merely because another app is foreground. Prefer advertised AX actions. If a hidden window, another Space or Stage Manager prevents usable observation, explain the foreground-dependent step before app.activate() or an advertised raise action, then read fresh state. Avoid repeated activation when the user switches away; continue background-capable steps and report what requires foreground access. Applications may still change focus in response to input.
 
-Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording permission.
+Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. WINDOW_CHANGED requires fresh state before any retry; use an advertised AX action or explicitly restore the window before screenshot or coordinate input, then observe again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording permission.
 
 Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste inserts plain text using native Unicode input without changing the clipboard; rich-text formats are unavailable. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, initialize once with var { connectCua } = await import("@deepseek-ai/dsh-experimental-cua/bridge"); var cua = connectCua(() => tools.cua, text => console.log(text)). Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.`
 
@@ -155,7 +158,7 @@ export function apply(ctx: Context, config: Config): void {
         let client = clients.get(agent)
         if (!client || client.disposed) {
           client = new NativeClient(ctx, {
-            helperPath: config.helperPath, cwd: process.cwd(), timeoutMs: config.timeoutMs,
+            helperPath: config.helperPath, cwd: process.cwd(), timeoutMs: config.timeoutMs, axTimeoutMs: config.axTimeoutMs,
             maxRequestBytes: config.maxRequestBytes, maxResponseBytes: config.maxResponseBytes, graceMs: config.graceMs,
             textEventIntervalMs: config.textEventIntervalMs,
           })

@@ -958,6 +958,8 @@ export interface Config {
   helperPath: string
   /** Deadline for one native operation, including capture and AX traversal. */
   timeoutMs: number
+  /** Deadline for each individual Accessibility system call. */
+  axTimeoutMs: number
   /** Maximum bytes retained for one helper response frame. */
   maxResponseBytes: number
   /** Maximum UTF-8 bytes admitted for one helper request frame. */

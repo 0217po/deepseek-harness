@@ -28,6 +28,7 @@ export interface NativeClientConfig {
   helperPath: string
   cwd: string
   timeoutMs: number
+  axTimeoutMs: number
   maxRequestBytes: number
   maxResponseBytes: number
   graceMs: number
@@ -51,7 +52,7 @@ export class NativeClient {
         config.helperPath,
         '--max-request-bytes', String(config.maxRequestBytes),
         '--max-response-bytes', String(config.maxResponseBytes),
-        '--ax-timeout-ms', String(config.timeoutMs),
+        '--ax-timeout-ms', String(config.axTimeoutMs),
         '--shutdown-grace-ms', String(config.graceMs),
         '--text-event-interval-ms', String(config.textEventIntervalMs),
       ], cwd: config.cwd, graceMs: config.graceMs,
