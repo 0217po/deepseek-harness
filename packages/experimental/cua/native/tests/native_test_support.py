@@ -1,14 +1,23 @@
 """Owned JSONL helper processes shared by opt-in macOS application checks."""
 import json
+from contextlib import ExitStack
 import os
 from pathlib import Path
 import select
 import signal
 import subprocess
 import time
+from typing import Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 BINARY = ROOT / ".build" / "release" / "dsh-cua-native"
+
+
+def run_cleanup(*actions: Callable[[], None]) -> None:
+    """Attempt every cleanup in order and preserve chained cleanup failures."""
+    with ExitStack() as pending:
+        for action in reversed(actions):
+            pending.callback(action)
 
 
 def line(process, timeout=15):

@@ -14,7 +14,7 @@ import subprocess
 import tempfile
 import time
 
-from native_test_support import ROOT, NativeHelper, line, stop
+from native_test_support import ROOT, NativeHelper, line, run_cleanup, stop
 
 
 def check_file_panel(call, owner, primary_params, primary, directory, wait_state, button_target):
@@ -241,13 +241,13 @@ def main():
             helper.eof()
             print("PASS: capability preflight, two-window snapshots, scoped invalidation, AX readback, Unicode input, single scroll/right-click/drag dispatch, image dimensions, system file panel, stale app cleanup, EOF")
         finally:
-            if artifacts is not None:
-                (artifacts / "transcript.json").write_text(json.dumps(transcript, ensure_ascii=False, indent=2) + "\n")
-                if state_path.exists():
-                    (artifacts / "fixture-state.json").write_bytes(state_path.read_bytes())
-            if helper is not None:
-                helper.stop()
-            stop(fixture)
+            def save_artifacts():
+                if artifacts is not None:
+                    (artifacts / "transcript.json").write_text(json.dumps(transcript, ensure_ascii=False, indent=2) + "\n")
+                    if state_path.exists():
+                        (artifacts / "fixture-state.json").write_bytes(state_path.read_bytes())
+
+            run_cleanup(save_artifacts, *([helper.stop] if helper is not None else []), lambda: stop(fixture))
 
 
 if __name__ == "__main__":

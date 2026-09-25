@@ -13,7 +13,7 @@ import subprocess
 import tempfile
 import time
 
-from native_test_support import ROOT, NativeHelper, line, stop_group
+from native_test_support import ROOT, NativeHelper, line, run_cleanup, stop_group
 
 
 def main():
@@ -128,11 +128,11 @@ def main():
                 print(diagnostics.read()[-8192:])
                 raise
             finally:
-                if args.artifacts:
-                    (args.artifacts / 'transcript.json').write_text(json.dumps(transcript, ensure_ascii=False, indent=2) + '\n')
-                if helper is not None:
-                    helper.stop()
-                stop_group(fixture)
+                def save_artifacts():
+                    if args.artifacts:
+                        (args.artifacts / 'transcript.json').write_text(json.dumps(transcript, ensure_ascii=False, indent=2) + '\n')
+
+                run_cleanup(save_artifacts, *([helper.stop] if helper is not None else []), lambda: stop_group(fixture))
 
 
 if __name__ == '__main__':
