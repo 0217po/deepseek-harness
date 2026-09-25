@@ -5,7 +5,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcRunRequest, PtcRunSpec, PtcRunResult, PtcRunFailure, PtcBindingNamespace, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import { clampTimeout } from '@deepseek-ai/dsh-timeout'
-import type { SubprocessHandle } from '@deepseek-ai/dsh-subprocess'
+import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
 import { NodeConfig, validateConfig } from './config.ts'
 import type { Config, ResolvedConfig } from './config.ts'
 import { replyToBinding, validateBindings } from './bindings.ts'
@@ -47,6 +47,7 @@ class Kernel {
   private stderr = ''
   private stopped?: Promise<void>
   private starting?: Promise<void>
+  private exitOutcome?: SubprocessOutcome
   private readonly controller = new AbortController()
   closed = false
 
@@ -58,6 +59,16 @@ class Kernel {
 
   async run(spec: PtcRunSpec, bindings: Map<string, PtcBindingNamespace>, code: string): Promise<PtcRunResult> {
     this.assertIdle()
+    if (this.exitOutcome !== undefined) {
+      const output = persistentOutput(this.config.maxOutputBytes)
+      const failure: PtcRunFailure = spec.signal?.aborted
+        ? { kind: 'abort', message: 'execution canceled; retained variables were cleared' }
+        : { kind: 'worker-exit', message: `${this.exitMessage(this.exitOutcome)}; retained variables were cleared` }
+      try { await this.stop() } catch (error: unknown) {
+        return output.failure([], { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(error)}` })
+      }
+      return output.failure([], failure)
+    }
     this.stderr = ''
     const output = persistentOutput(this.config.maxOutputBytes)
     const logs: string[] = []
@@ -131,6 +142,10 @@ class Kernel {
       .catch((error: unknown) => { this.fail('protocol', messageOf(error)) })
   }
 
+  private exitMessage(outcome: SubprocessOutcome): string {
+    return `Node process exited (${String(outcome.exitCode)}, signal ${String(outcome.signal)})${this.stderr ? `: ${this.stderr}` : ''}`
+  }
+
   private async start(cwd: string): Promise<void> {
     const executable = await this.ctx.subprocess.resolveExecutable(this.config.nodeExecutable, undefined, this.controller.signal)
     if (this.closed) return
@@ -150,18 +165,17 @@ class Kernel {
       })
       stream.on('error', (error: Error) => { this.fail('worker-exit', error.message) })
     }
-    let exited = false
     this.channel = new JsonChannel(handle.control, this.config.maxMessageBytes,
       (raw, bytes) => { this.receive(raw, bytes) }, (error, kind) => {
         if (kind === 'protocol') this.fail('protocol', error.message)
-        else setImmediate(() => { if (!this.closed && !exited) handle.terminate() })
+        else setImmediate(() => { if (!this.closed && this.exitOutcome === undefined) handle.terminate() })
       })
     void handle.done.then(async (outcome) => {
-      exited = true
+      this.exitOutcome = outcome
       await Promise.all([drainOutput(handle.stdout, this.config.graceMs), drainOutput(handle.stderr, this.config.graceMs)])
       // The terminal control frame can already be queued when process exit arrives.
       setImmediate(() => {
-        if (!this.closed) this.fail('worker-exit', `Node process exited (${String(outcome.exitCode)}, signal ${String(outcome.signal)})${this.stderr ? `: ${this.stderr}` : ''}`)
+        if (!this.closed) this.fail('worker-exit', this.exitMessage(outcome))
       })
     }, (error: unknown) => { this.fail('worker-exit', messageOf(error)) })
   }
@@ -251,8 +265,10 @@ export class PersistentNodePtcRuntime extends PtcRuntime {
     if ('pkg' in process && this.config.bootstrapPath === undefined) throw new Error('Persistent PTC requires an explicit bootstrapPath in a packaged executable')
     ctx.effect(() => async () => {
       this.disposed = true
-      await Promise.all([...this.kernels].map(kernel => kernel.dispose()))
+      const results = await Promise.allSettled([...this.kernels].map(kernel => kernel.dispose()))
       this.kernels.clear()
+      const failed = results.find(result => result.status === 'rejected')
+      if (failed?.status === 'rejected') throw failed.reason
     }, 'Persistent PTC environments')
   }
 
@@ -282,8 +298,13 @@ export class PersistentNodePtcRuntime extends PtcRuntime {
     kernel?.assertIdle()
     let code: string
     try { code = stripTypeScriptTypes(spec.program) } catch (error: unknown) {
-      const outcome = persistentOutput(this.config.maxOutputBytes).failure([], { kind: 'exception', message: messageOf(error) })
-      if (outcome.error?.kind === 'output-limit' && spec.stateOwner !== undefined) await this.release(spec.stateOwner)
+      const output = persistentOutput(this.config.maxOutputBytes)
+      const outcome = output.failure([], { kind: 'exception', message: messageOf(error) })
+      if (outcome.error?.kind === 'output-limit' && spec.stateOwner !== undefined) {
+        try { await this.release(spec.stateOwner) } catch (failure: unknown) {
+          return output.failure([], { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(failure)}` })
+        }
+      }
       return outcome
     }
     if (!kernel || kernel.closed) {

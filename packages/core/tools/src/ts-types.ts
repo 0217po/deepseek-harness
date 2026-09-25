@@ -7,6 +7,7 @@
  */
 
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
+import type { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import { assertSupportedJsonSchema } from './json-schema.ts'
 import type { JsonSchemaNode, JsonSchemaScalar } from './json-schema.ts'
 /** Internal PTC mode projection: the model-facing schema plus the canonical output schema. */
@@ -270,7 +271,7 @@ function acceptsExampleString(schema: JsonSchemaNode | undefined, value: string)
 }
 
 /** Render the bash example only when its literal arguments satisfy the current parameter schema. */
-function renderBashExample(schemas: ToolSdkSchema[], format: 'function-body' | 'repl'): string {
+function renderBashExample(schemas: ToolSdkSchema[], format: PtcRuntime['programFormat']): string {
   const bash = schemas.find(schema => schema.name === 'bash')
   if (bash === undefined) return ''
   const parameters = bash.parameters as JsonSchemaNode
@@ -297,7 +298,7 @@ function renderBashExample(schemas: ToolSdkSchema[], format: 'function-body' | '
  * @param format - Whether the program is an async body or REPL statements.
  * @returns the complete section text.
  */
-export function renderToolsSdk(schemas: ToolSdkSchema[], format: 'function-body' | 'repl' = 'function-body'): string {
+export function renderToolsSdk(schemas: ToolSdkSchema[], format: PtcRuntime['programFormat'] = 'function-body'): string {
   const sorted = [...schemas].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
   const argsMembers: string[] = []
   const outputMembers: string[] = []

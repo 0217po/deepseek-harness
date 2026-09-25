@@ -58,7 +58,7 @@ declare module '@deepseek-ai/dsh-llm' {
  */
 const PTC_ONLY_INSTRUCTION = `\`${RUN_CODE_NAME}\` is the only tool you can call directly — a tool call naming any other tool fails. Reach every tool the SDK declares below from inside the program.`
 
-const SDK_RENDERERS: Record<string, (schemas: ToolSdkSchema[], format?: 'function-body' | 'repl') => string> = {
+const SDK_RENDERERS: Record<string, (schemas: ToolSdkSchema[], format?: PtcRuntime['programFormat']) => string> = {
   typescript: renderToolsSdk,
   python: renderToolsSdkPy,
 } satisfies Record<PtcSdkLanguage, (schemas: ToolSdkSchema[]) => string>

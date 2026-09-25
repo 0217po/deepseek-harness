@@ -28,10 +28,37 @@ function bindings(value: PtcBindingFunction) {
 }
 
 describe('persistent Node REPL', () => {
+  it.each([
+    'function f() {', '(', '[', '`unfinished',
+    'const x = await Promise.resolve(1); return x',
+  ])('reports an incomplete or top-level-return program before starting a process: %s', async (program) => {
+    const { ctx, run } = await setup()
+    const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+    onTestFinished(() => { spawn.mockRestore() })
+    const result = await run(program)
+    expect(result.error?.kind).toBe('exception')
+    expect(result.error?.message.trim().length).toBeGreaterThan(0)
+    if (program.includes('return x')) expect(result.error?.message).toMatch(/return/i)
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
   it('retains declarations, closures, object identity, and imports across evaluations', async () => {
     const { run, cwd } = await setup()
     expect(await run('const box: { count: number } = { count: 1 }; let alias = box; function increment() { return ++box.count }; const path = await import("node:path");')).toEqual({ logs: [] })
     expect(await run('console.log("second call"); ({ count: increment(), same: box === alias, dir: path.basename(process.cwd()), env: Object.keys(process.env) })')).toEqual({ logs: ['second call'], value: { count: 2, same: true, dir: cwd.split(/[\\/]/).at(-1), env: [] } })
+  })
+
+  it('retains implicit REPL globals and does not attribute a completed callback exception to a later evaluation', async () => {
+    const { run } = await setup()
+    expect((await run('implicitValue = 7')).value).toBe(7)
+    await run(`
+      let fireLate; let acknowledge;
+      const fired = new Promise(resolve => { fireLate = resolve });
+      const acknowledged = new Promise(resolve => { acknowledge = resolve });
+      void fired.then(() => setImmediate(() => { acknowledge(); throw new Error('completed callback failure') }));
+    `)
+    expect(await run('fireLate(); await acknowledged; implicitValue')).toEqual({ logs: [], value: 7 })
+    expect(await run('implicitValue')).toEqual({ logs: [], value: 7 })
   })
 
   it('uses current host bindings through retained functions and saved method references', async () => {
@@ -53,6 +80,32 @@ describe('persistent Node REPL', () => {
     expect(await run(code, { bindings: bindings(async () => 2) })).toEqual({ logs: ['2'] })
     expect(await run(code, { bindings: bindings(async () => 3) })).toEqual({ logs: ['3'] })
     expect(await run('({ total, local: typeof amount })')).toEqual({ logs: [], value: { total: 5, local: 'undefined' } })
+  })
+
+  it('uses the current error descriptor through a saved binding and retains matching constructor identity', async () => {
+    const { run } = await setup()
+    const fail = async () => { throw new Error('rejected') }
+    const first = { bindings: [{ global: 'tools', functions: { value: fail },
+      errorClass: { name: 'FirstError', memberNameProperty: 'firstMember' } }] }
+    const second = { bindings: [{ global: 'tools', functions: { value: fail },
+      errorClass: { name: 'SecondError', memberNameProperty: 'secondMember' } }] }
+    await run('const saved = tools.value; const initialClass = FirstError;', first)
+    expect((await run('FirstError === initialClass', first)).value).toBe(true)
+    const observed = await run(`
+      let observed;
+      try { await saved({}) } catch (error) {
+        observed = { name: error.name, member: error.secondMember, first: 'firstMember' in error,
+          current: error instanceof SecondError, previous: error instanceof initialClass };
+      }
+      observed
+    `, second)
+    expect(observed.value).toEqual({ name: 'SecondError', member: 'value', first: false, current: true, previous: false })
+    const plain = await run(`
+      let plain;
+      try { await saved({}) } catch (error) { plain = { name: error.name, member: 'secondMember' in error }; }
+      plain
+    `, { bindings: [{ global: 'tools', functions: { value: fail } }] })
+    expect(plain.value).toEqual({ name: 'Error', member: false })
   })
 
   it('settles an asynchronous exception once while a later evaluation awaits a tool', async () => {

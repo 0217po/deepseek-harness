@@ -17,7 +17,7 @@ async function setup(config: Config = {}) {
   onTestFinished(async () => { await ctx.fiber.dispose() })
   await ctx.plugin(FileSystem)
   await ctx.plugin(Subprocess)
-  await ctx.plugin(PersistentRuntime, config)
+  const fiber = await ctx.plugin(PersistentRuntime, config)
   const runtime = ctx.ptcRuntime
   const control = new Duplex({
     read() {},
@@ -86,7 +86,7 @@ async function setup(config: Config = {}) {
     }
   }
   return {
-    ctx, runtime, handle, terminate, waitForExit, direct, stdout, stderr, control, peer, messages,
+    ctx, fiber, runtime, handle, terminate, waitForExit, direct, stdout, stderr, control, peer, messages,
     spawn, resolveExecutable, emit, start, onBoot,
     receive: (callback: typeof receive) => { receive = callback },
   }
@@ -242,6 +242,22 @@ describe('persistent PTC host protocol', () => {
     expect(h.terminate).toHaveBeenCalledTimes(1)
   })
 
+  it('does not dispatch a new evaluation to an exited idle process while its output remains open', async () => {
+    const h = await setup()
+    h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+    await h.start()
+    h.onBoot(() => { h.stdout.end(); h.stderr.end() })
+    h.direct.resolve({ exitCode: 9, signal: null })
+    await Promise.resolve()
+    const result = await h.runtime.run(h.runtime.resolve({ ...request, program: '2' }))
+    expect(result.error?.kind).toBe('worker-exit')
+    expect(result.error?.message).toContain('exited (9, signal null)')
+    expect(h.messages).toEqual([expect.objectContaining({ type: 'run', id: 1 })])
+    expect(h.spawn).toHaveBeenCalledTimes(1)
+    expect(h.terminate).toHaveBeenCalledTimes(1)
+    expect(h.waitForExit).toHaveBeenCalledTimes(1)
+  })
+
   it('reports stream errors and process failures without retaining state', async () => {
     for (const action of ['stream', 'exit', 'rejection'] as const) {
       const h = await setup()
@@ -263,6 +279,24 @@ describe('persistent PTC host protocol', () => {
     expect((await h.start()).error?.message).toContain('cleanup failed')
   })
 
+  it.each([
+    { maxOutputBytes: 38, kind: 'worker-exit' },
+    { maxOutputBytes: 4, kind: 'output-limit' },
+  ])('bounds cleanup failure after parse diagnostics overflow a $maxOutputBytes-byte budget', async ({ maxOutputBytes, kind }) => {
+    const h = await setup({ maxOutputBytes })
+    h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+    expect(await h.start()).toEqual({ logs: [] })
+    h.waitForExit.mockRejectedValue(new Error('x'))
+    const result = await h.runtime.run(h.runtime.resolve({ ...request, program: 'return 1' }))
+    expect(result.error?.kind).toBe(kind)
+    if (kind === 'worker-exit') expect(result.error?.message).toContain('cleanup failed: x')
+    const bytes = Buffer.byteLength(JSON.stringify(result.logs)) + Buffer.byteLength(JSON.stringify(result.error?.message))
+    expect(bytes).toBeLessThanOrEqual(maxOutputBytes)
+    expect(h.terminate).toHaveBeenCalledTimes(1)
+    expect(h.waitForExit).toHaveBeenCalledTimes(1)
+    await h.runtime.release(request.stateOwner!)
+  })
+
   it('rejects invalid resolved inputs and deployment bounds', async () => {
     const h = await setup()
     expect(h.runtime.executionInstructions).toContain('Variables, functions, and imported modules remain in memory')
@@ -273,6 +307,37 @@ describe('persistent PTC host protocol', () => {
       { nodeExecutable: '' }, { bootstrapPath: 'relative' },
     ]) {
       await expect(setup(config)).rejects.toThrow('ptc-runtime-node')
+    }
+  })
+
+  it('waits for another environment to stop before reporting a failed cleanup', async () => {
+    const h = await setup()
+    h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+    await h.start()
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const release: PromiseWithResolvers<string> = Promise.withResolvers()
+    h.resolveExecutable.mockImplementationOnce(() => { entered.resolve(); return release.promise })
+    const pending = h.runtime.run(h.runtime.resolve({ ...request, stateOwner: {} }))
+    await entered.promise
+    const failure = new Error('first environment cleanup failed')
+    h.waitForExit.mockRejectedValue(failure)
+    const reported = vi.spyOn(h.fiber.ctx.logger, 'error').mockImplementation(() => {})
+    let closed = false
+    const closing = h.fiber.dispose().then(() => { closed = true })
+    try {
+      await setImmediate()
+      expect(closed).toBe(false)
+      expect(reported).not.toHaveBeenCalled()
+      release.resolve(process.execPath)
+      expect((await pending).error?.kind).toBe('abort')
+      await closing
+      expect(closed).toBe(true)
+      expect(reported).toHaveBeenCalledWith(failure)
+      expect(h.spawn).toHaveBeenCalledTimes(1)
+    } finally {
+      release.resolve(process.execPath)
+      await Promise.allSettled([pending, closing])
+      reported.mockRestore()
     }
   })
 })

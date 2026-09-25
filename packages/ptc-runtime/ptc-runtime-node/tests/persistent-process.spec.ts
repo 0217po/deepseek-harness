@@ -42,6 +42,21 @@ async function setup(limit = 4096, chdir: (cwd: string) => void = () => {}) {
   return { state, nativeEnvironment, run, seen, peer, main, close, host, setCall: (handler: typeof onCall) => { onCall = handler } }
 }
 
+it('keeps an injected process local to the REPL while it runs and after it closes', async () => {
+  const hostProcess = globalThis.process
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'process')!
+  try {
+    const h = await setup()
+    expect(globalThis.process === hostProcess).toBe(true)
+    expect(decodePtcJsonWire((await h.run('Object.keys(process.env)')).value)).toEqual([])
+    expect(globalThis.process === hostProcess).toBe(true)
+    await h.close()
+    expect(globalThis.process === hostProcess).toBe(true)
+  } finally {
+    Object.defineProperty(globalThis, 'process', descriptor)
+  }
+})
+
 it('keeps an environment while capturing each evaluation and binding replies separately', async () => {
   const h = await setup()
   const declarations = [{ global: 'tools', names: ['echo'], errorClass: { name: 'ToolCallError', memberNameProperty: 'toolName' } }]
