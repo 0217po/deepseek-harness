@@ -326,6 +326,8 @@ describe('input actions', () => {
     ['negative drag point', app => app.drag([0, 0], [-1, 3])],
     ['empty chord', app => app.pressKey('')],
     ['missing key', app => app.pressKey('super+')],
+    ['empty plus modifier', app => app.pressKey('++')],
+    ['extra plus delimiter', app => app.pressKey('cmd+++')],
     ['unknown modifier', app => app.pressKey('unknown+a')],
   ]
   it.each(invalidActions)('rejects %s without invoking native input', async (_label, run) => {
@@ -334,6 +336,19 @@ describe('input actions', () => {
     const calls = f.dispatch.mock.calls.length
     await expect(run(app)).rejects.toThrow()
     expect(f.dispatch).toHaveBeenCalledTimes(calls)
+  })
+
+  it.each<[string, string, string[]]>([
+    ['+', '+', []],
+    ['cmd++', '+', ['command']],
+    ['ctrl+shift++', '+', ['control', 'shift']],
+    ['cmd+plus', 'plus', ['command']],
+    ['plus', 'plus', []],
+  ])('dispatches the plus-key chord %s', async (chord, key, modifiers) => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    await app.pressKey(chord)
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'pressKey', params: { appHandle: 'app-17', key, modifiers } })
   })
 
   it('passes literal text and keys to the selected app identity', async () => {

@@ -47,6 +47,8 @@ The dump command checks profile composition without a model request. For a real 
 
 The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-cua) lists all fields. Native tool calls use `{method, params}`; the complete method-specific schema is exposed to the model. For example, `getApp` returns the `appHandle` needed by `listWindows`, `getState` and input operations.
 
+Key chords use `+` between modifiers and the key. Use `+` for the plus key, `cmd++` for Command-plus, or the key name `plus`; an unfinished chord such as `cmd+` is rejected.
+
 ### Connect an external execution environment
 
 To run through persistent PTC, add `--patch packages/experimental/cua/examples/persistent-ptc.cordis.yml` after the macOS overlay. This provider keeps variables for the live Agent and runs without a file sandbox. The caller imports the bridge and supplies the current authorized `tools.cua` binding. This integration snippet assumes an execution host has supplied `tools`; the package does not install a global object or keep variables alive:

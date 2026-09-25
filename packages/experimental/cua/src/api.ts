@@ -7,7 +7,11 @@ export type * from './types.ts'
 
 function keyChord(chord: string): { key: string; modifiers: string[] } {
   const parts = chord.split('+')
-  const key = parts.pop()
+  let key = parts.pop()
+  if (key === '' && parts.at(-1) === '') {
+    key = '+'
+    parts.pop()
+  }
   if (!key) throw new Error('A key chord must end with a key name')
   const names: Record<string, string> = {
     cmd: 'command', command: 'command', super: 'command', Super_L: 'command', Super_R: 'command',

@@ -155,7 +155,7 @@ export interface CuaApp extends CuaSurface {
   paste(text: string): Promise<CuaActionResult>
   /**
    * Send a key/chord at current focus.
-   * @param key - xdotool-style chord such as super+c or shift+Tab.
+   * @param key - xdotool-style chord such as super+c, shift+Tab, + or cmd++; plus is also a key name.
    * @returns dispatch evidence.
    */
   pressKey(key: string): Promise<CuaActionResult>

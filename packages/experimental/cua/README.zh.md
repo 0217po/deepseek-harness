@@ -47,6 +47,8 @@ pnpm dsh headless --patch packages/experimental/cua/examples/macos.cordis.yml --
 
 [配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-cua)列出全部字段。原生工具调用使用 `{method, params}`，模型可以看到每个方法的完整参数定义。例如，`getApp` 返回 `listWindows`、`getState` 和输入操作所需的 `appHandle`。
 
+组合键用 `+` 分隔修饰键与按键。加号键写作 `+`，Command 加号写作 `cmd++`，也可以使用键名 `plus`；`cmd+` 这类缺少按键的输入会被拒绝。
+
 ### 接入外部执行环境
 
 使用 persistent PTC 时，在 macOS 配置后追加 `--patch packages/experimental/cua/examples/persistent-ptc.cordis.yml`。该 provider 为存活的 Agent 保留变量，不启用文件沙箱。调用方导入适配模块，并提供当前执行中已授权的 `tools.cua` 绑定。下面的接入代码假设执行宿主已提供 `tools`；本包不安装全局对象，也不负责保留变量：
