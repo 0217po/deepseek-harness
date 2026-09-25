@@ -375,7 +375,9 @@ it('waits for canceled preparation and never publishes its late success', async 
   const starting = Promise.resolve(NativeProvider.apply(f.ctx, automaticConfig))
   const failed = expect(starting).rejects.toThrow()
   const signal = native.prepare.mock.calls[0]![0].signal
-  const aborted = new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }))
+  const aborted = new Promise<void>((resolve) => {
+    signal.addEventListener('abort', () => { resolve() }, { once: true })
+  })
   let closed = false
   const closing = f.ctx.fiber.dispose().then(() => { closed = true })
   try {
