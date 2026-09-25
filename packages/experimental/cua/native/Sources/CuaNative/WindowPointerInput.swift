@@ -23,6 +23,11 @@ final class WindowPointerInput {
         self.checkCancellation = checkCancellation
     }
 
+    /// Requested movement time is distributed across every validated drag segment.
+    static func dragStepInterval(durationMs: Int, steps: Int) -> TimeInterval {
+        Double(durationMs) / Double(steps) / 1000
+    }
+
     /// Post one or two left clicks, or one right click, with a shared window-routing group.
     func click(in route: WindowRoute, at point: WindowPoint, button: String, count: Int) throws {
         try checkCancellation()
@@ -159,7 +164,7 @@ final class WindowPointerInput {
             poster.post(down, to: route.owner.pid)
             heldRelease = initialRelease
             Thread.sleep(forTimeInterval: 0.016)
-            let stepInterval = Double(durationMs / steps) / 1000
+            let stepInterval = Self.dragStepInterval(durationMs: durationMs, steps: steps)
             for step in path {
                 try checkCancellation()
                 poster.post(step.movement, to: route.owner.pid)

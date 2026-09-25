@@ -13,7 +13,7 @@
     {
       "local": "Sources/CuaNative/WindowPointerInput.swift",
       "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/mouse.rs",
-      "changes": "Reimplement the exposed window-directed click, drag and line-scroll paths in Swift. Preserve routing fields and gesture timing, post each event once, and release this operation’s held button on cooperative cancellation."
+      "changes": "Reimplement the exposed window-directed click, drag and line-scroll paths in Swift. Preserve routing fields and gesture timing, post each event once, and release this operation\u2019s held button on cooperative cancellation. Preserve fractional movement delays for short or unevenly divided drags."
     },
     {
       "local": "Sources/CuaNative/PIDEventPoster.swift",
