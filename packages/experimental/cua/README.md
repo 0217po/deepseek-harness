@@ -49,6 +49,8 @@ The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-exper
 
 Key chords use `+` between modifiers and the key. Use `+` for the plus key, `cmd++` for Command-plus, or the key name `plus`; an unfinished chord such as `cmd+` is rejected.
 
+Agent disposal and plugin unload cancel and await the complete tool call, including image admission and attachment storage. An image write already in progress must settle before disposal returns; a canceled call cannot return a successful screenshot.
+
 ### Connect an external execution environment
 
 To run through persistent PTC, add `--patch packages/experimental/cua/examples/persistent-ptc.cordis.yml` after the macOS overlay. This provider keeps variables for the live Agent and runs without a file sandbox. The caller imports the bridge and supplies the current authorized `tools.cua` binding. This integration snippet assumes an execution host has supplied `tools`; the package does not install a global object or keep variables alive:

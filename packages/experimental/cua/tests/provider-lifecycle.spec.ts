@@ -31,6 +31,16 @@ const config = {
   graceMs: 10, textEventIntervalMs: 8, maxElements: 64, maxDepth: 8, dragDurationMs: 200, dragSteps: 10,
 } satisfies NativeProvider.Config
 
+class ImageAdapter extends LlmAdapter {
+  override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+    return Promise.resolve({ provider, id: model, name: model, inputModalities: ['text', 'image'] })
+  }
+  stream(): AsyncIterable<StreamChunk> { throw new Error('This direct tool test does not request model generation') }
+}
+
+const imageData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
+const imageMetadata = { pixelWidth: 1, pixelHeight: 1, bounds: { x: 2, y: 3, width: 1, height: 1 }, coordinateSpace: 'window-points', windowId: 7 }
+
 async function setup(model?: { provider: string; model: string }) {
   native.request.mockReset().mockResolvedValue([])
   native.dispose.mockReset()
@@ -227,19 +237,13 @@ it('supplies configured resource bounds and clears registrations on unload', asy
 })
 
 it('preserves screenshot coordinates and image attachments on every host', async () => {
-  class ImageAdapter extends LlmAdapter {
-    override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
-      return Promise.resolve({ provider, id: model, name: model, inputModalities: ['text', 'image'] })
-    }
-    stream(): AsyncIterable<StreamChunk> { throw new Error('This direct tool test does not request model generation') }
-  }
   const f = await setup({ provider: 'image-fixture', model: 'vision' })
   f.ctx.llm.registerAdapter(['image-fixture'], new ImageAdapter())
   const root = await mkdtemp(join(tmpdir(), 'dsh-cua-image-'))
   onTestFinished(async () => { await f.ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
   await f.ctx.plugin(LocalAttachmentStore, { dshHome: root })
-  const data = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
-  const metadata = { pixelWidth: 1, pixelHeight: 1, bounds: { x: 2, y: 3, width: 1, height: 1 }, coordinateSpace: 'window-points', windowId: 7 }
+  const data = imageData
+  const metadata = imageMetadata
   native.request.mockResolvedValue({ ...metadata, mimeType: 'image/png', data })
   const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
   expect(result.isError).toBe(false)
@@ -251,4 +255,54 @@ it('preserves screenshot coordinates and image attachments on every host', async
   const stored = await f.ctx.attachments.readImage(image.attachment)
   expect(Buffer.from(stored.data).toString('base64')).toBe(data)
   expect(result.value).toMatchObject({ structuredContent: { ...metadata, mimeType: 'image/png', data } })
+})
+
+it.each([
+  { owner: 'provider', stage: 'admission' },
+  { owner: 'provider', stage: 'storage' },
+  { owner: 'agent', stage: 'admission' },
+  { owner: 'agent', stage: 'storage' },
+])('waits for screenshot $stage and cancels its result during $owner disposal', async ({ owner, stage }) => {
+  const f = await setup({ provider: 'image-fixture', model: 'vision' })
+  f.ctx.llm.registerAdapter(['image-fixture'], new ImageAdapter())
+  const root = await mkdtemp(join(tmpdir(), 'dsh-cua-image-disposal-'))
+  onTestFinished(async () => { try { await f.ctx.fiber.dispose() } finally { await rm(root, { recursive: true, force: true }) } })
+  await f.ctx.plugin(LocalAttachmentStore, { dshHome: root })
+  native.request.mockResolvedValue({ ...imageMetadata, mimeType: 'image/png', data: imageData })
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  const release: PromiseWithResolvers<void> = Promise.withResolvers()
+  onTestFinished(() => { release.resolve() })
+  let admissionSignal: AbortSignal | undefined
+  const resolveModel = f.ctx.llm.resolveModelInfo.bind(f.ctx.llm)
+  const admission = vi.spyOn(f.ctx.llm, 'resolveModelInfo').mockImplementation(async (provider, model, signal) => {
+    admissionSignal = signal
+    if (stage === 'admission') { entered.resolve(); await release.promise }
+    return resolveModel(provider, model, signal)
+  })
+  const saveImages = f.ctx.attachments.saveImages.bind(f.ctx.attachments)
+  const storage = vi.spyOn(f.ctx.attachments, 'saveImages').mockImplementation(async (images) => {
+    if (stage === 'storage') { entered.resolve(); await release.promise }
+    return saveImages(images)
+  })
+  const pending = f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+  let closing: Promise<void> | undefined
+  try {
+    const reached = await Promise.race([entered.promise.then(() => true), pending.then(() => false)])
+    expect(reached).toBe(true)
+    let closed = false
+    closing = (owner === 'provider' ? f.provider.dispose() : f.handle.dispose()).then(() => { closed = true })
+    await setImmediate()
+    expect(admissionSignal?.aborted).toBe(true)
+    expect(closed).toBe(false)
+    release.resolve()
+    expect((await pending).isError).toBe(true)
+    await closing
+    expect(closed).toBe(true)
+    expect(storage).toHaveBeenCalledTimes(stage === 'storage' ? 1 : 0)
+  } finally {
+    release.resolve()
+    await Promise.allSettled([pending, closing])
+    admission.mockRestore()
+    storage.mockRestore()
+  }
 })

@@ -9,7 +9,7 @@ import { z } from 'zod'
 import { NativeClient } from './native-client.ts'
 import { Request, ScreenshotResult } from './protocol.ts'
 import type {} from '@deepseek-ai/dsh-system-prompt'
-import type {} from '@deepseek-ai/dsh-tools'
+import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-computer-use'
 
@@ -99,8 +99,33 @@ export function apply(ctx: Context, config: Config): void {
   const clients = new Map<Agent, NativeClient>()
   const lifetime = new AbortController()
   const pending = new Map<Promise<unknown>, Agent>()
-  const ownerCleanups = new Map<Agent, { close: () => Promise<void>; release: () => Promise<void> }>()
+  const ownerCleanups = new Map<Agent, { close: () => Promise<void>; release: () => Promise<void>; signal: AbortSignal }>()
   const closedOwners = new WeakSet<Agent>()
+  const projectionExecutions = new WeakMap<Readonly<ToolExecution>, ToolExecution>()
+  function ownerFor(agent: Agent) {
+    if (closedOwners.has(agent) || ctx.agents.get(agent.id) !== agent) throw new Error('dsh-cua agent has been disposed')
+    const existing = ownerCleanups.get(agent)
+    if (existing) return existing
+    const controller = new AbortController()
+    let closing: Promise<void> | undefined
+    const close = (): Promise<void> => {
+      closedOwners.add(agent)
+      controller.abort()
+      return closing ??= Promise.resolve().then(async () => {
+        try {
+          await clients.get(agent)?.dispose()
+        } finally {
+          await Promise.allSettled([...pending].filter(([, owner]) => owner === agent).map(([task]) => task))
+          clients.delete(agent)
+          ownerCleanups.delete(agent)
+        }
+      })
+    }
+    const release = agent.ctx.effect(() => close, 'dsh-cua.agent')
+    const owner = { close, release, signal: controller.signal }
+    ownerCleanups.set(agent, owner)
+    return owner
+  }
   ctx.effect(function* () {
     yield ctx.computerUse.register(ComputerUseProviderName('dsh-cua'))
     yield async () => {
@@ -113,7 +138,7 @@ export function apply(ctx: Context, config: Config): void {
       for (const result of [...results, ...releases]) if (result.status === 'rejected') errors.push(result.reason)
       if (errors.length > 0) throw new AggregateError(errors, 'dsh-cua helper cleanup failed')
     }
-    yield ctx.tools.register(createMcpToolDefinition(ctx, {
+    const definition = createMcpToolDefinition(ctx, {
       name: 'cua', rawName: 'cua',
       description: 'Inspect macOS permissions, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.',
       inputSchema: { ...z.record(z.string(), z.json()).parse(z.toJSONSchema(Request)), type: 'object' },
@@ -122,58 +147,65 @@ export function apply(ctx: Context, config: Config): void {
         const params = z.record(z.string(), z.json()).parse(parsedParams)
         const agent = execution.agent
         if (!agent) throw new Error('dsh-cua requires an agent-owned execution')
-        const signal = AbortSignal.any([execution.signal, lifetime.signal])
+        const signal = execution.signal
         signal.throwIfAborted()
+        const previous = clients.get(agent)
+        if (previous?.disposed) await previous.dispose()
+        signal.throwIfAborted()
+        let client = clients.get(agent)
+        if (!client || client.disposed) {
+          client = new NativeClient(ctx, {
+            helperPath: config.helperPath, cwd: process.cwd(), timeoutMs: config.timeoutMs,
+            maxRequestBytes: config.maxRequestBytes, maxResponseBytes: config.maxResponseBytes, graceMs: config.graceMs,
+            textEventIntervalMs: config.textEventIntervalMs,
+          })
+          clients.set(agent, client)
+        }
+        const result = await client.request(method, method === 'getState'
+          ? { ...params, maxElements: config.maxElements, maxDepth: config.maxDepth }
+          : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
+            : params, signal, execution.callId)
+        signal.throwIfAborted()
+        if (method === 'screenshot') {
+          const { data, mimeType, ...metadata } = ScreenshotResult.parse(result)
+          return { content: [{ type: 'text', text: JSON.stringify(metadata) }, { type: 'image', mimeType, data }], structuredContent: result }
+        }
+        return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result }
+      },
+    })
+    yield ctx.tools.register({
+      ...definition,
+      async execute(args, execution) {
+        const agent = execution.agent
+        if (!agent) throw new Error('dsh-cua requires an agent-owned execution')
+        execution.signal.throwIfAborted()
+        lifetime.signal.throwIfAborted()
+        const owner = ownerFor(agent)
+        const signal = AbortSignal.any([execution.signal, lifetime.signal, owner.signal])
+        signal.throwIfAborted()
+        const scoped = { ...execution, signal }
+        projectionExecutions.set(execution, scoped)
         const operation = (async () => {
-          const previous = clients.get(agent)
-          if (previous?.disposed) await previous.dispose()
+          const result = await definition.execute(args, scoped)
           signal.throwIfAborted()
-          if (closedOwners.has(agent) || ctx.agents.get(agent.id) !== agent) throw new Error('dsh-cua agent has been disposed')
-          if (!ownerCleanups.has(agent)) {
-            let closing: Promise<void> | undefined
-            const close = (): Promise<void> => {
-              closedOwners.add(agent)
-              return closing ??= Promise.resolve().then(async () => {
-                try {
-                  await clients.get(agent)?.dispose()
-                } finally {
-                  await Promise.allSettled([...pending].filter(([, owner]) => owner === agent).map(([task]) => task))
-                  clients.delete(agent)
-                  ownerCleanups.delete(agent)
-                }
-              })
-            }
-            const release = agent.ctx.effect(() => close, 'dsh-cua.agent')
-            ownerCleanups.set(agent, { close, release })
-          }
-          let client = clients.get(agent)
-          if (!client || client.disposed) {
-            client = new NativeClient(ctx, {
-              helperPath: config.helperPath, cwd: process.cwd(), timeoutMs: config.timeoutMs,
-              maxRequestBytes: config.maxRequestBytes, maxResponseBytes: config.maxResponseBytes, graceMs: config.graceMs,
-              textEventIntervalMs: config.textEventIntervalMs,
-            })
-            clients.set(agent, client)
-          }
-          return client.request(method, method === 'getState'
-            ? { ...params, maxElements: config.maxElements, maxDepth: config.maxDepth }
-            : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
-              : params, signal, execution.callId)
+          return result
         })()
         pending.set(operation, agent)
         try {
-          const result = await operation
-          signal.throwIfAborted()
-          if (method === 'screenshot') {
-            const { data, mimeType, ...metadata } = ScreenshotResult.parse(result)
-            return { content: [{ type: 'text', text: JSON.stringify(metadata) }, { type: 'image', mimeType, data }], structuredContent: result }
-          }
-          return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result }
+          return await operation
+        } catch (error) {
+          projectionExecutions.delete(execution)
+          throw error
         } finally {
           pending.delete(operation)
         }
       },
-    }))
+      projectContent(execution, result) {
+        const scoped = projectionExecutions.get(execution)
+        projectionExecutions.delete(execution)
+        return scoped === undefined ? undefined : definition.projectContent?.(scoped, result)
+      },
+    })
     yield ctx.systemPrompt.section({ name: 'computer-use:dsh-cua', order: ctx.systemPrompt.getSectionOrder('TOOL_COMPUTER_USE'), text: GUIDANCE })
   }, 'dsh-cua.runtime')
 }
