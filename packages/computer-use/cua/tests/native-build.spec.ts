@@ -6,7 +6,7 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import type { SubprocessHandle, SubprocessOutcome, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { buildNativeExecutable, isSourcePackage, nativeExecutablePath, nativeHostArchitecture, prepareNativeExecutable } from '../src/native-build.ts'
 
-async function fixture() {
+async function fixture(diagnostics = true) {
   const root = await mkdtemp(join(tmpdir(), 'cua-native-build-'))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   const packageRoot = join(root, 'packages/computer-use/cua')
@@ -21,7 +21,10 @@ async function fixture() {
     const scratch = request.argv[request.argv.indexOf('--scratch-path') + 1]!
     return {
       stdin: undefined, stdout: undefined, stderr: undefined, control: undefined,
-      collected: { stderr: { readFrom: () => ({ text: 'compiler diagnostic', nextOffset: 19, lossy: false }) } },
+      collected: diagnostics ? {
+        stdout: { readFrom: () => ({ text: 'build output', nextOffset: 12, lossy: false }) },
+        stderr: { readFrom: () => ({ text: 'compiler diagnostic', nextOffset: 19, lossy: false }) },
+      } : {},
       done: (async () => {
         await beforeExit()
         if (outcome.exitCode === 0) {
@@ -132,4 +135,18 @@ it('serializes publication and cancels a competing preparation without starting 
     expect(f.spawn).toHaveBeenCalledTimes(1)
   } finally { release.resolve(); await first }
   expect(await readFile(nativeExecutablePath(f.spec.packageRoot, 'arm64'))).toEqual(f.output)
+})
+
+it('reports an unsuccessful compiler even when no collected diagnostics are available', async () => {
+  const f = await fixture(false)
+  f.setOutcome({ exitCode: 2, signal: null })
+  await expect(buildNativeExecutable(f.spec)).rejects.toThrow('preparation failed (2, null)')
+})
+
+it('preserves an invalid existing artifact location instead of treating every read error as a missing file', async () => {
+  const f = await fixture()
+  const target = nativeExecutablePath(f.spec.packageRoot, 'arm64')
+  await mkdir(target, { recursive: true })
+  await expect(buildNativeExecutable(f.spec)).rejects.toMatchObject({ code: 'EISDIR' })
+  expect((await stat(target)).isDirectory()).toBe(true)
 })
