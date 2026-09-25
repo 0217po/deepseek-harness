@@ -28,7 +28,7 @@ interface Evaluation {
  * Serve sequential evaluations until the owning host closes the control channel.
  * @param stream - Inherited private control endpoint.
  * @param maxMessageBytes - Maximum control frame and queued output bytes.
- * @param processState - Environment, output streams and directory control of the child.
+ * @param processState - Child environment, output and directory control, bound only in the REPL context.
  * @returns After the channel closes and the REPL releases its streams.
  */
 export async function runPersistentMain(stream: Duplex, maxMessageBytes: number, processState: PersistentProcess): Promise<void> {
@@ -63,7 +63,7 @@ export async function runPersistentMain(stream: Duplex, maxMessageBytes: number,
   wireReplies(port, pending)
   const logSink = { push(text: string): void { const evaluation = context.getStore(); if (evaluation?.active) evaluation.logs.push(text) } }
   repl.context.console = makeConsoleShim(logSink)
-  repl.context.process = processState
+  Object.defineProperty(repl.context, 'process', { configurable: true, enumerable: true, writable: true, value: processState })
   captureStreamWrites(logSink, processState.stdout)
   captureStreamWrites(logSink, processState.stderr)
   const channel = new JsonChannel(stream, maxMessageBytes, (raw) => {
