@@ -17,7 +17,7 @@ async function setup(config: Config = {}) {
   onTestFinished(async () => { await ctx.fiber.dispose() })
   await ctx.plugin(FileSystem)
   await ctx.plugin(Subprocess)
-  await ctx.plugin(PersistentRuntime, config)
+  const fiber = await ctx.plugin(PersistentRuntime, config)
   const runtime = ctx.ptcRuntime
   const control = new Duplex({
     read() {},
@@ -86,7 +86,7 @@ async function setup(config: Config = {}) {
     }
   }
   return {
-    ctx, runtime, handle, terminate, waitForExit, direct, stdout, stderr, control, peer, messages,
+    ctx, fiber, runtime, handle, terminate, waitForExit, direct, stdout, stderr, control, peer, messages,
     spawn, resolveExecutable, emit, start, onBoot,
     receive: (callback: typeof receive) => { receive = callback },
   }
@@ -261,6 +261,24 @@ describe('persistent PTC host protocol', () => {
     h.waitForExit.mockRejectedValue(new Error('cleanup failed'))
     h.onBoot(() => { h.emit(frame({ type: 'output-limit' })) })
     expect((await h.start()).error?.message).toContain('cleanup failed')
+  })
+
+  it.each([
+    { maxOutputBytes: 38, kind: 'worker-exit' },
+    { maxOutputBytes: 4, kind: 'output-limit' },
+  ])('bounds cleanup failure after parse diagnostics overflow a $maxOutputBytes-byte budget', async ({ maxOutputBytes, kind }) => {
+    const h = await setup({ maxOutputBytes })
+    h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+    expect(await h.start()).toEqual({ logs: [] })
+    h.waitForExit.mockRejectedValue(new Error('x'))
+    const result = await h.runtime.run(h.runtime.resolve({ ...request, program: 'return 1' }))
+    expect(result.error?.kind).toBe(kind)
+    if (kind === 'worker-exit') expect(result.error?.message).toContain('cleanup failed: x')
+    const bytes = Buffer.byteLength(JSON.stringify(result.logs)) + Buffer.byteLength(JSON.stringify(result.error?.message))
+    expect(bytes).toBeLessThanOrEqual(maxOutputBytes)
+    expect(h.terminate).toHaveBeenCalledTimes(1)
+    expect(h.waitForExit).toHaveBeenCalledTimes(1)
+    await h.runtime.release(request.stateOwner!)
   })
 
   it('rejects invalid resolved inputs and deployment bounds', async () => {

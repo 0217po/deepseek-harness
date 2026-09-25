@@ -282,8 +282,13 @@ export class PersistentNodePtcRuntime extends PtcRuntime {
     kernel?.assertIdle()
     let code: string
     try { code = stripTypeScriptTypes(spec.program) } catch (error: unknown) {
-      const outcome = persistentOutput(this.config.maxOutputBytes).failure([], { kind: 'exception', message: messageOf(error) })
-      if (outcome.error?.kind === 'output-limit' && spec.stateOwner !== undefined) await this.release(spec.stateOwner)
+      const output = persistentOutput(this.config.maxOutputBytes)
+      const outcome = output.failure([], { kind: 'exception', message: messageOf(error) })
+      if (outcome.error?.kind === 'output-limit' && spec.stateOwner !== undefined) {
+        try { await this.release(spec.stateOwner) } catch (failure: unknown) {
+          return output.failure([], { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(failure)}` })
+        }
+      }
       return outcome
     }
     if (!kernel || kernel.closed) {
