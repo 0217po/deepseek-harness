@@ -28,6 +28,20 @@ function bindings(value: PtcBindingFunction) {
 }
 
 describe('persistent Node REPL', () => {
+  it.each([
+    'function f() {', '(', '[', '`unfinished',
+    'const x = await Promise.resolve(1); return x',
+  ])('reports an incomplete or top-level-return program before starting a process: %s', async (program) => {
+    const { ctx, run } = await setup()
+    const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+    onTestFinished(() => { spawn.mockRestore() })
+    const result = await run(program)
+    expect(result.error?.kind).toBe('exception')
+    expect(result.error?.message.trim().length).toBeGreaterThan(0)
+    if (program.includes('return x')) expect(result.error?.message).toMatch(/return/i)
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
   it('retains declarations, closures, object identity, and imports across evaluations', async () => {
     const { run, cwd } = await setup()
     expect(await run('const box: { count: number } = { count: 1 }; let alias = box; function increment() { return ++box.count }; const path = await import("node:path");')).toEqual({ logs: [] })
