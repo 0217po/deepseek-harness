@@ -853,7 +853,7 @@ describe('PluginManagerPage', () => {
     fireEvent.click(toggle('row-2'))
     expect(actions.setRowEnabled).toHaveBeenCalledTimes(1)
     expect(toggle('include:row-5')).toHaveProperty('disabled', true)
-    expect(within(detail).getByText(en.rowPhaseFailed)).toBeTruthy()
+    expect(within(detail.querySelector<HTMLElement>('[data-plugin-row="include:row-3"]')!).getByText(en.rowPhaseFailed)).toBeTruthy()
     expect(within(detail).getByText(en.rowPhaseLoading)).toBeTruthy()
     expect(within(detail).getByText(en.rowPhaseUnloading)).toBeTruthy()
     expect(document.querySelector('[data-plugin-row="include:row-3"]')?.getAttribute('data-state')).toBe('failed')

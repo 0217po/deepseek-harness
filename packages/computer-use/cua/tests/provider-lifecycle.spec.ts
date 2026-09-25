@@ -39,6 +39,8 @@ const config = {
   graceMs: 10, textEventIntervalMs: 8, maxElements: 64, maxDepth: 8, dragDurationMs: 200, dragSteps: 10,
 } satisfies NativeProvider.Config
 
+const { helperPath: _helperPath, ...automaticConfig } = config
+
 class ImageAdapter extends LlmAdapter {
   override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
     return Promise.resolve({ provider, id: model, name: model, inputModalities: ['text', 'image'] })
@@ -345,7 +347,7 @@ it('prepares the selected native component before registering CUA and creates no
   const f = await setup()
   await f.provider.dispose()
   native.prepare.mockReset().mockResolvedValue(resolve('prepared-helper'))
-  await NativeProvider.apply(f.ctx, { ...config, helperPath: undefined })
+  await NativeProvider.apply(f.ctx, automaticConfig)
   expect(native.prepare).toHaveBeenCalledTimes(1)
   expect(native.instances).toHaveLength(0)
   await f.execute()
@@ -359,7 +361,7 @@ it('does not register operations after native preparation fails', async () => {
   const f = await setup()
   await f.provider.dispose()
   native.prepare.mockReset().mockRejectedValue(new Error('compiler unavailable'))
-  await expect(NativeProvider.apply(f.ctx, { ...config, helperPath: undefined })).rejects.toThrow('compiler unavailable')
+  await expect(NativeProvider.apply(f.ctx, automaticConfig)).rejects.toThrow('compiler unavailable')
   expect(f.ctx.tools.schemas().some(tool => tool.name === 'cua')).toBe(false)
   expect(native.instances).toHaveLength(0)
 })
@@ -370,7 +372,7 @@ it('waits for canceled preparation and never publishes its late success', async 
   const ready = Promise.withResolvers<string>()
   onTestFinished(() => { ready.resolve(resolve('late-helper')) })
   native.prepare.mockReset().mockReturnValue(ready.promise)
-  const starting = Promise.resolve(NativeProvider.apply(f.ctx, { ...config, helperPath: undefined }))
+  const starting = Promise.resolve(NativeProvider.apply(f.ctx, automaticConfig))
   const failed = expect(starting).rejects.toThrow()
   const signal = native.prepare.mock.calls[0]![0].signal
   const aborted = new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }))
@@ -391,6 +393,6 @@ it('rejects an unsupported native host before starting preparation', async () =>
   await f.provider.dispose()
   native.architecture.mockImplementationOnce(() => { throw new Error('unsupported host') })
   native.prepare.mockReset()
-  expect(() => NativeProvider.apply(f.ctx, { ...config, helperPath: undefined })).toThrow('unsupported host')
+  expect(() => NativeProvider.apply(f.ctx, automaticConfig)).toThrow('unsupported host')
   expect(native.prepare).not.toHaveBeenCalled()
 })
