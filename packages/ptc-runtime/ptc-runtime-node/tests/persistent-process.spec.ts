@@ -47,11 +47,11 @@ it('keeps an injected process local to the REPL while it runs and after it close
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'process')!
   try {
     const h = await setup()
-    expect(globalThis.process).toBe(hostProcess)
+    expect(globalThis.process === hostProcess).toBe(true)
     expect(decodePtcJsonWire((await h.run('Object.keys(process.env)')).value)).toEqual([])
-    expect(globalThis.process).toBe(hostProcess)
+    expect(globalThis.process === hostProcess).toBe(true)
     await h.close()
-    expect(globalThis.process).toBe(hostProcess)
+    expect(globalThis.process === hostProcess).toBe(true)
   } finally {
     Object.defineProperty(globalThis, 'process', descriptor)
   }
