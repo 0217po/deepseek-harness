@@ -1014,7 +1014,7 @@ describe('catalog arrival', () => {
 })
 
 describe('Host membership recovery', () => {
-  it.each(['event', 'list'] as const)('restores a retained Session through a current %s after plugin reload', async (source, { bench }) => {
+  it.for(['event', 'list'] as const)('restores a retained Session through a current %s after plugin reload', async (source, { bench }) => {
     const b = bench()
     await feedList(b, [{ id: 's1' }])
     using reference = b.svc.retain(sid('s1'), { source: 'controllerOperation' })
