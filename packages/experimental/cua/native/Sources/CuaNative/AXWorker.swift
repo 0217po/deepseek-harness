@@ -133,6 +133,13 @@ actor AXWorker {
             throw NativeFailure(code: "STALE_SNAPSHOT", message: "Snapshot belongs to another window")
         }
     }
+    private func coordinateWindow(_ identity: ProcessIdentity, _ windowID: UInt32) throws -> WindowInfo {
+        try WindowGeometry.resolve(owner: identity, windowID: windowID) {
+            // Capture without Accessibility permission retains its CG/SCK checks.
+            guard AXIsProcessTrusted() else { return nil }
+            return try ax().windowBounds(windowID, owner: identity)
+        }
+    }
     static func actionKey(_ value: String) -> String {
         let name = value.hasPrefix("AX") ? String(value.dropFirst(2)) : value
         return name.filter { !$0.isWhitespace }.lowercased()
@@ -213,7 +220,7 @@ actor AXWorker {
                 "windows": .array(observedWindows.map(\.json)), "truncated": .bool(projection.truncated)]))
         case "screenshot":
             try NativePlatform.requireScreenRecording()
-            let window = try NativePlatform.ownedWindow(identity.pid, params.windowID())
+            let window = try coordinateWindow(identity, params.windowID())
             return .capture(CaptureTarget(appHandle: handle, process: identity, window: window))
         case "typeText", "pressKey":
             let recipient = try ax().keyboardRecipient(identity, catalog: catalog)
@@ -255,13 +262,13 @@ actor AXWorker {
             } else {
                 let id = try params.windowID()
                 try coordinateSnapshot(handle, params, id)
-                let window = try NativePlatform.ownedWindow(identity.pid, id)
+                let window = try coordinateWindow(identity, id)
                 try inputs().1.click(in: WindowRoute(owner: identity, windowID: id, bounds: window.bounds), at: params.point(), button: button, count: count)
             }
         case "scroll", "drag":
             let id = try params.windowID()
             try coordinateSnapshot(handle, params, id)
-            let window = try NativePlatform.ownedWindow(identity.pid, id)
+            let window = try coordinateWindow(identity, id)
             let route = WindowRoute(owner: identity, windowID: id, bounds: window.bounds)
             if request.method == "scroll" {
                 let dx = params.contains("deltaLinesX") ? try params.integer("deltaLinesX", in: -10...10) : 0
@@ -303,7 +310,7 @@ actor AXWorker {
         guard identity == target.process else { throw NativeFailure(code: "STALE_APP", message: "Capture process identity changed") }
         try NativePlatform.requireUnlocked(observeSession())
         try NativePlatform.requireScreenRecording()
-        let after = try NativePlatform.ownedWindow(identity.pid, target.window.windowID)
+        let after = try coordinateWindow(identity, target.window.windowID)
         guard after.bounds == target.window.bounds else { throw NativeFailure(code: "WINDOW_CHANGED", message: "Window moved or resized during capture; observe again") }
         return .object(["mimeType": .string("image/png"), "data": .string(image.bytes.base64EncodedString()),
             "pixelWidth": .number(Double(image.width)), "pixelHeight": .number(Double(image.height)), "bounds": after.bounds.json,

@@ -149,6 +149,23 @@ final class AXAccess {
         guard let position = try attribute(element, "AXPosition") else { return nil }
         return try bounds(position: position, size: attribute(element, "AXSize"))
     }
+    /// Resolve an exact AX window or sheet without enabling accessibility or traversing its controls.
+    func windowBounds(_ id: UInt32, owner: ProcessIdentity) throws -> WindowBounds? {
+        let app = AXUIElementCreateApplication(owner.pid)
+        var windows = try children(app, "AXWindows")
+        if let focused = try element(app, "AXFocusedWindow"), !windows.contains(where: { CFEqual($0, focused) }) {
+            windows.append(focused)
+        }
+        for window in windows {
+            let role = try string(window, "AXRole")
+            guard role == "AXWindow" || role == "AXSheet" else { continue }
+            if try windowID(window) == id { return try bounds(window) }
+            for sheet in try children(window) where try string(sheet, "AXRole") == "AXSheet" {
+                if try windowID(sheet) == id { return try bounds(sheet) }
+            }
+        }
+        return nil
+    }
     private func bounds(position: CFTypeRef?, size: CFTypeRef?) throws -> WindowBounds? {
         guard let position, let size else { return nil }
         guard CFGetTypeID(position) == AXValueGetTypeID(), CFGetTypeID(size) == AXValueGetTypeID() else { return nil }
@@ -354,7 +371,7 @@ final class AXAccess {
             visited.append(node)
             let role = try string(node, "AXRole")
             if role == "AXWindow" || role == "AXSheet", let id = try windowID(node) {
-                return try NativePlatform.ownedWindow(owner.pid, id)
+                return try WindowGeometry.resolve(owner: owner, windowID: id) { try bounds(node) }
             }
             current = try self.element(node, "AXParent")
         }

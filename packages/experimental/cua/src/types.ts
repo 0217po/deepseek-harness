@@ -59,7 +59,11 @@ export interface CuaClickOptions { mouseButton?: 'left' | 'right'; clickCount?: 
 export interface CuaScrollOptions { x: number; y: number; deltaLinesX: number; deltaLinesY: number }
 /** An observed AX tree and independently captured PNG; capture is not atomic. */
 export interface CuaObservation { state: string; screenshot: Uint8Array }
-/** App-wide or explicitly scoped window observations and actions. */
+/**
+ * App-wide or explicitly scoped window observations and actions.
+ * Capture and pointer delivery reject known AX/display frame conflicts with WINDOW_CHANGED.
+ * Advertised AX actions remain available; failed actions are not retried through pointer input.
+ */
 export interface CuaSurface {
   /**
    * Read a fresh full tree.

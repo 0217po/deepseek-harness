@@ -15,6 +15,7 @@ const app = { appHandle: 'fixture-app', pid: 9, name: 'Fixture', bundleId: 'test
 const bounds = { x: 40, y: 60, width: 320, height: 200 }
 const window = { windowId: 7, pid: 9, appName: 'Fixture', title: 'CUA fixture', bounds, isOnScreen: true, onCurrentSpace: true }
 const axlessWindow = { ...window, windowId: 8, title: 'AXless canvas' }
+const transformedWindow = { ...window, windowId: 9, title: 'Transformed window', bounds: { x: 16, y: 512, width: 131, height: 145 } }
 const snapshots = new Map()
 const methods = ['getCapabilities', 'listApps', 'getApp', 'activate', 'listWindows', 'getState', 'click', 'setValue', 'typeText', 'pressKey', 'scroll', 'drag', 'screenshot']
 let acquired = false
@@ -64,7 +65,10 @@ function call(requestId, method, params) {
       tree: '', elements: [], windows: [axlessWindow], truncated: false }
     return { appHandle: app.appHandle, pid: 9, windowId: params.windowId ?? null,
       snapshotId: `fixture-snapshot-${generation}`, tree: `0 AXButton Increment\n1 AXTextField value: ${value}\n2 AXStaticText Count: ${count}`,
-      elements: [{ index: 0, role: 'AXButton', title: 'Increment', bounds: { x: 60, y: 80, width: 100, height: 20 } }], windows: [window], truncated: false }
+      elements: [{ index: 0, role: 'AXButton', title: 'Increment', bounds: { x: 60, y: 80, width: 100, height: 20 } }], windows: [params.windowId === 9 ? transformedWindow : window], truncated: false }
+  }
+  if (params.windowId === 9 && ['screenshot', 'click', 'scroll', 'drag'].includes(method) && params.elementIndex === undefined) {
+    refuse('WINDOW_CHANGED', 'Window display and accessibility bounds disagree. Read fresh state; if unchanged, use AX actions or explicitly restore the window before capture or coordinate input')
   }
   if (method === 'screenshot') return { windowId: params.windowId, mimeType: 'image/png', data: png, pixelWidth: 1, pixelHeight: 1, bounds, coordinateSpace: 'window-points' }
   if (method === 'click' || method === 'setValue') {
