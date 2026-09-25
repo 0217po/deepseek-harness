@@ -92,6 +92,11 @@ Await operations sequentially. After input, read fresh state to verify the effec
 
 Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste inserts plain text using native Unicode input without changing the clipboard; rich-text formats are unavailable. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, initialize once with var { connectCua } = await import("@deepseek-ai/dsh-experimental-cua/bridge"); var cua = connectCua(() => tools.cua, text => console.log(text)). Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.`
 
+function executionAgent(execution: Readonly<ToolExecution>): Agent {
+  if (!execution.agent) throw new Error('dsh-cua requires an agent-owned execution')
+  return execution.agent
+}
+
 /**
  * Mount logged native operations with a separate helper per agent.
  * @param ctx - Host context with computer-use, subprocess and tool services.
@@ -148,8 +153,7 @@ export function apply(ctx: Context, config: Config): void {
       async call(args, execution) {
         const { method, params: parsedParams } = Request.parse(args)
         const params = z.record(z.string(), z.json()).parse(parsedParams)
-        const agent = execution.agent
-        if (!agent) throw new Error('dsh-cua requires an agent-owned execution')
+        const agent = executionAgent(execution)
         const signal = execution.signal
         signal.throwIfAborted()
         const previous = clients.get(agent)
@@ -180,8 +184,7 @@ export function apply(ctx: Context, config: Config): void {
     yield ctx.tools.register({
       ...definition,
       async execute(args, execution) {
-        const agent = execution.agent
-        if (!agent) throw new Error('dsh-cua requires an agent-owned execution')
+        const agent = executionAgent(execution)
         execution.signal.throwIfAborted()
         lifetime.signal.throwIfAborted()
         const owner = ownerFor(agent)
