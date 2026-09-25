@@ -6,12 +6,15 @@ enum WindowGeometry {
 
     /// Read CG bounds around the AX query; missing AX geometry does not disable an owned window.
     static func resolve(
-        owner: ProcessIdentity, windowID: UInt32, accessibilityBounds: () throws -> WindowBounds?
+        owner: ProcessIdentity, windowID: UInt32,
+        readWindow: (Int32, UInt32) throws -> WindowInfo = NativePlatform.ownedWindow,
+        verifyOwner: (ProcessIdentity) throws -> Void = NativePlatform.verify,
+        accessibilityBounds: () throws -> WindowBounds?
     ) throws -> WindowInfo {
-        let before = try NativePlatform.ownedWindow(owner.pid, windowID)
+        let before = try readWindow(owner.pid, windowID)
         let accessibility = try accessibilityBounds()
-        try NativePlatform.verify(owner)
-        let after = try NativePlatform.ownedWindow(owner.pid, windowID)
+        try verifyOwner(owner)
+        let after = try readWindow(owner.pid, windowID)
         try validate(before: before.bounds, after: after.bounds, accessibility: accessibility)
         return after
     }

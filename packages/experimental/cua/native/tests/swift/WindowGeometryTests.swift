@@ -43,3 +43,41 @@ func acceptsTheSameIntegralPointRectangle(_ ax: WindowBounds, _ cg: WindowBounds
         try WindowGeometry.validate(before: frame(0, 0, 320, 200), after: frame(0.25, 0, 320, 200), accessibility: nil)
     }
 }
+
+private let geometryOwner = ProcessIdentity(pid: 42, startedSeconds: 1, startedMicroseconds: 0)
+
+private func geometryWindow(_ bounds: WindowBounds) -> WindowInfo {
+    WindowInfo(windowID: 7, pid: geometryOwner.pid, appName: "Fixture", title: "Fixture", bounds: bounds,
+               isOnScreen: true, onCurrentSpace: true)
+}
+
+@Test func resolveDetectsMovementDuringTheAXQueryEvenWhenTheFinalFramesMatch() {
+    var current = frame(0, 0, 320, 200)
+    do {
+        _ = try WindowGeometry.resolve(owner: geometryOwner, windowID: 7,
+            readWindow: { _, _ in geometryWindow(current) }, verifyOwner: { _ in },
+            accessibilityBounds: { current = frame(20, 30, 320, 200); return current })
+        Issue.record("Movement during AX observation was accepted")
+    } catch let error as NativeFailure { #expect(error.code == "WINDOW_CHANGED") }
+    catch { Issue.record("Unexpected error: \(error)") }
+}
+
+@Test func resolveRejectsAProcessReplacedDuringTheAXQuery() {
+    var currentOwner = geometryOwner
+    var reads = 0
+    let bounds = frame(0, 0, 320, 200)
+    do {
+        _ = try WindowGeometry.resolve(owner: geometryOwner, windowID: 7,
+            readWindow: { _, _ in reads += 1; return geometryWindow(bounds) },
+            verifyOwner: { expected in
+                guard currentOwner == expected else { throw NativeFailure(code: "STALE_APP", message: "Process replaced") }
+            },
+            accessibilityBounds: {
+                currentOwner = ProcessIdentity(pid: geometryOwner.pid, startedSeconds: 2, startedMicroseconds: 0)
+                return bounds
+            })
+        Issue.record("A replaced process was accepted")
+    } catch let error as NativeFailure { #expect(error.code == "STALE_APP") }
+    catch { Issue.record("Unexpected error: \(error)") }
+    #expect(reads == 1)
+}
