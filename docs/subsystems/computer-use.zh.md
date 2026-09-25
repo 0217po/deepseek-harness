@@ -4,6 +4,8 @@
 
 计算机操作让模型通过配置的提供方观察并操作本地桌面。DSH 的共享能力称为 **computer use（计算机操作）**；**Cua Driver** 是上游实现的名称。
 
+[Computer Use](../../packages/computer-use/cua-bundle/README.zh.md) 提供 macOS CUA 和 persistent PTC 的可选实验性开关。
+
 ## 选择提供方
 
 在同一组合中挂载 [`dsh-computer-use`](../../packages/computer-use/computer-use/README.zh.md) 和一个提供方。两个 Cua Driver 提供方都是公开发布到 npm 的实验性包，均需显式启用。

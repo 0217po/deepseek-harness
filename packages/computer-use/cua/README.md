@@ -3,7 +3,7 @@ description: "Inspect and operate native macOS applications through scoped app a
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-experimental-cua
+# @deepseek-ai/dsh-cua
 
 English | [中文](README.zh.md)
 
@@ -25,20 +25,21 @@ Inspect macOS permissions, select running applications and windows, read accessi
 <a id="use-this-package"></a>
 ## Use this package
 
-Build with Swift 6 and Xcode command-line tools on macOS 14 or later, then mount the source overlay from the repository root:
+For repository Web use, enable [Computer Use](../cua-bundle/README.md) in Plugins. This prepares the local executable on macOS 14 or later; subsequent builds check it while the existing Web profile keeps the bundle selected. Disabled profiles do not prepare native components. Explicit source composition is also available:
 
 ```sh
-swift build --package-path packages/experimental/cua/native --configuration release
-cua_native_root="$PWD/packages/experimental/cua/native"
+swift build --package-path packages/computer-use/cua/native --configuration release
+cua_native_root="$PWD/packages/computer-use/cua/native"
 export DSH_CUA_HELPER="$cua_native_root/.build/release/dsh-cua-native"
-pnpm dsh headless --patch packages/experimental/cua/examples/macos.cordis.yml --dump-config
+pnpm dsh headless --patch packages/computer-use/cua/examples/macos.cordis.yml --dump-config
 ```
 
 The dump command checks profile composition without a model request. For a real task, replace `--dump-config` with a prompt and configure the profile’s model credentials. The overlay mounts the computer-use registry and this provider; remove an existing competing provider before using it. The responsible host/helper needs Accessibility permission for AX/input and Screen Recording permission for capture. `getCapabilities` reports permissions and session lock state without opening a system dialog. Locked or unavailable desktop sessions reject UI observations and input before dispatch; the user must unlock macOS before resuming. Start the target application yourself. Select it by name, bundle ID, absolute application path, or PID. `getApp` reads the selected application without activating it. Model guidance starts with background observation and input, without activation during initialization or before each action. If a hidden window, another Space or a Stage Manager thumbnail prevents observation, explain the foreground-dependent step before `app.activate()` or an observed window’s `raise` action, then read fresh state. Applications may change focus after input; background delivery does not guarantee an undisturbed user session.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `helperPath` | required | Absolute native executable path. |
+| `helperPath` | package-owned executable | Optional absolute native executable override. |
+| `buildTimeoutMs` | `300000` | Maximum native preparation time. |
 | `timeoutMs` | `30000` | Per-operation deadline; cancellation can leave partial input. |
 | `axTimeoutMs` | `3000` | Deadline per Accessibility system call, configured independently of the complete operation. |
 | `maxRequestBytes` / `maxResponseBytes` | `1048576` / `33554432` | UTF-8 request and response limits. |
@@ -54,12 +55,14 @@ Agent disposal and plugin unload cancel and await the complete tool call, includ
 
 Raw `getState` exposes the validated state fields and its complete `tree`. The native helper also returns structured element diagnostics for native checks; the tool projection omits that duplicate array from model text and structured tool values.
 
+Native preparation serializes compiler checks and executable publication with the shared file lock, retains the native build cache, and replaces the executable atomically only when its bytes change. Cancellation and preparation failure finish managed process cleanup before releasing the lock.
+
 ### Connect an external execution environment
 
-To run through persistent PTC, add `--patch packages/experimental/cua/examples/persistent-ptc.cordis.yml` after the macOS overlay. This provider keeps variables for the live Agent and runs without a file sandbox. The caller imports the bridge and supplies the current authorized `tools.cua` binding. This integration snippet assumes an execution host has supplied `tools`; the package does not install a global object or keep variables alive:
+To run through persistent PTC, add `--patch packages/computer-use/cua/examples/persistent-ptc.cordis.yml` after the macOS overlay. This provider keeps variables for the live Agent and runs without a file sandbox. The caller imports the bridge and supplies the current authorized `tools.cua` binding. This integration snippet assumes an execution host has supplied `tools`; the package does not install a global object or keep variables alive:
 
 ```javascript
-import { connectCua } from '@deepseek-ai/dsh-experimental-cua/bridge'
+import { connectCua } from '@deepseek-ai/dsh-cua/bridge'
 const cua = connectCua(() => tools.cua, text => console.log(text))
 const app = await cua.getApp("com.apple.TextEdit")
 const windows = await app.getWindows()
@@ -100,7 +103,7 @@ Node roles and metadata share one AX batch per observation. Group and scroll-are
 <a id="further-exploration"></a>
 ## Further Exploration
 
-- [Computer-use registration](../../computer-use/computer-use/README.md)
+- [Computer-use registration](../computer-use/README.md)
 - [Native protocol](native/protocol.schema.json)
 - [Object interfaces](src/types.ts)
 
@@ -148,7 +151,7 @@ Raw operation tools use { method, params }, including params: {} for parameterle
 
 Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. WINDOW_CHANGED requires fresh state before any retry; use an advertised AX action or explicitly restore the window before screenshot or coordinate input, then observe again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording permission.
 
-Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste inserts plain text using native Unicode input without changing the clipboard; rich-text formats are unavailable. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, initialize once with var { connectCua } = await import("@deepseek-ai/dsh-experimental-cua/bridge"); var cua = connectCua(() => tools.cua, text => console.log(text)). Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.
+Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste inserts plain text using native Unicode input without changing the clipboard; rich-text formats are unavailable. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, initialize once with var { connectCua } = await import("@deepseek-ai/dsh-cua/bridge"); var cua = connectCua(() => tools.cua, text => console.log(text)). Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.
 ```
 
 #### Token effect

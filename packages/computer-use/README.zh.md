@@ -27,6 +27,8 @@ kind: "package-group"
 | 包 | 职责 | ctx 键 |
 |---|---|---|
 | [`computer-use`](computer-use/README.zh.md) | 按名称独占注册提供方 | `ctx.computerUse` |
+| [`cua`](cua/README.zh.md) | 原生 macOS 应用与窗口操作 | `ctx.computerUse` |
+| [`cua-bundle`](cua-bundle/README.zh.md) | 默认关闭的 Computer Use 开关与 persistent PTC 组合 | — |
 
 <a id="related-documentation"></a>
 ## 相关文档

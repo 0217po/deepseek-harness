@@ -3,7 +3,7 @@ description: "通过按应用和窗口限定的对象，观察和操作原生 ma
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-experimental-cua
+# @deepseek-ai/dsh-cua
 
 [English](README.md) | 中文
 
@@ -25,20 +25,21 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在 macOS 14 或更高版本上使用 Swift 6 和 Xcode 命令行工具构建，然后从仓库根目录挂载源码配置：
+从仓库运行 Web 时，在插件页开启 [Computer Use](../cua-bundle/README.zh.md)。首次启用会在 macOS 14 及以上准备本机组件；现有 Web profile 保持选中时，后续构建继续检查更新。未开启的 profile 不准备原生组件。也可以显式加载源码覆盖层：
 
 ```sh
-swift build --package-path packages/experimental/cua/native --configuration release
-cua_native_root="$PWD/packages/experimental/cua/native"
+swift build --package-path packages/computer-use/cua/native --configuration release
+cua_native_root="$PWD/packages/computer-use/cua/native"
 export DSH_CUA_HELPER="$cua_native_root/.build/release/dsh-cua-native"
-pnpm dsh headless --patch packages/experimental/cua/examples/macos.cordis.yml --dump-config
+pnpm dsh headless --patch packages/computer-use/cua/examples/macos.cordis.yml --dump-config
 ```
 
 配置输出命令不发起模型请求。执行真实任务时，将 `--dump-config` 替换为任务提示，并配置该 profile 的模型凭据。配置挂载 computer-use 注册表和本 provider；使用前需移除已有的竞争 provider。负责执行的宿主或辅助进程需要辅助功能权限来读取 AX 和输入，需要屏幕录制权限来截图。`getCapabilities` 查询权限和锁屏状态，不弹出系统授权窗口。桌面会话锁定或不可用时，界面观察与输入会在分派前拒绝，需由用户解锁 macOS 后继续。目标应用需提前启动，可按名称、bundle ID、应用绝对路径或 PID 选择。`getApp` 读取选中的应用，不自动激活它。模型指引要求先在后台观察和输入，不在初始化或每次动作前激活应用。窗口隐藏、位于其他桌面空间或被台前调度缩为缩略图而无法观察时，先说明需要前台的步骤，再显式调用 `app.activate()` 或窗口的 `raise` 动作，之后重新读取状态。应用收到输入后仍可能改变焦点，后台投递不保证用户操作始终不受干扰。
 
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
-| `helperPath` | 必填 | 原生可执行文件的绝对路径。 |
+| `helperPath` | 包内可执行文件 | 可选的原生可执行文件绝对路径覆盖。 |
+| `buildTimeoutMs` | `300000` | 原生组件准备的最长时间。 |
 | `timeoutMs` | `30000` | 单次操作截止时间，取消后可能已发生部分输入。 |
 | `axTimeoutMs` | `3000` | 每次 Accessibility 系统调用的截止时间，与完整操作截止独立配置。 |
 | `maxRequestBytes` / `maxResponseBytes` | `1048576` / `33554432` | UTF-8 请求与响应字节限制。 |
@@ -54,12 +55,14 @@ Agent 销毁和插件卸载会取消并等待完整工具调用，包括图像�
 
 原始 `getState` 操作返回经过校验的状态字段和完整 `tree`。原生 helper 还返回供原生检查使用的结构化元素诊断数组；工具投影会从模型文本和结构化工具值中移除这份重复数组。
 
+原生准备复用文件锁，串行检查编译和发布可执行文件，保留构建缓存，只在字节变化时原子替换可执行文件。取消或准备失败后，先完成受管进程清理再释放锁。
+
 ### 接入外部执行环境
 
-使用 persistent PTC 时，在 macOS 配置后追加 `--patch packages/experimental/cua/examples/persistent-ptc.cordis.yml`。该 provider 为存活的 Agent 保留变量，不启用文件沙箱。调用方导入适配模块，并提供当前执行中已授权的 `tools.cua` 绑定。下面的接入代码假设执行宿主已提供 `tools`；本包不安装全局对象，也不负责保留变量：
+使用 persistent PTC 时，在 macOS 配置后追加 `--patch packages/computer-use/cua/examples/persistent-ptc.cordis.yml`。该 provider 为存活的 Agent 保留变量，不启用文件沙箱。调用方导入适配模块，并提供当前执行中已授权的 `tools.cua` 绑定。下面的接入代码假设执行宿主已提供 `tools`；本包不安装全局对象，也不负责保留变量：
 
 ```javascript
-import { connectCua } from '@deepseek-ai/dsh-experimental-cua/bridge'
+import { connectCua } from '@deepseek-ai/dsh-cua/bridge'
 const cua = connectCua(() => tools.cua, text => console.log(text))
 const app = await cua.getApp("com.apple.TextEdit")
 const windows = await app.getWindows()
@@ -100,7 +103,7 @@ AppKit sheet 可以通过其窗口 ID 单独选择，也会出现在所属文档
 <a id="further-exploration"></a>
 ## 进一步阅读
 
-- [Computer-use 注册](../../computer-use/computer-use/README.zh.md)
+- [Computer-use 注册](../computer-use/README.zh.md)
 - [原生协议](native/protocol.schema.json)
 - [对象接口](src/types.ts)
 
@@ -148,7 +151,7 @@ Raw operation tools use { method, params }, including params: {} for parameterle
 
 Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. WINDOW_CHANGED requires fresh state before any retry; use an advertised AX action or explicitly restore the window before screenshot or coordinate input, then observe again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording permission.
 
-Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste inserts plain text using native Unicode input without changing the clipboard; rich-text formats are unavailable. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, initialize once with var { connectCua } = await import("@deepseek-ai/dsh-experimental-cua/bridge"); var cua = connectCua(() => tools.cua, text => console.log(text)). Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.
+Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste inserts plain text using native Unicode input without changing the clipboard; rich-text formats are unavailable. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, initialize once with var { connectCua } = await import("@deepseek-ai/dsh-cua/bridge"); var cua = connectCua(() => tools.cua, text => console.log(text)). Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.
 ```
 
 #### Token 影响

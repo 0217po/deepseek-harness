@@ -130,7 +130,7 @@ describe('web e2e: plugin manager', () => {
     expect(await panel.locator('[data-plugin-group="official"] [data-plugin-package]').count()).toBe(OPTIONAL_BUNDLES.length)
     expect(await panel.locator('[data-plugin-group="official"] [data-plugin-item]').count()).toBe(4)
     expect(await panel.getByText('实验性', { exact: true }).count())
-      .toBe(OPTIONAL_BUNDLES.filter(name => name.startsWith('@deepseek-ai/dsh-experimental-')).length)
+      .toBe((await scaffold.ctx.pluginManager.listBundles()).filter(bundle => bundle.optional && (bundle.experimental === true || bundle.name.startsWith('@deepseek-ai/dsh-experimental-'))).length)
     expect(await panel.locator('[data-plugin-package="@deepseek-ai/dsh-experimental-inspector"]').count()).toBe(0)
     expect(await panel.getByRole('switch', { name: '启用 语音输入', exact: true }).getAttribute('aria-checked')).toBe('false')
     // A bundle that is off still shows the rows its patch declares, without switches.

@@ -1,5 +1,6 @@
-/** Experimental Codex-style macOS computer use over locally built native source. */
-import { isAbsolute } from 'node:path'
+/** macOS computer use over a managed native helper. */
+import { isAbsolute, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -7,6 +8,7 @@ import { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/brand'
 import { createMcpToolDefinition } from '@deepseek-ai/dsh-mcp-client'
 import { z } from 'zod'
 import { NativeClient } from './native-client.ts'
+import { nativeHostArchitecture, prepareNativeExecutable } from './native-build.ts'
 import { Request, ScreenshotResult, StateResult } from './protocol.ts'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
@@ -14,14 +16,16 @@ import type {} from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-computer-use'
 
 /** Loader plugin identity. */
-export const name = 'experimental-cua'
+export const name = 'cua'
 /** Services required for logged tools and owned native process lifetime. */
 export const inject = ['computerUse', 'tools', 'systemPrompt', 'subprocess', 'agents']
 
 /** Native executable and per-operation resource bounds. */
 export interface Config {
-  /** Absolute path to the locally built macOS native helper. */
-  helperPath: string
+  /** Absolute native helper override; omission prepares the package-owned executable. */
+  helperPath?: string
+  /** Maximum time in milliseconds for native component preparation. */
+  buildTimeoutMs: number
   /** Deadline for one native operation, including capture and AX traversal. */
   timeoutMs: number
   /** Deadline for each individual Accessibility system call. */
@@ -46,7 +50,8 @@ export interface Config {
 
 /** Validated host configuration; no driver is downloaded at runtime. */
 export const Config: Schema<Config> = Schema.object({
-  helperPath: Schema.string().required(),
+  helperPath: Schema.string(),
+  buildTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(300_000),
   timeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(30_000),
   axTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(3000),
   maxRequestBytes: Schema.number().step(1).min(1024).default(1024 * 1024),
@@ -90,7 +95,7 @@ Raw operation tools use { method, params }, including params: {} for parameterle
 
 Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. WINDOW_CHANGED requires fresh state before any retry; use an advertised AX action or explicitly restore the window before screenshot or coordinate input, then observe again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording permission.
 
-Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste inserts plain text using native Unicode input without changing the clipboard; rich-text formats are unavailable. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, initialize once with var { connectCua } = await import("@deepseek-ai/dsh-experimental-cua/bridge"); var cua = connectCua(() => tools.cua, text => console.log(text)). Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.`
+Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste inserts plain text using native Unicode input without changing the clipboard; rich-text formats are unavailable. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, initialize once with var { connectCua } = await import("@deepseek-ai/dsh-cua/bridge"); var cua = connectCua(() => tools.cua, text => console.log(text)). Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.`
 
 function executionAgent(execution: Readonly<ToolExecution>): Agent {
   if (!execution.agent) throw new Error('dsh-cua requires an agent-owned execution')
@@ -100,10 +105,33 @@ function executionAgent(execution: Readonly<ToolExecution>): Agent {
 /**
  * Mount logged native operations with a separate helper per agent.
  * @param ctx - Host context with computer-use, subprocess and tool services.
- * @param config - Validated macOS helper path and bounds.
+ * @param config - Validated native preparation and operation bounds.
+ * @returns Preparation completion when the package-owned native executable is selected.
  */
-export function apply(ctx: Context, config: Config): void {
-  if (!isAbsolute(config.helperPath)) throw new Error('dsh-cua helperPath must be absolute')
+export function apply(ctx: Context, config: Config): void | Promise<void> {
+  if (config.helperPath !== undefined) {
+    if (!isAbsolute(config.helperPath)) throw new Error('dsh-cua helperPath must be absolute')
+    return mount(ctx, { ...config, helperPath: config.helperPath })
+  }
+  const architecture = nativeHostArchitecture(process.platform, process.arch)
+  const controller = new AbortController()
+  const prepared = prepareNativeExecutable({
+    packageRoot: resolve(fileURLToPath(new URL('..', import.meta.url))),
+    architecture, subprocess: ctx.subprocess,
+    timeoutMs: config.buildTimeoutMs, graceMs: config.graceMs, signal: controller.signal,
+  })
+  ctx.effect(() => async () => {
+    controller.abort()
+    // The Loader receives preparation failures through apply; disposal only awaits quiescence.
+    await prepared.catch(() => {})
+  }, 'dsh-cua.native-preparation')
+  return prepared.then((helperPath) => {
+    controller.signal.throwIfAborted()
+    mount(ctx, { ...config, helperPath })
+  })
+}
+
+function mount(ctx: Context, config: Config & { helperPath: string }): void {
   const clients = new Map<Agent, NativeClient>()
   const lifetime = new AbortController()
   const pending = new Map<Promise<unknown>, Agent>()

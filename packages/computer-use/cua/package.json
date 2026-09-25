@@ -1,6 +1,6 @@
 {
-  "name": "@deepseek-ai/dsh-experimental-cua",
-  "description": "Experimental Codex-style macOS computer use",
+  "name": "@deepseek-ai/dsh-cua",
+  "description": "macOS computer use through application and window objects",
   "version": "0.1.7-rc.2",
   "publishConfig": {
     "access": "public"
@@ -8,7 +8,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
-    "directory": "packages/experimental/cua"
+    "directory": "packages/computer-use/cua"
   },
   "type": "module",
   "main": "lib/index.js",
@@ -27,6 +27,10 @@
     "./bridge": {
       "types": "./lib/types/bridge.d.ts",
       "default": "./lib/bridge.js"
+    },
+    "./native-build": {
+      "types": "./lib/types/native-build.d.ts",
+      "default": "./lib/native-build.js"
     }
   },
   "files": [
@@ -41,7 +45,9 @@
     "native/upstream.json",
     "native/README.txt",
     "native/protocol.schema.json",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/native-build.js",
+    "native/bin"
   ],
   "license": "MIT",
   "peerDependencies": {
@@ -57,7 +63,8 @@
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
     "zod": "^4.4.3",
-    "@deepseek-ai/dsh-brand": "workspace:*"
+    "@deepseek-ai/dsh-brand": "workspace:*",
+    "@deepseek-ai/dsh-atomic-write": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",

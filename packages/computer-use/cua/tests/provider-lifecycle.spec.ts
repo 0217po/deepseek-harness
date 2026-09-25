@@ -12,9 +12,17 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import Subprocess from '@deepseek-ai/dsh-subprocess'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import * as NativeProvider from '../src/index.ts'
+import type { NativeBuildSpec } from '../src/native-build.ts'
 
 const native = vi.hoisted(() => ({
+  prepare: vi.fn<(spec: NativeBuildSpec) => Promise<string>>(),
+  architecture: vi.fn(() => 'arm64' as const),
   request: vi.fn(), dispose: vi.fn(), instances: [] as Array<{ disposed: boolean }>,
+}))
+vi.mock('../src/native-build.ts', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/native-build.ts')>(),
+  nativeHostArchitecture: native.architecture,
+  prepareNativeExecutable: native.prepare,
 }))
 vi.mock('../src/native-client.ts', async importOriginal => ({
   ...await importOriginal<typeof import('../src/native-client.ts')>(),
@@ -27,7 +35,7 @@ vi.mock('../src/native-client.ts', async importOriginal => ({
 }))
 
 const config = {
-  helperPath: resolve('fixture-helper'), timeoutMs: 10_000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096,
+  helperPath: resolve('fixture-helper'), buildTimeoutMs: 300_000, timeoutMs: 10_000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096,
   graceMs: 10, textEventIntervalMs: 8, maxElements: 64, maxDepth: 8, dragDurationMs: 200, dragSteps: 10,
 } satisfies NativeProvider.Config
 
@@ -331,4 +339,58 @@ it.each([
     admission.mockRestore()
     storage.mockRestore()
   }
+})
+
+it('prepares the selected native component before registering CUA and creates no helper until a tool call', async () => {
+  const f = await setup()
+  await f.provider.dispose()
+  native.prepare.mockReset().mockResolvedValue(resolve('prepared-helper'))
+  await NativeProvider.apply(f.ctx, { ...config, helperPath: undefined })
+  expect(native.prepare).toHaveBeenCalledTimes(1)
+  expect(native.instances).toHaveLength(0)
+  await f.execute()
+  expect(native.instances).toHaveLength(1)
+  const signal = native.prepare.mock.calls[0]![0].signal
+  await f.ctx.fiber.dispose()
+  expect(signal.aborted).toBe(true)
+})
+
+it('does not register operations after native preparation fails', async () => {
+  const f = await setup()
+  await f.provider.dispose()
+  native.prepare.mockReset().mockRejectedValue(new Error('compiler unavailable'))
+  await expect(NativeProvider.apply(f.ctx, { ...config, helperPath: undefined })).rejects.toThrow('compiler unavailable')
+  expect(f.ctx.tools.schemas().some(tool => tool.name === 'cua')).toBe(false)
+  expect(native.instances).toHaveLength(0)
+})
+
+it('waits for canceled preparation and never publishes its late success', async () => {
+  const f = await setup()
+  await f.provider.dispose()
+  const ready = Promise.withResolvers<string>()
+  onTestFinished(() => { ready.resolve(resolve('late-helper')) })
+  native.prepare.mockReset().mockReturnValue(ready.promise)
+  const starting = Promise.resolve(NativeProvider.apply(f.ctx, { ...config, helperPath: undefined }))
+  const failed = expect(starting).rejects.toThrow()
+  const signal = native.prepare.mock.calls[0]![0].signal
+  const aborted = new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }))
+  let closed = false
+  const closing = f.ctx.fiber.dispose().then(() => { closed = true })
+  try {
+    await aborted
+    expect(closed).toBe(false)
+  } finally {
+    ready.resolve(resolve('late-helper'))
+    await Promise.all([closing, failed])
+  }
+  expect(native.instances).toHaveLength(0)
+})
+
+it('rejects an unsupported native host before starting preparation', async () => {
+  const f = await setup()
+  await f.provider.dispose()
+  native.architecture.mockImplementationOnce(() => { throw new Error('unsupported host') })
+  native.prepare.mockReset()
+  expect(() => NativeProvider.apply(f.ctx, { ...config, helperPath: undefined })).toThrow('unsupported host')
+  expect(native.prepare).not.toHaveBeenCalled()
 })

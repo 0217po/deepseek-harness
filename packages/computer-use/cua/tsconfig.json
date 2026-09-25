@@ -15,7 +15,7 @@
       "path": "../../../vendor/schemastery"
     },
     {
-      "path": "../../computer-use/computer-use"
+      "path": "../computer-use"
     },
     {
       "path": "../../core/tools"
@@ -37,6 +37,9 @@
     },
     {
       "path": "../../util/brand"
+    },
+    {
+      "path": "../../util/atomic-write"
     }
   ]
 }

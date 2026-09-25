@@ -293,7 +293,7 @@ function EnableSwitch({ pkg, title, t, busy, onSetEnabled }: {
 
 /** The status one card carries: running, off, or a problem the Host reported. */
 function packageStatus(pkg: PackageView): 'running' | 'disabled' | 'problem' {
-  if (pkg.error !== undefined) return 'problem'
+  if (pkg.error !== undefined || (pkg.enabled && pkg.rows.some(row => row.phase === 'failed'))) return 'problem'
   return pkg.enabled ? 'running' : 'disabled'
 }
 

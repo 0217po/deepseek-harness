@@ -760,6 +760,45 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-credentials-local -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-cua -->
+<a id="deepseek-aidsh-cua"></a>
+
+## `@deepseek-ai/dsh-cua`
+
+- `inject`: `computerUse` · `tools` · `systemPrompt` · `subprocess` · `agents`
+- `source`: [`packages/computer-use/cua/src/index.ts:24`](../packages/computer-use/cua/src/index.ts)
+
+```ts config-catalog
+/** Native executable and per-operation resource bounds. */
+export interface Config {
+  /** Absolute native helper override; omission prepares the package-owned executable. */
+  helperPath?: string
+  /** Maximum time in milliseconds for native component preparation. */
+  buildTimeoutMs: number
+  /** Deadline for one native operation, including capture and AX traversal. */
+  timeoutMs: number
+  /** Deadline for each individual Accessibility system call. */
+  axTimeoutMs: number
+  /** Maximum bytes retained for one helper response frame. */
+  maxResponseBytes: number
+  /** Maximum UTF-8 bytes admitted for one helper request frame. */
+  maxRequestBytes: number
+  /** Duration in milliseconds of one same-window drag. */
+  dragDurationMs: number
+  /** Number of movement segments dispatched during a drag. */
+  dragSteps: number
+  /** Delay in milliseconds after each Unicode key-down or key-up event. */
+  textEventIntervalMs: number
+  /** Managed process termination grace in milliseconds. */
+  graceMs: number
+  /** Maximum nodes admitted by a native accessibility snapshot. */
+  maxElements: number
+  /** Maximum depth traversed by a native accessibility snapshot. */
+  maxDepth: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-cua -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-deepseek-account-platform -->
 <a id="deepseek-aidsh-deepseek-account-platform"></a>
 
@@ -940,43 +979,6 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-computer-use-cua-driver-mcp -->
-
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-cua -->
-<a id="deepseek-aidsh-experimental-cua"></a>
-
-## `@deepseek-ai/dsh-experimental-cua`
-
-- `inject`: `computerUse` · `tools` · `systemPrompt` · `subprocess` · `agents`
-- `source`: [`packages/experimental/cua/src/index.ts:22`](../packages/experimental/cua/src/index.ts)
-
-```ts config-catalog
-/** Native executable and per-operation resource bounds. */
-export interface Config {
-  /** Absolute path to the locally built macOS native helper. */
-  helperPath: string
-  /** Deadline for one native operation, including capture and AX traversal. */
-  timeoutMs: number
-  /** Deadline for each individual Accessibility system call. */
-  axTimeoutMs: number
-  /** Maximum bytes retained for one helper response frame. */
-  maxResponseBytes: number
-  /** Maximum UTF-8 bytes admitted for one helper request frame. */
-  maxRequestBytes: number
-  /** Duration in milliseconds of one same-window drag. */
-  dragDurationMs: number
-  /** Number of movement segments dispatched during a drag. */
-  dragSteps: number
-  /** Delay in milliseconds after each Unicode key-down or key-up event. */
-  textEventIntervalMs: number
-  /** Managed process termination grace in milliseconds. */
-  graceMs: number
-  /** Maximum nodes admitted by a native accessibility snapshot. */
-  maxElements: number
-  /** Maximum depth traversed by a native accessibility snapshot. */
-  maxDepth: number
-}
-```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-cua -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-inspector -->
 <a id="deepseek-aidsh-experimental-inspector"></a>
@@ -4458,6 +4460,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 | `@deepseek-ai/dsh-client-ui-slots` | — | [`packages/client/ui-slots/src/index.ts`](../packages/client/ui-slots/src/index.ts) |
 | `@deepseek-ai/dsh-client-web` | — | [`packages/client/web/src/index.ts`](../packages/client/web/src/index.ts) |
 | `@deepseek-ai/dsh-cmdline` | — | [`packages/boot/cmdline/src/index.ts`](../packages/boot/cmdline/src/index.ts) |
+| `@deepseek-ai/dsh-cua-bundle` | — | [`packages/computer-use/cua-bundle/src/index.ts`](../packages/computer-use/cua-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-deque` | — | [`packages/util/deque/src/index.ts`](../packages/util/deque/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-agent-team-profile` | — | [`packages/experimental/agent-team-profile/src/index.ts`](../packages/experimental/agent-team-profile/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-browser-use-runtime` | — | [`packages/experimental/browser-use-runtime/src/index.ts`](../packages/experimental/browser-use-runtime/src/index.ts) |

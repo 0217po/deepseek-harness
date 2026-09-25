@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Computer Use",
+    "description": "操作 macOS 应用。启用后当前配置档切换为 persistent PTC，代码变量跨调用保留，不提供文件沙箱。首次开启会准备本机组件，后续项目构建会检查更新。关闭会清除保留的变量。"
+  }
+}

@@ -1394,3 +1394,16 @@ it.each([false, true])('rechecks installed bundle peers before accepting a disab
   }
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toEqual(['core', 'extra'])
 })
+
+it.each([true, false])('projects the explicit experimental flag %s independently of package naming', async (experimental) => {
+  const { manager, dir } = await fixture()
+  const path = join(dir, 'node_modules/extra/package.json')
+  const manifest = JSON.parse(readFileSync(path, 'utf8'))
+  manifest.dsh.bundle.experimental = experimental
+  writeFileSync(path, JSON.stringify(manifest))
+  expect((await manager.listBundles()).find(row => row.name === 'extra')).toMatchObject({ experimental })
+  manifest.dsh.bundle.experimental = 'yes'
+  writeFileSync(path, JSON.stringify(manifest))
+  expect((await manager.listBundles()).find(row => row.name === 'extra')?.error)
+    .toMatchObject({ code: 'operation-error', diagnostic: expect.stringContaining('must be a boolean') })
+})

@@ -1,0 +1,12 @@
+- id: ptc-runtime
+  disabled: true
+- id: tools
+  config:
+    mode: ptc
+- insert:
+    - id: cua-provider-registry
+      name: '@deepseek-ai/dsh-computer-use'
+    - id: cua
+      name: '@deepseek-ai/dsh-cua'
+    - id: ptc-runtime-persistent
+      name: '@deepseek-ai/dsh-ptc-runtime-node/persistent'

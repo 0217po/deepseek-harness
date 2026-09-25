@@ -1412,3 +1412,7 @@ it('recognizes the official registry without a trailing slash and with uppercase
   face.openInstall()
   await vi.waitFor(() => { expect(state().install.registry).toEqual({ kind: 'offered', registry: MIRROR }) })
 })
+
+it('retains the bundle experimental marker in its client projection', () => {
+  expect(packageView({ ...BUNDLE, experimental: true }, PLUGINS)).toMatchObject({ experimental: true })
+})

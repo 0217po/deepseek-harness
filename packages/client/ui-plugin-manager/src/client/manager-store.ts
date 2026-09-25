@@ -77,6 +77,8 @@ export interface PackageRow {
 /** One bundle as the page shows it: the Host's bundle joined with the entries its rows run as. */
 export interface PackageView {
   readonly name: string
+  /** Experimental feature marker supplied by the bundle manifest. */
+  readonly experimental?: boolean
   readonly version?: string
   readonly description?: string
   /** Local package display text and metadata diagnostics supplied by the Host. */
@@ -410,6 +412,7 @@ export function packageView(bundle: BundleInfo, plugins: readonly PluginInfo[]):
     name: bundle.name,
     installed: bundle.installed,
     optional: bundle.optional,
+    ...bundle.experimental === undefined ? {} : { experimental: bundle.experimental },
     enabled: bundle.enabled,
     rows,
     ...bundle.version === undefined ? {} : { version: bundle.version },
