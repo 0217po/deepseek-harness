@@ -73,7 +73,7 @@ async function setup(model?: { provider: string; model: string }) {
 it('rejects a relative helper path before publishing computer-use operations', () => {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
-  expect(() => { NativeProvider.apply(ctx, { ...config, helperPath: 'relative-helper' }) }).toThrow('helperPath must be absolute')
+  expect(() => NativeProvider.apply(ctx, { ...config, helperPath: 'relative-helper' })).toThrow('helperPath must be absolute')
 })
 
 it('correlates a native request with its logged tool invocation', async () => {

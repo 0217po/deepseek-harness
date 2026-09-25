@@ -111,7 +111,7 @@ function executionAgent(execution: Readonly<ToolExecution>): Agent {
 export function apply(ctx: Context, config: Config): void | Promise<void> {
   if (config.helperPath !== undefined) {
     if (!isAbsolute(config.helperPath)) throw new Error('dsh-cua helperPath must be absolute')
-    mount(ctx, { ...config, helperPath: config.helperPath })
+    mount(ctx, config, config.helperPath)
     return
   }
   const architecture = nativeHostArchitecture(process.platform, process.arch)
@@ -128,11 +128,11 @@ export function apply(ctx: Context, config: Config): void | Promise<void> {
   }, 'dsh-cua.native-preparation')
   return prepared.then((helperPath) => {
     controller.signal.throwIfAborted()
-    mount(ctx, { ...config, helperPath })
+    mount(ctx, config, helperPath)
   })
 }
 
-function mount(ctx: Context, config: Config & { helperPath: string }): void {
+function mount(ctx: Context, config: Config, helperPath: string): void {
   const clients = new Map<Agent, NativeClient>()
   const lifetime = new AbortController()
   const pending = new Map<Promise<unknown>, Agent>()
@@ -191,7 +191,7 @@ function mount(ctx: Context, config: Config & { helperPath: string }): void {
         let client = clients.get(agent)
         if (!client || client.disposed) {
           client = new NativeClient(ctx, {
-            helperPath: config.helperPath, cwd: process.cwd(), timeoutMs: config.timeoutMs, axTimeoutMs: config.axTimeoutMs,
+            helperPath, cwd: process.cwd(), timeoutMs: config.timeoutMs, axTimeoutMs: config.axTimeoutMs,
             maxRequestBytes: config.maxRequestBytes, maxResponseBytes: config.maxResponseBytes, graceMs: config.graceMs,
             textEventIntervalMs: config.textEventIntervalMs,
           })

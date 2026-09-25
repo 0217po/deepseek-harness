@@ -1398,7 +1398,7 @@ it.each([false, true])('rechecks installed bundle peers before accepting a disab
 it.each([true, false])('projects the explicit experimental flag %s independently of package naming', async (experimental) => {
   const { manager, dir } = await fixture()
   const path = join(dir, 'node_modules/extra/package.json')
-  const manifest = JSON.parse(readFileSync(path, 'utf8'))
+  const manifest = JSON.parse(readFileSync(path, 'utf8')) as { dsh: { bundle: { experimental?: boolean | string } } }
   manifest.dsh.bundle.experimental = experimental
   writeFileSync(path, JSON.stringify(manifest))
   expect((await manager.listBundles()).find(row => row.name === 'extra')).toMatchObject({ experimental })

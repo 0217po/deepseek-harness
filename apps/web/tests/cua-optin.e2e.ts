@@ -1,9 +1,10 @@
 /** Plugin selection, persistent execution and restoration through the existing Web switch. */
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium, type Browser } from 'playwright'
+import { readProfileManifest } from '@deepseek-ai/dsh-app-boot'
 import type {} from '@deepseek-ai/dsh-ptc-runtime'
 import { expect, it } from 'vitest'
 import { launchWebScaffold, type WebScaffold } from './scaffold.ts'
@@ -33,13 +34,13 @@ it('keeps Computer Use off by default and persists its explicit profile-wide PTC
     expect(await card.textContent()).not.toContain('Swift')
     expect(scaffold.ctx.ptcRuntime.programFormat).toBe('function-body')
     expect(scaffold.ctx.get('computerUse')).toBeUndefined()
-    const selected = async () => JSON.parse(await readFile(join(scaffold.harnessHome, 'profiles/scaffold/package.json'), 'utf8')).dsh.profile.bundles as string[]
-    expect(await selected()).not.toContain('@deepseek-ai/dsh-cua-bundle')
+    const selected = () => readProfileManifest('scaffold', join(scaffold.harnessHome, 'profiles/scaffold')).dsh?.profile?.bundles
+    expect(selected()).not.toContain('@deepseek-ai/dsh-cua-bundle')
 
     await toggle.click()
     await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
     await expect.poll(() => scaffold.ctx.ptcRuntime.programFormat).toBe('repl')
-    expect(await selected()).toContain('@deepseek-ai/dsh-cua-bundle')
+    expect(selected()).toContain('@deepseek-ai/dsh-cua-bundle')
     expect(scaffold.ctx.get('computerUse')).toBeDefined()
     const runtime = scaffold.ctx.ptcRuntime
     const stateOwner = {}
@@ -50,7 +51,7 @@ it('keeps Computer Use off by default and persists its explicit profile-wide PTC
     await toggle.click()
     await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
     await expect.poll(() => scaffold.ctx.ptcRuntime.programFormat).toBe('function-body')
-    expect(await selected()).not.toContain('@deepseek-ai/dsh-cua-bundle')
+    expect(selected()).not.toContain('@deepseek-ai/dsh-cua-bundle')
     expect(scaffold.ctx.get('computerUse')).toBeUndefined()
   } finally {
     try { await browser?.close() } finally {
