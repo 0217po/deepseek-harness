@@ -8,7 +8,7 @@ import { readProfileManifest } from '@deepseek-ai/dsh-app-boot'
 import type {} from '@deepseek-ai/dsh-ptc-runtime'
 import { expect, it } from 'vitest'
 import { launchWebScaffold, type WebScaffold } from './scaffold.ts'
-import { ZH_BROWSER_LOCALE } from './support.ts'
+import { connectFreshWorkspaceZh, writeComposerDraft, ZH_BROWSER_LOCALE } from './support.ts'
 
 it('keeps Computer Use off by default and persists its explicit profile-wide PTC switch', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'cua-optin-web-'))
@@ -24,6 +24,9 @@ it('keeps Computer Use off by default and persists its explicit profile-wide PTC
     browser = await chromium.launch()
     const page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    await connectFreshWorkspaceZh(page, scaffold.workspaceCwd)
+    const input = page.locator('[data-composer-input]')
+    await writeComposerDraft(page, input, 'Retained draft')
     await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
     const card = page.locator('[data-plugin-package="@deepseek-ai/dsh-cua-bundle"]')
     const toggle = card.getByRole('switch', { name: '启用 Computer Use', exact: true })
@@ -42,6 +45,10 @@ it('keeps Computer Use off by default and persists its explicit profile-wide PTC
     await expect.poll(() => scaffold.ctx.ptcRuntime.programFormat).toBe('repl')
     expect(selected()).toContain('@deepseek-ai/dsh-cua-bundle')
     expect(scaffold.ctx.get('computerUse')).toBeDefined()
+    await page.getByRole('treeitem', { name: '新会话', exact: true }).click()
+    await input.and(page.locator('[contenteditable="true"]')).waitFor()
+    expect(await input.textContent()).toBe('Retained draft')
+    await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
     const runtime = scaffold.ctx.ptcRuntime
     const stateOwner = {}
     const program = 'globalThis.counter = (globalThis.counter ?? 0) + 1'
@@ -53,6 +60,9 @@ it('keeps Computer Use off by default and persists its explicit profile-wide PTC
     await expect.poll(() => scaffold.ctx.ptcRuntime.programFormat).toBe('function-body')
     expect(selected()).not.toContain('@deepseek-ai/dsh-cua-bundle')
     expect(scaffold.ctx.get('computerUse')).toBeUndefined()
+    await page.getByRole('treeitem', { name: '新会话', exact: true }).click()
+    await input.and(page.locator('[contenteditable="true"]')).waitFor()
+    expect(await input.textContent()).toBe('Retained draft')
   } finally {
     try { await browser?.close() } finally {
       try { await ownedScaffold?.close() } finally { await rm(directory, { recursive: true, force: true }) }

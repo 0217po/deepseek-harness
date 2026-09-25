@@ -829,8 +829,10 @@ describe('remaining branches', () => {
     const before = session.getSnapshot()
     session.handleRunning(false) // already false: dedup branch
     expect(session.getSnapshot()).toBe(before)
-    session.handleRemoved()
+    session.handlePresence(false)
     expect(session.getSnapshot().removed).toBe(true)
+    session.handlePresence(true)
+    expect(session.getSnapshot().removed).toBe(false)
   })
 
   it('drops live events while cold/error (no window upkeep)', async ({ mock, start }) => {

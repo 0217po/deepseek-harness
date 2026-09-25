@@ -1013,6 +1013,43 @@ describe('catalog arrival', () => {
   })
 })
 
+describe('Host membership recovery', () => {
+  it.each(['event', 'list'] as const)('restores a retained Session through a current %s after plugin reload', async (source, { bench }) => {
+    const b = bench()
+    await feedList(b, [{ id: 's1' }])
+    using reference = b.svc.retain(sid('s1'), { source: 'controllerOperation' })
+    await reference.ready
+    const session = reference.binding.session
+    b.svc.handleSessionRemoved(sid('s1'))
+    expect(session.getSnapshot().removed).toBe(true)
+    if (source === 'event') {
+      b.svc.handleSessionAdded({ agentAvailable: true, sessionId: sid('s1'), updatedAt: 2, running: false, blank: false })
+    } else {
+      await feedList(b, [{ id: 's1' }])
+    }
+    expect(b.svc.binding(sid('s1'))).toBe(reference.binding)
+    expect(session.getSnapshot().removed).toBe(false)
+  })
+
+  it('keeps a removal newer than an in-flight list response', async ({ bench }) => {
+    const b = bench()
+    await feedList(b, [{ id: 's1' }])
+    using reference = b.svc.retain(sid('s1'), { source: 'controllerOperation' })
+    await reference.ready
+    const gate: PromiseWithResolvers<void> = Promise.withResolvers()
+    b.unblock.push(() => { gate.resolve() })
+    b.mock.remote.session.list.mockImplementation(async () => {
+      await gate.promise
+      return ok({ items: [{ agentAvailable: true, sessionId: sid('s1'), updatedAt: 1, running: false, blank: false }] })
+    })
+    const refresh = b.svc.refresh()
+    b.svc.handleSessionRemoved(sid('s1'))
+    gate.resolve()
+    await refresh
+    expect(reference.binding.session.getSnapshot().removed).toBe(true)
+  })
+})
+
 describe('blank mirror', () => {
   it('flips blank=false from the running:true status frame (cross-client conversion)', async ({ bench }) => {
     const b = bench()
