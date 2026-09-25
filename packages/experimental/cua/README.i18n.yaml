@@ -1,6 +1,52 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/cua/README.md
-README.md: e975e3cfbdb3034eee4fa5a0befe48e12203b646
-README.zh.md: 2fbf4a8bf4bc20c1ba5471c8ad23ef6ca312892e
+/:
+  en: a1503331d3f35516
+  zh: fcb8e5220ff732e1
+/deepseek-ai-dsh-experimental-cua:
+  en: fff802c0fccb9353
+  zh: 9d5436065b8ca835
+/deepseek-ai-dsh-experimental-cua/summary:
+  en: 4549f02fc53854a5
+  zh: 6f74f1130b6623a8
+/deepseek-ai-dsh-experimental-cua/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 7b30b973a849247d
+/deepseek-ai-dsh-experimental-cua/use-this-package:
+  en: 2bd2072854d093d5
+  zh: 752716da235b53d8
+/deepseek-ai-dsh-experimental-cua/use-this-package/connect-an-external-execution-environment:
+  en: dc2f1cd930a6b6ba
+  zh: 12b4f57fa745afbf
+/deepseek-ai-dsh-experimental-cua/understand-the-implementation:
+  en: ee9fd0ddf93d496d
+  zh: 38d8d5f8b58e6f50
+/deepseek-ai-dsh-experimental-cua/further-exploration:
+  en: b1047318879cd6f4
+  zh: e4ce4a5ad2a9c4dc
+/deepseek-ai-dsh-experimental-cua/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-cua/model-experience/native-application-operations:
+  en: ab7cba4a42334ab9
+  zh: f77cd9d84624b6c2
+/deepseek-ai-dsh-experimental-cua/model-experience/native-application-operations/what-the-model-sees:
+  en: c221fa5ce647b1dd
+  zh: 9388c91a9f89e029
+/deepseek-ai-dsh-experimental-cua/model-experience/native-application-operations/what-the-model-sees/operation-guidance-verbatim:
+  en: 2dbc22ffd1f8a717
+  zh: d4458872e75305d9
+/deepseek-ai-dsh-experimental-cua/model-experience/native-application-operations/token-effect:
+  en: ab52b46d874fa8b9
+  zh: e87d3620ef77cb06
+/deepseek-ai-dsh-experimental-cua/model-experience/native-application-operations/kv-cache-effect:
+  en: a2c9acb5a4320dda
+  zh: e8d1586af60215c4
+/deepseek-ai-dsh-experimental-cua/known-limitations-and-deferred-work:
+  en: 0bc15ef067ffd2c6
+  zh: 5ffd97b61a8a589f
+/deepseek-ai-dsh-experimental-cua/known-limitations-and-deferred-work/dev-note:
+  en: b836f01bd0bceb4a
+  zh: 8122fa08b2aa95fa

@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-17-experimental-cua-object-api.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-17-experimental-cua-object-api.md
-2026-09-17-experimental-cua-object-api.md: 9b3ae36a02f5d53edd9ff479d8989ac2ae9b7193
-2026-09-17-experimental-cua-object-api.zh.md: 85b82763fa3ac2409e0f241ff6e8da2473d9b1fd
+/agent-note-native-cua-objects-independent-of-evaluator-ownership:
+  en: 1ea218552c24946e
+  zh: 83524cf60abec6c8
+/agent-note-native-cua-objects-independent-of-evaluator-ownership/problem:
+  en: a22ddcfb339e503d
+  zh: a1f4fadb46fce1e7
+/agent-note-native-cua-objects-independent-of-evaluator-ownership/decision:
+  en: fecd529e76af4100
+  zh: d8df0c4c9a4e2c9c
+/agent-note-native-cua-objects-independent-of-evaluator-ownership/alternatives-considered:
+  en: 62dfcec71ed2a058
+  zh: 0f3c6edfe19fef1f
+/agent-note-native-cua-objects-independent-of-evaluator-ownership/consequences:
+  en: 87a2f238489effcd
+  zh: 6699c0f5470d904b
