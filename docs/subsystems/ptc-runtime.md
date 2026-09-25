@@ -101,7 +101,7 @@ interface PtcRunResult {
 }
 ```
 
-`programFormat` distinguishes async function bodies from REPL statements. `stateOwner` is an in-process object identity for optional retained memory; distinct objects remain isolated. Consumers await `release(owner)` when that owner ends. Omitted owners are one-shot, and stateless providers ignore ownership. The [persistent Node provider](../../packages/ptc-runtime/ptc-runtime-node/README.md#persistent-repl) defines reset and recovery behavior; no retained object enters the durable Session format.
+`programFormat` distinguishes async function bodies from REPL statements. `stateOwner` is an in-process object identity for optional retained memory; distinct objects remain isolated. Consumers await `release(owner)` when that owner ends; cleanup failures reject that call. Omitted owners are one-shot, and stateless providers ignore ownership. The [persistent Node provider](../../packages/ptc-runtime/ptc-runtime-node/README.md#persistent-repl) defines reset and recovery behavior; no retained object enters the durable Session format.
 
 ## Bindings: host functions as program globals
 
@@ -225,6 +225,8 @@ Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and subst
  * Release an owner's retained environment and await its execution resources.
  * Stateless providers have no retained resources to release.
  * @param owner - The exact object supplied as the request's state owner.
+ * @returns Completion after all owned execution resources have been released.
+ * @throws When managed resource cleanup fails.
  */
 release(owner: object): Promise<void>
 

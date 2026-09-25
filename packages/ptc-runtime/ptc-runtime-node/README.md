@@ -78,15 +78,15 @@ The optional `@deepseek-ai/dsh-ptc-runtime-node/persistent` entry replaces the d
 
 Save the patch and pass its path to `dsh headless --patch <path>` in a composition with PTC tool presentation. Node applications still launch through a named `dsh` profile. Packaged single-executable hosts require `nodeExecutable` pointing to Node and `bootstrapPath` pointing to this package's built `persistent-process.js`.
 
-Each live Agent keeps its own process and top-level variables, functions, and imported modules across `run_code` calls and turns. Use `await import(...)`, `console.log(...)`, and a final JSON expression; top-level `return` is not supported. Node REPL declaration rules apply, including errors on redeclaring existing `let`, `const`, or `class` names; assign to a mutable binding or choose a new name. A leading `{ ... }` is a statement block and can contain top-level await and temporary declarations; parenthesize an object expression to return it. Retained functions and saved tool methods call the current evaluation's bindings. All tool calls must be awaited; callbacks from a completed evaluation cannot invoke tools in a later evaluation.
+Each live Agent keeps its own process and top-level variables, functions, and imported modules across `run_code` calls and turns. Use `await import(...)`, `console.log(...)`, and a final JSON expression; top-level `return` is not supported. Assignments to undeclared names create retained globals under Node REPL’s non-strict evaluation. Node REPL declaration rules apply, including errors on redeclaring existing `let`, `const`, or `class` names; assign to a mutable binding or choose a new name. A leading `{ ... }` is a statement block and can contain top-level await and temporary declarations; parenthesize an object expression to return it. Retained functions and saved tool methods call the current evaluation's bindings. All tool calls must be awaited; callbacks from a completed evaluation cannot invoke tools in a later evaluation.
 
-Memory is best-effort and never saved to disk. Restart, Agent disposal, provider unload, cancellation, timeout, protocol failure, output overflow, or process exit clears it. Missing variables raise normal reference errors; reacquire handles and recreate declarations. Ordinary synchronous and asynchronous program exceptions settle once and preserve any earlier mutations. The Session still records programs, tool dispatches and visible results; restoring a Session or forking an Agent starts with empty memory. Direct Node access remains unsandboxed; explicit sandbox policies are rejected.
+Memory is best-effort and never saved to disk. Restart, Agent disposal, provider unload, cancellation, timeout, protocol failure, output overflow, or process exit clears it. Missing variables raise normal reference errors; reacquire handles and recreate declarations. Exceptions in the active evaluation settle once and preserve earlier mutations. Exceptions thrown by callbacks from a completed evaluation are not reported in a later result; await asynchronous work before completing an evaluation. The Session still records programs, tool dispatches and visible results; restoring a Session or forking an Agent starts with empty memory. Direct Node access remains unsandboxed; explicit sandbox policies are rejected.
 
 Service consumers pass an object as `stateOwner` to reuse its environment and await `release(owner)` when finished. Requests without an owner run in temporary processes. Concurrent runs for one owner reject; distinct owners may run concurrently. An idle environment has no expiration timer and keeps its process until release or failure. Raw stdout/stderr have no evaluation identity: bytes received during an evaluation share its output budget, even when written by an earlier child process; idle bytes are discarded. Await child-process completion before ending an evaluation. Early process-exit diagnostics include the exit code and retained stderr tail.
 
 ### Deadlines and cancellation
 
-The PTC consumer exposes per-call timeout and approved sandbox choices as described in [dsh-tools](../../core/tools/README.md#ptc-mode). The runtime's readonly `timeout` descriptor reports its effective default and maximum to that consumer. Its `executionInstructions` describes fresh Node state, direct Node APIs, the empty program environment and file policy in the model-visible schema.
+The PTC consumer exposes per-call timeout and approved sandbox choices as described in [dsh-tools](../../core/tools/README.md#ptc-mode). The runtime's readonly `timeout` descriptor reports its effective default and maximum to that consumer. The default provider’s `executionInstructions` describes fresh Node state, direct Node APIs, the empty program environment and file policy in the model-visible schema.
 
 Omitting `timeoutMs` uses the configured elapsed default; numeric requests are validated and capped. Service callers can explicitly pass `timeoutMs: null` to omit the elapsed timer, as the workflow adapter does; `run_code` continues to accept only positive numeric overrides. An enabled deadline covers runtime setup and execution, including time awaiting nested tools or approval. It is not a CPU meter. Timeout or cancellation stops a synchronous loop through the host's managed process owner; successful completion also cleans that managed range. The timer stops when an outcome is selected, before cleanup, so the returned call can take longer than its execution deadline while cleanup settles.
 
@@ -112,13 +112,17 @@ Length-framed JSON travels separately from stdout/stderr. The host bounds frames
 
 ### Source and built bootstraps
 
-Source execution loads an erasable-only bootstrap closure without relying on sibling built exports. Built execution uses the packaged `process.js` entry. An execution world that cannot map the host bootstrap requires a preinstalled compatible `bootstrapPath`; a host path is never assumed to name the same remote file.
+Source execution loads an erasable-only bootstrap closure without relying on sibling built exports. Built execution uses `process.js` for one-shot programs or `persistent-process.js` for retained REPL environments. An execution world that cannot map the host bootstrap requires a preinstalled compatible `bootstrapPath`; a host path is never assumed to name the same remote file.
 
 ### Source map
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Configuration, resolution, policy, bindings and managed execution |
+| [`src/index.ts`](src/index.ts) | Default provider: resolution, policy, bindings and managed execution |
+| [`src/config.ts`](src/config.ts) | Shared configuration, validation and defaults |
+| [`src/persistent.ts`](src/persistent.ts) | Retained process ownership, evaluation deadlines and cleanup |
+| [`src/persistent-process.ts`](src/persistent-process.ts) | Child REPL, retained declarations and current binding dispatch |
+| [`src/output-stream.ts`](src/output-stream.ts) | Bounded stream capture and process-output draining |
 | [`src/launch.ts`](src/launch.ts) | Executable/bootstrap arguments and execution-world asset mapping |
 | [`src/process.ts`](src/process.ts) | Child handshake, environment clearing and program lifecycle |
 | [`src/bootstrap.ts`](src/bootstrap.ts) | Program evaluation, binding proxies and output capture |

@@ -128,6 +128,8 @@ export abstract class PtcRuntime extends Service {
    * Release an owner's retained environment and await its execution resources.
    * Stateless providers have no retained resources to release.
    * @param owner - The exact object supplied as the request's state owner.
+   * @returns Completion after all owned execution resources have been released.
+   * @throws When managed resource cleanup fails.
    */
   release(owner: object): Promise<void> { void owner; return Promise.resolve() }
 
