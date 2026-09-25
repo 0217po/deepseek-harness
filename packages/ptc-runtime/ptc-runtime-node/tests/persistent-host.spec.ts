@@ -242,16 +242,19 @@ describe('persistent PTC host protocol', () => {
     expect(h.terminate).toHaveBeenCalledTimes(1)
   })
 
-  it('does not dispatch a new evaluation to an exited idle process while its output remains open', async () => {
+  it.each(['exit', 'abort', 'cleanup'] as const)('does not dispatch to an exited idle process during %s handling', async (outcome) => {
     const h = await setup()
     h.onBoot(() => { h.emit(frame({ type: 'done' })) })
     await h.start()
     h.onBoot(() => { h.stdout.end(); h.stderr.end() })
     h.direct.resolve({ exitCode: 9, signal: null })
     await Promise.resolve()
-    const result = await h.runtime.run(h.runtime.resolve({ ...request, program: '2' }))
-    expect(result.error?.kind).toBe('worker-exit')
-    expect(result.error?.message).toContain('exited (9, signal null)')
+    const controller = new AbortController()
+    if (outcome === 'abort') controller.abort()
+    if (outcome === 'cleanup') h.waitForExit.mockRejectedValue(new Error('exit cleanup failed'))
+    const result = await h.runtime.run(h.runtime.resolve({ ...request, program: '2', signal: controller.signal }))
+    expect(result.error?.kind).toBe(outcome === 'abort' ? 'abort' : 'worker-exit')
+    expect(result.error?.message).toContain(outcome === 'abort' ? 'execution canceled' : outcome === 'cleanup' ? 'exit cleanup failed' : 'exited (9, signal null)')
     expect(h.messages).toEqual([expect.objectContaining({ type: 'run', id: 1 })])
     expect(h.spawn).toHaveBeenCalledTimes(1)
     expect(h.terminate).toHaveBeenCalledTimes(1)
