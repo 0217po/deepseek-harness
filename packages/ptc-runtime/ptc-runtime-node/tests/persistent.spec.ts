@@ -69,6 +69,32 @@ describe('persistent Node REPL', () => {
     expect(await run('({ total, local: typeof amount })')).toEqual({ logs: [], value: { total: 5, local: 'undefined' } })
   })
 
+  it('uses the current error descriptor through a saved binding and retains matching constructor identity', async () => {
+    const { run } = await setup()
+    const fail = async () => { throw new Error('rejected') }
+    const first = { bindings: [{ global: 'tools', functions: { value: fail },
+      errorClass: { name: 'FirstError', memberNameProperty: 'firstMember' } }] }
+    const second = { bindings: [{ global: 'tools', functions: { value: fail },
+      errorClass: { name: 'SecondError', memberNameProperty: 'secondMember' } }] }
+    await run('const saved = tools.value; const initialClass = FirstError;', first)
+    expect((await run('FirstError === initialClass', first)).value).toBe(true)
+    const observed = await run(`
+      let observed;
+      try { await saved({}) } catch (error) {
+        observed = { name: error.name, member: error.secondMember, first: 'firstMember' in error,
+          current: error instanceof SecondError, previous: error instanceof initialClass };
+      }
+      observed
+    `, second)
+    expect(observed.value).toEqual({ name: 'SecondError', member: 'value', first: false, current: true, previous: false })
+    const plain = await run(`
+      let plain;
+      try { await saved({}) } catch (error) { plain = { name: error.name, member: 'secondMember' in error }; }
+      plain
+    `, { bindings: [{ global: 'tools', functions: { value: fail } }] })
+    expect(plain.value).toEqual({ name: 'Error', member: false })
+  })
+
   it('settles an asynchronous exception once while a later evaluation awaits a tool', async () => {
     const { run } = await setup()
     const failed = await run('let retained = 17; let resume; const paused = new Promise(resolve => { resume = resolve }); setImmediate(() => { throw new Error("async failure") }); await paused; retained')

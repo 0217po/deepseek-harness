@@ -240,7 +240,7 @@ export type BindingErrorConstructor = new (memberName: string, message: string) 
  * @param descriptor - program-global class name and member-name property.
  * @returns the constructor injected into the program and used for rejections.
  */
-function makeBindingErrorClass(
+export function makeBindingErrorClass(
   descriptor: { name: string; memberNameProperty: string },
 ): BindingErrorConstructor {
   return class BindingCallError extends CapturedError {
@@ -307,7 +307,7 @@ export function wireReplies(port: BootstrapPort, pending: Map<number, PendingCal
  * @param port - the port binding calls are posted to.
  * @param pending - the id-keyed map each posted call parks its handles in.
  * @param nextId - the shared mutable id counter (program-issued correlation ids).
- * @param errorClasses - per-namespace constructors shared with program globals.
+ * @param errorClasses - Namespace constructors shared with program globals, resolved for each invocation.
  * @returns one namespace object per declaration, in declaration order.
  */
 export function makeNamespaces(
@@ -315,15 +315,15 @@ export function makeNamespaces(
   port: BootstrapPort,
   pending: Map<number, PendingCall>,
   nextId: { value: number },
-  errorClasses: Map<string, BindingErrorConstructor> = makeBindingErrorClasses(data),
+  errorClasses: Pick<ReadonlyMap<string, BindingErrorConstructor>, 'get'> = makeBindingErrorClasses(data),
 ): Record<string, unknown>[] {
   return data.namespaces.map(({ global, names }) => {
-    const errorClass = errorClasses.get(global)
     const namespace = Object.create(null) as Record<string, unknown>
     for (const name of names) {
       Object.defineProperty(namespace, name, {
         enumerable: true,
         value: (args: unknown): Promise<unknown> => {
+          const errorClass = errorClasses.get(global)
           let detached: ReturnType<typeof snapshotPtcJsonValue>
           try {
             detached = snapshotPtcJsonValue(args)
