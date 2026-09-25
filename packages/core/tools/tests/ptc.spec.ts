@@ -2205,7 +2205,7 @@ describe('per-program execution controls', () => {
     })
     const session = Session.create(SessionId('program-controls'))
     session.append('turn/start', { turn: 1 })
-    const agent = { ctx: state.ctx, session } as unknown as Agent
+    const agent = { ctx: state.ctx, session } as Agent
     const execute = (args: Record<string, unknown>, signal = testToolSignal) => state.tools.execute({
       callId: ToolCallId('program-controls'), name: RUN_CODE_NAME,
       arguments: { code: 'program', description: 'Test execution controls', ...args }, agent, signal,

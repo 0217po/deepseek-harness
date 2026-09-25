@@ -8,9 +8,6 @@
   "apps/cli/tests/profiles/acp/tests/cleanup.ts": {
     "04bc8a44533574365dfedf563e2356458bcf95f990a00906938c977c1d683356": 1
   },
-  "apps/cli/tests/profiles/headless/tests/ptc.e2e.ts": {
-    "25e22fc52656ecfa64043e399e125dcb91feff05049727e056a46482a3d34867": 1
-  },
   "apps/cli/tests/profiles/headless/tests/session-format-guard.expected.e2e.ts": {
     "340837865a9f6222ae46d41b594c4c079ae3935c004433c76da047df31c8008f": 1
   },
@@ -1015,10 +1012,7 @@
     "d1250fc465aac30c8474c1ee43ecbafc0a8c072d5e607961da1295acc710a257": 1
   },
   "packages/core/tools/tests/ptc.spec.ts": {
-    "05f243cc5759828058eed400ddb98c32a394915895dc14ddd49ea044652bab97": 1,
-    "4dd1f265ec710503bb27f057a582099a1e9d8b5db80fb45f148e32fd2afb5325": 1,
-    "52faf4558fcd91bd27dbdfa7e497843e8eeb75ea5f68ee231335018d5b3f2053": 1,
-    "88c6953a5e4dd96aede7a09416b7f34dc76d8d917220bb5d0c6b0a04d0d73956": 1
+    "52faf4558fcd91bd27dbdfa7e497843e8eeb75ea5f68ee231335018d5b3f2053": 1
   },
   "packages/core/tools/tests/py-types.spec.ts": {
     "0d733b2c7c458f6a7c4d287ed741c321842339cbe5908a8720660883423474c0": 9,
