@@ -251,8 +251,10 @@ export class PersistentNodePtcRuntime extends PtcRuntime {
     if ('pkg' in process && this.config.bootstrapPath === undefined) throw new Error('Persistent PTC requires an explicit bootstrapPath in a packaged executable')
     ctx.effect(() => async () => {
       this.disposed = true
-      await Promise.all([...this.kernels].map(kernel => kernel.dispose()))
+      const results = await Promise.allSettled([...this.kernels].map(kernel => kernel.dispose()))
       this.kernels.clear()
+      const failed = results.find(result => result.status === 'rejected')
+      if (failed?.status === 'rejected') throw failed.reason
     }, 'Persistent PTC environments')
   }
 

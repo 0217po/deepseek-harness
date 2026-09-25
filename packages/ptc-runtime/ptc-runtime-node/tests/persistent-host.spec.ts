@@ -293,6 +293,37 @@ describe('persistent PTC host protocol', () => {
       await expect(setup(config)).rejects.toThrow('ptc-runtime-node')
     }
   })
+
+  it('waits for another environment to stop before reporting a failed cleanup', async () => {
+    const h = await setup()
+    h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+    await h.start()
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const release: PromiseWithResolvers<string> = Promise.withResolvers()
+    h.resolveExecutable.mockImplementationOnce(() => { entered.resolve(); return release.promise })
+    const pending = h.runtime.run(h.runtime.resolve({ ...request, stateOwner: {} }))
+    await entered.promise
+    const failure = new Error('first environment cleanup failed')
+    h.waitForExit.mockRejectedValue(failure)
+    const reported = vi.spyOn(h.fiber.ctx.logger, 'error').mockImplementation(() => {})
+    let closed = false
+    const closing = h.fiber.dispose().then(() => { closed = true })
+    try {
+      await setImmediate()
+      expect(closed).toBe(false)
+      expect(reported).not.toHaveBeenCalled()
+      release.resolve(process.execPath)
+      expect((await pending).error?.kind).toBe('abort')
+      await closing
+      expect(closed).toBe(true)
+      expect(reported).toHaveBeenCalledWith(failure)
+      expect(h.spawn).toHaveBeenCalledTimes(1)
+    } finally {
+      release.resolve(process.execPath)
+      await Promise.allSettled([pending, closing])
+      reported.mockRestore()
+    }
+  })
 })
 
 it('rejects corrupt framed traffic before it reaches the evaluator', async () => {
