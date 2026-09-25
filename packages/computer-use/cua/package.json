@@ -35,6 +35,8 @@
   },
   "files": [
     "lib/index.js",
+    "lib/native-build.js",
+    "native/bin",
     "lib/api.js",
     "lib/bridge.js",
     "native/Package.swift",
@@ -45,9 +47,7 @@
     "native/upstream.json",
     "native/README.txt",
     "native/protocol.schema.json",
-    "lib/types/**/*.d.ts",
-    "lib/native-build.js",
-    "native/bin"
+    "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
   "peerDependencies": {
