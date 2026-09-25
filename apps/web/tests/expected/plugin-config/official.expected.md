@@ -7,7 +7,7 @@
 - list:
   - listitem:
     - button "查看 Computer Use": Computer Use
-    - text: 实验性 操作 macOS 应用。启用后当前配置档切换为 persistent PTC，代码变量跨调用保留，不提供文件沙箱。首次开启会准备本机组件，后续项目构建会检查更新。关闭会清除保留的变量。
+    - text: 实验性 仅支持 macOS。启用后当前配置档使用 persistent PTC，保留变量且无文件沙箱。开启和后续项目构建会准备本机组件；关闭清空变量。
     - switch "启用 Computer Use"
   - listitem:
     - button "查看 智能体团队": 智能体团队
