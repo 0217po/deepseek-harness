@@ -149,15 +149,16 @@ describe('PluginInventoryGateway', () => {
     ])
   })
 
-  it('reads startup diagnostics from failed fibers and clears them after recovery', async () => {
+  it.each(['error', 'string'] as const)('reads %s startup diagnostics from failed fibers and clears them after recovery', async (kind) => {
     const { ctx, inventory } = await harness()
+    const failure: unknown = kind === 'error' ? new Error('native preparation unavailable') : 'native preparation unavailable'
     ctx.loader.builtins.failing = {
       async apply(_ctx: Context, config: { fail: boolean }) {
-        if (config.fail) throw new Error('native preparation unavailable')
+        if (config.fail) throw failure
       },
     }
-    const entry = ctx.loader.resolve(await ctx.loader.create({ name: 'cordis:failing', config: { fail: true } }))!
-    await expect(entry.fiber!.await()).rejects.toThrow('native preparation unavailable')
+    const entry = ctx.loader.resolve(await ctx.loader.create({ name: 'cordis:failing', config: { fail: true } }))
+    await expect(entry.fiber!.await()).rejects.toBe(failure)
     for (let index = 0; index < 2; index++) {
       expect((await inventory.list()).entries).toContainEqual({
         entryId: entry.id, moduleName: 'cordis:failing', enabled: true,
