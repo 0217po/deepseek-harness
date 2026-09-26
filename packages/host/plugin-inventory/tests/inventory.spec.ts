@@ -156,7 +156,7 @@ describe('PluginInventoryGateway', () => {
         if (config.fail) throw new Error('native preparation unavailable')
       },
     }
-    const entry = await ctx.loader.create({ name: 'cordis:failing', config: { fail: true } })
+    const entry = ctx.loader.resolve(await ctx.loader.create({ name: 'cordis:failing', config: { fail: true } }))!
     await expect(entry.fiber!.await()).rejects.toThrow('native preparation unavailable')
     for (let index = 0; index < 2; index++) {
       expect((await inventory.list()).entries).toContainEqual({

@@ -378,7 +378,7 @@ it('keeps Cordis loading until preparation succeeds and reports preparation fail
   native.prepare.mockReset().mockImplementation(() => { entered.resolve(); return ready.promise })
   await f.ctx.plugin(Loader)
   f.ctx.loader.builtins.cua = NativeProvider
-  const entry = await f.ctx.loader.create({ name: 'cordis:cua', config: automaticConfig })
+  const entry = f.ctx.loader.resolve(await f.ctx.loader.create({ name: 'cordis:cua', config: automaticConfig }))!
   const provider = entry.fiber!
   await entered.promise
   expect(provider.state).toBe(FiberState.LOADING)

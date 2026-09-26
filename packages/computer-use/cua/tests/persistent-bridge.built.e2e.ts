@@ -42,7 +42,7 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
       await ctx.plugin(LocalAttachmentStore, { dshHome: join(cwd, 'home') })
       await ctx.plugin(ComputerUseRegistry)
       await ctx.plugin(PersistentRuntime, { bootstrapPath: bootstrap })
-      await ctx.plugin(Cua, { helperPath })
+      await ctx.plugin(Cua, Cua.Config({ helperPath }))
       await mountAgentLoopTestHarness(ctx)
       ctx.llm.registerAdapter(['bridge-fixture'], new VisualAdapter())
       const handle = await ctx.agents.create({ sessionId: SessionId('external-cua-project'), agentOptions: { provider: 'bridge-fixture', model: 'vision' } })
@@ -57,7 +57,7 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
           const result = await ctx.tools.execute({ agent: handle.agent, signal: new AbortController().signal,
             callId: ToolCallId(`external-cua-${++count}`), name: 'cua', arguments: operation })
           images += result.content.filter(block => block.type === 'image').length
-          return result.value
+          return result.value ?? null
         } } }],
       }))
       expect((await run('await import("@deepseek-ai/dsh-cua/bridge")', 'unresolved')).error?.message).toContain('Cannot find package')

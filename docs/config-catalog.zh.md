@@ -768,7 +768,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-cua`
 
 - `inject`: `computerUse` · `tools` · `systemPrompt` · `subprocess` · `agents`
-- `source`: [`packages/computer-use/cua/src/index.ts:24`](../packages/computer-use/cua/src/index.ts)
+- `source`: [`packages/computer-use/cua/src/index.ts:25`](../packages/computer-use/cua/src/index.ts)
 
 ```ts config-catalog
 /** Native executable and per-operation resource bounds. */
