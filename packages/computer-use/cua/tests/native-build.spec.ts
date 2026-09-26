@@ -111,10 +111,10 @@ it('awaits compiler cleanup and refuses to publish after cancellation', async ()
   expect(f.spawn).toHaveBeenCalledTimes(1)
 })
 
-it('reports incomplete compiler process cleanup before publishing', async () => {
+it('reports failed compiler range observation before publishing', async () => {
   const f = await fixture()
-  f.waitForExit.mockResolvedValue(false)
-  await expect(buildNativeExecutable(f.spec)).rejects.toThrow('did not exit cleanly')
+  f.waitForExit.mockRejectedValue(new Error('compiler range observation failed'))
+  await expect(buildNativeExecutable(f.spec)).rejects.toThrow('compiler range observation failed')
   await expect(readFile(nativeExecutablePath(f.spec.packageRoot, 'arm64'))).rejects.toMatchObject({ code: 'ENOENT' })
 })
 

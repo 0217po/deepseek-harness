@@ -71,7 +71,6 @@
       "@deepseek-ai/dsh-cua": ["./packages/computer-use/cua/src/index.ts"],
       "@deepseek-ai/dsh-cua/api": ["./packages/computer-use/cua/src/api.ts"],
       "@deepseek-ai/dsh-cua/bridge": ["./packages/computer-use/cua/src/bridge.ts"],
-      "@deepseek-ai/dsh-cua/native-build": ["./packages/computer-use/cua/src/native-build.ts"],
       "@deepseek-ai/dsh-experimental-computer-use-cua-driver-native": ["./packages/experimental/computer-use-cua-driver-native/src/index.ts"],
       "@deepseek-ai/cordis": ["./vendor/cordis/src"],
       "@deepseek-ai/cosmokit": ["./vendor/cosmokit/src"],

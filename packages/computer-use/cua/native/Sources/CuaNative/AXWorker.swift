@@ -234,8 +234,8 @@ actor AXWorker {
             guard let action = try ax().actions(selected).first(where: { Self.actionKey($0) == Self.actionKey(requested) }) else {
                 throw NativeFailure(code: "NATIVE_ERROR", message: "Element does not advertise this action; refresh getAXState")
             }
-            try ax().requireEnabled(selected)
             if action == "AXRaise" {
+                try ax().requireEnabled(selected)
                 return .foreground(ForegroundPlan(appHandle: handle, identity: identity, snapshotID: try params.string("snapshotId"),
                     index: try params.integer("elementIndex", in: 0...Int.max), targetWindowID: try ax().windowID(selected),
                     role: try ax().string(selected, "AXRole"), main: try ax().boolean(selected, "AXMain"), minimized: try ax().boolean(selected, "AXMinimized")))

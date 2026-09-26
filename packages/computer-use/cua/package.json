@@ -27,15 +27,10 @@
     "./bridge": {
       "types": "./lib/types/bridge.d.ts",
       "default": "./lib/bridge.js"
-    },
-    "./native-build": {
-      "types": "./lib/types/native-build.d.ts",
-      "default": "./lib/native-build.js"
     }
   },
   "files": [
     "lib/index.js",
-    "lib/native-build.js",
     "native/bin",
     "lib/api.js",
     "lib/bridge.js",

@@ -62,7 +62,6 @@ import Darwin
             do {
                 let request = try NativeRequest(data: data)
                 requestID = .string(request.id)
-                _ = try RequestParameters(request)
                 let requiresCatalog = ["getApp", "listApps", "typeText", "pressKey"].contains(request.method)
                 let catalog = requiresCatalog ? ApplicationCatalog.snapshot() : ApplicationCatalogSnapshot(applications: [], frontPID: nil)
                 let outcome = try await self.worker.execute(request, catalog: catalog)

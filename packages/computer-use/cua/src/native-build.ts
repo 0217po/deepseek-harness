@@ -84,7 +84,7 @@ async function compileNative(spec: NativeBuildSpec, signal: AbortSignal, executa
   let outcome: SubprocessOutcome
   try { outcome = await handle.done } finally {
     try { handle.terminate() } finally {
-      if (!await handle.waitForExit()) throw new Error('Computer Use preparation process did not exit cleanly')
+      await handle.waitForExit()
     }
   }
   signal.throwIfAborted()
