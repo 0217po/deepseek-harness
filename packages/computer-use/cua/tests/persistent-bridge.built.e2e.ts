@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
+import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
@@ -42,7 +43,10 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
       await ctx.plugin(LocalAttachmentStore, { dshHome: join(cwd, 'home') })
       await ctx.plugin(ComputerUseRegistry)
       await ctx.plugin(PersistentRuntime, { bootstrapPath: bootstrap })
-      await ctx.plugin(Cua, Cua.Config({ helperPath }))
+      await ctx.plugin(Loader)
+      ctx.loader.builtins.cua = Cua
+      const entry = await ctx.loader.create({ name: 'cordis:cua', config: { helperPath } })
+      await ctx.loader.resolve(entry).fiber!.await()
       await mountAgentLoopTestHarness(ctx)
       ctx.llm.registerAdapter(['bridge-fixture'], new VisualAdapter())
       const handle = await ctx.agents.create({ sessionId: SessionId('external-cua-project'), agentOptions: { provider: 'bridge-fixture', model: 'vision' } })
