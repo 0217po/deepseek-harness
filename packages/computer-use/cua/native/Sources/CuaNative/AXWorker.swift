@@ -155,20 +155,19 @@ actor AXWorker {
                              accessibilityError: failure.accessibilityError)
     }
 
-    func execute(_ request: NativeRequest, catalog: ApplicationCatalogSnapshot) throws -> DriverOutcome {
+    func execute(_ method: String, params: RequestParameters, catalog: ApplicationCatalogSnapshot) throws -> DriverOutcome {
         try cancellation.check()
         guard !closed else { throw NativeFailure(code: "NATIVE_CLOSED", message: "Helper is closing") }
-        let params = try RequestParameters(request)
         let locked = observeSession()
-        if request.method == "getCapabilities" {
+        if method == "getCapabilities" {
             return .result(.object(["platform": .string("macos"), "permissions": .object([
                 "accessibility": .bool(AXIsProcessTrusted()), "screenRecording": .bool(CGPreflightScreenCaptureAccess())]),
                 "sessionLocked": locked.map(JSONValue.bool) ?? .null,
                 "methods": .array(RequestParameters.fields.keys.sorted().map(JSONValue.string)), "coordinateSpace": .string("window-points"), "browser": .bool(false)]))
         }
-        if request.method == "listApps" { return .result(.array(catalog.applications.filter { $0.regular && $0.name != nil }.map(\.json))) }
+        if method == "listApps" { return .result(.array(catalog.applications.filter { $0.regular && $0.name != nil }.map(\.json))) }
         try NativePlatform.requireUnlocked(locked)
-        if request.method == "getApp" {
+        if method == "getApp" {
             let selector = try params.string("selector")
             let matches = catalog.applications.filter { app in
                 app.regular && app.name != nil && (app.name == selector || app.bundleID == selector || String(app.pid) == selector || (selector.hasPrefix("/") && app.path == selector))
@@ -182,16 +181,16 @@ actor AXWorker {
         }
         let handle = try params.string("appHandle")
         let identity = try validateIdentity(handle)
-        if request.method == "listWindows" {
+        if method == "listWindows" {
             let windows = NativePlatform.windows().filter { $0.pid == identity.pid }
             // Remove closed window scopes using the current WindowServer identity set.
             let ids = Set(windows.map(\.windowID))
             snapshots = snapshots.filter { key, _ in key.appHandle != handle || (key.windowID.map { ids.contains($0) } ?? true) }
             return .result(.array(windows.map(\.json)))
         }
-        if request.method == "getState" { snapshots.removeValue(forKey: SnapshotScope(appHandle: handle, windowID: try params.optionalWindowID())) }
-        if request.method != "screenshot" { try NativePlatform.requireAccessibility() }
-        switch request.method {
+        if method == "getState" { snapshots.removeValue(forKey: SnapshotScope(appHandle: handle, windowID: try params.optionalWindowID())) }
+        if method != "screenshot" { try NativePlatform.requireAccessibility() }
+        switch method {
         case "activate":
             return .foreground(ForegroundPlan(appHandle: handle, identity: identity, snapshotID: nil, index: nil, targetWindowID: nil, role: nil, main: nil, minimized: nil))
         case "getState":
@@ -225,7 +224,7 @@ actor AXWorker {
         case "typeText", "pressKey":
             let recipient = try ax().keyboardRecipient(identity, catalog: catalog)
             try NativePlatform.verify(recipient)
-            if request.method == "typeText" { try inputs().0.typeText(params.string("text"), to: recipient.pid) }
+            if method == "typeText" { try inputs().0.typeText(params.string("text"), to: recipient.pid) }
             else { try inputs().0.pressKey(params.string("key"), modifiers: params.modifiers(), to: recipient.pid) }
         case "setValue": try ax().setValue(element(handle, params), params.string("value"))
         case "performSecondaryAction":
@@ -270,7 +269,7 @@ actor AXWorker {
             try coordinateSnapshot(handle, params, id)
             let window = try coordinateWindow(identity, id)
             let route = WindowRoute(owner: identity, windowID: id, bounds: window.bounds)
-            if request.method == "scroll" {
+            if method == "scroll" {
                 let dx = params.contains("deltaLinesX") ? try params.integer("deltaLinesX", in: -10...10) : 0
                 let dy = params.contains("deltaLinesY") ? try params.integer("deltaLinesY", in: -10...10) : 0
                 try inputs().1.scroll(in: route, at: params.point(), deltaLinesX: Int32(dx), deltaLinesY: Int32(dy))
@@ -278,7 +277,7 @@ actor AXWorker {
                 try inputs().1.drag(in: route, from: params.point("fromX", "fromY"), to: params.point("toX", "toY"),
                     durationMs: params.integer("durationMs", in: 1...5000), steps: params.integer("steps", in: 1...240))
             }
-        default: throw NativeFailure(code: "UNSUPPORTED", message: request.method)
+        default: throw NativeFailure(code: "UNSUPPORTED", message: method)
         }
         return .result(Self.actionResult)
     }

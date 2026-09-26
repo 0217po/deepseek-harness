@@ -62,9 +62,10 @@ import Darwin
             do {
                 let request = try NativeRequest(data: data)
                 requestID = .string(request.id)
+                let params = try RequestParameters(request)
                 let requiresCatalog = ["getApp", "listApps", "typeText", "pressKey"].contains(request.method)
                 let catalog = requiresCatalog ? ApplicationCatalog.snapshot() : ApplicationCatalogSnapshot(applications: [], frontPID: nil)
-                let outcome = try await self.worker.execute(request, catalog: catalog)
+                let outcome = try await self.worker.execute(request.method, params: params, catalog: catalog)
                 let result: JSONValue
                 switch outcome {
                 case .result(let value): result = value
