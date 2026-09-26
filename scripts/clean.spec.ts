@@ -1,7 +1,9 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
+import ts from 'typescript'
 
 import { RepositoryCleaner } from './clean.ts'
 
@@ -32,6 +34,28 @@ afterEach(() => {
 })
 
 describe('RepositoryCleaner', () => {
+  it('cleans the Desktop keyboard compiler output and its retired directory without deleting sibling files', async () => {
+    const root = fixture()
+    const configPath = fileURLToPath(new URL('../tsconfig.desktop-keyboard-tests.json', import.meta.url))
+    const config = ts.readConfigFile(configPath, ts.sys.readFile).config as { compilerOptions: { outDir: string } }
+    write(join(root, 'tsconfig.json'), JSON.stringify({ files: [], references: [{ path: './tsconfig.desktop-keyboard-tests.json' }] }))
+    write(join(root, 'tsconfig.desktop-keyboard-tests.json'), JSON.stringify({
+      compilerOptions: { composite: true, emitDeclarationOnly: true, outDir: config.compilerOptions.outDir },
+      files: ['keyboard.ts'],
+    }))
+    write(join(root, 'keyboard.ts'), 'export {}\n')
+    write(join(root, config.compilerOptions.outDir, 'keyboard.d.ts'))
+    write(join(root, 'lib/desktop-keyboard-test-types/keyboard.d.ts'))
+    write(join(root, 'lib/retained.txt'), 'unrelated sibling')
+
+    await new RepositoryCleaner(root).clean()
+
+    expect(existsSync(join(root, 'lib/desktop-keyboard-tests'))).toBe(false)
+    expect(existsSync(join(root, 'lib/desktop-keyboard-test-types'))).toBe(false)
+    expect(existsSync(join(root, 'lib/retained.txt'))).toBe(true)
+    expect(existsSync(join(root, 'keyboard.ts'))).toBe(true)
+  })
+
   it('derives live build outputs from project references and removes safe stale package residue', async () => {
     const root = fixture()
     addProject(root, 'products/shell')
