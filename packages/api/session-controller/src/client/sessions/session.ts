@@ -582,6 +582,7 @@ export class Session implements SessionFace {
    * @param present - Whether a current Host event or reconciled list contains this Session.
    */
   handlePresence(present: boolean): void {
+    if (present === !this.removed) return
     this.removed = !present
     this.notifier.markDirty()
   }

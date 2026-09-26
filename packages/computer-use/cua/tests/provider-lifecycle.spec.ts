@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { setImmediate } from 'node:timers/promises'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, FiberState } from '@deepseek-ai/cordis'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
@@ -70,10 +70,10 @@ async function setup(model?: { provider: string; model: string }) {
   return { ctx, provider, handle, execute }
 }
 
-it('rejects a relative helper path before publishing computer-use operations', () => {
+it('rejects a relative helper path before publishing computer-use operations', async () => {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
-  expect(() => NativeProvider.apply(ctx, { ...config, helperPath: 'relative-helper' })).toThrow('helperPath must be absolute')
+  await expect(NativeProvider.apply(ctx, { ...config, helperPath: 'relative-helper' })).rejects.toThrow('helperPath must be absolute')
 })
 
 it('correlates a native request with its logged tool invocation', async () => {
@@ -357,11 +357,21 @@ it('prepares the selected native component before registering CUA and creates no
   expect(signal.aborted).toBe(true)
 })
 
-it('does not register operations after native preparation fails', async () => {
+it('keeps Cordis loading until preparation succeeds and reports preparation failure through the fiber', async () => {
   const f = await setup()
   await f.provider.dispose()
-  native.prepare.mockReset().mockRejectedValue(new Error('compiler unavailable'))
-  await expect(NativeProvider.apply(f.ctx, automaticConfig)).rejects.toThrow('compiler unavailable')
+  const ready: PromiseWithResolvers<string> = Promise.withResolvers()
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  onTestFinished(() => { ready.resolve(resolve('prepared-helper')) })
+  native.prepare.mockReset().mockImplementation(() => { entered.resolve(); return ready.promise })
+  const provider = f.ctx.plugin(NativeProvider, automaticConfig)
+  await entered.promise
+  expect(provider.state).toBe(FiberState.LOADING)
+  expect(f.ctx.tools.schemas().some(tool => tool.name === 'cua')).toBe(false)
+  const failed = expect(provider.await()).rejects.toThrow('compiler unavailable')
+  ready.reject(new Error('compiler unavailable'))
+  await failed
+  expect(provider.state).toBe(FiberState.FAILED)
   expect(f.ctx.tools.schemas().some(tool => tool.name === 'cua')).toBe(false)
   expect(native.instances).toHaveLength(0)
 })
@@ -395,6 +405,6 @@ it('rejects an unsupported native host before starting preparation', async () =>
   await f.provider.dispose()
   native.architecture.mockImplementationOnce(() => { throw new Error('unsupported host') })
   native.prepare.mockReset()
-  expect(() => NativeProvider.apply(f.ctx, automaticConfig)).toThrow('unsupported host')
+  await expect(NativeProvider.apply(f.ctx, automaticConfig)).rejects.toThrow('unsupported host')
   expect(native.prepare).not.toHaveBeenCalled()
 })

@@ -106,9 +106,9 @@ function executionAgent(execution: Readonly<ToolExecution>): Agent {
  * Mount logged native operations with a separate helper per agent.
  * @param ctx - Host context with computer-use, subprocess and tool services.
  * @param config - Validated native preparation and operation bounds.
- * @returns Preparation completion when the package-owned native executable is selected.
+ * @returns Completion after native preparation and tool registration.
  */
-export function apply(ctx: Context, config: Config): void | Promise<void> {
+export async function apply(ctx: Context, config: Config): Promise<void> {
   if (config.helperPath !== undefined) {
     if (!isAbsolute(config.helperPath)) throw new Error('dsh-cua helperPath must be absolute')
     mount(ctx, config, config.helperPath)
@@ -126,10 +126,9 @@ export function apply(ctx: Context, config: Config): void | Promise<void> {
     // The Loader receives preparation failures through apply; disposal only awaits quiescence.
     await prepared.catch(() => {})
   }, 'dsh-cua.native-preparation')
-  return prepared.then((helperPath) => {
-    controller.signal.throwIfAborted()
-    mount(ctx, config, helperPath)
-  })
+  const helperPath = await prepared
+  controller.signal.throwIfAborted()
+  mount(ctx, config, helperPath)
 }
 
 function mount(ctx: Context, config: Config, helperPath: string): void {

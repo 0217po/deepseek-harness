@@ -827,10 +827,15 @@ describe('remaining branches', () => {
   it('deduplicates repeated running flips and records removal', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
     const before = session.getSnapshot()
+    session.handlePresence(true)
+    expect(session.getSnapshot()).toBe(before)
     session.handleRunning(false) // already false: dedup branch
     expect(session.getSnapshot()).toBe(before)
     session.handlePresence(false)
     expect(session.getSnapshot().removed).toBe(true)
+    const removed = session.getSnapshot()
+    session.handlePresence(false)
+    expect(session.getSnapshot()).toBe(removed)
     session.handlePresence(true)
     expect(session.getSnapshot().removed).toBe(false)
   })
