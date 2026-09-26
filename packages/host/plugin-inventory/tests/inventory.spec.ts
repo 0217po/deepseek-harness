@@ -149,9 +149,10 @@ describe('PluginInventoryGateway', () => {
     ])
   })
 
-  it.each(['error', 'string'] as const)('reads %s startup diagnostics from failed fibers and clears them after recovery', async (kind) => {
+  it.each(['error', 'stack object'] as const)('reads %s startup diagnostics from failed fibers and clears them after recovery', async (kind) => {
     const { ctx, inventory } = await harness()
-    const failure: unknown = kind === 'error' ? new Error('native preparation unavailable') : 'native preparation unavailable'
+    const failure: unknown = kind === 'error' ? new Error('native preparation unavailable')
+      : { stack: 'plugin startup failure', toString: () => 'native preparation unavailable' }
     ctx.loader.builtins.failing = {
       async apply(_ctx: Context, config: { fail: boolean }) {
         if (config.fail) throw failure
