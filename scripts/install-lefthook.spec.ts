@@ -160,7 +160,8 @@ function gitDirectory(fixture: Fixture, root: string): string {
 
 function commonDirectory(fixture: Fixture): string {
   const output = git(fixture, fixture.main, ['rev-parse', '--git-common-dir'])
-  return isAbsolute(output) ? output : resolve(fixture.main, output)
+  // Git can expand a Windows short path before the installer constructs its lock path.
+  return isAbsolute(output) ? output : resolve(git(fixture, fixture.main, ['rev-parse', '--show-toplevel']), output)
 }
 
 function hooksPath(fixture: Fixture, root: string): string {
