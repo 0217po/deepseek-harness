@@ -40,6 +40,9 @@
     },
     {
       "path": "../../util/atomic-write"
+    },
+    {
+      "path": "../../ptc-runtime/ptc-runtime"
     }
   ]
 }

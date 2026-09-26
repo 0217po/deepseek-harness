@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Computer Use",
-    "description": "macOS only. Enables persistent PTC for this profile (retained variables, no file sandbox). Activation and project builds prepare local components; disabling clears variables."
+    "description": "macOS only. Use in PTC mode. Enables persistent PTC for this profile (retained variables, no file sandbox). Activation and project builds prepare local components; disabling clears variables."
   }
 }

@@ -315,9 +315,11 @@ describe('PluginManagerPage', () => {
   })
 
   it('keeps the persisted selection while marking a failed component as a problem', () => {
-    renderTab({ packages: [pkg({ name: 'cua', enabled: true, rows: [row({ phase: 'failed' })] })] })
+    renderTab({ packages: [pkg({ name: 'cua', enabled: true, rows: [row({ phase: 'failed', diagnostic: 'native preparation unavailable' })] })] })
     expect(document.querySelector('[data-plugin-package="cua"]')?.getAttribute('data-plugin-status')).toBe('problem')
     expect(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'cua') }).getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'cua') }))
+    expect(screen.getByText(`${en.reasonLabel}: native preparation unavailable`)).toBeTruthy()
   })
 
   it('marks a normally named Computer Use bundle experimental and explains persistent PTC before enabling', () => {

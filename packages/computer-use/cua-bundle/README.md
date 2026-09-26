@@ -35,6 +35,8 @@ The switch reuses `dsh.profile.bundles` in the profile's `package.json`. Enablin
 
 Disabling unloads CUA and its persistent runtime, cancels and awaits owned operations, clears retained variables, and restores the preceding tool/runtime configuration. After a project build updates the executable, re-enable or restart to replace running helpers.
 
+If preparation fails, the selected bundle and its persistent PTC configuration remain in effect, while CUA operations stay unavailable. The failed component shows its current diagnostic after refreshing or reopening the plugin page. Disable Computer Use to restore the previous runtime, or correct the reported cause and re-enable it.
+
 -----
 
 <a id="understand-the-implementation"></a>

@@ -4,9 +4,12 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { setImmediate } from 'node:timers/promises'
 import { Context, FiberState } from '@deepseek-ai/cordis'
+import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
+import FileSystem from '@deepseek-ai/dsh-fs-local'
+import PersistentRuntime from '@deepseek-ai/dsh-ptc-runtime-node/persistent'
 import { LlmAdapter, ToolCallId, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import Subprocess from '@deepseek-ai/dsh-subprocess'
@@ -357,6 +360,15 @@ it('prepares the selected native component before registering CUA and creates no
   expect(signal.aborted).toBe(true)
 })
 
+it('adds an installation-owned bridge URL when persistent PTC is available', async () => {
+  const f = await setup()
+  const text = async () => (await f.ctx.systemPrompt.assemble()).sections.find(section => section.name === 'computer-use:dsh-cua')?.text
+  expect(await text()).not.toContain('Persistent PTC initialization:')
+  await f.ctx.plugin(FileSystem)
+  await f.ctx.plugin(PersistentRuntime)
+  expect(await text()).toContain(new URL('../lib/bridge.js', import.meta.url).href)
+})
+
 it('keeps Cordis loading until preparation succeeds and reports preparation failure through the fiber', async () => {
   const f = await setup()
   await f.provider.dispose()
@@ -364,7 +376,10 @@ it('keeps Cordis loading until preparation succeeds and reports preparation fail
   const entered: PromiseWithResolvers<void> = Promise.withResolvers()
   onTestFinished(() => { ready.resolve(resolve('prepared-helper')) })
   native.prepare.mockReset().mockImplementation(() => { entered.resolve(); return ready.promise })
-  const provider = f.ctx.plugin(NativeProvider, automaticConfig)
+  await f.ctx.plugin(Loader)
+  f.ctx.loader.builtins.cua = NativeProvider
+  const entry = await f.ctx.loader.create({ name: 'cordis:cua', config: automaticConfig })
+  const provider = entry.fiber!
   await entered.promise
   expect(provider.state).toBe(FiberState.LOADING)
   expect(f.ctx.tools.schemas().some(tool => tool.name === 'cua')).toBe(false)

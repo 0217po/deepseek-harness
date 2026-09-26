@@ -79,6 +79,8 @@ ctx.slots.inject('plugins.detail.section', () => ctx.slots.register({
 
 行页只在某个 `plugins.row.config` 条目点名这一行时存在，因此给行的贡献渲染在该配置打开的页面上。
 
+组件列表和详情页显示 Host 清单中的当前启动诊断。重新打开页面后仍能看到原因，组件恢复后诊断消失。
+
 -----
 
 <a id="understand-the-implementation"></a>

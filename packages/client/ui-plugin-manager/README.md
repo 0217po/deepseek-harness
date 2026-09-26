@@ -79,6 +79,8 @@ ctx.slots.inject('plugins.detail.section', () => ctx.slots.register({
 
 A row's page exists only while a `plugins.row.config` entry names the row, so a contribution meant for a row renders on the page that configuration opens.
 
+Component lists and detail pages show current startup diagnostics from the Host inventory. The diagnostic remains visible after reopening the page and disappears when the component recovers.
+
 -----
 
 <a id="understand-the-implementation"></a>

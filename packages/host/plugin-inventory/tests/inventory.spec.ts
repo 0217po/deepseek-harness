@@ -149,6 +149,28 @@ describe('PluginInventoryGateway', () => {
     ])
   })
 
+  it('reads startup diagnostics from failed fibers and clears them after recovery', async () => {
+    const { ctx, inventory } = await harness()
+    ctx.loader.builtins.failing = {
+      async apply(_ctx: Context, config: { fail: boolean }) {
+        if (config.fail) throw new Error('native preparation unavailable')
+      },
+    }
+    const entry = await ctx.loader.create({ name: 'cordis:failing', config: { fail: true } })
+    await expect(entry.fiber!.await()).rejects.toThrow('native preparation unavailable')
+    for (let index = 0; index < 2; index++) {
+      expect((await inventory.list()).entries).toContainEqual({
+        entryId: entry.id, moduleName: 'cordis:failing', enabled: true,
+        fiberPhase: 'failed', diagnostic: 'native preparation unavailable',
+      })
+    }
+    await entry.update({ config: { fail: false } })
+    await entry.fiber!.await()
+    expect((await inventory.list()).entries).toContainEqual({
+      entryId: entry.id, moduleName: 'cordis:failing', enabled: true, fiberPhase: 'active',
+    })
+  })
+
   it('projects current non-group Loader entries without a second cache', async () => {
     const { ctx, inventory } = await harness()
     const activeId = await ctx.loader.create({ name: 'cordis:active' })
