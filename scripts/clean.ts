@@ -72,6 +72,7 @@ export class RepositoryCleaner {
 
     // These checks cover legacy root-level incremental state emitted by older configs.
     await this.addIfPresent(targets, join(this.root, '.typecheck'), canonicalRoot)
+    await this.addIfPresent(targets, join(this.root, 'lib/desktop-keyboard-test-types'), canonicalRoot)
     for (const entry of await readdir(this.root, { withFileTypes: true })) {
       if (entry.isFile() && entry.name.endsWith('.tsbuildinfo')) targets.add(join(this.root, entry.name))
     }
