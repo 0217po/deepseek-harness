@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-在与 Bash 相同的平台沙箱策略下执行模型编写的 TypeScript，并通过异步绑定调用 Host 提供的函数。每次调用启动一个全新的 Node 进程，返回捕获日志、精确 JSON 值或结构化失败。直接 Node API 在所选限制内仍可使用。经过时间截止、输出上限和 V8 堆限制约束执行；取消和完成都会终止受管进程范围。请求受限模式但沙箱后端不可用时，执行失败。
+执行模型编写的 TypeScript，并提供宿主异步函数。默认的 `per-call` 模式每次启动新 Node 进程，使用与 Bash 相同的平台沙箱策略。显式启用的 `in-memory` 模式为每个 Agent 跨调用保留无沙箱 REPL。两种模式都返回捕获的日志、精确 JSON 值或结构化失败。直接 Node API 受所选模式的限制。执行时限、输出上限和 V8 堆上限约束运行；取消与逐次执行完成后清理托管进程范围。请求受限模式而沙箱后端不可用时，执行失败。
 
 ## 目录
 
@@ -34,6 +34,7 @@ kind: "package-reference"
 ```yaml
 - name: '@deepseek-ai/dsh-ptc-runtime-node'
   config:
+    executionMode: per-call
     timeoutMs: 120000
     maxTimeoutMs: 600000
     maxOutputBytes: 67108864
@@ -45,6 +46,7 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
+| `executionMode` | `per-call` | `per-call` 每次按文件策略启动新进程；`in-memory` 为每个所有者保留无沙箱 REPL |
 | `timeoutMs` | `120,000` | 默认经过时间截止，包括嵌套工具与审批等待 |
 | `maxTimeoutMs` | `600,000` | 解析器应用的经过时间截止上限 |
 | `maxOutputBytes` | `67,108,864` | 序列化日志与完成值或诊断的合计预算 |
@@ -59,24 +61,22 @@ kind: "package-reference"
 
 ### 执行与结果
 
-程序是异步函数体：支持顶层 `await` 与 `return`，且只接受可擦除 TypeScript。成功调用以 `result.value` 返回无损 JSON 值，以 `result.logs` 返回捕获文本。`result.sandbox` 独立于程序结果报告所选模式、观察到的拒绝，以及后端完整或部分的强制能力。
+`per-call` 模式中的程序是异步函数体：支持顶层 `await` 与 `return`，且只接受可擦除 TypeScript。成功调用以 `result.value` 返回无损 JSON 值，以 `result.logs` 返回捕获文本。`result.sandbox` 独立于程序结果报告所选模式、观察到的拒绝，以及后端完整或部分的强制能力。
 
 直接文件系统、网络与子进程操作仍是 Node 操作，受所选 OS 沙箱约束。嵌套 Host 绑定通过控制通道调用；PTC 工具调用保留注册表的可见性、排序、日志和审批规则。运行程序不会改变 Session 的常设策略，也不会在拒绝后自动重放程序。
 
 <a id="persistent-repl"></a>
 ### 持久 REPL
 
-可选入口 `@deepseek-ai/dsh-ptc-runtime-node/persistent` 替换默认提供方。它需要 `fs` 和 `subprocess`，使用同一组配置字段，不创建文件沙盒。通过配置档补丁显式启用；默认配置不会启用它：
+在现有 `@deepseek-ai/dsh-ptc-runtime-node` 插件上设置 `executionMode: in-memory` 即可保留状态。两种模式都需要 `fs`、`subprocess`、`sandbox` 和 `sandboxPolicy`；内存保留模式不应用文件沙箱，并拒绝显式沙箱策略。通过配置档补丁显式启用：
 
 ```yaml
 - id: ptc-runtime
-  disabled: true
-- insert:
-    - id: ptc-runtime-persistent
-      name: '@deepseek-ai/dsh-ptc-runtime-node/persistent'
+  config:
+    executionMode: in-memory
 ```
 
-保存补丁，在启用 PTC 工具呈现的组合中使用 `dsh headless --patch <path>` 传入路径。Node 应用仍通过具名 `dsh` 配置档启动。打包为单个可执行文件的宿主需要将 `nodeExecutable` 指向 Node，将 `bootstrapPath` 指向本包构建的 `persistent-process.js`。
+保存补丁，在使用 PTC 工具展示的配置中通过 `dsh headless --patch <path>` 加载。默认的 `per-call` 模式不跨调用保留程序内存。修改配置会重载提供方并释放其执行资源。单文件打包宿主使用内存保留模式时，需要将 `nodeExecutable` 指向 Node，并将 `bootstrapPath` 指向本包构建出的 `persistent-process.js`。
 
 每个存活 Agent 保留独立进程，跨 `run_code` 调用和轮次保留顶层变量、函数及导入模块。使用 `await import(...)`、`console.log(...)` 和末尾 JSON 表达式；不支持顶层 `return`。Node REPL 使用非严格模式，给未声明的名称赋值会创建保留的全局变量。声明遵循 Node REPL 规则，包括重复声明已有 `let`、`const` 或 `class` 名称时报错；应给可变绑定赋值或选择新名称。开头的 `{ ... }` 按语句块执行，可以包含顶层 await 和临时声明；需要返回对象表达式时，用圆括号包裹。保留的函数和工具方法引用调用当前执行的绑定。必须等待所有工具调用；已完成执行的回调不能在后续执行中调用工具。
 
@@ -86,9 +86,9 @@ kind: "package-reference"
 
 ### 截止时间与取消
 
-PTC 消费方按 [dsh-tools](../../core/tools/README.zh.md#ptc-mode) 的说明公开逐次超时与经审批的沙箱选择。运行时只读 `timeout` 描述符向该消费方报告有效默认值与上限。默认提供方的 `executionInstructions` 在面向模型的 schema 中说明全新 Node 状态、直接 Node API、空程序环境和文件策略。
+PTC 消费方按 [dsh-tools](../../core/tools/README.zh.md#ptc-mode) 的说明公开逐次超时与经审批的沙箱选择。运行时只读 `timeout` 描述符向该消费方报告有效默认值与上限。逐次执行模式的 `executionInstructions` 在面向模型的 schema 中说明全新 Node 状态、直接 Node API、空程序环境和文件策略。
 
-省略 `timeoutMs` 使用配置的经过时间默认值；数值请求经过验证并封顶。服务调用方可以显式传入 `timeoutMs: null` 来省略经过时间定时器，工作流适配器即如此；`run_code` 仍只接受正数覆盖值。启用的截止覆盖运行时准备和执行，包括等待嵌套工具或审批的时间。它不是 CPU 计量器。超时或取消通过 Host 的受管进程所有者停止同步循环；成功完成也会清理该受管范围。选择结果后、清理前停止计时器，因此调用可能要在执行截止之后等待清理结算才返回。
+省略 `timeoutMs` 使用配置的经过时间默认值；数值请求经过验证并封顶。服务调用方可以显式传入 `timeoutMs: null` 来省略经过时间定时器，工作流适配器即如此；`run_code` 仍只接受正数覆盖值。启用的截止覆盖运行时准备和执行，包括等待嵌套工具或审批的时间。它不是 CPU 计量器。超时或取消通过 Host 的受管进程所有者停止同步循环；逐次执行成功完成也会清理该受管范围。选择结果后、清理前停止计时器，因此调用可能要在执行截止之后等待清理结算才返回。
 
 ### 失败
 
@@ -119,8 +119,8 @@ Host 擦除可擦除类型，在配置的执行世界中解析可执行文件与
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 默认提供方的解析、策略、绑定与受管执行 |
-| [`src/config.ts`](src/config.ts) | 共享配置、校验与默认值 |
-| [`src/persistent.ts`](src/persistent.ts) | 保留进程的所有权、执行截止与清理 |
+| [`src/config.ts`](src/config.ts) | 执行模式、限制校验与默认值 |
+| [`src/persistent.ts`](src/persistent.ts) | 内存保留模式的进程所有权、执行截止与清理 |
 | [`src/persistent-process.ts`](src/persistent-process.ts) | 子进程 REPL、保留声明与当前绑定分派 |
 | [`src/output-stream.ts`](src/output-stream.ts) | 有界流捕获与进程输出排空 |
 | [`src/launch.ts`](src/launch.ts) | 可执行文件／bootstrap 参数与执行世界资源映射 |
@@ -164,8 +164,8 @@ Host 擦除可擦除类型，在配置的执行世界中解析可执行文件与
 - **约束继承所选后端的限制**——完整与部分强制能力分开报告；沙箱策略与受管进程约束是不同保证。
 - **堆上限不是进程树内存限制**——原生分配与后代进程内存不属于 V8 老生代上限。不提供进程树 CPU 计量器。
 - **清理继承子进程的可观测范围**——使用 fallback 的平台上，逃逸的后代可能仍在受管范围之外；参见子进程提供方声明的限制。
-- **默认执行是一次性的**——保留状态需要可选的持久提供方；两个提供方都不提供 yield/wait API。
-- **持久环境为每个存活所有者保留一个进程**——空闲所有者保留进程及堆内存，直到显式释放、所有者销毁或执行失败。并行创建多个所有者会保留多个进程；空闲过期机制留待后续处理。
+- **默认执行是一次性的**：保留状态需要设置 `executionMode: in-memory`；两种模式都不提供 yield/wait API。
+- **内存保留环境为每个存活所有者保留一个进程**——空闲所有者保留进程及堆内存，直到显式释放、所有者销毁或执行失败。并行创建多个所有者会保留多个进程；空闲过期机制留待后续处理。
 - **输出上限拒绝超量内容，而不保留每个字节**——溢出只能保存本提供方交付的有界结果。
 - **绑定在传输接纳时受限**——控制限制不约束 Host 绑定生成结果期间分配的内存。
 - **console shim 有五个方法**——`log`、`info`、`warn`、`error` 与 `debug`。

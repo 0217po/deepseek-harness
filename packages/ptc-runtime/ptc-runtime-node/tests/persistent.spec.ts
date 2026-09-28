@@ -3,20 +3,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setImmediate } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
-import FileSystem from '@deepseek-ai/dsh-fs-local'
-import Subprocess from '@deepseek-ai/dsh-subprocess-local'
 import type { PtcBindingFunction, PtcRunRequest } from '@deepseek-ai/dsh-ptc-runtime'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import PersistentRuntime, { type Config } from '../src/persistent.ts'
+import type { Config } from '../src/index.ts'
+import { mountRuntime } from './setup.ts'
 
 async function setup(config: Config = {}) {
   const cwd = await mkdtemp(join(tmpdir(), 'dsh-persistent-ptc-'))
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose(); await rm(cwd, { recursive: true, force: true }) })
-  await ctx.plugin(FileSystem)
-  await ctx.plugin(Subprocess)
-  const fiber = await ctx.plugin(PersistentRuntime, config)
-  const runtime = ctx.ptcRuntime
+  const runtime = await mountRuntime(ctx, { ...config, executionMode: 'in-memory' })
+  const fiber = runtime.ctx.fiber
   const owner = {}
   const run = (program: string, options: Partial<PtcRunRequest> = {}) =>
     runtime.run(runtime.resolve({ program, bindings: [], cwd, stateOwner: owner, ...options }))

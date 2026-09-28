@@ -33,7 +33,7 @@ pnpm dsh web
 
 开关复用 profile 的 `package.json` 中 `dsh.profile.bundles`。开启时先准备本机组件；源码启动恢复已开启状态时也检查。后续 `pnpm run build` 读取现有 Web profile 的同一列表，选中才检查增量构建。首次准备需要本机编译工具，耗时取决于机器；失败保留原始诊断，不发布新的可执行文件。
 
-关闭会卸载 CUA 和持久执行器，取消并等待自有操作结束；保留的代码变量随之清除，原有工具与执行器配置重新生效。项目构建更新可执行文件后，重新启用或重启，运行中的 helper 才会换用新版。
+关闭会卸载 CUA 并重载 Node 执行器，取消并等待自有操作结束；保留的代码变量随之清除，原有工具与执行器配置重新生效。项目构建更新可执行文件后，重新启用或重启，运行中的 helper 才会换用新版。
 
 准备失败时，组合包选择和 persistent PTC 配置仍生效，CUA 操作暂不可用。刷新或重新打开插件页后，失败组件仍显示当前诊断。关闭 Computer Use 可恢复原有运行时；修复报告的问题后可重新启用。
 
@@ -45,7 +45,7 @@ pnpm dsh web
 <details>
 <summary>维护者说明</summary>
 
-`cordis.patch.yml` 插入注册表、CUA 提供方和 persistent PTC，覆盖默认执行器与工具模式。插件管理器保存组合包选择并触发正常重组；没有第二份启用标记。此配置组合没有独立可变投影，因此不发布 runtime invariant 配套模块。
+`cordis.patch.yml` 插入注册表与 CUA 提供方，将现有 Node 执行器设为 `executionMode: in-memory`，并选择 PTC 工具展示模式。插件管理器保存组合包选择并触发正常重组；没有第二份启用标记。此配置组合没有独立可变投影，因此不发布 runtime invariant 配套模块。
 
 </details>
 

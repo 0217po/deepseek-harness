@@ -9,7 +9,9 @@ import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deep
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
-import PersistentRuntime from '@deepseek-ai/dsh-ptc-runtime-node/persistent'
+import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
+import Sandbox from '@deepseek-ai/dsh-sandbox-local'
+import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import { LlmAdapter, ToolCallId, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import Subprocess from '@deepseek-ai/dsh-subprocess'
@@ -365,7 +367,9 @@ it('adds an installation-owned bridge URL when persistent PTC is available', asy
   const text = async () => (await f.ctx.systemPrompt.assemble()).sections.find(section => section.name === 'computer-use:dsh-cua')?.text
   expect(await text()).not.toContain('Persistent PTC initialization:')
   await f.ctx.plugin(FileSystem)
-  await f.ctx.plugin(PersistentRuntime)
+  await f.ctx.plugin(Sandbox)
+  await f.ctx.plugin(SandboxPolicy)
+  await f.ctx.plugin(NodeRuntime, { executionMode: 'in-memory' })
   expect(await text()).toContain(new URL('../lib/bridge.js', import.meta.url).href)
 })
 

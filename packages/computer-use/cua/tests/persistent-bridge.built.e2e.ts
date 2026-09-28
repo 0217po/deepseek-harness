@@ -11,7 +11,9 @@ import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
 import { LlmAdapter, ToolCallId, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
-import PersistentRuntime from '@deepseek-ai/dsh-ptc-runtime-node/persistent'
+import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
+import Sandbox from '@deepseek-ai/dsh-sandbox-local'
+import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import Subprocess from '@deepseek-ai/dsh-subprocess-local'
 import { expect, it } from 'vitest'
@@ -42,7 +44,9 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
       await ctx.plugin(Subprocess)
       await ctx.plugin(LocalAttachmentStore, { dshHome: join(cwd, 'home') })
       await ctx.plugin(ComputerUseRegistry)
-      await ctx.plugin(PersistentRuntime, { bootstrapPath: bootstrap })
+      await ctx.plugin(Sandbox)
+      await ctx.plugin(SandboxPolicy)
+      await ctx.plugin(NodeRuntime, { executionMode: 'in-memory', bootstrapPath: bootstrap })
       await ctx.plugin(Loader)
       ctx.loader.builtins.cua = Cua
       const entry = await ctx.loader.create({ name: 'cordis:cua', config: { helperPath } })

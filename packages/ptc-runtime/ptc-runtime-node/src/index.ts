@@ -1,4 +1,4 @@
-/** Confined Node programs with host-owned bindings, output limits, and managed process cleanup. */
+/** Node PTC execution with configurable per-call processes or retained in-memory REPL state. */
 import { stripTypeScriptTypes } from 'node:module'
 import { isAbsolute } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -14,6 +14,7 @@ import { replyToBinding, validateBindings } from './bindings.ts'
 import { JsonChannel } from './channel.ts'
 import { bootstrapArgs } from './launch.ts'
 import { NodeConfig, validateConfig } from './config.ts'
+import { InMemoryExecution } from './persistent.ts'
 import type { Config, ResolvedConfig } from './config.ts'
 export type { Config } from './config.ts'
 import { OutputLedger } from './output-ledger.ts'
@@ -29,13 +30,17 @@ const STRIP_SUFFIX = '\n}'
 function messageOf(error: unknown): string { return error instanceof Error ? error.message : String(error) }
 function record(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 
-/** Node provider; direct file effects use the same sandbox service as Bash. */
+/** Node provider; per-call execution uses file policy, while in-memory execution has full host access. */
 export class NodePtcRuntime extends PtcRuntime {
   static inject = ['fs', 'subprocess', 'sandbox', 'sandboxPolicy']
   static Config = NodeConfig
   readonly language = 'typescript'
   readonly isolation = 'process'
+  private readonly inMemory?: InMemoryExecution
+
+  override get programFormat(): 'function-body' | 'repl' { return this.inMemory ? 'repl' : 'function-body' }
   override get executionInstructions(): string {
+    if (this.inMemory) return this.inMemory.executionInstructions
     return 'Each call runs in a fresh Node process. Node APIs are available through await import(...). Relative paths use the supplied working directory; process.env starts empty. Direct filesystem access follows this execution\'s sandbox policy.'
   }
   private readonly config: ResolvedConfig
@@ -46,6 +51,10 @@ export class NodePtcRuntime extends PtcRuntime {
     super(ctx)
     this.config = { ...config, nodeExecutable: config.nodeExecutable ?? process.execPath } as ResolvedConfig
     validateConfig(this.config)
+    if (this.config.executionMode === 'in-memory') {
+      this.inMemory = new InMemoryExecution(ctx, this.config)
+      return
+    }
     ctx.effect(() => async () => {
       this.disposed = true
       const active = [...this.live]
@@ -54,18 +63,23 @@ export class NodePtcRuntime extends PtcRuntime {
     }, 'Node ptc-runtime cleanup')
   }
 
-  override get sandboxMode(): SandboxMode { return this.ctx.sandboxPolicy.defaultMode }
+  override get sandboxMode(): SandboxMode | undefined { return this.inMemory ? undefined : this.ctx.sandboxPolicy.defaultMode }
+
+  override release(owner: object): Promise<void> {
+    return this.inMemory ? this.inMemory.release(owner) : super.release(owner)
+  }
 
   override get timeout(): { defaultMs: number; maxMs: number } {
     return { defaultMs: Math.min(this.config.timeoutMs, this.config.maxTimeoutMs), maxMs: this.config.maxTimeoutMs }
   }
 
   /**
-   * Resolve an execution under explicit or deployment policy.
+   * Resolve the selected execution mode, applying file policy only to per-call processes.
    * @param request - Program, bindings, optional cwd/deadline, and resolved authority.
    * @returns Complete execution inputs with a capped numeric budget or an explicit null deadline.
    */
   resolve(request: PtcRunRequest): PtcRunSpec {
+    if (this.inMemory) return this.inMemory.resolve(request)
     if (this.disposed) throw new Error('ptc-runtime-node: resolve after disposal')
     const sandboxPolicy = request.sandboxPolicy ?? this.ctx.sandboxPolicy.resolve()
     const cwd = request.cwd ?? sandboxPolicy.workspaceRoot
@@ -79,11 +93,12 @@ export class NodePtcRuntime extends PtcRuntime {
   }
 
   /**
-   * Run a resolved program in a fresh managed and confined Node process.
-   * @param spec - Inputs returned by resolve; missing authority is caller misuse.
-   * @returns Output and file-confinement facts after managed cleanup.
+   * Run a resolved program under the configured execution mode.
+   * @param spec - Inputs returned by resolve for the configured mode.
+   * @returns Logs, JSON completion or failure; retained processes remain until release or invalidation.
    */
   async run(spec: PtcRunSpec): Promise<PtcRunResult> {
+    if (this.inMemory) return this.inMemory.run(spec)
     if (this.disposed) throw new Error('ptc-runtime-node: run after disposal')
     if (spec.sandboxPolicy === undefined) throw new Error('ptc-runtime-node: run requires a resolved sandbox policy')
     if (!isAbsolute(spec.cwd) || (spec.timeoutMs !== null && (!Number.isFinite(spec.timeoutMs) || spec.timeoutMs <= 0 || spec.timeoutMs > this.config.maxTimeoutMs))) throw new Error('ptc-runtime-node: run requires resolved cwd and timeout')

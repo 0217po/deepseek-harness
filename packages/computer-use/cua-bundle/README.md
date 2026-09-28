@@ -33,7 +33,7 @@ pnpm dsh web
 
 The switch reuses `dsh.profile.bundles` in the profile's `package.json`. Enabling prepares native components; source startup also checks an already enabled profile. Subsequent `pnpm run build` reads the same selection in the existing Web profile and checks the incremental build only when selected. First preparation requires local compiler tools and takes machine-dependent time; failures retain their diagnostics and publish no new executable.
 
-Disabling unloads CUA and its persistent runtime, cancels and awaits owned operations, clears retained variables, and restores the preceding tool/runtime configuration. After a project build updates the executable, re-enable or restart to replace running helpers.
+Disabling unloads CUA and reloads the Node runtime, cancels and awaits owned operations, clears retained variables, and restores the preceding tool/runtime configuration. After a project build updates the executable, re-enable or restart to replace running helpers.
 
 If preparation fails, the selected bundle and its persistent PTC configuration remain in effect, while CUA operations stay unavailable. The failed component shows its current diagnostic after refreshing or reopening the plugin page. Disable Computer Use to restore the previous runtime, or correct the reported cause and re-enable it.
 
@@ -45,7 +45,7 @@ If preparation fails, the selected bundle and its persistent PTC configuration r
 <details>
 <summary>Maintainer details</summary>
 
-`cordis.patch.yml` inserts the registration service, CUA provider and persistent PTC, overriding the default runtime and tool mode. Plugin management persists bundle selection and performs ordinary recomposition; there is no second enabled flag. This configuration-only bundle has no independently mutable projection, so no runtime invariant companion is published.
+`cordis.patch.yml` inserts the registration service and CUA provider, sets the existing Node runtime to `executionMode: in-memory`, and selects PTC tool presentation. Plugin management persists bundle selection and performs ordinary recomposition; there is no second enabled flag. This configuration-only bundle has no independently mutable projection, so no runtime invariant companion is published.
 
 </details>
 

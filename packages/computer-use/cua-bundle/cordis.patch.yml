@@ -1,5 +1,6 @@
 - id: ptc-runtime
-  disabled: true
+  config:
+    executionMode: in-memory
 - id: tools
   config:
     mode: ptc
@@ -8,5 +9,3 @@
       name: '@deepseek-ai/dsh-computer-use'
     - id: cua
       name: '@deepseek-ai/dsh-cua'
-    - id: ptc-runtime-persistent
-      name: '@deepseek-ai/dsh-ptc-runtime-node/persistent'

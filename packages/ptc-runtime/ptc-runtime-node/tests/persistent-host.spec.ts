@@ -2,11 +2,10 @@ import { Duplex, PassThrough } from 'node:stream'
 import { setImmediate } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import FileSystem from '@deepseek-ai/dsh-fs-local'
-import Subprocess from '@deepseek-ai/dsh-subprocess-local'
 import type { PtcBindingFunction, PtcRunRequest } from '@deepseek-ai/dsh-ptc-runtime'
 import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
-import PersistentRuntime, { type Config } from '../src/persistent.ts'
+import type { Config } from '../src/index.ts'
+import { mountRuntime } from './setup.ts'
 import { JsonChannel } from '../src/channel.ts'
 import { encodePtcJsonWire } from '../src/json-wire.ts'
 
@@ -15,10 +14,8 @@ const NO_INITIAL_FRAME = Symbol('no initial frame')
 async function setup(config: Config = {}) {
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose() })
-  await ctx.plugin(FileSystem)
-  await ctx.plugin(Subprocess)
-  const fiber = await ctx.plugin(PersistentRuntime, config)
-  const runtime = ctx.ptcRuntime
+  const runtime = await mountRuntime(ctx, { ...config, executionMode: 'in-memory' })
+  const fiber = runtime.ctx.fiber
   const control = new Duplex({
     read() {},
     write(chunk: Buffer, _encoding, callback) {
