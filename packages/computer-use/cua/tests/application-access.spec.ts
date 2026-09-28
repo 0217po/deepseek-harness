@@ -246,6 +246,7 @@ it('cancels native work when saved consent is removed from configuration', async
   await entered.promise
   await f.save([])
   f.ctx.emit('loader/volatile-update', [['allowedApps']])
+  f.ctx.emit('loader/volatile-update', [['allowedApps']])
   await rejected
   expect(f.client.disposed).toBe(true)
   await expect(f.access.run(f.client, handle, signal, async () => null)).rejects.toThrow('APP_ACCESS_REVOKED')
@@ -256,4 +257,61 @@ it('cancels native work when saved consent is removed from configuration', async
   await expect(f.access.run(replacement, handle, signal, async () => 'fresh')).resolves.toBe('fresh')
   f.access.forget(f.agent)
   await expect(f.access.run(replacement, handle, signal, async () => null)).rejects.toThrow('APP_ACCESS_REQUIRED')
+})
+
+it('fails closed without a human answerer and never offers persistence without its owner', async () => {
+  const f = await setup('Always allow', { writable: false, questions: false })
+  await expect(f.access.select(f.agent, f.client, handle, identity, signal)).rejects.toThrow('APP_APPROVAL_UNAVAILABLE')
+  await f.ctx.plugin(UserQuestions)
+  await expect(f.access.select(f.agent, f.client, handle, identity, signal)).rejects.toThrow('APP_ACCESS_DENIED')
+  expect(f.save).not.toHaveBeenCalled()
+})
+
+it('rejects an answer for a helper that exits while the human question is pending', async () => {
+  const f = await setup()
+  const answer = Promise.withResolvers<AskUserQuestionAnswer>()
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  onTestFinished(() => { answer.resolve({ answers: [{ id: 'cua-app-access', selected: ['Deny'] }] }) })
+  f.answer.mockImplementationOnce(() => { entered.resolve(); return answer.promise })
+  const selected = f.access.select(f.agent, f.client, handle, identity, signal)
+  const rejected = expect(selected).rejects.toThrow('NATIVE_CLOSED')
+  await entered.promise
+  f.client.invalidate()
+  answer.resolve({ answers: [{ id: 'cua-app-access', selected: ['Allow for this task'] }] })
+  await rejected
+})
+
+it('refuses closed helpers and forgets one task without removing another task', async () => {
+  const f = await setup()
+  await f.access.select(f.agent, f.client, handle, identity, signal)
+  const owner = await f.ctx.agents.create({ sessionId: SessionId('other-consented-task') })
+  const other = new NativeClient(f.ctx, nativeConfig)
+  await f.access.select(owner.agent, other, handle, identity, signal)
+  f.ctx.emit('loader/volatile-update', [['allowedApps']])
+  f.access.forget(f.agent)
+  await expect(f.access.run(other, handle, signal, async () => 'kept')).resolves.toBe('kept')
+  other.invalidate()
+  await expect(f.access.run(other, handle, signal, async () => null)).rejects.toThrow('NATIVE_CLOSED')
+  await expect(f.access.select(owner.agent, other, handle, identity, signal)).rejects.toThrow('NATIVE_CLOSED')
+})
+
+it('keeps an active task operation running when a different task denies the same application', async () => {
+  const f = await setup()
+  await f.access.select(f.agent, f.client, handle, identity, signal)
+  const entered = Promise.withResolvers<AbortSignal>()
+  const release = Promise.withResolvers<null>()
+  const pending = f.access.run(f.client, handle, signal, async (operationSignal) => {
+    entered.resolve(operationSignal)
+    return release.promise
+  })
+  try {
+    const operationSignal = await entered.promise
+    const owner = await f.ctx.agents.create({ sessionId: SessionId('denying-task') })
+    const other = new NativeClient(f.ctx, nativeConfig)
+    f.answer.mockResolvedValueOnce({ answers: [{ id: 'cua-app-access', selected: ['Deny'] }] })
+    await expect(f.access.select(owner.agent, other, handle, identity, signal)).rejects.toThrow('APP_ACCESS_DENIED')
+    expect(operationSignal.aborted).toBe(false)
+    release.resolve(null)
+    await expect(pending).resolves.toBeNull()
+  } finally { release.resolve(null); await pending }
 })

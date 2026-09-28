@@ -192,7 +192,7 @@ export class ApplicationAccess {
     rejected.set(identity.id, { id: identity.id, name: identity.name, executablePath: identity.executablePath })
     this.rejected.set(agent, rejected)
   }
-  private invalidate(id: CuaApplicationId, agent?: Agent): NativeClient[] {
+  private invalidate(id: CuaApplicationId, agent?: Agent): void {
     const clients = new Set<NativeClient>()
     for (const [client, state] of this.clients) for (const selection of state.handles.values()) if (selection.identity.id === id
       && (agent === undefined || state.agent === agent)) {
@@ -206,7 +206,6 @@ export class ApplicationAccess {
       clients.add(operation.client)
     }
     for (const client of clients) client.invalidate()
-    return [...clients]
   }
   private reconcile(): void {
     for (const state of this.clients.values()) for (const selection of state.handles.values()) {

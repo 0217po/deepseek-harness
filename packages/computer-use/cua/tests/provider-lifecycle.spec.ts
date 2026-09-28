@@ -87,7 +87,7 @@ async function selectApplication(f: Awaited<ReturnType<typeof setup>>) {
   await f.ctx.plugin(UserQuestions)
   f.ctx.on('user-questions/request', async () => ({ answers: [{ id: 'cua-app-access', selected: ['Allow for this task'] }] }))
   native.request.mockResolvedValueOnce({ appHandle: 'app-one', pid: 17, name: 'Fixture',
-    authorization: { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: false } })
+    authorization: { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: true } })
   expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
 }
 
@@ -473,13 +473,18 @@ it('stores signed application consent in the current profile and refuses unavail
   await f.ctx.plugin(ConfigEditor)
   await mountRootInclude(f.ctx, join(dir, 'cordis.yml'), readProfilePatches('test', profile))
   await f.ctx.loader.await()
+  await f.ctx.plugin(UserQuestions)
+  const answer = vi.fn(async () => ({ answers: [{ id: 'cua-app-access', selected: ['Allow for this task'] }] }))
+  f.ctx.on('user-questions/request', answer)
+  native.request.mockResolvedValue({ appHandle: 'task-app', pid: 17, name: 'Fixture',
+    authorization: { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: true } })
+  expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
   await f.ctx.plugin(Settings)
   await f.ctx.plugin(Timer)
   await f.ctx.plugin(Hmr, { root: [], ignored: [], debounce: 0 })
   await f.ctx.hmr.runExclusive(async () => {})
   expect(f.ctx.settings.describe().find(row => row.ns === 'cua')?.autoGenerate).toBe(false)
-  await f.ctx.plugin(UserQuestions)
-  f.ctx.on('user-questions/request', async () => ({ answers: [{ id: 'cua-app-access', selected: ['Always allow'] }] }))
+  answer.mockResolvedValue({ answers: [{ id: 'cua-app-access', selected: ['Always allow'] }] })
   const authorization = { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: true }
   native.request.mockResolvedValue({ appHandle: 'signed-app', pid: 17, name: 'Fixture', authorization })
   expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
