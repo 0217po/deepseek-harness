@@ -62,7 +62,7 @@ createInterface({ input: process.stdin }).on('line', line => {
   let result;
   if (method === 'getApp' && params.selector === '9') {
     acquired = true;
-    result = { appHandle: 'large-image-app', pid: 9, name: 'Generated screenshot' };
+    result = { appHandle: 'large-image-app', pid: 9, name: 'Generated screenshot', authorization: {"id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "name": "Fixture", "executablePath": "/fixture/app", "persistable": true} };
   } else if (method === 'screenshot' && acquired && params.appHandle === 'large-image-app' && params.windowId === 7) {
     result = { mimeType: 'image/png', data: readFileSync(new URL('./generated-screenshot.png', import.meta.url)).toString('base64'),
       pixelWidth: ${WIDTH}, pixelHeight: ${HEIGHT}, windowId: 7, coordinateSpace: 'window-points',
@@ -82,7 +82,7 @@ createInterface({ input: process.stdin }).on('line', line => {
   const configPath = join(root, 'cordis.yml')
   const configs: Record<string, object> = {
     tools: { mode: 'ptc' }, attachments: { dshHome: join(root, 'home') },
-    fs: { cwd: root }, sandboxPolicy: { mode: 'danger-full-access', workspaceRoot: root }, cua: { helperPath },
+    fs: { cwd: root }, sandboxPolicy: { mode: 'danger-full-access', workspaceRoot: root }, cua: { helperPath, allowedApps: [{ 'id': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'name': 'Fixture', 'executablePath': '/fixture/app' }] },
   }
   await writeFile(configPath, Object.keys(modules).flatMap(name => [
     `- name: 'cordis:${name}'`, ...configs[name] === undefined ? [] : [`  config: ${JSON.stringify(configs[name])}`],

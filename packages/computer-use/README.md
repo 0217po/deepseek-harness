@@ -28,7 +28,6 @@ Choose one provider and mount the shared registration service.
 |---|---|---|
 | [`computer-use`](computer-use/README.md) | Exclusive named provider registration | `ctx.computerUse` |
 | [`cua`](cua/README.md) | Native macOS application and window operations | `ctx.computerUse` |
-| [`cua-bundle`](cua-bundle/README.md) | Optional Computer Use switch with persistent PTC | — |
 
 <a id="related-documentation"></a>
 ## Related documentation

@@ -55,3 +55,5 @@ For an independently isolated Electron/Chromium check, run `python3 packages/com
 System file-panel keyboard routing resolves the remote recipient through the selected app’s focused AX sheet. Only Apple’s Open and Save Panel Service is accepted, and its focused ancestry must still contain the identified remote window. Element pointer fallbacks resolve an app-owned window or sheet through AX parents when AXWindow is unavailable. AX actions retain priority over pointer input; visual click markers need no system-cursor movement.
 
 Keyboard modifiers in this native request schema accept command/control/option/shift/fn and cmd/ctrl/alt aliases. The TypeScript raw-tool schema accepts only canonical names; the object API normalizes key-chord aliases before dispatch.
+
+Application selection verifies the executable path and code-signing requirement before returning an authorization identity to the Host. Unsigned applications receive a process-lifetime identity. The Host obtains human consent before using that handle for observation or input.

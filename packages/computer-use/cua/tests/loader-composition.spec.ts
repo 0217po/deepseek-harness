@@ -79,7 +79,7 @@ it.skipIf(process.platform === 'win32')('loads the native provider, records veri
   await writeFile(configPath, Object.keys(modules).flatMap(name => [
     `- name: 'cordis:${name}'`,
     ...name === 'attachments' ? ['  config:', `    dshHome: ${JSON.stringify(root)}`] : [],
-    ...name === 'cua' ? ['  config:', `    helperPath: ${JSON.stringify(helperPath)}`] : [],
+    ...name === 'cua' ? ['  config:', `    helperPath: ${JSON.stringify(helperPath)}`, '    allowedApps: [{"id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "name": "Fixture", "executablePath": "/fixture/app"}]'] : [],
   ]).join('\n') + '\n')
   context.baseUrl = pathToFileURL(root).href + '/'
   await context.plugin(Loader)
@@ -156,7 +156,12 @@ it.skipIf(process.platform === 'win32')('loads the native provider, records veri
     callId: ToolCallId('stale-window'), name: 'cua', arguments: { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: 7 } },
   })
   expect(stale.isError).toBe(true)
-  expect(JSON.stringify(stale.content)).toContain('APP_NOT_FOUND')
+  expect(JSON.stringify(stale.content)).toContain('APP_ACCESS_REQUIRED')
+  expect((await readEvents()).filter(event => event.event === 'start')).toHaveLength(1)
+  const selected = await context.tools.execute({ agent: next.agent, signal: new AbortController().signal,
+    callId: ToolCallId('select-new-task'), name: 'cua', arguments: { method: 'getApp', params: { selector: 'test.fixture' } },
+  })
+  expect(selected.isError).toBe(false)
   const starts = (await readEvents()).filter(event => event.event === 'start')
   expect(starts).toHaveLength(2)
   expect(starts[0]?.pid).not.toBe(starts[1]?.pid)

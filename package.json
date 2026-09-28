@@ -200,8 +200,7 @@
     "mock:llm": "node --import tsx packages/test-support/llm-mock-server/src/bin.ts",
     "start:web": "node --import tsx/esm apps/cli/src/bin.ts web",
     "dev:web": "tsx scripts/dev-web.ts --poll",
-    "postinstall": "node scripts/install-lefthook.mjs",
-    "build:cua": "tsx scripts/build-cua.ts"
+    "postinstall": "node scripts/install-lefthook.mjs"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-agent": "workspace:*",
@@ -257,7 +256,6 @@
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^4.1.8",
     "@deepseek-ai/dsh-skill-office": "workspace:*",
-    "@deepseek-ai/dsh-tool-workspace-dependencies": "workspace:*",
-    "@deepseek-ai/dsh-cua-bundle": "workspace:*"
+    "@deepseek-ai/dsh-tool-workspace-dependencies": "workspace:*"
   }
 }

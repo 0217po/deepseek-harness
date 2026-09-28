@@ -68,7 +68,6 @@
     "tests/plugin-config.e2e.ts",
     "tests/input-plugin-extensions.e2e.ts",
     "tests/plugin-manager.e2e.ts",
-    "tests/cua-optin.e2e.ts",
     "tests/plugin-install-cancel.e2e.ts",
     "tests/plugin-install-approve.e2e.ts",
     "tests/plugin-install-registry.e2e.ts",

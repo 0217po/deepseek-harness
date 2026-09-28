@@ -4,12 +4,8 @@
 - button "刷新"
 - button "添加插件"
 - heading "官方" [level=3]
-- text: "9"
+- text: "8"
 - list:
-  - listitem:
-    - button "查看 Computer Use": Computer Use
-    - text: 实验性 仅支持 macOS。请在 ptc 模式下使用。启用后当前配置档使用 persistent PTC，保留变量且无文件沙箱。开启和后续项目构建会准备本机组件；关闭清空变量。
-    - switch "启用 Computer Use"
   - listitem:
     - button "查看 智能体团队": 智能体团队
     - text: 实验性 启用团队协作、团队工具、成员列表和共享任务看板。

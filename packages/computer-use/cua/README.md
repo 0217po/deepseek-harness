@@ -25,7 +25,7 @@ Inspect macOS permissions, select running applications and windows, read accessi
 <a id="use-this-package"></a>
 ## Use this package
 
-For repository Web use, enable [Computer Use](../cua-bundle/README.md) in Plugins. This prepares the local executable on macOS 14 or later; subsequent builds check it while the existing Web profile keeps the bundle selected. Disabled profiles do not prepare native components. Explicit source composition is also available:
+Enable this provider through explicit source composition on macOS 14 or later. Shipped profiles do not mount it. Prepare a native helper and load the registry/provider overlay:
 
 ```sh
 swift build --package-path packages/computer-use/cua/native --configuration release
@@ -38,6 +38,7 @@ The dump command checks profile composition without a model request. For a real 
 
 | Field | Default | Meaning |
 | --- | --- | --- |
+| `allowedApps` | `[]` | Live profile-local application consent, keyed by executable path and verified signing requirement. |
 | `helperPath` | package-owned executable | Optional absolute native executable override. |
 | `buildTimeoutMs` | `300000` | Maximum native preparation time. |
 | `timeoutMs` | `30000` | Per-operation deadline; cancellation can leave partial input. |
@@ -52,6 +53,8 @@ The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-cua) 
 Key chords use `+` between modifiers and the key. Use `+` for the plus key, `cmd++` for Command-plus, or the key name `plus`; an unfinished chord such as `cmd+` is rejected.
 
 Agent disposal and plugin unload cancel and await the complete tool call, including image admission and attachment storage. An image write already in progress must settle before disposal returns; a canceled call cannot return a successful screenshot.
+
+Application consent is enforced before AX reads, window-title reads, screenshots, activation, and input through the CUA tool. User Questions offers task access or denial, plus saved access when the application has a verifiable signature and the composition provides settings persistence. Task access is bound to the selected process handle; saved access is bound to its canonical executable path and designated code-signing requirement. Denial prevents repeated prompts in that task. Removing a saved `allowedApps` entry cancels affected operations and invalidates their helper handles; reauthorization requires fresh selection. Other handles in the same helper also expire, while saved grants remain reusable. Agent/provider disposal joins helper cleanup. See the [application consent decision](../../../.agents/notes/implemented/architecture/2026-09-26-cua-application-consent.md). These checks govern CUA calls; persistent PTC and separately authorized shell tools retain their own execution authority.
 
 Raw `getState` exposes the validated state fields and its complete `tree`. The native helper also returns structured element diagnostics for native checks; the tool projection omits that duplicate array from model text and structured tool values.
 
@@ -121,7 +124,7 @@ The plugin contributes one `cua` operation tool with method-specific parameters.
 ##### Operation guidance (verbatim)
 
 ```markdown
-Use cua with method getCapabilities and params {} to inspect permissions and sessionLocked. If sessionLocked is true or an operation reports SESSION_LOCKED, stop UI attempts and ask the user to unlock macOS. A null sessionLocked means no usable console session was verified. After unlocking, read fresh state; screenshots from a locked desktop are not current observations. Use listApps and getApp to select an already running application. Keep the returned appHandle; every app operation requires it. listWindows returns window IDs and point bounds. getState returns a complete AX tree and snapshotId. Use its element indices only with that snapshotId. Select a windowId explicitly for screenshots and coordinate actions. Coordinates are window-local macOS points, which may differ from screenshot pixels. A verified window can expose no AX elements. Its empty snapshot permits screenshots and coordinate input; element-index actions require an element from a fresh AX observation.
+Use cua with method getCapabilities and params {} to inspect permissions and sessionLocked. If sessionLocked is true or an operation reports SESSION_LOCKED, stop UI attempts and ask the user to unlock macOS. A null sessionLocked means no usable console session was verified. After unlocking, read fresh state; screenshots from a locked desktop are not current observations. Use listApps and getApp to select an already running application. getApp requests user consent before application observations or input. If access is denied or revoked, stop using that application until the user explicitly grants access again. Never switch tools to bypass a refusal. Keep the returned appHandle; every app operation requires it. listWindows returns window IDs and point bounds. getState returns a complete AX tree and snapshotId. Use its element indices only with that snapshotId. Select a windowId explicitly for screenshots and coordinate actions. Coordinates are window-local macOS points, which may differ from screenshot pixels. A verified window can expose no AX elements. Its empty snapshot permits screenshots and coordinate input; element-index actions require an element from a fresh AX observation.
 
 Initialize the object API once in persistent PTC. Reuse its variables in later calls; put temporary declarations inside { ... } blocks to avoid redeclaration errors. All object methods are async. Await getWindow before using the returned window object. getAXState returns text, not a structured state object.
 
@@ -149,7 +152,7 @@ App and Window methods:
 
 Raw operation tools use { method, params }, including params: {} for parameterless methods. getApp selects without activating the app. Keep applications in the background for observation and routine input. Do not activate or raise an app during initialization, before each action, or merely because another app is foreground. Prefer advertised AX actions. If a hidden window, another Space or Stage Manager prevents usable observation, explain the foreground-dependent step before app.activate() or an advertised raise action, then read fresh state. Avoid repeated activation when the user switches away; continue background-capable steps and report what requires foreground access. Applications may still change focus in response to input.
 
-Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. WINDOW_CHANGED requires fresh state before any retry; use an advertised AX action or explicitly restore the window before screenshot or coordinate input, then observe again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording permission.
+Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. WINDOW_CHANGED requires fresh state before any retry; use an advertised AX action or explicitly restore the window before screenshot or coordinate input, then observe again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording access in System Settings. After granting access, observe fresh state before continuing; do not automatically replay prior input.
 
 Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste inserts plain text using native Unicode input without changing the clipboard; rich-text formats are unavailable. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, use the host-provided initialization snippet below once. Its installation-owned file URL works independently of the project directory. Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.
 ```
@@ -171,7 +174,7 @@ Tool results append to Session history. Changing plugin configuration or tool pr
 - macOS Stage Manager can reduce background window bounds and screenshots to thumbnails. Full-window observation and coordinate input in this state are not guaranteed; model guidance requires explaining foreground needs and avoiding repeated focus reclamation.
 - Background input depends on private SkyLight symbols; macOS updates can make them unavailable. Validate each target OS version.
 - Observed failures include dispatched Unicode text not appearing in Blender and background Command+A not selecting all text in AppKit. Inspect application state after input; a successful tool result confirms dispatch only.
-- Native binaries require a local build. Signing, distribution and permission onboarding remain future work.
+- Native binaries require a local build. Signing, distribution, and system-permission onboarding remain deferred.
 - Persistent PTC is an external dependency assumption, not an implementation in this package. Real-model task success requires separate evaluation beyond native and protocol fixtures.
 
 -----

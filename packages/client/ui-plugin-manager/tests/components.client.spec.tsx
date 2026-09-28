@@ -459,26 +459,6 @@ describe('PluginManagerPage', () => {
     expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith('@deepseek-ai/dsh-experimental-agent-team-profile', true)
   })
 
-  it('keeps the persisted selection while marking a failed component as a problem', () => {
-    renderTab({ packages: [pkg({ name: 'cua', enabled: true, rows: [row({ phase: 'failed', diagnostic: 'native preparation unavailable' })] })] })
-    expect(document.querySelector('[data-plugin-package="cua"]')?.getAttribute('data-plugin-status')).toBe('problem')
-    expect(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'cua') }).getAttribute('aria-checked')).toBe('true')
-    fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'cua') }))
-    expect(screen.getByText(`${en.reasonLabel}: native preparation unavailable`)).toBeTruthy()
-  })
-
-  it('marks a normally named Computer Use bundle experimental and explains persistent PTC before enabling', () => {
-    const description = 'Enabling switches this profile to persistent PTC.'
-    const { actions } = renderTab({ packages: [pkg({
-      name: '@deepseek-ai/dsh-cua-bundle', experimental: true, enabled: false, optional: true, installed: false,
-      meta: { title: 'Computer Use', description },
-    })] })
-    expect(screen.getByText(en.statusBeta)).toBeTruthy()
-    expect(screen.getByText(description)).toBeTruthy()
-    fireEvent.click(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'Computer Use') }))
-    expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith('@deepseek-ai/dsh-cua-bundle', true)
-  })
-
   it.each([
     '@deepseek-ai/dsh-experimental-agent-team-profile',
     '@deepseek-ai/dsh-experimental-auto-review',
@@ -1030,7 +1010,7 @@ describe('PluginManagerPage', () => {
     fireEvent.click(toggle('row-2'))
     expect(actions.setRowEnabled).toHaveBeenCalledTimes(1)
     expect(toggle('include:row-5')).toHaveProperty('disabled', true)
-    expect(within(detail.querySelector<HTMLElement>('[data-plugin-row="include:row-3"]')!).getByText(en.rowPhaseFailed)).toBeTruthy()
+    expect(within(detail).getByText(en.rowPhaseFailed)).toBeTruthy()
     expect(within(detail).getByText(en.rowPhaseLoading)).toBeTruthy()
     expect(within(detail).getByText(en.rowPhaseUnloading)).toBeTruthy()
     expect(document.querySelector('[data-plugin-row="include:row-3"]')?.getAttribute('data-state')).toBe('failed')

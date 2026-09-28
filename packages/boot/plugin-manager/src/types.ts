@@ -46,8 +46,6 @@ export interface BundleRowInfo {
 /** One installed or installation-provided bundle. */
 export interface BundleInfo {
   name: string
-  /** Explicit experimental feature status declared by the bundle. */
-  experimental?: boolean
   version?: string
   /** Local display text with available translations or literal fallbacks, or a metadata diagnostic. */
   meta?: PluginLocalizedMeta

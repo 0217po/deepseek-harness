@@ -32,9 +32,15 @@ function call(requestId, method, params) {
   if (method === 'getCapabilities') return { platform: 'macos', sessionLocked: false, permissions: { accessibility: true, screenRecording: true }, methods, coordinateSpace: 'window-points', browser: false }
   if (method === 'listApps') return [{ pid: app.pid, name: app.name, bundleId: app.bundleId }]
   if (method === 'getApp') {
+    if (params.selector === 'Denied Fixture' || params.selector === 'Revocable Fixture') {
+      const denied = params.selector === 'Denied Fixture'
+      return { appHandle: denied ? 'denied-app' : 'revoked-app', pid: 17, name: params.selector,
+        authorization: { id: (denied ? 'b' : 'c').repeat(64), name: params.selector,
+          executablePath: denied ? '/fixture/denied' : '/fixture/revocable', persistable: false } }
+    }
     if (!['Fixture', 'test.fixture', '9'].includes(params.selector)) refuse('APP_NOT_FOUND', 'Select the running Fixture application')
     acquired = true
-    return app
+    return { ...app, authorization: {"id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "name": "Fixture", "executablePath": "/fixture/app", "persistable": true} }
   }
   if (!acquired || params.appHandle !== app.appHandle) refuse('APP_NOT_FOUND', 'Acquire an application in this helper first')
   if (method === 'activate') {

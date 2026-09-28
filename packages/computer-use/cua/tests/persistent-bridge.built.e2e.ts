@@ -49,7 +49,7 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
       await ctx.plugin(NodeRuntime, { executionMode: 'in-memory', bootstrapPath: bootstrap })
       await ctx.plugin(Loader)
       ctx.loader.builtins.cua = Cua
-      const entry = await ctx.loader.create({ name: 'cordis:cua', config: { helperPath } })
+      const entry = await ctx.loader.create({ name: 'cordis:cua', config: { helperPath, allowedApps: [{ 'id': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'name': 'Fixture', 'executablePath': '/fixture/app' }] } })
       await ctx.loader.resolve(entry).fiber!.await()
       await mountAgentLoopTestHarness(ctx)
       ctx.llm.registerAdapter(['bridge-fixture'], new VisualAdapter())

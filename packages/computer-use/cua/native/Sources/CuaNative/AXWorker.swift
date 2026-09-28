@@ -174,9 +174,12 @@ actor AXWorker {
             }
             guard !matches.isEmpty else { throw NativeFailure(code: "APP_UNAVAILABLE", message: "No running application matches selector") }
             guard matches.count == 1, let app = matches.first else { throw NativeFailure(code: "AMBIGUOUS_APP", message: "Select an exact PID from listApps") }
-            let handle = try acquire(NativePlatform.identity(app.pid))
+            let identity = try NativePlatform.identity(app.pid)
+            let authorization = try ApplicationAuthorization.describe(identity, name: app.name ?? selector, expectedExecutablePath: app.executablePath)
+            let handle = try acquire(identity)
             var response = app.json.object ?? [:]
             response["appHandle"] = .string(handle)
+            response["authorization"] = authorization
             return .result(.object(response))
         }
         let handle = try params.string("appHandle")

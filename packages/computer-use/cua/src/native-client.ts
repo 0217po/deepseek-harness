@@ -121,9 +121,12 @@ export class NativeClient {
   /** Whether this helper has lost its retained native state. */
   get disposed(): boolean { return this.failure !== undefined }
 
+  /** Invalidate retained handles and request termination; the owner must await dispose before releasing the helper. */
+  invalidate(): void { this.fail(new NativeError('NATIVE_DISPOSED', 'Helper disposed')) }
+
   /** Stop pending work and await the entire managed process range before releasing streams. */
   dispose(): Promise<void> {
-    this.fail(new NativeError('NATIVE_DISPOSED', 'Helper disposed'))
+    this.invalidate()
     this.disposal ??= (async () => {
       try {
         const [, range] = await Promise.allSettled([this.handle.done, this.handle.waitForExit()])

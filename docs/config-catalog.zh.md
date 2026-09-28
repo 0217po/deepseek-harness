@@ -788,11 +788,17 @@ export interface Config {
 ## `@deepseek-ai/dsh-cua`
 
 - `inject`: `computerUse` · `tools` · `systemPrompt` · `subprocess` · `agents`
-- `source`: [`packages/computer-use/cua/src/index.ts:25`](../packages/computer-use/cua/src/index.ts)
+- `refs`: [`Branded`](../packages/util/brand/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/computer-use/cua/src/index.ts:30`](../packages/computer-use/cua/src/index.ts)
 
 ```ts config-catalog
 /** Native executable and per-operation resource bounds. */
 export interface Config {
+  /** Signed applications explicitly approved for future tasks in this profile. */
+  allowedApps: Volatile<Array<Omit<CuaApplicationGrant, 'id'> & {
+    /** Unbranded digest at the profile configuration boundary; admitted by the Config schema. */
+    id: string
+  }>>
   /** Absolute native helper override; omission prepares the package-owned executable. */
   helperPath?: string
   /** Maximum time in milliseconds for native component preparation. */
@@ -818,6 +824,19 @@ export interface Config {
   /** Maximum depth traversed by a native accessibility snapshot. */
   maxDepth: number
 }
+
+/** Identity shown to the human before application access is granted. */
+export interface CuaApplicationGrant {
+  /** Native identity digest admitted from the helper or validated profile configuration. */
+  id: CuaApplicationId
+  /** Application label presented when the decision was made. */
+  name: string
+  /** Canonical executable path presented with the application label. */
+  executablePath: string
+}
+
+/** Native digest of an executable path and its signing requirement or process lifetime. */
+export type CuaApplicationId = Branded<'CuaApplicationId'>
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-cua -->
 
@@ -4495,7 +4514,6 @@ export interface Config {
 | `@deepseek-ai/dsh-client-ui-slots` | — | [`packages/client/ui-slots/src/index.ts`](../packages/client/ui-slots/src/index.ts) |
 | `@deepseek-ai/dsh-client-web` | — | [`packages/client/web/src/index.ts`](../packages/client/web/src/index.ts) |
 | `@deepseek-ai/dsh-cmdline` | — | [`packages/boot/cmdline/src/index.ts`](../packages/boot/cmdline/src/index.ts) |
-| `@deepseek-ai/dsh-cua-bundle` | — | [`packages/computer-use/cua-bundle/src/index.ts`](../packages/computer-use/cua-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-deque` | — | [`packages/util/deque/src/index.ts`](../packages/util/deque/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-agent-team-profile` | — | [`packages/experimental/agent-team-profile/src/index.ts`](../packages/experimental/agent-team-profile/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-browser-use-runtime` | — | [`packages/experimental/browser-use-runtime/src/index.ts`](../packages/experimental/browser-use-runtime/src/index.ts) |

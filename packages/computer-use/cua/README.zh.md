@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-从仓库运行 Web 时，在插件页开启 [Computer Use](../cua-bundle/README.zh.md)。首次启用会在 macOS 14 及以上准备本机组件；现有 Web profile 保持选中时，后续构建继续检查更新。未开启的 profile 不准备原生组件。也可以显式加载源码覆盖层：
+该提供方需要在 macOS 14 及以上通过源码配置显式启用，默认配置不加载它。先准备原生组件，再加载注册表和提供方覆盖层：
 
 ```sh
 swift build --package-path packages/computer-use/cua/native --configuration release
@@ -38,6 +38,7 @@ pnpm dsh headless --patch packages/computer-use/cua/examples/macos.cordis.yml --
 
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
+| `allowedApps` | `[]` | 当前配置档的动态应用授权，绑定可执行文件路径和已验证的代码签名要求。 |
 | `helperPath` | 包内可执行文件 | 可选的原生可执行文件绝对路径覆盖。 |
 | `buildTimeoutMs` | `300000` | 原生组件准备的最长时间。 |
 | `timeoutMs` | `30000` | 单次操作截止时间，取消后可能已发生部分输入。 |
@@ -52,6 +53,8 @@ pnpm dsh headless --patch packages/computer-use/cua/examples/macos.cordis.yml --
 组合键用 `+` 分隔修饰键与按键。加号键写作 `+`，Command 加号写作 `cmd++`，也可以使用键名 `plus`；`cmd+` 这类缺少按键的输入会被拒绝。
 
 Agent 销毁和插件卸载会取消并等待完整工具调用，包括图像接入检查和附件存储。已经开始的图像写入必须结束后，销毁才会返回；已取消的调用不会返回成功截图。
+
+CUA 工具在读取 AX、窗口标题、截图、激活和输入之前检查应用授权。User Questions 提供任务级允许和拒绝选项；应用签名可验证且组合支持配置持久化时，也可保存授权。任务授权绑定所选进程句柄，长期授权绑定真实可执行路径和指定代码签名要求。拒绝后，同一任务不再反复询问。删除保存的 `allowedApps` 条目会取消相关操作并使原生组件中的句柄失效；重新授权需要重新选择应用。同一组件中的其他句柄也会失效，已保存的授权仍可复用。Agent 或提供方销毁时等待组件清理。设计理由见[应用授权决策](../../../.agents/notes/implemented/architecture/2026-09-26-cua-application-consent.zh.md)。这些检查约束 CUA 调用；持久 PTC 和另行授权的 shell 工具保留各自的执行权限。
 
 原始 `getState` 操作返回经过校验的状态字段和完整 `tree`。原生 helper 还返回供原生检查使用的结构化元素诊断数组；工具投影会从模型文本和结构化工具值中移除这份重复数组。
 
@@ -121,7 +124,7 @@ AppKit sheet 可以通过其窗口 ID 单独选择，也会出现在所属文档
 ##### 操作指导文本（原文）
 
 ```markdown
-Use cua with method getCapabilities and params {} to inspect permissions and sessionLocked. If sessionLocked is true or an operation reports SESSION_LOCKED, stop UI attempts and ask the user to unlock macOS. A null sessionLocked means no usable console session was verified. After unlocking, read fresh state; screenshots from a locked desktop are not current observations. Use listApps and getApp to select an already running application. Keep the returned appHandle; every app operation requires it. listWindows returns window IDs and point bounds. getState returns a complete AX tree and snapshotId. Use its element indices only with that snapshotId. Select a windowId explicitly for screenshots and coordinate actions. Coordinates are window-local macOS points, which may differ from screenshot pixels. A verified window can expose no AX elements. Its empty snapshot permits screenshots and coordinate input; element-index actions require an element from a fresh AX observation.
+Use cua with method getCapabilities and params {} to inspect permissions and sessionLocked. If sessionLocked is true or an operation reports SESSION_LOCKED, stop UI attempts and ask the user to unlock macOS. A null sessionLocked means no usable console session was verified. After unlocking, read fresh state; screenshots from a locked desktop are not current observations. Use listApps and getApp to select an already running application. getApp requests user consent before application observations or input. If access is denied or revoked, stop using that application until the user explicitly grants access again. Never switch tools to bypass a refusal. Keep the returned appHandle; every app operation requires it. listWindows returns window IDs and point bounds. getState returns a complete AX tree and snapshotId. Use its element indices only with that snapshotId. Select a windowId explicitly for screenshots and coordinate actions. Coordinates are window-local macOS points, which may differ from screenshot pixels. A verified window can expose no AX elements. Its empty snapshot permits screenshots and coordinate input; element-index actions require an element from a fresh AX observation.
 
 Initialize the object API once in persistent PTC. Reuse its variables in later calls; put temporary declarations inside { ... } blocks to avoid redeclaration errors. All object methods are async. Await getWindow before using the returned window object. getAXState returns text, not a structured state object.
 
@@ -149,7 +152,7 @@ App and Window methods:
 
 Raw operation tools use { method, params }, including params: {} for parameterless methods. getApp selects without activating the app. Keep applications in the background for observation and routine input. Do not activate or raise an app during initialization, before each action, or merely because another app is foreground. Prefer advertised AX actions. If a hidden window, another Space or Stage Manager prevents usable observation, explain the foreground-dependent step before app.activate() or an advertised raise action, then read fresh state. Avoid repeated activation when the user switches away; continue background-capable steps and report what requires foreground access. Applications may still change focus in response to input.
 
-Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. WINDOW_CHANGED requires fresh state before any retry; use an advertised AX action or explicitly restore the window before screenshot or coordinate input, then observe again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording permission.
+Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. WINDOW_CHANGED requires fresh state before any retry; use an advertised AX action or explicitly restore the window before screenshot or coordinate input, then observe again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording access in System Settings. After granting access, observe fresh state before continuing; do not automatically replay prior input.
 
 Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste inserts plain text using native Unicode input without changing the clipboard; rich-text formats are unavailable. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, use the host-provided initialization snippet below once. Its installation-owned file URL works independently of the project directory. Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.
 ```
@@ -171,7 +174,7 @@ Window objects expose observation and pointer/AX actions; keyboard input remains
 - macOS 台前调度可能将后台窗口的尺寸与截图变为缩略图，当前无法保证这种状态下的完整画面与坐标输入；模型指引要求说明前台需求并避免反复抢回焦点。
 - 后台输入依赖私有 SkyLight 符号，macOS 升级可能使其不可用，需在目标系统版本验证。
 - 实测 Blender Unicode 输入曾出现分派成功但界面未显示文本，后台 AppKit 的 Command+A 曾未选中全文。输入后必须检查应用状态；工具返回成功只表示已分派。
-- 原生二进制需要本地构建。签名、分发和权限引导尚未实现。
+- 原生二进制需要本地构建。签名、分发和系统权限引导留待后续。
 - 持久 PTC 是对外部运行环境的假设，本包不实现它。真实模型任务成功率需要在原生测试和协议测试之外单独评估。
 
 -----

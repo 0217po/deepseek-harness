@@ -43,6 +43,15 @@
     },
     {
       "path": "../../ptc-runtime/ptc-runtime"
+    },
+    {
+      "path": "../../settings/settings"
+    },
+    {
+      "path": "../../interaction/user-questions"
+    },
+    {
+      "path": "../../../vendor/loader"
     }
   ]
 }

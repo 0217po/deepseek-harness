@@ -9,6 +9,7 @@ struct ApplicationInfo: Sendable {
     let name: String?
     let bundleID: String?
     let path: String?
+    let executablePath: String?
     let regular: Bool
     var json: JSONValue {
         var value: [String: JSONValue] = ["pid": .number(Double(pid))]
@@ -26,7 +27,7 @@ struct ApplicationCatalogSnapshot: Sendable {
     static func snapshot() -> ApplicationCatalogSnapshot {
         let apps = NSWorkspace.shared.runningApplications.filter { !$0.isTerminated }.map { app in
             ApplicationInfo(pid: app.processIdentifier, name: app.localizedName, bundleID: app.bundleIdentifier,
-                                   path: app.bundleURL?.path, regular: app.activationPolicy == .regular)
+                            path: app.bundleURL?.path, executablePath: app.executableURL?.path, regular: app.activationPolicy == .regular)
         }
         return ApplicationCatalogSnapshot(applications: apps, frontPID: NSWorkspace.shared.frontmostApplication?.processIdentifier)
     }
@@ -41,6 +42,10 @@ struct ApplicationCatalogSnapshot: Sendable {
 }
 
 enum NativePlatform {
+    static func executablePath(_ pid: Int32) -> String? {
+        var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+        return proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 ? String(cString: buffer) : nil
+    }
     static func identity(_ pid: Int32) throws -> ProcessIdentity {
         var info = proc_bsdinfo()
         let size = MemoryLayout<proc_bsdinfo>.stride

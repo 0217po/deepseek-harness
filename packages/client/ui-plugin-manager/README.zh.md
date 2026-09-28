@@ -49,8 +49,6 @@ Host 将网络失败或超时归因于 GitHub 地址，且提供 npmmirror 时�
 
 ### 切换一个组合包
 
-组合包可通过 `dsh.bundle.experimental: true` 显示实验性标签，代码目录和包名不必包含 experimental；已有实验性包名也保留标签。
-
 组合包页面在标题下方显示完整包名，也就是在别处安装它所需的 spec。组合包开关改变其层选择。启用了 HMR 的 profile 在操作完成前重组；没有 HMR 的 profile，以及被更高层覆盖的组合包，会以 toast 说明。Host 读不了的组合包带异常标签，其页面给出原因，且不能打开；提供管理组件的组合包保持锁定。Host 以错误码作答，由页面字典措辞；pnpm 与 Loader 自己的诊断原样显示。页面从卡片与数量中排除内置 profile 组合包，即使 profile 将它们列为依赖或 Host 报告了异常。Host 清单仍保留完整数据；设置中「插件」分区的「插件列表」标签页负责查看它们的插件。
 
 ### 切换组合包里的一行
@@ -84,8 +82,6 @@ ctx.slots.inject('plugins.detail.section', () => ctx.slots.register({
 ```
 
 行页只在某个 `plugins.row.config` 条目点名这一行时存在，因此给行的贡献渲染在该配置打开的页面上。
-
-组件列表和详情页显示 Host 清单中的当前启动诊断。重新打开页面后仍能看到原因，组件恢复后诊断消失。
 
 -----
 

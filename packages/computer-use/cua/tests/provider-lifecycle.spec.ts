@@ -1,14 +1,21 @@
 /** Native helper replacement is synchronized with Agent and provider disposal. */
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { setImmediate } from 'node:timers/promises'
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
+import Timer from '@deepseek-ai/cordis-plugin-timer'
+import { initProfile, mountRootInclude, readProfilePatches, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
+import ConfigEditor from '@deepseek-ai/dsh-config-editor'
+import Settings from '@deepseek-ai/dsh-settings'
+import Hmr from '@deepseek-ai/dsh-hmr'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
+import UserQuestions from '@deepseek-ai/dsh-user-questions'
 import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
@@ -35,6 +42,7 @@ vi.mock('../src/native-client.ts', async importOriginal => ({
     disposed = false
     constructor() { native.instances.push(this) }
     request = native.request
+    invalidate() { this.disposed = true }
     async dispose() { this.disposed = true; await native.dispose() }
   },
 }))
@@ -42,7 +50,7 @@ vi.mock('../src/native-client.ts', async importOriginal => ({
 const config = {
   helperPath: resolve('fixture-helper'), buildTimeoutMs: 300_000, timeoutMs: 10_000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096,
   graceMs: 10, textEventIntervalMs: 8, maxElements: 64, maxDepth: 8, dragDurationMs: 200, dragSteps: 10,
-} satisfies NativeProvider.Config
+} satisfies Omit<NativeProvider.Config, 'allowedApps'>
 
 const { helperPath: _helperPath, ...automaticConfig } = config
 
@@ -75,10 +83,18 @@ async function setup(model?: { provider: string; model: string }) {
   return { ctx, provider, handle, execute }
 }
 
+async function selectApplication(f: Awaited<ReturnType<typeof setup>>) {
+  await f.ctx.plugin(UserQuestions)
+  f.ctx.on('user-questions/request', async () => ({ answers: [{ id: 'cua-app-access', selected: ['Allow for this task'] }] }))
+  native.request.mockResolvedValueOnce({ appHandle: 'app-one', pid: 17, name: 'Fixture',
+    authorization: { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: false } })
+  expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
+}
+
 it('rejects a relative helper path before publishing computer-use operations', async () => {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
-  await expect(NativeProvider.apply(ctx, { ...config, helperPath: 'relative-helper' })).rejects.toThrow('helperPath must be absolute')
+  await expect(NativeProvider.apply(ctx, { ...config, allowedApps: { get: () => [] }, helperPath: 'relative-helper' })).rejects.toThrow('helperPath must be absolute')
 })
 
 it('correlates a native request with its logged tool invocation', async () => {
@@ -254,10 +270,11 @@ it.each([false, true])('rejects an ended Agent with prior helper acquisition %s'
 
 it('supplies configured resource bounds and clears registrations on unload', async () => {
   const f = await setup()
+  await selectApplication(f)
   await f.execute('getState', { appHandle: 'app-one' })
-  expect(native.request).toHaveBeenLastCalledWith('getState', { appHandle: 'app-one', maxElements: 64, maxDepth: 8 }, expect.any(AbortSignal), ToolCallId('lifecycle-1'))
+  expect(native.request).toHaveBeenLastCalledWith('getState', { appHandle: 'app-one', maxElements: 64, maxDepth: 8 }, expect.any(AbortSignal), ToolCallId('lifecycle-2'))
   await f.execute('drag', { appHandle: 'app-one', windowId: 7, fromX: 1, fromY: 2, toX: 3, toY: 4 })
-  expect(native.request).toHaveBeenLastCalledWith('drag', expect.objectContaining({ durationMs: 200, steps: 10 }), expect.any(AbortSignal), ToolCallId('lifecycle-2'))
+  expect(native.request).toHaveBeenLastCalledWith('drag', expect.objectContaining({ durationMs: 200, steps: 10 }), expect.any(AbortSignal), ToolCallId('lifecycle-3'))
   await f.provider.dispose()
   expect(f.ctx.tools.schemas()).toEqual([])
   expect(native.dispose).toHaveBeenCalledTimes(1)
@@ -265,6 +282,7 @@ it('supplies configured resource bounds and clears registrations on unload', asy
 
 it('keeps native element diagnostics out of model-visible state and structured tool values', async () => {
   const f = await setup()
+  await selectApplication(f)
   const visible = { appHandle: 'app-one', pid: 17, windowId: null, focusedWindowId: null,
     snapshotId: 'state-one', tree: '- [0] AXButton "Save"', windows: [], truncated: false }
   native.request.mockResolvedValue({ ...visible, elements: [{ index: 0, role: 'AXButton', bounds: [10, 20, 30, 40] }] })
@@ -279,6 +297,7 @@ it('keeps native element diagnostics out of model-visible state and structured t
 
 it('preserves screenshot coordinates and image attachments on every host', async () => {
   const f = await setup({ provider: 'image-fixture', model: 'vision' })
+  await selectApplication(f)
   f.ctx.llm.registerAdapter(['image-fixture'], new ImageAdapter())
   const root = await mkdtemp(join(tmpdir(), 'dsh-cua-image-'))
   onTestFinished(async () => { await f.ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
@@ -305,6 +324,7 @@ it.each([
   { owner: 'agent', stage: 'storage' },
 ])('waits for screenshot $stage and cancels its result during $owner disposal', async ({ owner, stage }) => {
   const f = await setup({ provider: 'image-fixture', model: 'vision' })
+  await selectApplication(f)
   f.ctx.llm.registerAdapter(['image-fixture'], new ImageAdapter())
   const root = await mkdtemp(join(tmpdir(), 'dsh-cua-image-disposal-'))
   onTestFinished(async () => { try { await f.ctx.fiber.dispose() } finally { await rm(root, { recursive: true, force: true }) } })
@@ -352,7 +372,7 @@ it('prepares the selected native component before registering CUA and creates no
   const f = await setup()
   await f.provider.dispose()
   native.prepare.mockReset().mockResolvedValue(resolve('prepared-helper'))
-  await NativeProvider.apply(f.ctx, automaticConfig)
+  await NativeProvider.apply(f.ctx, { ...automaticConfig, allowedApps: { get: () => [] } })
   expect(native.prepare).toHaveBeenCalledTimes(1)
   expect(native.instances).toHaveLength(0)
   await f.execute()
@@ -401,7 +421,7 @@ it('waits for canceled preparation and never publishes its late success', async 
   const ready = Promise.withResolvers<string>()
   onTestFinished(() => { ready.resolve(resolve('late-helper')) })
   native.prepare.mockReset().mockReturnValue(ready.promise)
-  const starting = Promise.resolve(NativeProvider.apply(f.ctx, automaticConfig))
+  const starting = Promise.resolve(NativeProvider.apply(f.ctx, { ...automaticConfig, allowedApps: { get: () => [] } }))
   const failed = expect(starting).rejects.toThrow()
   const signal = native.prepare.mock.calls[0]![0].signal
   const aborted = new Promise<void>((resolve) => {
@@ -424,6 +444,55 @@ it('rejects an unsupported native host before starting preparation', async () =>
   await f.provider.dispose()
   native.architecture.mockImplementationOnce(() => { throw new Error('unsupported host') })
   native.prepare.mockReset()
-  await expect(NativeProvider.apply(f.ctx, automaticConfig)).rejects.toThrow('unsupported host')
+  await expect(NativeProvider.apply(f.ctx, { ...automaticConfig, allowedApps: { get: () => [] } })).rejects.toThrow('unsupported host')
   expect(native.prepare).not.toHaveBeenCalled()
+})
+
+
+it('stores signed application consent in the current profile and refuses unavailable settings', async () => {
+  const f = await setup()
+  await f.provider.dispose()
+  const home = await mkdtemp(join(tmpdir(), 'cua-grant-profile-')), dir = join(home, 'profile')
+  onTestFinished(async () => { await f.ctx.fiber.dispose(); await rm(home, { recursive: true, force: true }) })
+  initProfile(dir, ['permission-fixture-bundle'])
+  const bundle = join(dir, 'node_modules', 'permission-fixture-bundle')
+  await mkdir(bundle, { recursive: true })
+  await writeFile(join(home, 'package.json'), '{"name":"test-installation"}\n')
+  await writeFile(join(bundle, 'package.json'), JSON.stringify({ name: 'permission-fixture-bundle', version: '1.0.0',
+    dsh: { bundle: { patch: 'cordis.patch.yml' } } }))
+  await writeFile(join(bundle, 'cordis.patch.yml'), JSON.stringify([{ insert: [{ id: 'cua', name: 'cordis:cua', config }] }]))
+  await writeFile(join(dir, 'cordis.yml'), '[]\n')
+  const profile: ProfileContext = { name: 'test', startedBundles: ['permission-fixture-bundle'], dir,
+    patchPath: join(dir, 'cordis.patch.yml'), installAnchor: join(home, 'package.json'), cwd: home, home,
+    overlays: [], telemetryDisabledEnv: undefined }
+  f.ctx.baseUrl = pathToFileURL(home).href + '/'
+  f.ctx.provide('profileContext', profile)
+  f.ctx.provide('appReady', { onReady: (listener: () => void) => { listener(); return () => {} } })
+  await f.ctx.plugin(Loader)
+  f.ctx.loader.builtins.cua = NativeProvider
+  await f.ctx.plugin(ConfigEditor)
+  await mountRootInclude(f.ctx, join(dir, 'cordis.yml'), readProfilePatches('test', profile))
+  await f.ctx.loader.await()
+  await f.ctx.plugin(Settings)
+  await f.ctx.plugin(Timer)
+  await f.ctx.plugin(Hmr, { root: [], ignored: [], debounce: 0 })
+  await f.ctx.hmr.runExclusive(async () => {})
+  expect(f.ctx.settings.describe().find(row => row.ns === 'cua')?.autoGenerate).toBe(false)
+  await f.ctx.plugin(UserQuestions)
+  f.ctx.on('user-questions/request', async () => ({ answers: [{ id: 'cua-app-access', selected: ['Always allow'] }] }))
+  const authorization = { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: true }
+  native.request.mockResolvedValue({ appHandle: 'signed-app', pid: 17, name: 'Fixture', authorization })
+  expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
+  expect(await readFile(profile.patchPath, 'utf8')).toContain(authorization.id)
+  const settings = f.ctx.settings.describe().find(row => row.ns === 'cua')!
+  await f.ctx.settings.mutate('cua', [{ op: 'set', path: ['allowedApps'], value: [] }], settings.revision)
+  expect(await readFile(profile.patchPath, 'utf8')).toContain('allowedApps: []')
+  const revoked = await f.execute('getState', { appHandle: 'signed-app' })
+  expect(revoked.isError).toBe(true)
+  expect(JSON.stringify(revoked.content)).toContain('APP_ACCESS_REVOKED')
+  vi.spyOn(f.ctx.settings, 'describe').mockReturnValue([])
+  native.request.mockResolvedValue({ appHandle: 'different-app', pid: 18, name: 'Other fixture', authorization: { ...authorization, id: 'b'.repeat(64) } })
+  const unavailable = await f.execute('getApp', { selector: 'Fixture' })
+  expect(unavailable.isError).toBe(true)
+  expect(JSON.stringify(unavailable.content)).toContain('APP_ACCESS_DENIED')
 })

@@ -577,13 +577,9 @@ export class Session implements SessionFace {
     this.notifier.markDirty()
   }
 
-  /**
-   * Update Host membership while retaining the resident instance and its draft.
-   * @param present - Whether a current Host event or reconciled list contains this Session.
-   */
-  handlePresence(present: boolean): void {
-    if (present === !this.removed) return
-    this.removed = !present
+  /** `api-session/removed` relay: flag the snapshot while retaining the resident instance. */
+  handleRemoved(): void {
+    this.removed = true
     this.notifier.markDirty()
   }
 
