@@ -99,9 +99,7 @@ kind: "package-reference"
 <a id="model-experience"></a>
 ## 模型体验
 
-间接地，通过 `dsh-tools` 中的 PTC mode；当显式组合挂载本提供方时，它会把程序的完成值或失败渲染成保留的 `run_code` 结果，且已发布 profile 均不挂载这个实验包。
-
-提供方通过 `executionInstructions` 说明异步函数语法、`print`/`return` 输出和每次启动新进程的状态规则；工具消费者将这些指引附加到 `run_code`。
+间接地，通过显式组合中的 `dsh-tools` PTC mode：消费者将本提供方的异步函数、输出和新进程执行指引附加到 `run_code`，并将程序的完成值或失败渲染为工具结果。
 
 #### KV Cache 效应
 
