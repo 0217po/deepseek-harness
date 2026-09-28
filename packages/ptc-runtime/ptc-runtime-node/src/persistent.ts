@@ -40,6 +40,7 @@ class Kernel {
   private active: Evaluation | undefined
   /** Admission remains reserved until the result includes completed process cleanup. */
   private running = false
+  private cleanupPending = false
   private ready = false
   private sequence = 0
   private nextCall = 1
@@ -53,7 +54,7 @@ class Kernel {
   constructor(private readonly ctx: Context, private readonly config: ResolvedConfig) {}
 
   assertIdle(): void {
-    if (this.running) throw new Error('persistent PTC does not accept concurrent runs for one state owner')
+    if (this.running || this.cleanupPending) throw new Error('persistent PTC does not accept concurrent runs for one state owner')
   }
 
   async run(spec: PtcRunSpec, bindings: Map<string, PtcBindingNamespace>, code: string): Promise<PtcRunResult> {
@@ -124,6 +125,7 @@ class Kernel {
   private stop(): Promise<void> {
     if (this.stopped) return this.stopped
     this.closed = true
+    this.cleanupPending = true
     this.controller.abort()
     this.channel?.close()
     this.stopped = (async () => {
@@ -131,13 +133,16 @@ class Kernel {
       const handle = this.handle
       if (!handle) return
       if (!await terminateProcess(handle, this.config.graceMs)) throw new Error('persistent Node process output did not close cleanly')
-    })()
+    })().finally(() => { this.cleanupPending = false })
     return this.stopped
   }
 
   private fail(kind: PtcRunFailure['kind'], message: string): void {
     if (this.active) this.active.finish({ kind, message: `${message}; retained variables were cleared` }, undefined, true)
-    else void this.stop().catch((error: unknown) => { this.ctx.logger.warn(messageOf(error)) })
+    else {
+      if (!this.closed) this.ctx.logger.warn(message)
+      void this.stop().catch((error: unknown) => { this.ctx.logger.warn(messageOf(error)) })
+    }
   }
 
   private dispatch(evaluation: Evaluation): void {
@@ -162,9 +167,8 @@ class Kernel {
     for (const stream of [handle.stdout, handle.stderr]) {
       stream.setEncoding('utf8')
       stream.on('data', (text: string) => {
-        if (!this.active) return
         if (stream === handle.stderr) this.stderr = (this.stderr + text).slice(-this.config.maxOutputBytes)
-        this.active.admit(text)
+        this.active?.admit(text)
       })
       stream.on('error', (error: Error) => { this.fail('worker-exit', error.message) })
     }
@@ -280,7 +284,7 @@ export class InMemoryExecution {
   resolve(request: PtcRunRequest): PtcRunSpec {
     if (this.disposed) throw new Error('persistent PTC: resolve after disposal')
     if (request.sandboxPolicy !== undefined) throw new Error('persistent PTC does not support sandbox policies')
-    const cwd = request.cwd ?? process.cwd()
+    const cwd = request.cwd ?? this.ctx.sandboxPolicy.workspaceRoot
     if (!isAbsolute(cwd)) throw new Error('persistent PTC: cwd must be absolute')
     return { ...request, cwd, timeoutMs: request.timeoutMs === null ? null : clampTimeout(request.timeoutMs, this.config.timeoutMs, this.config.maxTimeoutMs, 'persistent PTC timeoutMs') }
   }
@@ -327,7 +331,6 @@ export class InMemoryExecution {
     const kernel = this.owners.get(owner)
     if (!kernel) return
     this.owners.delete(owner)
-    await kernel.dispose()
-    this.kernels.delete(kernel)
+    try { await kernel.dispose() } finally { this.kernels.delete(kernel) }
   }
 }

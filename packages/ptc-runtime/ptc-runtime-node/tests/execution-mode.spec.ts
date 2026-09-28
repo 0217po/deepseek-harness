@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { expect, it } from 'vitest'
@@ -36,4 +37,11 @@ it('clears retained state when a provider is reloaded with another execution mod
   await perCallFiber.dispose()
   const { runtime: resumed } = await mountRuntime(ctx, { executionMode: 'in-memory' })
   expect((await resumed.run(resumed.resolve({ program: 'typeof retained', bindings: [], stateOwner: owner }))).value).toBe('undefined')
+})
+
+it.each<NonNullable<Config['executionMode']>>(['per-call', 'in-memory'])('resolves omitted cwd from the configured workspace in %s mode', async (executionMode) => {
+  const workspaceRoot = join(process.cwd(), 'configured-workspace')
+  const { runtime } = await mountRuntime(new Context(), { executionMode }, { workspaceRoot })
+  expect(runtime.resolve({ program: '', bindings: [] }).cwd).toBe(workspaceRoot)
+  expect(runtime.resolve({ program: '', bindings: [], cwd: process.cwd() }).cwd).toBe(process.cwd())
 })
