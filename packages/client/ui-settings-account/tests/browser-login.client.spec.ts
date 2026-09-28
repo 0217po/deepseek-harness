@@ -83,6 +83,13 @@ it('leaves success completion to the Platform page', () => {
   browser.dispose()
   expect(close).not.toHaveBeenCalled()
 })
+it('closes a blank tab when the Host finishes before it navigates', () => {
+  const { browser, close } = setup()
+  browser.follow(view('exchanging'))
+  browser.update(view('succeeded'))
+  browser.dispose()
+  expect(close).toHaveBeenCalledOnce()
+})
 it('opens the destination mapped from the authorization URL', () => {
   const { replace } = setup()
   const browser = new BrowserLogin(url => `${url}?theme=dark`)

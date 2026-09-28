@@ -41,7 +41,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Services required by account settings. */
 export const inject = ['slots', 'locale', 'remote', 'remote.account', 'remote.session', 'theme', 'configForms']
-/** @param ctx - client plugin context. */
+/** Register account UI in Desktop and plain Web clients. @param ctx - client plugin context. */
 export function apply(ctx: Context): void {
   const desktop = 'dshDesktop' in globalThis
   ctx.effect(() => ctx.locale.register('settings.account', { en, zh }), 'account: dictionaries')
@@ -182,7 +182,7 @@ export function apply(ctx: Context): void {
         dshDesktop?: { deviceInfo?: () => Promise<string> }
       }).dshDesktop?.deviceInfo
       if (readDeviceInfo === undefined) {
-        // A Desktop bridge without the optional reader reports the renderer user agent.
+        // A plain browser, or a Desktop bridge without the optional reader, reports the renderer user agent.
         openForm(navigator.userAgent)
         return
       }

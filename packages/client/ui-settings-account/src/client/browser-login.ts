@@ -55,6 +55,8 @@ export class BrowserLogin {
       return
     }
     if (attempt?.phase === 'succeeded') {
+      // A tab that never reached the authorization page stays blank; the Host finished without it.
+      if (!this.navigated) this.popup?.close()
       this.popup = null
       this.attempt = undefined
       return
