@@ -50,7 +50,10 @@ export class ApplicationAccess {
     ctx.effect(() => () => this.dispose(), 'cua-application-access.dispose')
   }
 
-  /** @returns Completion after consent waits and active operations settle. */
+  /**
+   * Cancel consent waits and join owned operations.
+   * @returns Completion after consent waits and active operations settle.
+   */
   dispose(): Promise<void> {
     return this.disposal ??= (async () => {
       this.lifetime.abort()
@@ -174,7 +177,10 @@ export class ApplicationAccess {
     }
   }
 
-  /** @param agent Disposed task whose transient decisions are released. */
+  /**
+   * Forget the disposed task's transient decisions and selected handles.
+   * @param agent Disposed task whose transient decisions are released.
+   */
   forget(agent: Agent): void {
     for (const [client, state] of this.clients) if (state.agent === agent) this.clients.delete(client)
     this.rejected.delete(agent)
