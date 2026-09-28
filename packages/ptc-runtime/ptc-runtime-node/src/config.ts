@@ -1,4 +1,4 @@
-/** Shared configuration for the isolated and persistent Node providers. */
+/** Execution mode and resource limits for the Node PTC provider. */
 import { isAbsolute } from 'node:path'
 import z from '@deepseek-ai/schemastery'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
@@ -6,6 +6,8 @@ import type { LaunchConfig } from './launch.ts'
 
 /** Deployment-varying runtime bounds and launch choices. */
 export interface Config extends LaunchConfig {
+  /** per-call starts fresh confined processes; in-memory retains an unsandboxed REPL per owner. */
+  executionMode?: 'per-call' | 'in-memory'
   /** Default elapsed deadline, including nested tool and approval waits. */
   timeoutMs?: number
   /** Maximum numeric elapsed budget accepted by resolve. */
@@ -24,8 +26,9 @@ export interface Config extends LaunchConfig {
 
 /** Configuration after Loader defaults and executable selection. */
 export type ResolvedConfig = Required<Omit<Config, 'bootstrapPath'>> & Pick<Config, 'bootstrapPath'>
-/** Loader defaults shared by both Node providers. */
+/** Loader defaults for the Node PTC provider. */
 export const NodeConfig: z<Config> = z.object({
+  executionMode: z.union([z.const('per-call'), z.const('in-memory')]).default('per-call'),
   timeoutMs: z.number().default(120_000),
   maxTimeoutMs: z.number().default(600_000),
   maxOutputBytes: z.number().default(67_108_864),

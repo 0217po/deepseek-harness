@@ -4,9 +4,6 @@ import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import FileSystem from '@deepseek-ai/dsh-fs-local'
-import Subprocess from '@deepseek-ai/dsh-subprocess-local'
-import PersistentRuntime from '@deepseek-ai/dsh-ptc-runtime-node/persistent'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import type { SubagentCapabilities, SubagentProvider, SubagentResult, SubagentRun, SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 import type { WorkflowMeta, WorkflowResult, WorkflowResultInfo, WorkflowRun, WorkflowRunInfo } from '@deepseek-ai/dsh-workflow'
@@ -139,12 +136,7 @@ interface SetupOptions {
 async function setup(options?: SetupOptions) {
   const ctx = new Context()
   await ctx.plugin(SessionProjectionRegistry)
-  if (options?.persistent) {
-    await ctx.plugin(FileSystem)
-    await ctx.plugin(Subprocess)
-    await ctx.plugin(PersistentRuntime, {})
-  }
-  await mountPtcRuntime(ctx)
+  await mountPtcRuntime(ctx, 'danger-full-access', options?.persistent ? 'in-memory' : 'per-call')
   await ctx.plugin(SubagentRuntime)
   const provider = new StubProvider(
     'stub',

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The `ptc-runtime/` group executes model programs against host-provided async functions. The default Node backend starts a fresh process under the configured sandbox policy. Its optional persistent entry keeps a separate unsandboxed REPL for each explicit state owner; memory ends with the process or owner. The experimental Python backend uses a fresh CPython process. Failures return as results for callers to diagnose or present to the model.
+The `ptc-runtime/` group executes model programs against host-provided async functions. The default Node backend starts a fresh process under the configured sandbox policy. Its opt-in `executionMode: in-memory` keeps a separate unsandboxed REPL for each explicit state owner; memory ends with the process or owner. The experimental Python backend uses a fresh CPython process. Failures return as results for callers to diagnose or present to the model.
 
 ## Table of Contents
 

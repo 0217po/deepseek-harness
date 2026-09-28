@@ -1,13 +1,11 @@
-/** Optional, unsandboxed Node REPL provider with memory scoped to caller-owned objects. */
+/** Node PTC in-memory execution with retained processes scoped to caller-owned objects. */
 import { stripTypeScriptTypes } from 'node:module'
 import { isAbsolute } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcRunRequest, PtcRunSpec, PtcRunResult, PtcRunFailure, PtcBindingNamespace, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import { clampTimeout } from '@deepseek-ai/dsh-timeout'
 import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
-import { NodeConfig, validateConfig } from './config.ts'
-import type { Config, ResolvedConfig } from './config.ts'
+import type { ResolvedConfig } from './config.ts'
 import { replyToBinding, validateBindings } from './bindings.ts'
 import { JsonChannel } from './channel.ts'
 import { bootstrapArgs } from './launch.ts'
@@ -17,7 +15,6 @@ import { OutputLedger } from './output-ledger.ts'
 import { drainOutput, terminateProcess } from './output-stream.ts'
 import type { ProgramBootData } from './protocol.ts'
 
-export type { Config } from './config.ts'
 const messageOf = (error: unknown): string => error instanceof Error ? error.message : String(error)
 const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 
@@ -241,27 +238,24 @@ class Kernel {
 }
 
 /** Unsandboxed, best-effort retained state; restart, disposal, and interrupted execution clear it. */
-export class PersistentNodePtcRuntime extends PtcRuntime {
-  static inject = ['fs', 'subprocess']
-  static Config = NodeConfig
-  readonly language = 'typescript'
-  readonly isolation = 'process'
-  override get programFormat(): 'repl' { return 'repl' }
-  override get executionInstructions(): string {
+export class InMemoryExecution {
+  /**
+   * Model-facing rules for retained variables, authority, output, and recovery.
+   * @returns Usage guidance appended to the run_code schema.
+   */
+  get executionInstructions(): string {
     return 'Variables, functions, and imported modules remain in memory for this Agent across calls. Use await import(...) for modules. This environment has full host access without a file sandbox; process.env starts empty. Restart, Agent disposal, cancellation, timeout, output overflow, or process failure clears the environment. If a variable is undefined, recreate it and reacquire its resources. State is not restored from the conversation, and failed evaluations can leave earlier mutations in memory. Redeclaring an existing let, const, or class name fails; assign to a mutable binding or use a new name. Await all tool calls; background callbacks cannot call tools after their evaluation ends. Await child-process completion before ending an evaluation; raw subprocess output belongs to whichever evaluation is active when it arrives.'
   }
-  override get timeout(): { defaultMs: number; maxMs: number } {
-    return { defaultMs: Math.min(this.config.timeoutMs, this.config.maxTimeoutMs), maxMs: this.config.maxTimeoutMs }
-  }
-  private readonly config: ResolvedConfig
   private readonly owners = new WeakMap<object, Kernel>()
   private readonly kernels = new Set<Kernel>()
   private disposed = false
 
-  constructor(ctx: Context, config: Config) {
-    super(ctx)
-    this.config = { ...config, nodeExecutable: config.nodeExecutable ?? process.execPath } as ResolvedConfig
-    validateConfig(this.config)
+  /**
+   * Own retained execution resources under the existing Node provider.
+   * @param ctx - Provider lifecycle and execution services.
+   * @param config - Validated limits and selected executable.
+   */
+  constructor(private readonly ctx: Context, private readonly config: ResolvedConfig) {
     if ('pkg' in process && this.config.bootstrapPath === undefined) throw new Error('Persistent PTC requires an explicit bootstrapPath in a packaged executable')
     ctx.effect(() => async () => {
       this.disposed = true
@@ -318,7 +312,12 @@ export class PersistentNodePtcRuntime extends PtcRuntime {
     }
   }
 
-  override async release(owner: object): Promise<void> {
+  /**
+   * Release retained state and await its process cleanup.
+   * @param owner - Exact object supplied to run.
+   * @returns Completion after the owned process and output streams stop.
+   */
+  async release(owner: object): Promise<void> {
     const kernel = this.owners.get(owner)
     if (!kernel) return
     this.owners.delete(owner)
@@ -326,5 +325,3 @@ export class PersistentNodePtcRuntime extends PtcRuntime {
     this.kernels.delete(kernel)
   }
 }
-
-export default PersistentNodePtcRuntime

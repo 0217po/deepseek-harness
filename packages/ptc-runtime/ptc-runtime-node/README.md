@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Execute model-written TypeScript under the same platform sandbox policy as Bash, with host-provided functions available as async bindings. Each call starts a fresh Node process and returns captured logs, an exact JSON value, or a structured failure. Direct Node APIs remain available within the selected restrictions. Elapsed deadlines, output bounds and a V8 heap limit constrain execution; cancellation and completion terminate the managed process range. A requested restricted mode fails when its sandbox backend is unavailable.
+Execute model-written TypeScript with host-provided async functions. The default `per-call` mode starts a fresh Node process under the same platform sandbox policy as Bash. Opt-in `in-memory` mode retains an unsandboxed REPL across calls for each Agent. Both return captured logs, an exact JSON value, or a structured failure. Direct Node APIs remain available within the selected restrictions. Elapsed deadlines, output bounds and a V8 heap limit constrain execution; cancellation and per-call completion terminate the managed process range. A requested restricted mode fails when its sandbox backend is unavailable.
 
 ## Table of Contents
 
@@ -34,6 +34,7 @@ Configure the provider row after its required services are available:
 ```yaml
 - name: '@deepseek-ai/dsh-ptc-runtime-node'
   config:
+    executionMode: per-call
     timeoutMs: 120000
     maxTimeoutMs: 600000
     maxOutputBytes: 67108864
@@ -45,6 +46,7 @@ Configure the provider row after its required services are available:
 
 | Field | Default | Meaning |
 |---|---|---|
+| `executionMode` | `per-call` | `per-call` starts fresh processes under file policy; `in-memory` retains an unsandboxed REPL per owner |
 | `timeoutMs` | `120,000` | Default elapsed execution deadline, including nested tool and approval waits |
 | `maxTimeoutMs` | `600,000` | Elapsed deadline ceiling applied by the resolver |
 | `maxOutputBytes` | `67,108,864` | Combined serialized logs and completion or diagnostic budget |
@@ -59,24 +61,22 @@ The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-ptc-r
 
 ### Execution and results
 
-Programs are async function bodies: top-level `await` and `return` work, and only erasable TypeScript is accepted. A successful call returns its lossless-JSON value as `result.value` and captured text as `result.logs`. `result.sandbox` reports the selected mode, observed denial and the backend's full or partial enforcement independently of the program outcome.
+In `per-call` mode, programs are async function bodies: top-level `await` and `return` work, and only erasable TypeScript is accepted. A successful call returns its lossless-JSON value as `result.value` and captured text as `result.logs`. `result.sandbox` reports the selected mode, observed denial and the backend's full or partial enforcement independently of the program outcome.
 
 Direct filesystem, network and subprocess operations remain Node operations, subject to the selected OS sandbox. Nested host bindings cross the control channel; PTC tool calls retain the registry's visibility, ordering, logging and approval rules. Running a program does not change the Session's standing policy or automatically replay it after a denial.
 
 <a id="persistent-repl"></a>
 ### Persistent REPL
 
-The optional `@deepseek-ai/dsh-ptc-runtime-node/persistent` entry replaces the default provider. It requires `fs` and `subprocess`, uses the same configuration fields, and does not create a file sandbox. Enable it deliberately with a profile patch; it is not a shipped default:
+Set `executionMode: in-memory` on the existing `@deepseek-ai/dsh-ptc-runtime-node` plugin to retain state. Both modes require `fs`, `subprocess`, `sandbox` and `sandboxPolicy`; in-memory execution does not apply a file sandbox and rejects explicit sandbox policies. Enable it deliberately with a profile patch:
 
 ```yaml
 - id: ptc-runtime
-  disabled: true
-- insert:
-    - id: ptc-runtime-persistent
-      name: '@deepseek-ai/dsh-ptc-runtime-node/persistent'
+  config:
+    executionMode: in-memory
 ```
 
-Save the patch and pass its path to `dsh headless --patch <path>` in a composition with PTC tool presentation. Node applications still launch through a named `dsh` profile. Packaged single-executable hosts require `nodeExecutable` pointing to Node and `bootstrapPath` pointing to this package's built `persistent-process.js`.
+Save the patch and pass its path to `dsh headless --patch <path>` in a composition with PTC tool presentation. The default `per-call` mode retains no program memory between calls. Changing the configuration reloads the provider and releases its execution resources. Packaged single-executable hosts require `nodeExecutable` pointing to Node and `bootstrapPath` pointing to this package's built `persistent-process.js` for in-memory execution.
 
 Each live Agent keeps its own process and top-level variables, functions, and imported modules across `run_code` calls and turns. Use `await import(...)`, `console.log(...)`, and a final JSON expression; top-level `return` is not supported. Assignments to undeclared names create retained globals under Node REPL’s non-strict evaluation. Node REPL declaration rules apply, including errors on redeclaring existing `let`, `const`, or `class` names; assign to a mutable binding or choose a new name. A leading `{ ... }` is a statement block and can contain top-level await and temporary declarations; parenthesize an object expression to return it. Retained functions and saved tool methods call the current evaluation's bindings. All tool calls must be awaited; callbacks from a completed evaluation cannot invoke tools in a later evaluation.
 
@@ -86,9 +86,9 @@ Service consumers pass an object as `stateOwner` to reuse its environment and aw
 
 ### Deadlines and cancellation
 
-The PTC consumer exposes per-call timeout and approved sandbox choices as described in [dsh-tools](../../core/tools/README.md#ptc-mode). The runtime's readonly `timeout` descriptor reports its effective default and maximum to that consumer. The default provider’s `executionInstructions` describes fresh Node state, direct Node APIs, the empty program environment and file policy in the model-visible schema.
+The PTC consumer exposes per-call timeout and approved sandbox choices as described in [dsh-tools](../../core/tools/README.md#ptc-mode). The runtime's readonly `timeout` descriptor reports its effective default and maximum to that consumer. The per-call mode’s `executionInstructions` describes fresh Node state, direct Node APIs, the empty program environment and file policy in the model-visible schema.
 
-Omitting `timeoutMs` uses the configured elapsed default; numeric requests are validated and capped. Service callers can explicitly pass `timeoutMs: null` to omit the elapsed timer, as the workflow adapter does; `run_code` continues to accept only positive numeric overrides. An enabled deadline covers runtime setup and execution, including time awaiting nested tools or approval. It is not a CPU meter. Timeout or cancellation stops a synchronous loop through the host's managed process owner; successful completion also cleans that managed range. The timer stops when an outcome is selected, before cleanup, so the returned call can take longer than its execution deadline while cleanup settles.
+Omitting `timeoutMs` uses the configured elapsed default; numeric requests are validated and capped. Service callers can explicitly pass `timeoutMs: null` to omit the elapsed timer, as the workflow adapter does; `run_code` continues to accept only positive numeric overrides. An enabled deadline covers runtime setup and execution, including time awaiting nested tools or approval. It is not a CPU meter. Timeout or cancellation stops a synchronous loop through the host's managed process owner; successful per-call completion also cleans that managed range. The timer stops when an outcome is selected, before cleanup, so the returned call can take longer than its execution deadline while cleanup settles.
 
 ### Failures
 
@@ -106,7 +106,7 @@ The host owns policy, deadlines, binding lookup and process cleanup. The child o
 
 ### Launch and control
 
-The host strips erasable types, resolves the executable and bootstrap in the configured execution world, awaits argv confinement through `ctx.sandbox`, then spawns through `ctx.subprocess`. Cancellation is checked again after confinement, so a provider returning after cancellation cannot start the program. After adopting the inherited control channel, the child retains only executable-search, Windows system, and temporary paths in its OS environment and replaces the program-visible `process.env` with an empty dictionary. Windows ACL setup receives the parent's distinct `TEMP` and `TMP` values for shared grant locks, then replaces both with its private directory before starting the program. These native paths keep nested process creation and native temporary-file APIs functional. The host preserves `ELECTRON_RUN_AS_NODE` only for child startup so the Desktop executable runs the Node bootstrap; the bootstrap removes the selector before evaluating model code. The heap limit uses Node argv or a provider-created `NODE_OPTIONS` value for packaged executables; ambient loader and inspector flags are discarded.
+For per-call execution, the host strips erasable types, resolves the executable and bootstrap in the configured execution world, awaits argv confinement through `ctx.sandbox`, then spawns through `ctx.subprocess`. Cancellation is checked again after confinement, so a provider returning after cancellation cannot start the program. After adopting the inherited control channel, the child retains only executable-search, Windows system, and temporary paths in its OS environment and replaces the program-visible `process.env` with an empty dictionary. Windows ACL setup receives the parent's distinct `TEMP` and `TMP` values for shared grant locks, then replaces both with its private directory before starting the program. These native paths keep nested process creation and native temporary-file APIs functional. The host preserves `ELECTRON_RUN_AS_NODE` only for child startup so the Desktop executable runs the Node bootstrap; the bootstrap removes the selector before evaluating model code. The heap limit uses Node argv or a provider-created `NODE_OPTIONS` value for packaged executables; ambient loader and inspector flags are discarded.
 
 Length-framed JSON travels separately from stdout/stderr. The host bounds frames and queued writes, validates call identity and declared binding names before dispatch, and refuses invalid traffic. The child flushes its terminal frame and keeps the control channel open until the host closes it. After submitting that frame, it ignores later binding replies and sends no further program control messages. Output capture meters serialized logs plus the completion or diagnostic; fixed result-envelope fields and sandbox metadata are outside that ledger.
 
@@ -118,9 +118,9 @@ Source execution loads an erasable-only bootstrap closure without relying on sib
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Default provider: resolution, policy, bindings and managed execution |
-| [`src/config.ts`](src/config.ts) | Shared configuration, validation and defaults |
-| [`src/persistent.ts`](src/persistent.ts) | Retained process ownership, evaluation deadlines and cleanup |
+| [`src/index.ts`](src/index.ts) | Node provider: mode selection, per-call resolution, policy and managed execution |
+| [`src/config.ts`](src/config.ts) | Execution mode, validated limits and defaults |
+| [`src/persistent.ts`](src/persistent.ts) | In-memory process ownership, evaluation deadlines and cleanup |
 | [`src/persistent-process.ts`](src/persistent-process.ts) | Child REPL, retained declarations and current binding dispatch |
 | [`src/output-stream.ts`](src/output-stream.ts) | Bounded stream capture and process-output draining |
 | [`src/launch.ts`](src/launch.ts) | Executable/bootstrap arguments and execution-world asset mapping |
@@ -164,8 +164,8 @@ These limits qualify the execution guarantees and retained output.
 - **Confinement inherits the selected backend's limits** — full and partial enforcement are reported separately; sandbox policy and managed-process containment are distinct guarantees.
 - **The heap cap is not a process-tree memory limit** — native allocations and descendant memory are outside the V8 old-generation bound. No process-tree CPU meter is supplied.
 - **Cleanup inherits subprocess observability** — escaped descendants on a fallback platform may remain outside the managed range; see the subprocess provider's stated limits.
-- **Default execution is one-shot** — retained state requires the optional persistent provider; neither provider offers a yield/wait API.
-- **Persistent environments retain one process per live owner** — idle owners keep their process and heap until explicit release, owner disposal or failure. Fan-out can retain many processes; idle expiration remains deferred.
+- **Default execution is one-shot** — retained state requires `executionMode: in-memory`; neither mode offers a yield/wait API.
+- **In-memory environments retain one process per live owner** — idle owners keep their process and heap until explicit release, owner disposal or failure. Fan-out can retain many processes; idle expiration remains deferred.
 - **Output caps reject rather than retain every byte** — spill can preserve only the bounded result delivered by this provider.
 - **Bindings are bounded at transport admission** — control limits do not bound the memory a host binding allocates while producing its result.
 - **The console shim has five methods** — `log`, `info`, `warn`, `error` and `debug`.

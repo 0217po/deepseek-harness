@@ -2283,6 +2283,8 @@ export interface Config {
 ```ts config-catalog
 /** Deployment-varying runtime bounds and launch choices. */
 export interface Config extends LaunchConfig {
+  /** per-call starts fresh confined processes; in-memory retains an unsandboxed REPL per owner. */
+  executionMode?: 'per-call' | 'in-memory'
   /** Default elapsed deadline, including nested tool and approval waits. */
   timeoutMs?: number
   /** Maximum numeric elapsed budget accepted by resolve. */

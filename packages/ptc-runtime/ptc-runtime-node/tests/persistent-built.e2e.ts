@@ -5,19 +5,19 @@ import { execa } from 'execa'
 import { describe, expect, it } from 'vitest'
 
 const pkgDir = fileURLToPath(new URL('..', import.meta.url))
-const built = ['lib/persistent.js', 'lib/persistent-process.js'].every(file => existsSync(join(pkgDir, file)))
+const built = ['lib/index.js', 'lib/persistent-process.js'].every(file => existsSync(join(pkgDir, file)))
 
 describe.skipIf(!built)('persistent PTC published exports', () => {
   it('retains variables through the built provider and sibling process entry', async () => {
     const script = `
       const { Context } = await import('@deepseek-ai/cordis')
-      const { default: Persistent } = await import('@deepseek-ai/dsh-ptc-runtime-node/persistent')
+      const { default: NodeRuntime } = await import('@deepseek-ai/dsh-ptc-runtime-node')
       const ctx = new Context()
       try {
-        for (const name of ['fs-local', 'subprocess-local']) {
+        for (const name of ['session-projection', 'fs-local', 'subprocess-local', 'sandbox-local', 'sandbox-policy']) {
           await ctx.plugin((await import('@deepseek-ai/dsh-' + name)).default)
         }
-        await ctx.plugin(Persistent, {})
+        await ctx.plugin(NodeRuntime, { executionMode: 'in-memory' })
         const stateOwner = {}
         const run = program => ctx.ptcRuntime.run(ctx.ptcRuntime.resolve({program, bindings: [], stateOwner}))
         const first = await run('let count: number = 40; const path = await import("node:path");')
