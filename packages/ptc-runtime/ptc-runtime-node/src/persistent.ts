@@ -330,7 +330,9 @@ export class InMemoryExecution {
   async release(owner: object): Promise<void> {
     const kernel = this.owners.get(owner)
     if (!kernel) return
-    this.owners.delete(owner)
-    try { await kernel.dispose() } finally { this.kernels.delete(kernel) }
+    try { await kernel.dispose() } finally {
+      if (this.owners.get(owner) === kernel) this.owners.delete(owner)
+      this.kernels.delete(kernel)
+    }
   }
 }

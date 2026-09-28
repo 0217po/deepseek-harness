@@ -375,6 +375,7 @@ it.each(['owner release', 'provider unload'])('keeps idle-crash cleanup tracked 
     closing = (action === 'owner release' ? h.runtime.release(request.stateOwner!) : h.fiber.dispose()).then(() => { disposed = true })
     await setImmediate()
     expect(disposed).toBe(false)
+    if (action === 'owner release') await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('concurrent runs')
     stopped.resolve(true)
     await closing
     expect(disposed).toBe(true)
@@ -410,4 +411,21 @@ it('reports a release failure once and removes the failed environment from provi
     expect(reported).not.toHaveBeenCalled()
     expect(h.waitForExit).toHaveBeenCalledOnce()
   } finally { reported.mockRestore() }
+})
+
+it('reserves the owner while parse-output overflow releases its environment', async () => {
+  const h = await setup({ maxOutputBytes: 32 })
+  const cleanup = Promise.withResolvers<true>()
+  const stopped = Promise.withResolvers<boolean>()
+  h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+  await h.start()
+  h.waitForExit.mockImplementation(async () => { cleanup.resolve(true); return stopped.promise })
+  const pending = h.runtime.run(h.runtime.resolve({ ...request, program: 'return 1' }))
+  try {
+    await cleanup.promise
+    await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('concurrent runs')
+    expect(h.spawn).toHaveBeenCalledOnce()
+    stopped.resolve(true)
+    expect((await pending).error?.kind).toBe('output-limit')
+  } finally { stopped.resolve(true); await pending }
 })
