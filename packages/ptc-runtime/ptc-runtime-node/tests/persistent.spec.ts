@@ -12,8 +12,7 @@ async function setup(config: Config = {}) {
   const cwd = await mkdtemp(join(tmpdir(), 'dsh-persistent-ptc-'))
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose(); await rm(cwd, { recursive: true, force: true }) })
-  const runtime = await mountRuntime(ctx, { ...config, executionMode: 'in-memory' })
-  const fiber = runtime.ctx.fiber
+  const { runtime, fiber } = await mountRuntime(ctx, { ...config, executionMode: 'in-memory' })
   const owner = {}
   const run = (program: string, options: Partial<PtcRunRequest> = {}) =>
     runtime.run(runtime.resolve({ program, bindings: [], cwd, stateOwner: owner, ...options }))

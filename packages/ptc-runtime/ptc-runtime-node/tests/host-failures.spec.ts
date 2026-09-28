@@ -17,7 +17,7 @@ const NO_INITIAL_FRAME = Symbol('no initial frame')
 
 async function setup(config: Config = {}, mode: 'read-only' | 'danger-full-access' = 'danger-full-access') {
   const ctx = new Context()
-  const runtime = await mountRuntime(ctx, config, { mode, workspaceRoot: process.cwd() })
+  const { runtime } = await mountRuntime(ctx, config, { mode, workspaceRoot: process.cwd() })
   const control = new Duplex({
     read() {},
     write(chunk: Buffer, _encoding, callback) {

@@ -29,7 +29,7 @@ async function setup(config: Config = {}, mode: 'read-only' | 'workspace-write' 
   await mkdir(cwd)
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
-  const runtime = await mountRuntime(ctx, config, { mode, workspaceRoot: cwd })
+  const { runtime } = await mountRuntime(ctx, config, { mode, workspaceRoot: cwd })
   const run = (request: PtcRunRequest) => runtime.run(runtime.resolve(request))
   return { ctx, runtime, root, cwd, run }
 }
