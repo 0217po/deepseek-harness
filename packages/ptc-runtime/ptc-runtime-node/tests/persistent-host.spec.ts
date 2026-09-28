@@ -372,7 +372,7 @@ it.each(['owner release', 'provider unload'])('keeps idle-crash cleanup tracked 
     await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('concurrent runs')
     expect(h.spawn).toHaveBeenCalledTimes(1)
     let disposed = false
-    closing = (action === 'owner release' ? h.runtime.release(request.stateOwner!) : h.fiber.dispose()).then(() => { disposed = true })
+    closing = (action === 'owner release' ? Promise.all([h.runtime.release(request.stateOwner!), h.runtime.release(request.stateOwner!)]) : h.fiber.dispose()).then(() => { disposed = true })
     await setImmediate()
     expect(disposed).toBe(false)
     if (action === 'owner release') await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('concurrent runs')
