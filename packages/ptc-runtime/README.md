@@ -27,7 +27,7 @@ These three packages together provide program execution; each README describes w
 | Package | Role | ctx key |
 |---|---|---|
 | [`ptc-runtime/`](ptc-runtime/README.md) | Defines what a PTC runtime does: run one program against host-provided bindings and report what it printed and returned | `ctx.ptcRuntime` |
-| [`ptc-runtime-node/`](ptc-runtime-node/README.md) | Executes TypeScript in fresh managed Node processes under the resolved sandbox policy | registers `ctx.ptcRuntime` |
+| [`ptc-runtime-node/`](ptc-runtime-node/README.md) | Executes TypeScript in fresh processes under file policy or an opt-in unsandboxed in-memory REPL | registers `ctx.ptcRuntime` |
 | [`experimental/ptc-runtime-python/`](../experimental/ptc-runtime-python/README.md) | The experimental Python backend: owns the fd-3 wire protocol between a Node host and a CPython subprocess and the CPython runtime implementation | — |
 
 -----

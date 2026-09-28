@@ -355,3 +355,77 @@ it('discards unsolicited idle traffic and awaits the retained process exit', asy
   await h.direct.promise
   expect(h.terminate).toHaveBeenCalledTimes(1)
 })
+
+it.each(['owner release', 'provider unload'])('keeps idle-crash cleanup tracked through %s', async (action) => {
+  const h = await setup()
+  const cleanup = Promise.withResolvers<true>()
+  const stopped = Promise.withResolvers<boolean>()
+  h.waitForExit.mockImplementation(async () => { cleanup.resolve(true); return stopped.promise })
+  h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+  let closing: Promise<void> | undefined
+  try {
+    await h.start()
+    h.stdout.end()
+    h.stderr.end()
+    h.direct.resolve({ exitCode: 9, signal: null })
+    await cleanup.promise
+    await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('concurrent runs')
+    expect(h.spawn).toHaveBeenCalledTimes(1)
+    let disposed = false
+    closing = (action === 'owner release' ? Promise.all([h.runtime.release(request.stateOwner!), h.runtime.release(request.stateOwner!)]) : h.fiber.dispose()).then(() => { disposed = true })
+    await setImmediate()
+    expect(disposed).toBe(false)
+    if (action === 'owner release') await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('concurrent runs')
+    stopped.resolve(true)
+    await closing
+    expect(disposed).toBe(true)
+  } finally { stopped.resolve(true); await closing }
+})
+
+it('logs an idle process failure with its bounded stderr tail', async () => {
+  const h = await setup({ maxOutputBytes: 100 })
+  const reported = vi.spyOn(h.fiber.ctx.logger, 'warn').mockImplementation(() => {})
+  try {
+    h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+    await h.start()
+    h.stdout.end()
+    h.stderr.end('x'.repeat(200) + 'idle fatal diagnostic')
+    h.direct.resolve({ exitCode: 9, signal: null })
+    await vi.waitFor(() => { expect(reported).toHaveBeenCalledOnce() })
+    expect(reported).toHaveBeenCalledWith(`Node process exited (9, signal null): ${'x'.repeat(79)}idle fatal diagnostic`)
+    await h.runtime.release(request.stateOwner!)
+  } finally { reported.mockRestore() }
+})
+
+it('reports a release failure once and removes the failed environment from provider cleanup', async () => {
+  const h = await setup()
+  h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+  await h.start()
+  const failure = new Error('release cleanup failed')
+  h.waitForExit.mockRejectedValue(failure)
+  await expect(h.runtime.release(request.stateOwner!)).rejects.toBe(failure)
+  const reported = vi.spyOn(h.fiber.ctx.logger, 'error').mockImplementation(() => {})
+  try {
+    await h.runtime.release(request.stateOwner!)
+    await h.fiber.dispose()
+    expect(reported).not.toHaveBeenCalled()
+    expect(h.waitForExit).toHaveBeenCalledOnce()
+  } finally { reported.mockRestore() }
+})
+
+it('reserves the owner while parse-output overflow releases its environment', async () => {
+  const h = await setup({ maxOutputBytes: 32 })
+  const cleanup = Promise.withResolvers<true>()
+  const stopped = Promise.withResolvers<boolean>()
+  h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+  await h.start()
+  h.waitForExit.mockImplementation(async () => { cleanup.resolve(true); return stopped.promise })
+  const pending = h.runtime.run(h.runtime.resolve({ ...request, program: 'return 1' }))
+  try {
+    await cleanup.promise
+    await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('concurrent runs')
+    expect(h.spawn).toHaveBeenCalledOnce()
+    stopped.resolve(true)
+    expect((await pending).error?.kind).toBe('output-limit')
+  } finally { stopped.resolve(true); await pending }
+})

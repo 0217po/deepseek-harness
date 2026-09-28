@@ -70,7 +70,9 @@ it.each(['read-only', 'workspace-write'] as const)('refuses an in-memory workflo
     parent,
   })
   try {
-    expect(await run.result).toMatchObject({ stopReason: 'error', error: expect.stringContaining(`workflow runtime cannot enforce the ${mode} file policy`) })
+    const result = await run.result
+    expect(result.stopReason).toBe('error')
+    expect(result.error).toContain(`workflow runtime cannot enforce the ${mode} file policy`)
     await expect(readFile(target)).rejects.toMatchObject({ code: 'ENOENT' })
   } finally { await run.dispose() }
 })

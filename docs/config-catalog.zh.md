@@ -2385,7 +2385,7 @@ export interface Config extends LaunchConfig {
 export interface LaunchConfig {
   /** Executable in the subprocess world; defaults to the current Node executable. */
   nodeExecutable?: string
-  /** Absolute preinstalled built bootstrap in the execution world. */
+  /** Absolute preinstalled bootstrap matching executionMode: process.js for per-call, persistent-process.js for in-memory. */
   bootstrapPath?: string
 }
 ```
