@@ -501,3 +501,25 @@ it('stores signed application consent in the current profile and refuses unavail
   expect(unavailable.isError).toBe(true)
   expect(JSON.stringify(unavailable.content)).toContain('APP_ACCESS_DENIED')
 })
+
+it('rejects an application handle before any helper or consent has been acquired', async () => {
+  const f = await setup()
+  const result = await f.execute('getState', { appHandle: 'unselected-app' })
+  expect(result.isError).toBe(true)
+  expect(JSON.stringify(result.content)).toContain('APP_ACCESS_REQUIRED')
+  expect(native.instances).toHaveLength(0)
+  expect(native.request).not.toHaveBeenCalled()
+})
+
+it('uses configured signed application grants without requesting a human answer', async () => {
+  const f = await setup()
+  await f.provider.dispose()
+  const grant = { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app' }
+  await f.ctx.plugin(NativeProvider, { ...config, allowedApps: [grant] })
+  native.request.mockResolvedValueOnce({ appHandle: 'saved-app', pid: 17, name: 'Fixture', authorization: { ...grant, persistable: true } })
+  expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
+  native.request.mockResolvedValue({ dispatched: true, verified: false })
+  expect((await f.execute('activate', { appHandle: 'saved-app' })).isError).toBe(false)
+  expect(native.instances).toHaveLength(1)
+  expect(native.request).toHaveBeenCalledTimes(2)
+})
