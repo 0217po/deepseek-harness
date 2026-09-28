@@ -99,9 +99,7 @@ Read these when the runtime contract is not enough. They move from the seam defi
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through PTC mode in `dsh-tools` when an explicit composition mounts this provider; it renders the program's completion value or failure into a retained `run_code` result, and no shipped profile mounts this experimental package.
-
-The provider supplies async-function syntax, `print`/`return` output and fresh-process state rules through `executionInstructions`; the tool consumer appends them to `run_code`.
+Indirectly, through PTC mode in `dsh-tools` when explicitly composed: the consumer appends this provider's async-function, output and fresh-process instructions to `run_code` and renders its completion value or failure as the tool result.
 
 #### KV Cache effect
 
