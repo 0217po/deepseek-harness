@@ -110,7 +110,8 @@ describe('workflow host callback validation', () => {
     const handle = start()
     try {
       const result = await handle.result
-      expect(result.stopReason, result.error).toBe('completed')
+      expect(result.stopReason, result.error).toBe(confined ? 'completed' : 'error')
+      if (!confined) expect(result.error).toContain('cannot enforce the read-only file policy')
     } finally { await handle.dispose() }
   })
 })

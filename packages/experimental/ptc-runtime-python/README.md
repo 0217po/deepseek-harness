@@ -101,6 +101,8 @@ Read these when the runtime contract is not enough. They move from the seam defi
 
 Indirectly, through PTC mode in `dsh-tools` when an explicit composition mounts this provider; it renders the program's completion value or failure into a retained `run_code` result, and no shipped profile mounts this experimental package.
 
+The provider supplies async-function syntax, `print`/`return` output and fresh-process state rules through `executionInstructions`; the tool consumer appends them to `run_code`.
+
 #### KV Cache effect
 
 No direct invalidation; the named consumer owns any request-prefix changes.

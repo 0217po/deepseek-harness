@@ -56,7 +56,7 @@ Node PTC 提供方的 `maxPendingCalls` 也限制工作流并发：子 agent 启
 
 ### 文件策略与取消
 
-引擎解析调用方 Session 的常设文件策略和 cwd，只向支持约束的提供方传递文件策略。可选持久 Node 提供方在临时无沙盒环境中执行异步包装函数，因此工作流局部变量不会进入 Agent 保留的 REPL。文件策略不限制网络访问。
+引擎解析调用方 Session 的常设文件策略和 cwd。不支持文件约束的运行时只允许用于 `danger-full-access`；`read-only` 和 `workspace-write` 在执行前失败。Node 内存保留模式在临时环境中执行异步包装函数，因此工作流局部变量不会进入 Agent 保留的 REPL。文件策略不限制网络访问。
 
 工作流向 PTC 请求 `timeoutMs: null`。最初的 VM 片段仍受 `syncTimeoutMs` 限制，调用方的中止信号仍然生效，包括外层工具的截止。取消立即中止 PTC 进程及待启动或活跃的 subagent。调用方必须释放每次运行并等待子 agent 清理；不另设工作流清理定时器。
 

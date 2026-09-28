@@ -279,3 +279,37 @@ describe('persistent Node REPL', () => {
     expect((await run('typeof retained')).value).toBe('undefined')
   })
 })
+
+it.each(['_', '_error'])('keeps %s assignments and subsequent tools in the active evaluation', async (name) => {
+  const { run } = await setup()
+  const called = vi.fn(async () => 7)
+  expect(await run(`${name} = 42; await tools.value({}); ${name}`, { bindings: bindings(called) })).toEqual({ logs: [], value: 42 })
+  expect(called).toHaveBeenCalledOnce()
+  expect((await run(name)).value).toBe(42)
+})
+
+it('rejects a new run until cancellation cleanup has completed for its owner', async () => {
+  const { run, ctx } = await setup()
+  const entered = Promise.withResolvers<true>()
+  const cleanup = Promise.withResolvers<true>()
+  const released = Promise.withResolvers<boolean>()
+  const spawn = ctx.subprocess.spawn.bind(ctx.subprocess)
+  const intercepted = vi.spyOn(ctx.subprocess, 'spawn').mockImplementationOnce((spec) => {
+    const handle = spawn(spec)
+    return { ...handle, waitForExit: async () => { await handle.waitForExit(); cleanup.resolve(true); return released.promise } }
+  })
+  const abort = new AbortController()
+  const pending = run('await tools.value({}); await new Promise(() => {})', {
+    signal: abort.signal, bindings: bindings(async () => { entered.resolve(true); return null }),
+  })
+  try {
+    await entered.promise
+    abort.abort()
+    await cleanup.promise
+    await expect(run('42')).rejects.toThrow('concurrent runs')
+    expect(intercepted).toHaveBeenCalledTimes(1)
+    released.resolve(true)
+    expect((await pending).error?.kind).toBe('abort')
+    expect((await run('42')).value).toBe(42)
+  } finally { released.resolve(true); await pending; intercepted.mockRestore() }
+})

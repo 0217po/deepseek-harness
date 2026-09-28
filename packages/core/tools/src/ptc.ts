@@ -45,43 +45,19 @@ interface RunCodeFlavor {
   readonly codeDescription: string
 }
 
-/**
- * The TypeScript flavor: the fallback for a schema read with no runtime
- * mounted ({@link resolveFlavor} owns which readers reach that). A real
- * assembly always resolves a runtime first, so the model never sees this
- * fallback outside its own language.
- */
-const TYPESCRIPT_FLAVOR: RunCodeFlavor = {
-  description:
-    'Execute a TypeScript program against the available tools. Takes two required '
-    + 'arguments: `code`, the BODY of an async function (erasable syntax only; top-level '
-    + '`await` and `return` work), and `description`, a short summary of what the program '
-    + 'does. Call tools as `await tools.name(args)` per the declarations in the system '
-    + 'prompt. Only what you print or return is program output — curate it. Image-bearing '
-    + 'subtool results are attached after the run.',
-  codeDescription: 'The program: the body of an async TypeScript function.',
+/** Keep tool-call rules here; the runtime owns evaluation syntax and state retention. */
+function runCodeFlavor(language: string): RunCodeFlavor {
+  return {
+    description: `Execute a ${language} program against the available tools. Takes two required arguments: `
+      + '`code`, the program to execute, and `description`, a short summary of what the program does. '
+      + 'Call tools as `await tools.name(args)` per the declarations in the system prompt. '
+      + 'Curate the program output. Image-bearing subtool results are attached after the run.',
+    codeDescription: `The ${language} program to execute, following this tool's execution instructions.`,
+  }
 }
 
-const REPL_FLAVOR: RunCodeFlavor = {
-  description: 'Execute TypeScript in an in-memory REPL. Top-level declarations and await are supported; only erasable TypeScript is accepted, with no enum or namespaces. Use console.log or a final JSON expression for output. Only printed values and that final expression become program output; curate them. Top-level return is not supported. Call tools as await tools.name(args) using the declarations in the system prompt. Image-bearing subtool results are attached after the run.',
-  codeDescription: 'TypeScript REPL statements with optional top-level await and a final JSON expression.',
-}
-
-/**
- * The Python flavor: the body of an async function, top-level `await` and
- * `return`, answer via `print` and/or the returned value, matching
- * {@link ./py-types.ts}'s SDK instructions.
- */
-const PYTHON_FLAVOR: RunCodeFlavor = {
-  description:
-    'Execute a Python program against the available tools. Takes two required '
-    + 'arguments: `code`, the BODY of an async function (top-level `await` and `return` '
-    + 'work), and `description`, a short summary of what the program does. Call tools as '
-    + '`await tools.name(args)` per the declarations in the system prompt. Use '
-    + '`print(...)` and/or `return <value>` for program output — curate it. Image-bearing '
-    + 'subtool results are attached after the run.',
-  codeDescription: 'The program: the body of an async Python function.',
-}
+const TYPESCRIPT_FLAVOR = runCodeFlavor('TypeScript')
+const PYTHON_FLAVOR = runCodeFlavor('Python')
 
 /**
  * The languages PTC mode ships a presentation for. Both per-language tables —
@@ -166,10 +142,6 @@ function resolveFlavor(peekRuntime: () => PtcRuntime | undefined): RunCodeFlavor
   if (!Object.hasOwn(RUN_CODE_FLAVORS, runtime.language) || flavor === undefined) {
     const known = Object.keys(RUN_CODE_FLAVORS).map(name => JSON.stringify(name)).join(', ')
     throw new Error(`dsh-tools: no run_code schema flavor registered for runtime language ${JSON.stringify(runtime.language)} (known: ${known})`)
-  }
-  if (runtime.programFormat === 'repl') {
-    if (runtime.language !== 'typescript') throw new Error('dsh-tools: REPL presentation requires TypeScript')
-    return REPL_FLAVOR
   }
   return flavor
 }

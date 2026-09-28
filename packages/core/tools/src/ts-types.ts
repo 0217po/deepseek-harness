@@ -7,7 +7,6 @@
  */
 
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
-import type { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import { assertSupportedJsonSchema } from './json-schema.ts'
 import type { JsonSchemaNode, JsonSchemaScalar } from './json-schema.ts'
 /** Internal PTC mode projection: the model-facing schema plus the canonical output schema. */
@@ -250,18 +249,16 @@ export function jsonSchemaToTs(schema: unknown, indent = 0): string {
 /** The fixed model-facing usage contract rendered above the declarations (see the PTC mode Agent Note's "What the model sees"). */
 const SDK_INSTRUCTIONS = `## Writing code for run_code
 
-\`run_code\` takes two required arguments: \`code\` — the body of an async TypeScript function (erasable syntax only — no \`enum\` or namespaces; type annotations are advisory, the code runs type-stripped) — and \`description\`, a short summary of what the program does. The declarations below are SDK bindings for this program. A declaration does not make its name a directly callable tool; only names supplied as separate tool schemas may be called directly.`
+\`run_code\` takes two required arguments: \`code\` — a TypeScript program following the execution instructions in its tool description — and \`description\`, a short summary of what the program does. The declarations below are SDK bindings for this program. A declaration does not make its name a directly callable tool; only names supplied as separate tool schemas may be called directly.`
 
-function programInstructions(output: string): string {
-  return `Inside the program:
+const SDK_PROGRAM_INSTRUCTIONS = `Inside the program:
 
 - Call tools as \`await tools.name(args)\` — quoted access for exotic names: \`tools["my-tool"](args)\`. Every call resolves to the tool's typed canonical JSON value. Tool arguments must be lossless JSON.
 - A FAILED tool call rejects with \`ToolCallError\`, whose \`toolName\` identifies the failed tool and whose \`message\` is human-readable — \`try/catch\` it to handle and continue.
 - Independent read-only calls MAY overlap under \`Promise.all\` (safe calls run concurrently; mutating calls run alone, in submission order). Sequence dependent work with \`await\`.
-- ${output} A successful tool result containing an image is attached after the run so you can inspect it on the next step; every other intermediate result stays out of the conversation, so extract just what you need.
+- Only values emitted as program output enter the conversation. A successful tool result containing an image is attached after the run so you can inspect it on the next step; every other intermediate result stays out of the conversation, so extract just what you need.
 
 Program-only SDK bindings:`
-}
 
 /** Whether one string schema accepts the literal used by the bash example. */
 function acceptsExampleString(schema: JsonSchemaNode | undefined, value: string): boolean {
@@ -271,7 +268,7 @@ function acceptsExampleString(schema: JsonSchemaNode | undefined, value: string)
 }
 
 /** Render the bash example only when its literal arguments satisfy the current parameter schema. */
-function renderBashExample(schemas: ToolSdkSchema[], format: PtcRuntime['programFormat']): string {
+function renderBashExample(schemas: ToolSdkSchema[]): string {
   const bash = schemas.find(schema => schema.name === 'bash')
   if (bash === undefined) return ''
   const parameters = bash.parameters as JsonSchemaNode
@@ -282,7 +279,7 @@ function renderBashExample(schemas: ToolSdkSchema[], format: PtcRuntime['program
   const needsDescription = required.includes('description')
   if (needsDescription && !acceptsExampleString(parameters.properties?.description, 'Show current directory')) return ''
   const description = needsDescription ? ", description: 'Show current directory'" : ''
-  return ` When no separate \`bash\` schema is supplied, invoke a declared \`bash\` binding inside \`run_code\`:\n\n\`run_code({ code: "${format === 'repl' ? '' : 'return '}await tools.bash({ command: 'pwd'${description} })", description: "Show current directory" })\``
+  return ` When no separate \`bash\` schema is supplied, invoke a declared \`bash\` binding inside \`run_code\`:\n\n\`run_code({ code: "console.log(await tools.bash({ command: 'pwd'${description} }))", description: "Show current directory" })\``
 }
 
 /**
@@ -295,10 +292,9 @@ function renderBashExample(schemas: ToolSdkSchema[], format: PtcRuntime['program
  * by name, so the input never carries a duplicate.
  * @param schemas - the tool schemas to declare (the caller excludes
  *   `run_code` itself).
- * @param format - Whether the program is an async body or REPL statements.
  * @returns the complete section text.
  */
-export function renderToolsSdk(schemas: ToolSdkSchema[], format: PtcRuntime['programFormat'] = 'function-body'): string {
+export function renderToolsSdk(schemas: ToolSdkSchema[]): string {
   const sorted = [...schemas].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
   const argsMembers: string[] = []
   const outputMembers: string[] = []
@@ -317,11 +313,5 @@ export function renderToolsSdk(schemas: ToolSdkSchema[], format: PtcRuntime['pro
     ['declare const tools: {', '  [K in ToolName]: (args: ToolArgsMap[K]) => Promise<ToolOutputMap[K]>;', '}'].join('\n'),
   ].join('\n\n')
   const jsonValue = 'type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }'
-  const instructions = format === 'repl'
-    ? '## Writing code for run_code\n\n`run_code` takes `code`, TypeScript REPL statements with erasable types (no `enum` or namespaces) and top-level `await`, and `description`, a short summary. Use `await import(...)` for modules. The declarations below describe program-only SDK bindings.'
-    : SDK_INSTRUCTIONS
-  const outputInstructions = programInstructions(format === 'repl'
-    ? 'Emit results with `console.log(...)` or a final JSON expression. Top-level `return` is not supported. Only printed values and that final expression become program output; curate them.'
-    : 'Emit results with `return` and/or `console.log(...)`. Only what you print or return is program output.')
-  return `${instructions}${renderBashExample(sorted, format)}\n\n${outputInstructions}\n\n\`\`\`ts\n${jsonValue}\n\n${declaration}\n\`\`\``
+  return `${SDK_INSTRUCTIONS}${renderBashExample(sorted)}\n\n${SDK_PROGRAM_INSTRUCTIONS}\n\n\`\`\`ts\n${jsonValue}\n\n${declaration}\n\`\`\``
 }
