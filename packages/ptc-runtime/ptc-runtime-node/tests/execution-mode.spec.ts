@@ -1,11 +1,12 @@
 import { Context } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
 import { expect, it } from 'vitest'
 import NodeRuntime from '../src/index.ts'
 import type { Config } from '../src/index.ts'
 import { mountRuntime } from './setup.ts'
 
-it.each<Config['executionMode']>([undefined, 'per-call'])('starts fresh state for each call in mode %s', async (executionMode) => {
-  const { runtime } = await mountRuntime(new Context(), { executionMode })
+it.each<Config>([{}, { executionMode: 'per-call' }])('starts fresh state for each call with configuration %j', async (config) => {
+  const { runtime } = await mountRuntime(new Context(), config)
   const stateOwner = {}
   const run = (program: string) => runtime.run(runtime.resolve({ program, bindings: [], stateOwner }))
   expect(runtime.programFormat).toBe('function-body')
@@ -16,7 +17,7 @@ it.each<Config['executionMode']>([undefined, 'per-call'])('starts fresh state fo
 })
 
 it.each(['durable', 'fresh-process', 'persistent-repl'])('rejects unsupported execution mode %s at configuration parsing', (executionMode) => {
-  expect(() => NodeRuntime.Config({ executionMode })).toThrow()
+  expect(() => z.resolve({ executionMode }, NodeRuntime.Config, {})).toThrow()
 })
 
 it('clears retained state when a provider is reloaded with another execution mode', async () => {
