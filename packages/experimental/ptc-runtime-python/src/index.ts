@@ -815,6 +815,10 @@ export class PythonPtcRuntime extends PtcRuntime {
   readonly language = 'python'
   readonly isolation = 'process'
 
+  override get executionInstructions(): string {
+    return 'The program is the body of an async Python function. Top-level await and return are supported. Emit output with print(...) or return a lossless JSON value. Only printed values and the returned value become program output. Each call runs in a fresh Python process; variables and imported modules do not persist across calls.'
+  }
+
   private readonly config: ResolvedConfig
   private readonly pythonBin: string
   // The frame cap this instance enforces: the protocol cap, or the host's

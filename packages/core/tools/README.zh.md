@@ -61,7 +61,7 @@ ctx.tools.register(defineTool({
 
 ### 配置呈现模式
 
-`mode` 配置决定模型看到什么：`native`（每个可见 schema）、`ptc`（只有 `run_code` 加一份生成 SDK）或 `both`。
+`mode` 配置决定模型看到什么：`native`（每个可见 schema）、`ptc`（只有 `run_code` 加一份生成 SDK）或 `both`。运行时通过 `executionInstructions` 提供求值语法、输出方式和状态保留指引；本包负责工具调用规则、SDK 声明和图片结果附加。
 
 ```yaml
 - name: '@deepseek-ai/dsh-tools'

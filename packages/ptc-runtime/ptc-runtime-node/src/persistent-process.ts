@@ -49,6 +49,10 @@ export async function runPersistentMain(stream: Duplex, maxMessageBytes: number,
     callback()
   } })
   const repl = start({ input, output, terminal: false, prompt: '', useGlobal: false, ignoreUndefined: true })
+  // Interactive result setters print notices; program assignments use ordinary retained globals.
+  for (const name of ['_', '_error']) {
+    Object.defineProperty(repl.context, name, { configurable: true, enumerable: true, writable: true, value: undefined })
+  }
   let current: Evaluation | undefined
   const send = (id: number, payload: ProgramToHost): void => {
     void channel.send({ id, payload }).catch(() => { channel.close(); closed.resolve() })

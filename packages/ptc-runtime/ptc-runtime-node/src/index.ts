@@ -41,7 +41,7 @@ export class NodePtcRuntime extends PtcRuntime {
   override get programFormat(): 'function-body' | 'repl' { return this.inMemory ? 'repl' : 'function-body' }
   override get executionInstructions(): string {
     if (this.inMemory) return this.inMemory.executionInstructions
-    return 'Each call runs in a fresh Node process. Node APIs are available through await import(...). Relative paths use the supplied working directory; process.env starts empty. Direct filesystem access follows this execution\'s sandbox policy.'
+    return 'The program is the body of an async TypeScript function; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level await and return are supported. Emit output with console.log(...) or return a lossless JSON value. Only printed values and the returned value become program output. Each call runs in a fresh Node process. Node APIs are available through await import(...). Relative paths use the supplied working directory; process.env starts empty. Direct filesystem access follows this execution\'s sandbox policy.'
   }
   private readonly config: ResolvedConfig
   private readonly live = new Set<LiveRun>()

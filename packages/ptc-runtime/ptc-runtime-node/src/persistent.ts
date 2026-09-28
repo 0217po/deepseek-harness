@@ -38,6 +38,8 @@ class Kernel {
   private handle?: SubprocessHandle
   private channel?: JsonChannel
   private active: Evaluation | undefined
+  /** Admission remains reserved until the result includes completed process cleanup. */
+  private running = false
   private ready = false
   private sequence = 0
   private nextCall = 1
@@ -51,11 +53,15 @@ class Kernel {
   constructor(private readonly ctx: Context, private readonly config: ResolvedConfig) {}
 
   assertIdle(): void {
-    if (this.active) throw new Error('persistent PTC does not accept concurrent runs for one state owner')
+    if (this.running) throw new Error('persistent PTC does not accept concurrent runs for one state owner')
   }
 
   async run(spec: PtcRunSpec, bindings: Map<string, PtcBindingNamespace>, code: string): Promise<PtcRunResult> {
-    this.assertIdle()
+    this.running = true
+    try { return await this.evaluate(spec, bindings, code) } finally { this.running = false }
+  }
+
+  private async evaluate(spec: PtcRunSpec, bindings: Map<string, PtcBindingNamespace>, code: string): Promise<PtcRunResult> {
     if (this.exitOutcome !== undefined) {
       const output = persistentOutput(this.config.maxOutputBytes)
       const failure: PtcRunFailure = spec.signal?.aborted
@@ -244,7 +250,7 @@ export class InMemoryExecution {
    * @returns Usage guidance appended to the run_code schema.
    */
   get executionInstructions(): string {
-    return 'Variables, functions, and imported modules remain in memory for this Agent across calls. Use await import(...) for modules. This environment has full host access without a file sandbox; process.env starts empty. Restart, Agent disposal, cancellation, timeout, output overflow, or process failure clears the environment. If a variable is undefined, recreate it and reacquire its resources. State is not restored from the conversation, and failed evaluations can leave earlier mutations in memory. Redeclaring an existing let, const, or class name fails; assign to a mutable binding or use a new name. Await all tool calls; background callbacks cannot call tools after their evaluation ends. Await child-process completion before ending an evaluation; raw subprocess output belongs to whichever evaluation is active when it arrives.'
+    return 'The program contains TypeScript REPL statements; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level declarations and await are supported; top-level return is not supported. Emit output with console.log(...) or a final lossless JSON expression. Only printed values and that final expression become program output. Variables, functions, and imported modules remain in memory for this Agent across calls. Use await import(...) for modules. This environment has full host access without a file sandbox; process.env starts empty. Restart, Agent disposal, cancellation, timeout, output overflow, or process failure clears the environment. If a variable is undefined, recreate it and reacquire its resources. State is not restored from the conversation, and failed evaluations can leave earlier mutations in memory. Redeclaring an existing let, const, or class name fails; assign to a mutable binding or use a new name. Await all tool calls; background callbacks cannot call tools after their evaluation ends. Await child-process completion before ending an evaluation; raw subprocess output belongs to whichever evaluation is active when it arrives.'
   }
   private readonly owners = new WeakMap<object, Kernel>()
   private readonly kernels = new Set<Kernel>()

@@ -56,7 +56,7 @@ Invalid metadata, an unparseable body, an unavailable provider route or a per-ru
 
 ### File policy and cancellation
 
-The engine resolves the calling Session's standing file policy and cwd. It passes file policy only to a provider that supports confinement. The optional persistent Node provider executes an async wrapper in a temporary unsandboxed environment, so workflow-local variables never join the Agent's retained REPL. Network access is not restricted by the file policy.
+The engine resolves the calling Session's standing file policy and cwd. A runtime without confinement is accepted only for `danger-full-access`; `read-only` and `workspace-write` fail before execution. Node in-memory mode executes an async wrapper in a temporary environment, so workflow-local variables never join the Agent's retained REPL. Network access is not restricted by the file policy.
 
 The workflow requests `timeoutMs: null` from PTC. Its initial VM slice still has `syncTimeoutMs`, and a caller's abort signal still applies, including an enclosing tool deadline. Cancellation immediately aborts the PTC process and pending or active subagents. The caller must dispose every run and await child cleanup; there is no separate workflow cleanup timer.
 

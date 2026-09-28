@@ -23,12 +23,12 @@
 /deepseek-ai-dsh-ptc-runtime-node/use-this-package/execution-and-results:
   en: c79baab0c0a49ca7
   zh: b90b78d0d75280fb
-/deepseek-ai-dsh-ptc-runtime-node/use-this-package/persistent-repl:
-  en: cf58c5bd3ff65aa0
-  zh: 4f8b020c21ca527b
+/deepseek-ai-dsh-ptc-runtime-node/use-this-package/in-memory-mode:
+  en: 886ac7a18eb3263f
+  zh: c38c86cfca8ce110
 /deepseek-ai-dsh-ptc-runtime-node/use-this-package/deadlines-and-cancellation:
-  en: 74825f65e6b59013
-  zh: 928b56f87309b8db
+  en: 6014e01f41d1ec22
+  zh: 33ddebf3cdb1f914
 /deepseek-ai-dsh-ptc-runtime-node/use-this-package/failures:
   en: 7682e50f9dcfa25c
   zh: ddcb3502e12be06f

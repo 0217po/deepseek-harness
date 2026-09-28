@@ -436,7 +436,7 @@ describe('mode-aware wire contribution', () => {
     const sdk = assembly.sections.find(section => section.name === 'tools:sdk')
     expect(sdk?.text).toContain('class Tools(Protocol):')
     expect(sdk?.text).toContain('async def echo(self, args:')
-    expect(sdk?.text).toContain('top-level `await`')
+    expect(sdk?.text).toContain('execution instructions in its tool description')
   })
 
   it("assembles under a python runtime in mode 'both' as well, SDK and schema together", async () => {
@@ -461,13 +461,13 @@ describe('mode-aware wire contribution', () => {
     const assembly = await systemPrompt.assemble()
     const runCodeSchema = assembly.tools.find(tool => tool.name === RUN_CODE_NAME)
     expect(runCodeSchema?.description).toContain('Execute a TypeScript program')
-    expect(runCodeSchema?.description).toContain('BODY of an')
+    expect(runCodeSchema?.description).toContain('`code`, the program to execute')
     // Both required arguments are named here, not only in the parameter
     // schema: prose that describes the call as "pass the program" is what
     // leads a model to emit `{code}` alone and fail INVALID_ARGS.
     expect(runCodeSchema?.description).toContain('`description`')
     const codeParam = (runCodeSchema?.parameters as { properties: { code: { description: string } } }).properties.code
-    expect(codeParam.description).toBe('The program: the body of an async TypeScript function.')
+    expect(codeParam.description).toBe("The TypeScript program to execute, following this tool's execution instructions.")
   })
 
   it('emits a Python-flavored run_code schema under a python runtime (matches the SDK language)', async () => {
@@ -476,11 +476,11 @@ describe('mode-aware wire contribution', () => {
     const assembly = await systemPrompt.assemble()
     const runCodeSchema = assembly.tools.find(tool => tool.name === RUN_CODE_NAME)
     expect(runCodeSchema?.description).toContain('Execute a Python program')
-    expect(runCodeSchema?.description).toContain('`return <value>`')
+    expect(runCodeSchema?.description).toContain('`code`')
     expect(runCodeSchema?.description).toContain('`description`')
     expect(runCodeSchema?.description).not.toContain('TypeScript')
     const codeParam = (runCodeSchema?.parameters as { properties: { code: { description: string } } }).properties.code
-    expect(codeParam.description).toBe('The program: the body of an async Python function.')
+    expect(codeParam.description).toBe("The Python program to execute, following this tool's execution instructions.")
   })
 
   it('resolves the run_code schema flavor lazily and fails loud on a language absent from the flavor table', async () => {
@@ -511,7 +511,7 @@ describe('mode-aware wire contribution', () => {
     const definition = ctx.tools.get(RUN_CODE_NAME)
     expect(definition?.description).toContain('Execute a TypeScript program')
     const params = definition?.parameters as { properties: { code: { description: string } } }
-    expect(params.properties.code.description).toBe('The program: the body of an async TypeScript function.')
+    expect(params.properties.code.description).toBe("The TypeScript program to execute, following this tool's execution instructions.")
   })
 
   it("rejects the assembly when toolOrder names a native tool that mode 'ptc' no longer contributes", async () => {
@@ -2385,7 +2385,7 @@ describe('PTC state ownership', () => {
     const format = vi.spyOn(runtime, 'programFormat', 'get').mockReturnValue(programFormat)
     const release = vi.spyOn(runtime, 'release')
     try {
-      expect(ctx.tools.schemas().find(tool => tool.name === 'run_code')?.description).toContain(programFormat === 'repl' ? 'in-memory REPL' : 'async function')
+      expect(ctx.tools.schemas().find(tool => tool.name === 'run_code')?.description).not.toContain('in-memory')
       expect((await runCode(ctx, 'let value = 1', { agent })).isError).toBe(false)
       expect((await runCode(ctx, 'value', { agent })).isError).toBe(false)
       expect(runtime.lastRequest?.stateOwner).toBe(agent)
@@ -2396,10 +2396,15 @@ describe('PTC state ownership', () => {
     } finally { format.mockRestore(); release.mockRestore(); await agentContext.fiber.dispose(); await ctx.fiber.dispose() }
   })
 
-  it('rejects an unsupported language and REPL combination during schema assembly', async () => {
+  it('keeps provider evaluation instructions independent of language and program format', async () => {
     const { ctx, runtime } = await setup({ runtime: { language: 'python' } })
     const format = vi.spyOn(runtime, 'programFormat', 'get').mockReturnValue('repl')
-    try { expect(() => ctx.tools.schemas()).toThrow('REPL presentation requires TypeScript') }
-    finally { format.mockRestore(); await ctx.fiber.dispose() }
+    const instructions = vi.spyOn(runtime, 'executionInstructions', 'get').mockReturnValue('Each call evaluates Python expressions in a fresh environment.')
+    try {
+      const description = ctx.tools.schemas().find(tool => tool.name === 'run_code')?.description
+      expect(description).toContain('Each call evaluates Python expressions in a fresh environment.')
+      expect(description).not.toContain('in-memory')
+      expect(description).not.toContain('TypeScript')
+    } finally { format.mockRestore(); instructions.mockRestore(); await ctx.fiber.dispose() }
   })
 })
