@@ -1,5 +1,5 @@
 ---
-description: "Desktop 设置中的账号页面显示 DeepSeek 登录状态，并提供浏览器授权和取消；侧边栏账号菜单提供 Platform 退出登录。"
+description: "设置中的账号页面显示 DeepSeek 登录状态，并提供浏览器授权和取消；侧边栏账号菜单提供 Platform 退出登录。"
 kind: "package-reference"
 ---
 
@@ -28,7 +28,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用此包
 
-客户端仅在具有 preload 桥接的 Desktop 内启用。普通 Web 客户端保留标准设置入口和 API Key 引导，不显示账号登录和账号设置，也不订阅账号状态。
+Desktop 与普通 Web 客户端都挂载侧边栏账号菜单、账号设置、模型引导中的登录步骤，并订阅账号状态。Desktop 主进程在系统浏览器中打开授权页面。普通 Web 客户端（以缺少 Desktop preload 桥接识别）以 `login_source` web 发起登录，并以自身 origin 作为回调 origin；它在点击登录时预先打开一个标签页，本次尝试获得授权 URL 后带上相同的 `theme` 参数导航该标签页，并在失败、过期或取消时关闭它；弹窗被拦截时仍可使用复制链接。内嵌 Platform 页面、Desktop 引导和原生设备信息读取器仅在 Desktop 中提供，因此 Web 中的 Platform 链接在新标签页打开。
 
 侧边栏和账号设置以正圆图片显示账号头像，直径分别为 24px 和 32px；头像 URL 缺失或图片加载失败时使用账号图标兜底。折叠侧边栏将头像居中放置在 36 × 36 px 的按钮内。登录前侧边栏入口改为「更多」行，以三点图标开头。
 

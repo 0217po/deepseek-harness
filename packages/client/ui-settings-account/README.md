@@ -1,5 +1,5 @@
 ---
-description: "Desktop Account settings display DeepSeek login state and offer browser authorization and cancellation; the sidebar account menu provides Platform sign-out."
+description: "Account settings display DeepSeek login state and offer browser authorization and cancellation; the sidebar account menu provides Platform sign-out."
 kind: "package-reference"
 ---
 
@@ -28,7 +28,7 @@ A new account-model sign-in-required event displays “Model unavailable. Please
 <a id="use-this-package"></a>
 ## Use this package
 
-The client activates only inside Desktop, identified by its preload bridge. Plain Web clients keep the standard Settings launcher and API-key onboarding without account login, account settings, or an account-state subscription.
+Desktop and plain Web clients both mount the sidebar account launcher, Account settings, the sign-in step of model onboarding, and the account-state subscription. Desktop main opens the authorization page in the system browser. A plain Web client, identified by the absent Desktop preload bridge, sends `login_source` web with its own origin as the callback origin, preopens a tab during the sign-in click, navigates it to the authorization URL with the same `theme` parameter once its attempt receives one, and closes it on failure, expiry, or cancellation; a blocked popup leaves the copy-link route. Embedded Platform pages, Desktop onboarding, and the native device reader stay Desktop-only, so Web Platform links open new tabs.
 
 The sidebar and Account settings display circular profile images with diameters of 24px and 32px respectively, with the account icon as fallback when the URL is absent or the image fails to load. The collapsed sidebar centers the avatar in a 36 × 36 px button. Before sign-in the sidebar launcher shows a More row instead, leading with the ellipsis glyph.
 
