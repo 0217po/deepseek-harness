@@ -254,7 +254,8 @@ actor AXWorker {
             return .capture(CaptureTarget(appHandle: handle, process: identity, window: window))
         case "paste":
             try ClipboardPaste().perform(text: params.string("text"), format: params.optionalString("format") ?? "text",
-                                         maxBytes: params.integer("maxClipboardBytes", in: 1024...Int.max)) { requireClipboard in
+                                         maxBytes: params.integer("maxClipboardBytes", in: 1024...Int.max),
+                                         checkCancellation: { try cancellation.check() }) { requireClipboard in
                 try ax().paste(identity.pid, maxElements: params.integer("maxElements", in: 1...10000),
                                maxDepth: params.integer("maxDepth", in: 1...100)) {
                     try cancellation.check()

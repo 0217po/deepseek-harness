@@ -69,3 +69,15 @@ import Testing
     } catch let error as NativeFailure { #expect(error.code == "CLIPBOARD_LIMIT") }
     #expect(board.string(forType: .string) == large)
 }
+
+@Test func clipboardPasteAwaitsDataConsumptionAndCanCancelBeforeItIsRequested() throws {
+    let board = NSPasteboard.withUniqueName()
+    defer { board.releaseGlobally() }
+    #expect(board.setString("original", forType: .string))
+    do {
+        try ClipboardPaste(pasteboard: board).perform(text: "paste", format: "text", maxBytes: 1024,
+            checkCancellation: { throw NativeFailure(code: "NATIVE_CANCELLED", message: "delivery cancelled") }) { _ in }
+        Issue.record("Unread clipboard data completed without cancellation")
+    } catch let error as NativeFailure { #expect(error.code == "NATIVE_CANCELLED") }
+    #expect(board.string(forType: .string) == "original")
+}

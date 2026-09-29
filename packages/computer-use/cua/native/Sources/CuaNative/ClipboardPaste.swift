@@ -2,6 +2,39 @@
 import AppKit
 import Foundation
 
+private final class PasteDataProvider: NSObject, NSPasteboardItemDataProvider, @unchecked Sendable {
+    private enum Delivery { case pending, supplied, failed }
+    private let data: Data
+    private let type: NSPasteboard.PasteboardType
+    // AppKit can request promised data on another thread while the AX worker waits.
+    private let condition = NSCondition()
+    private var delivery: Delivery = .pending
+    init(data: Data, type: NSPasteboard.PasteboardType) { self.data = data; self.type = type }
+    func pasteboard(_ pasteboard: NSPasteboard?, item: NSPasteboardItem, provideDataForType type: NSPasteboard.PasteboardType) {
+        let supplied = type == self.type && item.setData(data, forType: type)
+        condition.lock()
+        delivery = supplied ? .supplied : .failed
+        condition.broadcast()
+        condition.unlock()
+    }
+    func wait(check: () throws -> Void) throws {
+        while true {
+            try check()
+            condition.lock()
+            switch delivery {
+            case .supplied: condition.unlock(); return
+            case .failed:
+                condition.unlock()
+                throw NativeFailure(code: "CLIPBOARD_UNAVAILABLE", message: "Requested paste data could not be supplied")
+            case .pending:
+                // A bounded wait lets helper cancellation and a newer clipboard owner interrupt delivery.
+                _ = condition.wait(until: Date(timeIntervalSinceNow: 0.025))
+                condition.unlock()
+            }
+        }
+    }
+}
+
 final class ClipboardPaste {
     private struct SavedItem { let values: [(NSPasteboard.PasteboardType, Data)] }
     private static let ownerType = NSPasteboard.PasteboardType("org.deepseek-harness.cua.clipboard-owner")
@@ -9,7 +42,7 @@ final class ClipboardPaste {
 
     init(pasteboard: NSPasteboard = .general) { self.pasteboard = pasteboard }
 
-    func perform(text: String, format: String, maxBytes: Int, operation: (() throws -> Void) throws -> Void) throws {
+    func perform(text: String, format: String, maxBytes: Int, checkCancellation: () throws -> Void = {}, operation: (() throws -> Void) throws -> Void) throws {
         let type: NSPasteboard.PasteboardType
         switch format {
         case "text": type = .string
@@ -22,7 +55,8 @@ final class ClipboardPaste {
         let saved = try snapshot(maxBytes: maxBytes)
         let owner = Data(UUID().uuidString.utf8)
         let item = NSPasteboardItem()
-        guard item.setData(data, forType: type), item.setData(owner, forType: Self.ownerType) else {
+        let provider = PasteDataProvider(data: data, type: type)
+        guard item.setDataProvider(provider, forTypes: [type]), item.setData(owner, forType: Self.ownerType) else {
             throw NativeFailure(code: "CLIPBOARD_UNAVAILABLE", message: "Could not prepare paste contents")
         }
         guard pasteboard.changeCount == originalCount else {
@@ -41,6 +75,7 @@ final class ClipboardPaste {
         do {
             try requireOwnership()
             try operation(requireOwnership)
+            try provider.wait { try checkCancellation(); try requireOwnership() }
         } catch {
             if owned() { try restore(saved) }
             throw error

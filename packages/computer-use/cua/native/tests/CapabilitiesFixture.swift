@@ -25,10 +25,20 @@ final class CapabilityPad: NSView {
     }
 }
 
+final class CapabilityTextView: NSTextView {
+    var attemptedPaste: ((Bool) -> Void)?
+    override func paste(_ sender: Any?) {
+        let owned = NSPasteboard.general.data(forType: NSPasteboard.PasteboardType("org.deepseek-harness.cua.clipboard-owner")) != nil
+        attemptedPaste?(owned)
+        if owned { super.paste(sender) }
+    }
+}
+
 final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTextViewDelegate {
     let statePath: String
     var window: NSWindow!
-    var text: NSTextView!
+    var text: CapabilityTextView!
+    var pasteAttempts: [Bool] = []
     var pad: CapabilityPad!
     var events: [[String: Any]] = []
     init(statePath: String) { self.statePath = statePath }
@@ -49,7 +59,7 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelega
         window.isReleasedWhenClosed = false
         window.animationBehavior = .none
         window.collectionBehavior = [.canJoinAllApplications, .stationary]
-        text = NSTextView(frame: NSRect(x: 20, y: 230, width: 600, height: 235))
+        text = CapabilityTextView(frame: NSRect(x: 20, y: 230, width: 600, height: 235))
         text.isRichText = true
         text.isEditable = true
         text.font = .systemFont(ofSize: 18)
@@ -57,6 +67,7 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelega
         text.setAccessibilityIdentifier("dsh-cua-rich-text")
         text.setAccessibilityLabel("Rich text fixture")
         text.delegate = self
+        text.attemptedPaste = { [weak self] owned in self?.pasteAttempts.append(owned); self?.persist() }
         window.contentView!.addSubview(text)
         pad = CapabilityPad(frame: NSRect(x: 20, y: 25, width: 600, height: 170))
         pad.setAccessibilityLabel("Input receiver")
@@ -97,7 +108,7 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelega
         let selection = text.selectedRange()
         let result: [String: Any] = ["pid": ProcessInfo.processInfo.processIdentifier, "windowId": window.windowNumber,
             "active": NSApplication.shared.isActive, "keyWindow": window.isKeyWindow,
-            "textFocused": window.firstResponder === text,
+            "textFocused": window.firstResponder === text, "pasteAttempts": pasteAttempts,
             "text": text.string, "selection": [selection.location, selection.length], "runs": runs, "events": events,
             "pad": [frame.minX, window.frame.height - frame.maxY, frame.width, frame.height]]
         try! JSONSerialization.data(withJSONObject: result).write(to: URL(fileURLWithPath: statePath), options: .atomic)
