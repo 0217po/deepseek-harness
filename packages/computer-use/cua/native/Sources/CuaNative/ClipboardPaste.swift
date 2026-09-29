@@ -17,32 +17,31 @@ private final class PasteDataProvider: NSObject, NSPasteboardItemDataProvider, @
         condition.broadcast()
         condition.unlock()
     }
-    func wait(check: () throws -> Void) throws {
+    @MainActor func wait(check: () throws -> Void) async throws {
         while true {
             try check()
-            condition.lock()
-            switch delivery {
-            case .supplied: condition.unlock(); return
-            case .failed:
-                condition.unlock()
-                throw NativeFailure(code: "CLIPBOARD_UNAVAILABLE", message: "Requested paste data could not be supplied")
-            case .pending:
-                // A bounded wait lets helper cancellation and a newer clipboard owner interrupt delivery.
-                _ = condition.wait(until: Date(timeIntervalSinceNow: 0.025))
-                condition.unlock()
+            let state = condition.withLock { delivery }
+            switch state {
+            case .supplied: return
+            case .failed: throw NativeFailure(code: "CLIPBOARD_UNAVAILABLE", message: "Requested paste data could not be supplied")
+            case .pending: try await Task.sleep(for: .milliseconds(25))
             }
         }
     }
+
 }
 
-final class ClipboardPaste {
-    private struct SavedItem { let values: [(NSPasteboard.PasteboardType, Data)] }
+@MainActor final class ClipboardPaste {
+    private struct SavedItem: Sendable { let values: [(NSPasteboard.PasteboardType, Data)] }
     private static let ownerType = NSPasteboard.PasteboardType("org.deepseek-harness.cua.clipboard-owner")
     private let pasteboard: NSPasteboard
+    private var restorePending: (() throws -> Void)?
 
     init(pasteboard: NSPasteboard = .general) { self.pasteboard = pasteboard }
 
-    func perform(text: String, format: String, maxBytes: Int, checkCancellation: () throws -> Void = {}, operation: (() throws -> Void) throws -> Void) throws {
+    func perform(text: String, format: String, maxBytes: Int, checkCancellation: () throws -> Void = {},
+                 operation: (@escaping @MainActor @Sendable () throws -> Void) async throws -> Void) async throws {
+        try checkCancellation()
         let type: NSPasteboard.PasteboardType
         switch format {
         case "text": type = .string
@@ -62,25 +61,35 @@ final class ClipboardPaste {
         guard pasteboard.changeCount == originalCount else {
             throw NativeFailure(code: "CLIPBOARD_CHANGED", message: "Clipboard changed while preserving it; paste was not dispatched")
         }
+        try checkCancellation()
         let cleared = pasteboard.clearContents()
         guard pasteboard.writeObjects([item]) else {
             if pasteboard.changeCount == cleared { try restore(saved) }
             throw NativeFailure(code: "CLIPBOARD_UNAVAILABLE", message: "Could not publish paste contents")
         }
         let expectedCount = pasteboard.changeCount
-        func owned() -> Bool { pasteboard.changeCount == expectedCount && pasteboard.data(forType: Self.ownerType) == owner }
-        func requireOwnership() throws {
+        let owned: @MainActor @Sendable () -> Bool = { [self] in
+            pasteboard.changeCount == expectedCount && pasteboard.data(forType: Self.ownerType) == owner
+        }
+        let requireOwnership: @MainActor @Sendable () throws -> Void = {
             guard owned() else { throw NativeFailure(code: "CLIPBOARD_CHANGED", message: "Clipboard changed before paste; input was not dispatched") }
         }
+        restorePending = { [self] in if owned() { try restore(saved) } }
+        defer { restorePending = nil }
         do {
             try requireOwnership()
-            try operation(requireOwnership)
-            try provider.wait { try checkCancellation(); try requireOwnership() }
+            try await operation(requireOwnership)
+            try await provider.wait { try checkCancellation(); try requireOwnership() }
         } catch {
             if owned() { try restore(saved) }
             throw error
         }
         if owned() { try restore(saved) }
+    }
+
+    func cancel() throws {
+        try restorePending?()
+        restorePending = nil
     }
 
     private func snapshot(maxBytes: Int) throws -> [SavedItem] {

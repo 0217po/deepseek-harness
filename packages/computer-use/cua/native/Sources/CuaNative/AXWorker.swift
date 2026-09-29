@@ -47,6 +47,14 @@ struct ForegroundObservation: Sendable {
                  "frontWindowPid": frontWindowPID.map { .number(Double($0)) } ?? .null])
     }
 }
+struct PastePlan: Sendable {
+    let handle: String
+    let text: String
+    let format: String
+    let maxBytes: Int
+    let maxElements: Int
+    let maxDepth: Int
+}
 struct ApplicationLaunch: Sendable {
     let handle: String
     let application: InstalledApplication
@@ -56,7 +64,7 @@ private enum ApplicationTarget {
     case running(ProcessIdentity)
     case pending(InstalledApplication, JSONValue)
 }
-enum DriverOutcome: Sendable { case result(JSONValue), capture(CaptureTarget), foreground(ForegroundPlan), launch(ApplicationLaunch) }
+enum DriverOutcome: Sendable { case result(JSONValue), capture(CaptureTarget), foreground(ForegroundPlan), launch(ApplicationLaunch), paste(PastePlan) }
 
 actor AXWorker {
     nonisolated let executor = NativeSerialExecutor()
@@ -253,16 +261,9 @@ actor AXWorker {
             let window = try coordinateWindow(identity, params.windowID())
             return .capture(CaptureTarget(appHandle: handle, process: identity, window: window))
         case "paste":
-            try ClipboardPaste().perform(text: params.string("text"), format: params.optionalString("format") ?? "text",
-                                         maxBytes: params.integer("maxClipboardBytes", in: 1024...Int.max),
-                                         checkCancellation: { try cancellation.check() }) { requireClipboard in
-                try ax().paste(identity.pid, maxElements: params.integer("maxElements", in: 1...10000),
-                               maxDepth: params.integer("maxDepth", in: 1...100)) {
-                    try cancellation.check()
-                    _ = try validateIdentity(handle)
-                    try requireClipboard()
-                }
-            }
+            return .paste(PastePlan(handle: handle, text: try params.string("text"), format: try params.optionalString("format") ?? "text",
+                                   maxBytes: try params.integer("maxClipboardBytes", in: 1024...Int.max),
+                                   maxElements: try params.integer("maxElements", in: 1...10000), maxDepth: try params.integer("maxDepth", in: 1...100)))
         case "typeText", "pressKey":
             let recipient = try ax().keyboardRecipient(identity, catalog: catalog)
             try NativePlatform.verify(recipient)
@@ -327,6 +328,16 @@ actor AXWorker {
         default: throw NativeFailure(code: "UNSUPPORTED", message: method)
         }
         return .result(Self.actionResult)
+    }
+
+    func performPaste(_ plan: PastePlan, beforeDispatch: @MainActor @Sendable () throws -> Void) async throws {
+        let identity = try validateIdentity(plan.handle)
+        let command = try ax().pasteCommand(identity.pid, maxElements: plan.maxElements, maxDepth: plan.maxDepth)
+        try await beforeDispatch()
+        try cancellation.check()
+        _ = try validateIdentity(plan.handle)
+        try NativePlatform.requireUnlocked(observeSession())
+        try ax().perform(command, "AXPress")
     }
 
     private func pendingApplication(_ app: InstalledApplication, handle: String, authorization: JSONValue) -> JSONValue {

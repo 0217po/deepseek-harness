@@ -9,6 +9,7 @@ import Darwin
     private let cancellation: CancellationLatch
     private let worker: AXWorker
     private let capture = WindowCapture()
+    private let clipboard = ClipboardPaste()
     private let input: JSONLInput
     private let writer: JSONLWriter
     private let signalQueue = DispatchQueue(label: "dsh.cua.signals")
@@ -85,6 +86,12 @@ import Darwin
                     let image = try await self.capture.capture(target, cancellation: self.cancellation)
                     result = try await self.worker.finishCapture(target, image: image)
                     case .foreground(let plan): result = try await self.performForeground(plan, requestID: request.id)
+                    case .paste(let plan):
+                        try await self.clipboard.perform(text: plan.text, format: plan.format, maxBytes: plan.maxBytes,
+                            checkCancellation: { try self.cancellation.check() }) { requireClipboard in
+                            try await self.worker.performPaste(plan, beforeDispatch: requireClipboard)
+                        }
+                        result = AXWorker.actionResult
                     case .launch(let plan):
                         let pid = try await ApplicationDiscovery.launch(plan.application, cancellation: self.cancellation)
                         result = try await self.worker.finishLaunch(plan, pid: pid)
@@ -144,6 +151,8 @@ import Darwin
         guard !stopping else { return }
         stopping = true
         cancellation.cancel()
+        do { try clipboard.cancel() }
+        catch { fputs("Clipboard restoration failed during shutdown: \(error.localizedDescription)\n", stderr) }
         active = nil
         operation?.cancel()
         input.stop()

@@ -145,7 +145,7 @@ final class AXAccess {
         let error = AXUIElementSetAttributeValue(element, "AXValue" as CFString, value as CFString)
         guard error == .success else { throw failure(error, "set AXValue") }
     }
-    func paste(_ pid: Int32, maxElements: Int, maxDepth: Int, beforeDispatch: () throws -> Void) throws {
+    func pasteCommand(_ pid: Int32, maxElements: Int, maxDepth: Int) throws -> AXUIElement {
         guard let menu = try element(AXUIElementCreateApplication(pid), "AXMenuBar") else {
             throw NativeFailure(code: "UNSUPPORTED", message: "The application does not expose a Paste menu command")
         }
@@ -172,8 +172,7 @@ final class AXAccess {
             for child in try children(node) { pending.append((child, depth + 1)) }
         }
         guard let found else { throw NativeFailure(code: "UNSUPPORTED", message: "No standard Paste command is available") }
-        try beforeDispatch()
-        try perform(found, "AXPress")
+        return found
     }
     func selectText(_ element: AXUIElement, text: String, prefix: String?, suffix: String?, mode: String) throws {
         try requireEnabled(element)
