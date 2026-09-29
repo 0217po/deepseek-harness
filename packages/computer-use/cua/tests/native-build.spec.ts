@@ -12,7 +12,7 @@ async function fixture(diagnostics = true) {
   const packageRoot = join(root, 'packages/computer-use/cua')
   await mkdir(packageRoot, { recursive: true })
   const controller = new AbortController()
-  let output = Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 0, 255, 128])
+  let output: Buffer = Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 0, 255, 128])
   let outcome: SubprocessOutcome = { exitCode: 0, signal: null }
   let beforeExit = async () => {}
   const terminate = vi.fn()
