@@ -119,6 +119,18 @@ it.each(['Allow for this task', 'Deny'])('obtains %s before a stopped applicatio
   if (choice !== 'Deny') expect(result.value).toMatchObject({ structuredContent: { appHandle: 'pending-app', pid: 17 } })
 })
 
+it('rejects a launch result that changes the approved handle', async () => {
+  const f = await setup()
+  await f.ctx.plugin(UserQuestions)
+  f.ctx.on('user-questions/request', async () => ({ answers: [{ id: 'cua-app-access', selected: ['Allow for this task'] }] }))
+  native.request.mockResolvedValueOnce({ appHandle: 'pending-app', pid: null, name: 'Fixture', authorization: {
+    id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: false,
+  } }).mockResolvedValueOnce({ appHandle: 'another-app', pid: 17, name: 'Fixture' })
+  const result = await f.execute('getApp', { selector: 'Fixture' })
+  expect(result.isError).toBe(true)
+  expect(JSON.stringify(result.content)).toContain('another handle')
+})
+
 it('rejects a model attempt to call the private launch operation', async () => {
   const f = await setup()
   expect((await f.execute('launchApp', { appHandle: 'unapproved' })).isError).toBe(true)
@@ -304,7 +316,9 @@ it('supplies configured resource bounds and clears registrations on unload', asy
   await f.execute('drag', { appHandle: 'app-one', windowId: 7, fromX: 1, fromY: 2, toX: 3, toY: 4 })
   expect(native.request).toHaveBeenLastCalledWith('drag', expect.objectContaining({ durationMs: 200, steps: 10 }), expect.any(AbortSignal), ToolCallId('lifecycle-3'))
   await f.execute('paste', { appHandle: 'app-one', text: 'hello', format: 'text' })
-  expect(native.request).toHaveBeenLastCalledWith('paste', expect.objectContaining({ maxClipboardBytes: 8192, maxAppMatches: 20, maxElements: 64, maxDepth: 8 }), expect.any(AbortSignal), ToolCallId('lifecycle-4'))
+  expect(native.request).toHaveBeenLastCalledWith('paste', expect.objectContaining({ maxClipboardBytes: 8192, maxElements: 64, maxDepth: 8 }), expect.any(AbortSignal), ToolCallId('lifecycle-4'))
+  await f.execute('findApps', { query: 'Fixture' })
+  expect(native.request).toHaveBeenLastCalledWith('findApps', { query: 'Fixture', maxAppMatches: 20 }, expect.any(AbortSignal), ToolCallId('lifecycle-5'))
   await f.provider.dispose()
   expect(f.ctx.tools.schemas()).toEqual([])
   expect(native.dispose).toHaveBeenCalledTimes(1)

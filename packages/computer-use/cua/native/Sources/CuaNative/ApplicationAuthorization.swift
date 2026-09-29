@@ -28,7 +28,7 @@ enum ApplicationAuthorization {
     static func describeInstalled(_ app: InstalledApplication) throws -> JSONValue {
         var code: SecStaticCode?
         let url = URL(fileURLWithPath: app.executablePath)
-        let created = SecStaticCodeCreateWithPath(url as CFURL, SecCSFlags(), &code)
+        let created = SecStaticCodeCreateWithPath(URL(fileURLWithPath: app.path) as CFURL, SecCSFlags(), &code)
         let requirement = created == errSecSuccess ? code.flatMap { signingRequirement($0) } : nil
         let authority: String
         if let requirement { authority = requirement }
