@@ -25,7 +25,7 @@ const imageBase64 = z.string().min(1).refine(value => Buffer.from(value, 'base64
 
 /** Complete native request schema; resource bounds are supplied by the host. */
 export const Request = z.discriminatedUnion('method', [
-  operation('getCapabilities', {}), operation('listApps', {}),
+  operation('getCapabilities', {}), operation('listApps', {}), operation('findApps', { query: z.string().min(1).regex(/\S/) }),
   operation('getApp', { selector: z.string().min(1) }),
   operation('activate', app),
   operation('listWindows', app),
@@ -52,6 +52,9 @@ export const AppResult = z.object({
 })
 /** Running application records from the helper. */
 export const AppsResult = z.array(z.object({ pid: id, name: z.string(), bundleId: z.string().optional() }))
+/** Installed application matches keep running and stopped records distinct. */
+export const FoundAppsResult = z.array(z.intersection(z.object({ id: z.string().min(1), displayName: z.string(), path: z.string().min(1) }),
+  z.discriminatedUnion('isRunning', [z.object({ isRunning: z.literal(true), pid: id }), z.object({ isRunning: z.literal(false) })])))
 /** Current windows and their global point bounds. */
 export const WindowsResult = z.array(z.object({
   windowId: id, pid: id, appName: z.string(), title: z.string(), bounds,

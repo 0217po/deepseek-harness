@@ -11,6 +11,11 @@ struct ApplicationInfo: Sendable {
     let path: String?
     let executablePath: String?
     let regular: Bool
+    func matches(_ selector: String) -> Bool {
+        regular && name != nil && (name?.caseInsensitiveCompare(selector) == .orderedSame || bundleID == selector || String(pid) == selector
+            || (selector.hasPrefix("/") && path.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
+                == URL(fileURLWithPath: selector).resolvingSymlinksInPath().path))
+    }
     var json: JSONValue {
         var value: [String: JSONValue] = ["pid": .number(Double(pid))]
         if let name { value["name"] = .string(name) }

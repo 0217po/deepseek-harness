@@ -45,6 +45,8 @@ export interface Config {
   axTimeoutMs: number
   /** Maximum bytes retained for one helper response frame. */
   maxResponseBytes: number
+  /** Maximum installed application matches returned for one discovery query. */
+  maxAppMatches: number
   /** Maximum bytes preserved from the system clipboard during one paste. */
   maxClipboardBytes: number
   /** Maximum UTF-8 bytes admitted for one helper request frame. */
@@ -73,6 +75,7 @@ export const Config = Schema.object({
   buildTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(300_000),
   timeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(30_000),
   axTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(3000),
+  maxAppMatches: Schema.number().step(1).min(1).max(1000).default(20),
   maxClipboardBytes: Schema.number().step(1).min(1024).default(32 * 1024 * 1024),
   maxRequestBytes: Schema.number().step(1).min(1024).default(1024 * 1024),
   dragDurationMs: Schema.number().step(1).min(1).max(5000).default(400),
@@ -85,7 +88,7 @@ export const Config = Schema.object({
 }) satisfies Schema<Record<string, unknown>, Config>
 
 /** Instructions for raw operation calls and optional object-API bindings. */
-export const GUIDANCE = `Use cua with method getCapabilities and params {} to inspect permissions and sessionLocked. If sessionLocked is true or an operation reports SESSION_LOCKED, stop UI attempts and ask the user to unlock macOS. A null sessionLocked means no usable console session was verified. After unlocking, read fresh state; screenshots from a locked desktop are not current observations. Use listApps and getApp to select an already running application. getApp requests user consent before application observations or input. If access is denied or revoked, stop using that application until the user explicitly grants access again. Never switch tools to bypass a refusal. Keep the returned appHandle; every app operation requires it. listWindows returns window IDs and point bounds. getState returns a complete AX tree and snapshotId. Use its element indices only with that snapshotId. Raw screenshot and coordinate operations require a windowId. Coordinates are window-local macOS points, which may differ from screenshot pixels. A verified window can expose no AX elements. Its empty snapshot permits screenshots and coordinate input; element-index actions require an element from a fresh AX observation.
+export const GUIDANCE = `Use cua with method getCapabilities and params {} to inspect permissions and sessionLocked. If sessionLocked is true or an operation reports SESSION_LOCKED, stop UI attempts and ask the user to unlock macOS. A null sessionLocked means no usable console session was verified. After unlocking, read fresh state; screenshots from a locked desktop are not current observations. Use listApps or cua.getState to discover running applications, and findApps(query) to search installed applications by name, bundle ID or absolute path. getApp requests user consent before launching a stopped application in the background, or before observations and input on a running one. If access is denied or revoked, stop using that application until the user explicitly grants access again. Never switch tools to bypass a refusal. Keep the returned appHandle; every app operation requires it. listWindows returns window IDs and point bounds. Raw getState returns a complete AX tree and snapshotId. Use its element indices only with that snapshotId. Raw screenshot and coordinate operations require a windowId. Coordinates are window-local macOS points, which may differ from screenshot pixels. A verified window can expose no AX elements. Its empty snapshot permits screenshots and coordinate input; element-index actions require an element from a fresh AX observation.
 
 Initialize the object API once in persistent PTC. Reuse its variables in later calls; put temporary declarations inside { ... } blocks to avoid redeclaration errors. All object methods are async. getAXState returns text, not a structured state object. Its text marks disabled controls, valueWritable and selectionWritable capabilities, selected state and UTF-16 selection ranges when available.
 
@@ -94,7 +97,8 @@ Use app methods directly for single-window tasks; getApp already reads initial A
 Object API signatures (options default to { emit: true }):
 
 - cua.getCapabilities(options?) -> { platform, permissions, sessionLocked, methods, coordinateSpace, browser }
-- cua.listApps(options?) -> Array<{ id, displayName, isRunning, pid }>
+- cua.listApps(options?) -> Array<{ id, displayName, isRunning: true, pid }>
+- cua.findApps(query: string, options?) -> Array<{ id, displayName, path, isRunning, pid? }>
 - cua.getState(options?) -> { apps, browsers: [] }
 - cua.getApp(selector: string) -> App
 - app.activate() -> { dispatched: true, verified: false }
@@ -119,7 +123,7 @@ Raw operation tools use { method, params }, including params: {} for parameterle
 
 Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. WINDOW_CHANGED requires fresh state before any retry; use an advertised AX action or explicitly restore the window before screenshot or coordinate input, then observe again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording access in System Settings. After granting access, observe fresh state before continuing; do not automatically replay prior input.
 
-Use selectText only on controls advertising selectionWritable. It selects a unique literal occurrence, or places the cursor before/after it; prefix and suffix must be immediately adjacent. AMBIGUOUS_TEXT requires more context; TEXT_NOT_FOUND or SELECTION_CHANGED requires a fresh observation before deciding on input. Left clicks support single/double clicks; right and middle clicks support single clicks. Modified clicks use pointer input. Keypad names such as KP_0 and KP_Enter retain their physical key identity. Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste delivers plain text or HTML through the application's enabled standard Paste menu command. Original clipboard formats are restored if the clipboard still belongs to this paste; a later copy is preserved. Unsupported Paste commands fail without typing fallback. CLIPBOARD_CHANGED means another writer intervened; observe before deciding on further input. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, use the host-provided initialization snippet below once. Its installation-owned file URL works independently of the project directory. Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.`
+Use selectText only on controls advertising selectionWritable. It selects a unique literal occurrence, or places the cursor before/after it; prefix and suffix must be immediately adjacent. AMBIGUOUS_TEXT requires more context; TEXT_NOT_FOUND or SELECTION_CHANGED requires a fresh observation before deciding on input. Left clicks support single/double clicks; right and middle clicks support single clicks. Modified clicks use pointer input. Keypad names such as KP_0 and KP_Enter retain their physical key identity. Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste delivers plain text or HTML through the application's enabled standard Paste menu command. Original clipboard formats are restored if the clipboard still belongs to this paste; a later copy is preserved. Unsupported Paste commands fail without typing fallback. CLIPBOARD_CHANGED means another writer intervened; observe before deciding on further input. Browser applications can be controlled with getApp like other native apps; browser tabs are unavailable. Installed-app search covers standard macOS application directories; use an absolute application path for another location. Launch does not restore a window or document, and cancellation may leave an application already started. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, use the host-provided initialization snippet below once. Its installation-owned file URL works independently of the project directory. Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.`
 
 function executionAgent(execution: Readonly<ToolExecution>): Agent {
   if (!execution.agent) throw new Error('dsh-cua requires an agent-owned execution')
@@ -235,21 +239,28 @@ function mount(ctx: Context, config: Config, helperPath: string): void {
         const signal = execution.signal
         signal.throwIfAborted()
         const client = (execution as Readonly<CuaExecution>).nativeClient
-        const nativeParams = method === 'paste'
-          ? { ...params, maxClipboardBytes: config.maxClipboardBytes, maxElements: config.maxElements, maxDepth: config.maxDepth }
-          : method === 'getState'
-            ? { ...params, maxElements: config.maxElements, maxDepth: config.maxDepth }
-            : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
-              : params
+        const nativeParams = method === 'findApps'
+          ? { ...params, maxAppMatches: config.maxAppMatches }
+          : method === 'paste'
+            ? { ...params, maxClipboardBytes: config.maxClipboardBytes, maxElements: config.maxElements, maxDepth: config.maxDepth }
+            : method === 'getState'
+              ? { ...params, maxElements: config.maxElements, maxDepth: config.maxDepth }
+              : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
+                : params
         const requestNative = () => client.request(method, nativeParams, signal, execution.callId)
         const result = method === 'paste'
           ? await withFileLock(join(tmpdir(), 'dsh-cua-system-clipboard'), requestNative, { waitMs: config.timeoutMs, signal })
           : await requestNative()
         if (method === 'getApp') {
-          const selected = AppResult.parse(result)
+          const prepared = AppResult.extend({ pid: z.number().int().positive().nullable() }).parse(result)
           const { authorization } = z.object({ authorization: ApplicationAuthorizationResult }).parse(result)
-          await access.select(agent, client, selected.appHandle, authorization, signal)
+          await access.select(agent, client, prepared.appHandle, authorization, signal)
           signal.throwIfAborted()
+          const selected = prepared.pid === null
+            ? AppResult.parse(await access.run(client, prepared.appHandle, signal,
+              signal => client.request('launchApp', { appHandle: prepared.appHandle }, signal, execution.callId)))
+            : AppResult.parse(prepared)
+          if (selected.appHandle !== prepared.appHandle) throw new NativeError('NATIVE_PROTOCOL', 'Launched application has another handle')
           return { content: [{ type: 'text', text: JSON.stringify(selected) }], structuredContent: selected }
         }
         signal.throwIfAborted()

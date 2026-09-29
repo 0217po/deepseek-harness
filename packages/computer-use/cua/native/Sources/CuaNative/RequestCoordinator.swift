@@ -63,16 +63,32 @@ import Darwin
                 let request = try NativeRequest(data: data)
                 requestID = .string(request.id)
                 let params = try RequestParameters(request)
-                let requiresCatalog = ["getApp", "listApps", "typeText", "pressKey"].contains(request.method)
+                let requiresCatalog = ["getApp", "listApps", "findApps", "typeText", "pressKey"].contains(request.method)
                 let catalog = requiresCatalog ? ApplicationCatalog.snapshot() : ApplicationCatalogSnapshot(applications: [], frontPID: nil)
-                let outcome = try await self.worker.execute(request.method, params: params, catalog: catalog)
                 let result: JSONValue
-                switch outcome {
+                if request.method == "findApps" {
+                    result = .array(try ApplicationDiscovery.applications(matching: params.string("query"), exact: false,
+                        limit: params.integer("maxAppMatches", in: 1...1000), cancellation: self.cancellation).map { $0.json(catalog: catalog) })
+                } else {
+                    var installed: InstalledApplication?
+                    if request.method == "getApp" {
+                        let selector = try params.string("selector")
+                        if !catalog.applications.contains(where: { $0.matches(selector) }) && Int32(selector) == nil {
+                            installed = try ApplicationDiscovery.applications(matching: selector, exact: true, limit: 1,
+                                                                               cancellation: self.cancellation).first
+                        }
+                    }
+                    let outcome = try await self.worker.execute(request.method, params: params, catalog: catalog, installed: installed)
+                    switch outcome {
                 case .result(let value): result = value
                 case .capture(let target):
                     let image = try await self.capture.capture(target, cancellation: self.cancellation)
                     result = try await self.worker.finishCapture(target, image: image)
-                case .foreground(let plan): result = try await self.performForeground(plan, requestID: request.id)
+                    case .foreground(let plan): result = try await self.performForeground(plan, requestID: request.id)
+                    case .launch(let plan):
+                        let pid = try await ApplicationDiscovery.launch(plan.application, cancellation: self.cancellation)
+                        result = try await self.worker.finishLaunch(plan, pid: pid)
+                    }
                 }
                 response = .object(["id": requestID, "result": result])
             } catch let failure as NativeFailure {

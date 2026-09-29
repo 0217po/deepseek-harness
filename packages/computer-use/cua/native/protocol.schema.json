@@ -802,6 +802,73 @@
         "method",
         "params"
       ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "const": "findApps"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "query": {
+              "type": "string",
+              "minLength": 1
+            },
+            "maxAppMatches": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          },
+          "required": [
+            "query",
+            "maxAppMatches"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "const": "launchApp"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "appHandle": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "appHandle"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "description": "Host-only continuation after application consent; not exposed by the model tool."
     }
   ]
 }

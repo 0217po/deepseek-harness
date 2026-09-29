@@ -67,10 +67,10 @@ export class ApplicationAccess {
    * Obtain consent for a freshly selected native handle. Free text never grants access.
    * @param agent Exact live task requesting access.
    * @param client Helper that issued the handle.
-   * @param handle Process-lifetime handle returned by getApp.
+   * @param handle Helper handle for a running instance or an approved pending launch.
    * @param identity Native executable/signing identity.
    * @param signal Calling tool lifetime.
-   * @returns Completion after consent; refusals reject before AX, screenshots, or input.
+   * @returns Completion after consent; refusals reject before launch, AX, screenshots, or input.
    */
   async select(agent: Agent, client: NativeClient, handle: CuaAppHandle,
     identity: CuaApplicationGrant & { persistable: boolean }, signal: AbortSignal): Promise<void> {
@@ -90,8 +90,8 @@ export class ApplicationAccess {
         let result: AskUserQuestionAnswer
         try {
           result = await questions.ask({ agent, signal, questions: [{ id: 'cua-app-access',
-            question: `Allow Computer Use to read, capture, and control ${identity.name}?`,
-            detail: `Application: ${identity.executablePath}\nTask access applies to this running application instance. macOS permissions and approval of sensitive actions remain separate. Saved access can be revoked by removing its allowedApps entry from this provider configuration. Task access ends with the task.`, options }] })
+            question: `Allow Computer Use to launch if needed, read, capture, and control ${identity.name}?`,
+            detail: `Application: ${identity.executablePath}\nTask access applies to the selected application instance, including its launch if needed. macOS permissions and approval of sensitive actions remain separate. Saved access can be revoked by removing its allowedApps entry from this provider configuration. Task access ends with the task.`, options }] })
         } catch (error) {
           if (error instanceof UserQuestionError && error.code === 'ASK_CANCELLED') {
             this.invalidate(identity.id, agent)
@@ -118,7 +118,6 @@ export class ApplicationAccess {
         }
       }
       signal.throwIfAborted()
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- the helper can exit while a human answer or grant save is pending.
       if (client.disposed) throw new NativeError('NATIVE_CLOSED', 'Helper is closed; acquire fresh application handles')
       const state = this.clients.get(client) ?? { agent, handles: new Map<CuaAppHandle, Selection>() }
       const { persistable: _persistable, ...grant } = identity

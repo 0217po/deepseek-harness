@@ -1,7 +1,7 @@
 /** Object facade over logged native operations; its caller owns evaluator persistence. */
 import { Buffer } from 'node:buffer'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { ActionResult, AppResult, AppsResult, CapabilitiesResult, Request, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
+import { ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, Request, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
 import type { CuaApi, CuaApp, CuaAppHandle, CuaDispatch, CuaObservationOptions, CuaObservationSink, CuaSurface, CuaWindow } from './types.ts'
 export type * from './types.ts'
 
@@ -136,6 +136,11 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
       const result = AppsResult.parse(await call('listApps', {})).map(app => ({
         id: app.bundleId || String(app.pid), displayName: app.name, isRunning: true as const, pid: app.pid,
       }))
+      await emit(result, options)
+      return result
+    },
+    async findApps(query, options) {
+      const result = FoundAppsResult.parse(await call('findApps', { query }))
       await emit(result, options)
       return result
     },

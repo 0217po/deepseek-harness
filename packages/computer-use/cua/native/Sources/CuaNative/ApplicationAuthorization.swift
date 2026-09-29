@@ -25,22 +25,45 @@ enum ApplicationAuthorization {
         ])
     }
 
+    static func describeInstalled(_ app: InstalledApplication) throws -> JSONValue {
+        var code: SecStaticCode?
+        let url = URL(fileURLWithPath: app.executablePath)
+        let created = SecStaticCodeCreateWithPath(url as CFURL, SecCSFlags(), &code)
+        let requirement = created == errSecSuccess ? code.flatMap { signingRequirement($0) } : nil
+        let authority: String
+        if let requirement { authority = requirement }
+        else {
+            let handle = try FileHandle(forReadingFrom: url)
+            defer { try? handle.close() } // FileHandle also owns closure if an OS close error is reported.
+            var hash = SHA256()
+            while let data = try handle.read(upToCount: 64 * 1024), !data.isEmpty { hash.update(data: data) }
+            authority = "executable:" + hash.finalize().map { String(format: "%02x", $0) }.joined()
+        }
+        let id = SHA256.hash(data: Data((app.executablePath + "\n" + authority).utf8)).map { String(format: "%02x", $0) }.joined()
+        return .object(["id": .string(id), "name": .string(app.name), "executablePath": .string(app.executablePath),
+                        "persistable": .bool(requirement != nil)])
+    }
+
+    private static func signingRequirement(_ code: SecStaticCode) -> String? {
+        guard SecStaticCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSStrictValidate), nil) == errSecSuccess else { return nil }
+        var info: CFDictionary?
+        guard SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
+              let values = info as? [String: Any], let flags = values[kSecCodeInfoFlags as String] as? NSNumber,
+              !SecCodeSignatureFlags(rawValue: flags.uint32Value).contains(.adhoc) else { return nil }
+        var requirement: SecRequirement?
+        var text: CFString?
+        guard SecCodeCopyDesignatedRequirement(code, SecCSFlags(), &requirement) == errSecSuccess, let requirement,
+              SecRequirementCopyString(requirement, SecCSFlags(), &text) == errSecSuccess else { return nil }
+        return text as String?
+    }
+
     private static func signingRequirement(_ pid: Int32) -> String? {
         var code: SecCode?
         guard SecCodeCopyGuestWithAttributes(nil, [kSecGuestAttributePid as String: pid] as CFDictionary,
                                             SecCSFlags(), &code) == errSecSuccess, let code,
               SecCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSStrictValidate), nil) == errSecSuccess else { return nil }
-        var info: CFDictionary?
         var staticCode: SecStaticCode?
-        guard SecCodeCopyStaticCode(code, SecCSFlags(), &staticCode) == errSecSuccess, let staticCode,
-              SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
-              let values = info as? [String: Any],
-              let flags = values[kSecCodeInfoFlags as String] as? NSNumber,
-              !SecCodeSignatureFlags(rawValue: flags.uint32Value).contains(.adhoc) else { return nil }
-        var requirement: SecRequirement?
-        var text: CFString?
-        guard SecCodeCopyDesignatedRequirement(staticCode, SecCSFlags(), &requirement) == errSecSuccess, let requirement,
-              SecRequirementCopyString(requirement, SecCSFlags(), &text) == errSecSuccess else { return nil }
-        return text as String?
+        guard SecCodeCopyStaticCode(code, SecCSFlags(), &staticCode) == errSecSuccess, let staticCode else { return nil }
+        return signingRequirement(staticCode)
     }
 }

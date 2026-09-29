@@ -79,6 +79,19 @@ describe('application discovery', () => {
     expect(f.sink.image).not.toHaveBeenCalled()
   })
 
+  it('searches installed applications without turning ordinary discovery into an installed-app inventory', async () => {
+    const f = fixture()
+    const matches = [
+      { id: 'test.stopped', displayName: 'Stopped', path: '/Applications/Stopped.app', isRunning: false },
+      { id: 'test.running', displayName: 'Running', path: '/Applications/Running.app', isRunning: true, pid: 17 },
+    ]
+    f.dispatch.mockResolvedValueOnce(matches)
+    expect(await f.api.findApps('Editor')).toEqual(matches)
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'findApps', params: { query: 'Editor' } })
+    expect(f.sink.text).toHaveBeenLastCalledWith(JSON.stringify(matches))
+    await expect(f.api.findApps('   ')).rejects.toThrow()
+  })
+
   it('rejects malformed discovery and capability results', async () => {
     const f = fixture()
     f.dispatch.mockResolvedValueOnce({ platform: 'macos' })

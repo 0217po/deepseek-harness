@@ -39,6 +39,8 @@ export interface CuaCapabilities {
 }
 /** App discovery result accepted by getApp. */
 export interface CuaAppInfo { id: string; displayName: string; isRunning: true; pid: number }
+/** An installed application match; running matches include a process identifier. */
+export type CuaFoundAppInfo = { id: string; displayName: string; path: string } & ({ isRunning: true; pid: number } | { isRunning: false })
 /** Window bounds in global macOS points. Local operations use an origin of [0,0]. */
 export interface CuaBounds { x: number; y: number; width: number; height: number }
 /** Observed window metadata; identifiers are valid only while the window exists. */
@@ -200,14 +202,21 @@ export interface CuaApi {
    */
   listApps(options?: CuaObservationOptions): Promise<CuaAppInfo[]>
   /**
+   * Search standard macOS application directories without launching an app.
+   * @param query - Nonempty name, bundle identifier or absolute application path.
+   * @param options - Output options.
+   * @returns Matching installed applications; overly broad queries reject instead of silently truncating.
+   */
+  findApps(query: string, options?: CuaObservationOptions): Promise<CuaFoundAppInfo[]>
+  /**
    * Discover apps.
    * @param options - output options.
    * @returns native apps and an empty browser list.
    */
   getState(options?: CuaObservationOptions): Promise<{ apps: CuaAppInfo[]; browsers: [] }>
   /**
-   * Select an existing app and emit initial AX state without activating it.
-   * @param selector - exact name, bundle ID, absolute application path or PID string.
+   * Select an app, obtain consent, launch it in the background if necessary, and emit initial AX state.
+   * @param selector - Exact name, bundle ID, absolute application path or running PID string; ambiguous names reject.
    * @returns a handle tied to this process lifetime.
    */
   getApp(selector: string): Promise<CuaApp>

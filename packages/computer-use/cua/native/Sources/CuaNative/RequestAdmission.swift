@@ -3,7 +3,8 @@ import Foundation
 
 struct RequestParameters: Sendable {
     static let fields: [String: Set<String>] = [
-        "getCapabilities": [], "listApps": [], "getApp": ["selector"],
+        "getCapabilities": [], "listApps": [], "findApps": ["query", "maxAppMatches"], "getApp": ["selector"],
+        "launchApp": ["appHandle"],
         "listWindows": ["appHandle"], "activate": ["appHandle"],
         "getState": ["appHandle", "windowId", "maxElements", "maxDepth"],
         "click": ["appHandle", "snapshotId", "elementIndex", "windowId", "x", "y", "mouseButton", "clickCount", "modifiers"],

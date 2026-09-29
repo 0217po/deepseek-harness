@@ -48,7 +48,7 @@ vi.mock('../src/native-client.ts', async importOriginal => ({
 }))
 
 const config = {
-  helperPath: resolve('fixture-helper'), buildTimeoutMs: 300_000, timeoutMs: 10_000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096, maxClipboardBytes: 8192,
+  helperPath: resolve('fixture-helper'), buildTimeoutMs: 300_000, timeoutMs: 10_000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096, maxClipboardBytes: 8192, maxAppMatches: 20,
   graceMs: 10, textEventIntervalMs: 8, maxElements: 64, maxDepth: 8, dragDurationMs: 200, dragSteps: 10,
 } satisfies Omit<NativeProvider.Config, 'allowedApps'>
 
@@ -95,6 +95,34 @@ it('rejects a relative helper path before publishing computer-use operations', a
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await expect(NativeProvider.apply(ctx, { ...config, allowedApps: { get: () => [] }, helperPath: 'relative-helper' })).rejects.toThrow('helperPath must be absolute')
+})
+
+it.each(['Allow for this task', 'Deny'])('obtains %s before a stopped application can launch', async (choice) => {
+  const f = await setup()
+  await f.ctx.plugin(UserQuestions)
+  const asked: PromiseWithResolvers<void> = Promise.withResolvers()
+  const answer = Promise.withResolvers<{ answers: Array<{ id: string; selected: string[] }> }>()
+  onTestFinished(() => { answer.resolve({ answers: [{ id: 'cua-app-access', selected: ['Deny'] }] }) })
+  f.ctx.on('user-questions/request', async () => { asked.resolve(); return answer.promise })
+  native.request.mockImplementation(async (method: string) => method === 'getApp'
+    ? { appHandle: 'pending-app', pid: null, name: 'Fixture', authorization: {
+      id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: false,
+    } }
+    : { appHandle: 'pending-app', pid: 17, name: 'Fixture' })
+  const pending = f.execute('getApp', { selector: 'Fixture' })
+  await asked.promise
+  expect(native.request.mock.calls.map(call => call[0])).toEqual(['getApp'])
+  answer.resolve({ answers: [{ id: 'cua-app-access', selected: [choice] }] })
+  const result = await pending
+  expect(result.isError).toBe(choice === 'Deny')
+  expect(native.request.mock.calls.map(call => call[0])).toEqual(choice === 'Deny' ? ['getApp'] : ['getApp', 'launchApp'])
+  if (choice !== 'Deny') expect(result.value).toMatchObject({ structuredContent: { appHandle: 'pending-app', pid: 17 } })
+})
+
+it('rejects a model attempt to call the private launch operation', async () => {
+  const f = await setup()
+  expect((await f.execute('launchApp', { appHandle: 'unapproved' })).isError).toBe(true)
+  expect(native.request).not.toHaveBeenCalled()
 })
 
 it('correlates a native request with its logged tool invocation', async () => {
@@ -276,7 +304,7 @@ it('supplies configured resource bounds and clears registrations on unload', asy
   await f.execute('drag', { appHandle: 'app-one', windowId: 7, fromX: 1, fromY: 2, toX: 3, toY: 4 })
   expect(native.request).toHaveBeenLastCalledWith('drag', expect.objectContaining({ durationMs: 200, steps: 10 }), expect.any(AbortSignal), ToolCallId('lifecycle-3'))
   await f.execute('paste', { appHandle: 'app-one', text: 'hello', format: 'text' })
-  expect(native.request).toHaveBeenLastCalledWith('paste', expect.objectContaining({ maxClipboardBytes: 8192, maxElements: 64, maxDepth: 8 }), expect.any(AbortSignal), ToolCallId('lifecycle-4'))
+  expect(native.request).toHaveBeenLastCalledWith('paste', expect.objectContaining({ maxClipboardBytes: 8192, maxAppMatches: 20, maxElements: 64, maxDepth: 8 }), expect.any(AbortSignal), ToolCallId('lifecycle-4'))
   await f.provider.dispose()
   expect(f.ctx.tools.schemas()).toEqual([])
   expect(native.dispose).toHaveBeenCalledTimes(1)
