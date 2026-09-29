@@ -2,26 +2,22 @@
 import Foundation
 
 struct RequestParameters: Sendable {
-    static let fields: [String: Set<String>] = [
-        "getCapabilities": [], "listApps": [], "findApps": ["query", "maxAppMatches"], "getApp": ["selector"],
-        "launchApp": ["appHandle"],
-        "listWindows": ["appHandle"], "activate": ["appHandle"],
-        "getState": ["appHandle", "windowId", "maxElements", "maxDepth"],
-        "click": ["appHandle", "snapshotId", "elementIndex", "windowId", "x", "y", "mouseButton", "clickCount", "modifiers"],
-        "setValue": ["appHandle", "snapshotId", "elementIndex", "value"],
-        "selectText": ["appHandle", "snapshotId", "elementIndex", "text", "prefix", "suffix", "selectionType"],
-        "performSecondaryAction": ["appHandle", "snapshotId", "elementIndex", "action"],
-        "paste": ["appHandle", "text", "format", "maxClipboardBytes", "maxElements", "maxDepth"],
-        "typeText": ["appHandle", "text"], "pressKey": ["appHandle", "key", "modifiers"],
-        "scroll": ["appHandle", "windowId", "snapshotId", "x", "y", "deltaLinesX", "deltaLinesY"],
-        "drag": ["appHandle", "windowId", "snapshotId", "fromX", "fromY", "toX", "toY", "durationMs", "steps", "mouseButton", "modifiers"],
-        "screenshot": ["appHandle", "windowId"],
-    ]
+    static let fields = NativeProtocol.fields
     let values: [String: JSONValue]
     init(_ request: NativeRequest) throws {
         guard let values = request.params.object else { throw Self.invalid("params must be an object") }
         guard let allowed = Self.fields[request.method] else { throw NativeFailure(code: "UNSUPPORTED", message: "Unsupported native operation: \(request.method)") }
         guard Set(values.keys).isSubset(of: allowed) else { throw Self.invalid("Unknown operation parameter") }
+        for (field, allowed) in NativeProtocol.stringEnums[request.method] ?? [:] {
+            guard let value = values[field] else { continue }
+            switch value {
+            case .string(let text):
+                guard allowed.contains(text) else { throw Self.invalid("Unsupported value for \(field)") }
+            case .array(let items):
+                guard items.allSatisfy({ $0.string.map(allowed.contains) ?? false }) else { throw Self.invalid("Unsupported value for \(field)") }
+            default: throw Self.invalid("Invalid enum value for \(field)")
+            }
+        }
         self.values = values
     }
     static func invalid(_ message: String) -> NativeFailure { NativeFailure(code: "INVALID_ARGUMENT", message: message) }
@@ -48,9 +44,8 @@ struct RequestParameters: Sendable {
     func modifiers() throws -> [String] {
         guard let value = values["modifiers"] else { return [] }
         guard case .array(let items) = value else { throw Self.invalid("modifiers must be an array") }
-        let allowed: Set<String> = ["command", "cmd", "shift", "option", "alt", "control", "ctrl", "fn"]
         return try items.map { item in
-            guard let name = item.string, allowed.contains(name) else { throw Self.invalid("Unsupported key modifier") }
+            guard let name = item.string else { throw Self.invalid("Unsupported key modifier") }
             return name
         }
     }

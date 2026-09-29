@@ -16,6 +16,10 @@ The facade accepts an operation dispatcher. Its tool adapter resolves the curren
 
 A live Agent owns one serial native helper. App handles bind process identity and kernel start time; replacing the process or helper never revives old handles. AX snapshots are scoped to an app and optional window, so independent window observations remain usable. Coordinate actions select an owned window and use window-local points. Keyboard input remains app-scoped because macOS delivers it to the app's current focus.
 
+The operation schema owns shared data declarations. Host-only limits and launch continuations remain separate from model parameters, and generated native field/enum tables preserve independent native admission without hand-maintained copies. Native code continues to own system calls, permissions and cancellation. AX formatting consumes immutable observations; the walker retains sole ownership of indices and AX references.
+
+Clipboard paste is distinct from Unicode key input: Return and Tab key events can trigger actions instead of inserting clipboard content. Pasteboard access runs on the AppKit main actor and retains promised data until a reader requests it. AX command completion alone does not establish that the application has fetched the data. Restoration checks ownership before replacing contents; the caller still verifies the application result.
+
 ## Alternatives considered
 
 Depending on the complete upstream driver would simplify upgrades but does not meet the requirement for locally owned implementation. Copying browser and other platform code would add unsupported scope. The JSON operation protocol allows another native implementation without changing object consumers.

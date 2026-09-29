@@ -1,13 +1,16 @@
 /** Native application objects independent of evaluator ownership and persistence. */
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import type { z } from 'zod'
+import type { ActionResult, CapabilitiesResult, FoundAppsResult, Request, WindowsResult } from './protocol.ts'
 
-/** Helper-issued application identity, bound to one process lifetime. */
+/** Helper-issued application selection; public app objects bind it to one process lifetime. */
 export type CuaAppHandle = Branded<'CuaAppHandle'>
 /** Helper-issued accessibility observation identity. */
 export type CuaSnapshotId = Branded<'CuaSnapshotId'>
 /** One operation sent through an authorized and logged host dispatcher. */
-export interface CuaOperation { method: string; params: Record<string, JsonValue> }
+export type CuaOperation = z.output<typeof Request>
+type CuaParameters<M extends CuaOperation['method']> = Extract<CuaOperation, { method: M }>['params']
 /** Dispatch exactly once; a failed action must not be retried implicitly. */
 export type CuaDispatch = (operation: CuaOperation) => Promise<JsonValue>
 /** Optional output owned by the caller; persistence and image admission are external. */
@@ -27,48 +30,32 @@ export interface CuaObservationSink {
 export interface CuaObservationOptions { emit?: boolean }
 /** Diffing is not implemented; all reads return a complete tree. */
 export interface CuaAxOptions extends CuaObservationOptions { disableDiffing?: boolean }
-/** Available permissions and operations reported by the selected native implementation. */
-export interface CuaCapabilities {
-  platform: string
-  permissions: { accessibility: boolean; screenRecording: boolean }
-  /** Null means the helper could not verify a usable console session. */
-  sessionLocked: boolean | null
-  methods: string[]
-  coordinateSpace: 'window-points'
-  browser: false
-}
+/** Reported permissions and operations; null sessionLocked means no usable console session was verified. */
+export type CuaCapabilities = z.output<typeof CapabilitiesResult>
 /** App discovery result accepted by getApp. */
-export interface CuaAppInfo { id: string; displayName: string; isRunning: true; pid: number }
+export type CuaAppInfo = Pick<Extract<CuaFoundAppInfo, { isRunning: true }>, 'id' | 'displayName' | 'isRunning' | 'pid'>
 /** An installed application match; running matches include a process identifier. */
-export type CuaFoundAppInfo = { id: string; displayName: string; path: string } & ({ isRunning: true; pid: number } | { isRunning: false })
+export type CuaFoundAppInfo = z.output<typeof FoundAppsResult>[number]
 /** Window bounds in global macOS points. Local operations use an origin of [0,0]. */
-export interface CuaBounds { x: number; y: number; width: number; height: number }
-/** Observed window metadata; identifiers are valid only while the window exists. */
-export interface CuaWindowInfo {
-  windowId: number
-  pid: number
-  appName: string
-  title: string
-  bounds: CuaBounds
-  isOnScreen: boolean
-  onCurrentSpace: boolean | null
-}
+export type CuaBounds = CuaWindowInfo['bounds']
+/** Observed window metadata; identifiers are valid only while the window exists, and null Space membership is unknown. */
+export type CuaWindowInfo = z.output<typeof WindowsResult>[number]
 /** Successful input dispatch; application outcome still requires observation. */
-export interface CuaActionResult { dispatched: true; verified: false }
+export type CuaActionResult = z.output<typeof ActionResult>
 /** Modifiers attached to a window-directed pointer gesture. */
-export type CuaPointerModifier = 'command' | 'control' | 'option' | 'shift' | 'fn'
+export type CuaPointerModifier = NonNullable<CuaParameters<'click'>['modifiers']>[number]
 /** Buttons supported by window-directed clicks and drags. */
-export type CuaMouseButton = 'left' | 'right' | 'middle'
+export type CuaMouseButton = NonNullable<CuaParameters<'click'>['mouseButton']>
 /** Left clicks support one or two presses; right and middle clicks support one. */
-export interface CuaClickOptions { mouseButton?: CuaMouseButton; clickCount?: 1 | 2; modifiers?: readonly CuaPointerModifier[] }
+export type CuaClickOptions = Pick<CuaParameters<'click'>, 'mouseButton' | 'clickCount' | 'modifiers'>
 /** One same-window drag; omitted button is left and omitted modifiers are empty. */
-export interface CuaDragOptions { mouseButton?: CuaMouseButton; modifiers?: readonly CuaPointerModifier[] }
+export type CuaDragOptions = Pick<CuaParameters<'drag'>, 'mouseButton' | 'modifiers'>
 /** Clipboard representation delivered through the application's Paste command. */
-export interface CuaPasteOptions { format?: 'text' | 'html' }
+export type CuaPasteOptions = Pick<CuaParameters<'paste'>, 'format'>
 /** Adjacent literal context disambiguates repeated text; cursor modes collapse the matched range. */
-export interface CuaSelectTextOptions { prefix?: string; suffix?: string; selectionType?: 'text' | 'cursor_before' | 'cursor_after' }
+export type CuaSelectTextOptions = Pick<CuaParameters<'selectText'>, 'prefix' | 'suffix' | 'selectionType'>
 /** Positive deltas reveal content above/left; each axis is an integer from -10 to 10. */
-export interface CuaScrollOptions { x: number; y: number; deltaLinesX: number; deltaLinesY: number }
+export type CuaScrollOptions = Pick<CuaParameters<'scroll'>, 'x' | 'y' | 'deltaLinesX' | 'deltaLinesY'>
 /** An observed AX tree and independently captured PNG; capture is not atomic. */
 export interface CuaObservation { state: string; screenshot: Uint8Array }
 /**

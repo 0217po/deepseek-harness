@@ -25,3 +25,10 @@ func keypadKeysRetainTheirPhysicalIdentity(_ key: String, _ code: UInt16) throws
     #expect(WindowPointerInput.up(button) == .otherMouseUp)
     #expect(throws: NativeFailure.self) { try WindowPointerInput.button("unsupported") }
 }
+
+@Test func everyDeclaredPointerButtonAndModifierHasANativeMapping() throws {
+    let buttons = try #require(NativeProtocol.stringEnums["click"]?["mouseButton"])
+    let modifiers = try #require(NativeProtocol.stringEnums["click"]?["modifiers"])
+    for button in buttons { _ = try WindowPointerInput.button(button) }
+    for modifier in modifiers { _ = try KeyboardInput.modifierFlags([modifier]) }
+}

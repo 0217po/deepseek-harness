@@ -2,7 +2,7 @@
 import { Buffer } from 'node:buffer'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, Request, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
-import type { CuaApi, CuaApp, CuaAppHandle, CuaDispatch, CuaObservationOptions, CuaObservationSink, CuaSurface, CuaWindow } from './types.ts'
+import type { CuaApi, CuaApp, CuaAppHandle, CuaDispatch, CuaObservationOptions, CuaObservationSink, CuaOperation, CuaSurface, CuaWindow } from './types.ts'
 export type * from './types.ts'
 
 function keyChord(chord: string): { key: string; modifiers: string[] } {
@@ -33,11 +33,8 @@ function keyChord(chord: string): { key: string; modifiers: string[] } {
  * @returns Objects independent of variable storage and evaluator lifecycle.
  */
 export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): CuaApi {
-  const call = (method: string, params: Record<string, JsonValue>) => {
-    Request.parse({ method, params })
-    return dispatch({ method, params })
-  }
-  const action = async (method: string, params: Record<string, JsonValue>) => ActionResult.parse(await call(method, params))
+  const call = (method: CuaOperation['method'], params: Record<string, JsonValue>) => dispatch(Request.parse({ method, params }))
+  const action = async (method: CuaOperation['method'], params: Record<string, JsonValue>) => ActionResult.parse(await call(method, params))
   async function emit(value: object, options?: CuaObservationOptions): Promise<void> {
     if (options?.emit !== false) await sink?.text(JSON.stringify(value))
   }

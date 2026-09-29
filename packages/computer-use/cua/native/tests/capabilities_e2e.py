@@ -89,8 +89,9 @@ def main():
             call("selectText", {**target, "text": "target", "prefix": "第二😀 "})
             selected = wait_for_state(state_file, lambda value: value["selection"] == [17, 6])
             assert selected["text"] == "第一😀 target，第二😀 target.", selected
-            call("paste", {**owner, "text": "替换", "format": "text", "maxClipboardBytes": 33554432, "maxElements": 2000, "maxDepth": 25})
-            state = wait_for_state(state_file, lambda value: value["text"] == "第一😀 target，第二😀 替换.")
+            call("paste", {**owner, "text": "替换\n第二行\t保留", "format": "text", "maxClipboardBytes": 33554432, "maxElements": 2000, "maxDepth": 25})
+            state = wait_for_state(state_file, lambda value: value["text"] == "第一😀 target，第二😀 替换\n第二行\t保留.")
+            assert state["pasteAttempts"] == [True], state
             observed = call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
             field = next(item for item in observed["elements"] if item["role"] == "AXTextArea")
             target = {**owner, "snapshotId": observed["snapshotId"], "elementIndex": field["index"]}

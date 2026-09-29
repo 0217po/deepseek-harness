@@ -57,3 +57,5 @@ System file-panel keyboard routing resolves the remote recipient through the sel
 Keyboard modifiers in this native request schema accept command/control/option/shift/fn and cmd/ctrl/alt aliases. The TypeScript raw-tool schema accepts only canonical names; the object API normalizes key-chord aliases before dispatch.
 
 Application selection verifies the executable path and code-signing requirement before returning an authorization identity to the Host. Unsigned applications receive a process-lifetime identity. The Host obtains human consent before using that handle for observation or input.
+
+Protocol declarations are generated from src/protocol.ts. Run `pnpm exec tsx packages/computer-use/cua/native/generate-protocol.ts` from the repository root; package tests verify generated JSON and Swift field/enum tables. Model-submittable parameters exclude Host resource bounds and the private launch continuation.

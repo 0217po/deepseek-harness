@@ -180,7 +180,7 @@ actor AXWorker {
             return .result(.object(["platform": .string("macos"), "permissions": .object([
                 "accessibility": .bool(AXIsProcessTrusted()), "screenRecording": .bool(CGPreflightScreenCaptureAccess())]),
                 "sessionLocked": locked.map(JSONValue.bool) ?? .null,
-                "methods": .array(RequestParameters.fields.keys.filter { $0 != "launchApp" }.sorted().map(JSONValue.string)), "coordinateSpace": .string("window-points"), "browser": .bool(false)]))
+                "methods": .array(NativeProtocol.modelMethods.map(JSONValue.string)), "coordinateSpace": .string("window-points"), "browser": .bool(false)]))
         }
         if method == "listApps" { return .result(.array(catalog.applications.filter { $0.regular && $0.name != nil }.map(\.json))) }
         try NativePlatform.requireUnlocked(locked)

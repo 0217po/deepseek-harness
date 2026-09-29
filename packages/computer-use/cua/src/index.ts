@@ -252,7 +252,7 @@ function mount(ctx: Context, config: Config, helperPath: string): void {
           ? await withFileLock(join(tmpdir(), 'dsh-cua-system-clipboard'), requestNative, { waitMs: config.timeoutMs, signal })
           : await requestNative()
         if (method === 'getApp') {
-          const prepared = AppResult.extend({ pid: z.number().int().positive().nullable() }).parse(result)
+          const prepared = AppResult.extend({ pid: AppResult.shape.pid.nullable() }).parse(result)
           const { authorization } = z.object({ authorization: ApplicationAuthorizationResult }).parse(result)
           await access.select(agent, client, prepared.appHandle, authorization, signal)
           signal.throwIfAborted()

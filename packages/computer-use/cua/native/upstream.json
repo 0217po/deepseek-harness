@@ -37,10 +37,12 @@
     }
   ],
   "localFiles": [
+    "Sources/CuaNative/AXTextFormatter.swift",
     "Sources/CuaNative/AXWorker.swift",
     "Sources/CuaNative/ApplicationDiscovery.swift",
     "Sources/CuaNative/ClipboardPaste.swift",
     "Sources/CuaNative/Main.swift",
+    "Sources/CuaNative/NativeProtocol.generated.swift",
     "Sources/CuaNative/Protocol.swift",
     "Sources/CuaNative/RequestAdmission.swift",
     "Sources/CuaNative/RequestCoordinator.swift",

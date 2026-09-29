@@ -401,20 +401,12 @@ final class AXAccess {
                 return
             }
             let index: Int? = addressable ? indexed.count : nil
-            var line = String(repeating: "  ", count: level) + "- "
-            if let index { indexed[index] = element; line += "[\(index)] " }
-            line += role
-            if enabled == false { line += " disabled" }
-            if valueWritable { line += " valueWritable=true" }
-            if selectionWritable { line += " selectionWritable=true" }
-            if let selected { line += " selected=\(selected)" }
-            if let title, !title.isEmpty { line += " \(String(reflecting: title))" }
-            if let value, !value.isEmpty { line += " = \(String(reflecting: value))" }
-            if let description, !description.isEmpty { line += " (\(description))" }
-            if let selectedRange { line += " selection=[\(selectedRange.location), \(selectedRange.length)]" }
-            if let selectedText, !selectedText.isEmpty { line += " selectedText=\(String(reflecting: selectedText))" }
-            if !actionNames.isEmpty { line += " actions=[\(actionNames.joined(separator: ", "))]" }
-            lines.append(line)
+            if let index { indexed[index] = element }
+            let node = AXTextNode(index: index, role: role, title: title, value: value, description: description,
+                                  actions: actionNames, enabled: enabled, valueWritable: valueWritable,
+                                  selectionWritable: selectionWritable, selected: selected, selectedRange: selectedRange,
+                                  selectedText: selectedText)
+            lines.append(AXTextFormatter.line(node, level: level))
             if let index {
                 let frame: WindowBounds?
                 if let position = try observed("AXPosition") { frame = try bounds(position: position, size: observed("AXSize")) }
@@ -434,7 +426,7 @@ final class AXAccess {
             for child in try childValues(observed("AXChildren"), attribute: "AXChildren") { try walk(child, level: level + 1, depth: depth + 1) }
         }
         for root in roots { try walk(root, level: 0, depth: 0) }
-        if truncated { lines.append("Accessibility tree truncated; observe another window or use screenshot coordinates for unlisted elements.") }
+        if truncated { lines.append(AXTextFormatter.truncated) }
         return AXProjection(tree: lines.joined(separator: "\n"), elements: elements, indexed: indexed, focusedWindowID: focusedID, truncated: truncated)
     }
 
