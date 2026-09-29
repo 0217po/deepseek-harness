@@ -90,14 +90,15 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
       async click(target, options) {
         const mouseButton = options?.mouseButton ?? 'left'
         const clickCount = options?.clickCount ?? 1
-        if (mouseButton === 'right' && clickCount !== 1) throw new Error('Right double-click is unsupported')
+        if (mouseButton !== 'left' && clickCount !== 1) throw new Error('Only left double-click is supported')
+        const modifiers = options?.modifiers === undefined ? {} : { modifiers: [...options.modifiers] }
         if (typeof target === 'number') {
-          return action('click', { ...snapshotParams(), elementIndex: target,
+          return action('click', { ...snapshotParams(), ...modifiers, elementIndex: target,
             ...mouseButton === 'left' ? {} : { mouseButton }, ...clickCount === 1 ? {} : { clickCount },
           })
         }
         const [x, y] = target
-        return action('click', { ...snapshotParams(), windowId: windowId(), x, y, mouseButton, clickCount })
+        return action('click', { ...snapshotParams(), windowId: windowId(), x, y, mouseButton, clickCount, ...modifiers })
       },
       async setValue(index, value) { return action('setValue', { ...snapshotParams(), elementIndex: index, value }) },
       async performSecondaryAction(index, name) { return action('performSecondaryAction', { ...snapshotParams(), elementIndex: index, action: name }) },
@@ -108,8 +109,11 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
           x: options.x, y: options.y, deltaLinesX: options.deltaLinesX, deltaLinesY: options.deltaLinesY,
         })
       },
-      async drag(from, to) {
-        return action('drag', { ...snapshotParams(), windowId: windowId(), fromX: from[0], fromY: from[1], toX: to[0], toY: to[1] })
+      async drag(from, to, options) {
+        return action('drag', { ...snapshotParams(), windowId: windowId(), fromX: from[0], fromY: from[1], toX: to[0], toY: to[1],
+          ...options?.mouseButton === undefined ? {} : { mouseButton: options.mouseButton },
+          ...options?.modifiers === undefined ? {} : { modifiers: [...options.modifiers] },
+        })
       },
     }
     return result

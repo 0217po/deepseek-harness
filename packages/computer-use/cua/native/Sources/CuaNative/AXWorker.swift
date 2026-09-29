@@ -246,12 +246,13 @@ actor AXWorker {
         case "click":
             let button = try params.optionalString("mouseButton") ?? "left"
             let count = params.contains("clickCount") ? try params.integer("clickCount", in: 1...2) : 1
-            guard button == "left" || (button == "right" && count == 1) else { throw RequestParameters.invalid("Unsupported mouse button or click count") }
+            guard button == "left" || (["right", "middle"].contains(button) && count == 1) else { throw RequestParameters.invalid("Unsupported mouse button or click count") }
+            let modifiers = try params.modifiers()
             if params.contains("elementIndex") {
                 guard !params.contains("x"), !params.contains("y"), !params.contains("windowId") else { throw RequestParameters.invalid("Element and coordinate targets cannot be combined") }
                 let selected = try element(handle, params)
                 let names = try ax().actions(selected)
-                let action: String? = button == "right" && names.contains("AXShowMenu") ? "AXShowMenu"
+                let action: String? = !modifiers.isEmpty ? nil : button == "right" && names.contains("AXShowMenu") ? "AXShowMenu"
                     : (button == "left" && count == 1 ? (names.contains("AXPress") ? "AXPress" : names.contains("AXPick") ? "AXPick" : nil) : nil)
                 if let action { try ax().perform(selected, action) }
                 else {
@@ -259,13 +260,13 @@ actor AXWorker {
                     guard let bounds = try ax().bounds(selected), bounds.width > 0, bounds.height > 0 else { throw NativeFailure(code: "NATIVE_ERROR", message: "Element has no pointer bounds") }
                     let window = try ax().enclosingWindow(selected, owner: identity)
                     let point = WindowPoint(x: bounds.x + bounds.width / 2 - window.bounds.x, y: bounds.y + bounds.height / 2 - window.bounds.y)
-                    try inputs().1.click(in: WindowRoute(owner: identity, windowID: window.windowID, bounds: window.bounds), at: point, button: button, count: count)
+                    try inputs().1.click(in: WindowRoute(owner: identity, windowID: window.windowID, bounds: window.bounds), at: point, button: button, count: count, modifiers: modifiers)
                 }
             } else {
                 let id = try params.windowID()
                 try coordinateSnapshot(handle, params, id)
                 let window = try coordinateWindow(identity, id)
-                try inputs().1.click(in: WindowRoute(owner: identity, windowID: id, bounds: window.bounds), at: params.point(), button: button, count: count)
+                try inputs().1.click(in: WindowRoute(owner: identity, windowID: id, bounds: window.bounds), at: params.point(), button: button, count: count, modifiers: modifiers)
             }
         case "scroll", "drag":
             let id = try params.windowID()
@@ -278,7 +279,8 @@ actor AXWorker {
                 try inputs().1.scroll(in: route, at: params.point(), deltaLinesX: Int32(dx), deltaLinesY: Int32(dy))
             } else {
                 try inputs().1.drag(in: route, from: params.point("fromX", "fromY"), to: params.point("toX", "toY"),
-                    durationMs: params.integer("durationMs", in: 1...5000), steps: params.integer("steps", in: 1...240))
+                    durationMs: params.integer("durationMs", in: 1...5000), steps: params.integer("steps", in: 1...240),
+                                      button: params.optionalString("mouseButton") ?? "left", modifiers: params.modifiers())
             }
         default: throw NativeFailure(code: "UNSUPPORTED", message: method)
         }

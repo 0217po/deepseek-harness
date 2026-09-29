@@ -28,32 +28,34 @@ final class WindowPointerInput {
         Double(durationMs) / Double(steps) / 1000
     }
 
-    /// Post one or two left clicks, or one right click, with a shared window-routing group.
-    func click(in route: WindowRoute, at point: WindowPoint, button: String, count: Int) throws {
+    /// Post one or two left clicks, or one right/middle click, with a shared window-routing group.
+    func click(in route: WindowRoute, at point: WindowPoint, button: String, count: Int, modifiers: [String] = []) throws {
         try checkCancellation()
         try Self.validate(point, in: route)
-        guard (button == "left" && (count == 1 || count == 2)) || (button == "right" && count == 1) else {
+        guard (button == "left" && (count == 1 || count == 2)) || (["right", "middle"].contains(button) && count == 1) else {
             throw NativeFailure(code: "INVALID_ARGUMENT", message: "Unsupported mouse button or click count")
         }
         let source = try Self.source()
+        let selectedButton = try Self.button(button)
+        let flags = try KeyboardInput.modifierFlags(modifiers)
         let group = Self.clickGroup()
         let screen = Self.screenPoint(point, in: route)
         let move = try mouseEvent(
             source: source, route: route, screen: screen, local: point,
             type: .mouseMoved, button: .left, clickState: 0, subtype: 3,
-            group: group, number: button == "left" ? 2 : nil
+            group: group, number: button == "left" ? 2 : nil, flags: flags
         )
         if button == "left" {
             let outside = WindowPoint(x: -1, y: -1)
             let primer = try mousePair(
                 source: source, route: route, screen: CGPoint(x: -1, y: -1), local: outside,
-                button: .left, clickState: 1, group: group, downNumber: 1, upNumber: 2
+                button: .left, clickState: 1, group: group, downNumber: 1, upNumber: 2, flags: flags
             )
             var pairs: [MousePair] = []
             for index in 1...count {
                 pairs.append(try mousePair(
                     source: source, route: route, screen: screen, local: point,
-                    button: .left, clickState: Int64(index), group: group, downNumber: 3, upNumber: 3
+                    button: .left, clickState: Int64(index), group: group, downNumber: 3, upNumber: 3, flags: flags
                 ))
             }
             try checkCancellation()
@@ -69,7 +71,7 @@ final class WindowPointerInput {
         } else {
             let pair = try mousePair(
                 source: source, route: route, screen: screen, local: point,
-                button: .right, clickState: 1, group: group
+                button: selectedButton, clickState: 1, group: group, flags: flags
             )
             try checkCancellation()
             poster.post(move, to: route.owner.pid)
@@ -113,9 +115,10 @@ final class WindowPointerInput {
         try checkCancellation()
     }
 
-    /// Drag the left button along an interpolated path, releasing at the last posted point on cancellation.
+    /// Drag the selected button along an interpolated path, releasing at the last posted point on cancellation.
     func drag(
-        in route: WindowRoute, from start: WindowPoint, to end: WindowPoint, durationMs: Int, steps: Int
+        in route: WindowRoute, from start: WindowPoint, to end: WindowPoint, durationMs: Int, steps: Int,
+        button: String = "left", modifiers: [String] = []
     ) throws {
         try checkCancellation()
         try Self.validate(start, in: route)
@@ -124,14 +127,16 @@ final class WindowPointerInput {
             throw NativeFailure(code: "INVALID_ARGUMENT", message: "Drag durationMs must be 1...5000 and steps 1...240")
         }
         let source = try Self.source()
+        let selectedButton = try Self.button(button)
+        let flags = try KeyboardInput.modifierFlags(modifiers)
         let group = Self.clickGroup()
         let down = try mouseEvent(
             source: source, route: route, screen: Self.screenPoint(start, in: route), local: start,
-            type: .leftMouseDown, button: .left, clickState: 1, subtype: 0, group: group
+            type: Self.down(selectedButton), button: selectedButton, clickState: 1, subtype: 0, group: group, flags: flags
         )
         let initialRelease = try mouseEvent(
             source: source, route: route, screen: Self.screenPoint(start, in: route), local: start,
-            type: .leftMouseUp, button: .left, clickState: 1, subtype: 0, group: group
+            type: Self.up(selectedButton), button: selectedButton, clickState: 1, subtype: 0, group: group, flags: flags
         )
         var path: [DragStep] = []
         for index in 1...steps {
@@ -144,11 +149,11 @@ final class WindowPointerInput {
             path.append(DragStep(
                 movement: try mouseEvent(
                     source: source, route: route, screen: screen, local: local,
-                    type: .leftMouseDragged, button: .left, clickState: 1, subtype: 0, group: group
+                    type: Self.dragged(selectedButton), button: selectedButton, clickState: 1, subtype: 0, group: group, flags: flags
                 ),
                 release: try mouseEvent(
                     source: source, route: route, screen: screen, local: local,
-                    type: .leftMouseUp, button: .left, clickState: 1, subtype: 0, group: group
+                    type: Self.up(selectedButton), button: selectedButton, clickState: 1, subtype: 0, group: group, flags: flags
                 )
             ))
         }
@@ -197,18 +202,18 @@ final class WindowPointerInput {
     private func mousePair(
         source: CGEventSource, route: WindowRoute, screen: CGPoint, local: WindowPoint,
         button: CGMouseButton, clickState: Int64, group: Int64,
-        downNumber: Int64? = nil, upNumber: Int64? = nil
+        downNumber: Int64? = nil, upNumber: Int64? = nil, flags: CGEventFlags = []
     ) throws -> MousePair {
         try MousePair(
             down: mouseEvent(
                 source: source, route: route, screen: screen, local: local,
-                type: button == .right ? .rightMouseDown : .leftMouseDown,
-                button: button, clickState: clickState, subtype: 3, group: group, number: downNumber
+                type: Self.down(button),
+                button: button, clickState: clickState, subtype: 3, group: group, number: downNumber, flags: flags
             ),
             up: mouseEvent(
                 source: source, route: route, screen: screen, local: local,
-                type: button == .right ? .rightMouseUp : .leftMouseUp,
-                button: button, clickState: clickState, subtype: 3, group: group, number: upNumber
+                type: Self.up(button),
+                button: button, clickState: clickState, subtype: 3, group: group, number: upNumber, flags: flags
             )
         )
     }
@@ -216,19 +221,37 @@ final class WindowPointerInput {
     private func mouseEvent(
         source: CGEventSource, route: WindowRoute, screen: CGPoint, local: WindowPoint,
         type: CGEventType, button: CGMouseButton, clickState: Int64, subtype: Int64,
-        group: Int64, number: Int64? = nil
+        group: Int64, number: Int64? = nil, flags: CGEventFlags = []
     ) throws -> CGEvent {
         guard let event = CGEvent(
             mouseEventSource: source, mouseType: type, mouseCursorPosition: screen, mouseButton: button
         ) else {
             throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create pointer event")
         }
-        event.flags = []
+        event.flags = flags
         try poster.stampWindow(event, pid: route.owner.pid, windowID: route.windowID, point: local)
         let fields: [(UInt32, Int64)] = [(1, clickState), (3, Int64(button.rawValue)), (7, subtype), (58, group)]
         for (field, value) in fields { try poster.stamp(event, field: field, value: value) }
         if let number { try poster.stamp(event, field: 0, value: number) }
         return event
+    }
+
+    static func button(_ name: String) throws -> CGMouseButton {
+        switch name {
+        case "left": return .left
+        case "right": return .right
+        case "middle": return .center
+        default: throw NativeFailure(code: "INVALID_ARGUMENT", message: "Unsupported mouse button")
+        }
+    }
+    static func down(_ button: CGMouseButton) -> CGEventType {
+        button == .left ? .leftMouseDown : button == .right ? .rightMouseDown : .otherMouseDown
+    }
+    static func up(_ button: CGMouseButton) -> CGEventType {
+        button == .left ? .leftMouseUp : button == .right ? .rightMouseUp : .otherMouseUp
+    }
+    static func dragged(_ button: CGMouseButton) -> CGEventType {
+        button == .left ? .leftMouseDragged : button == .right ? .rightMouseDragged : .otherMouseDragged
     }
 
     private static func validate(_ point: WindowPoint, in route: WindowRoute) throws {

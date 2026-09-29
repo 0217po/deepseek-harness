@@ -50,7 +50,7 @@ pnpm dsh headless --patch packages/computer-use/cua/examples/macos.cordis.yml --
 
 [配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-cua)列出全部字段。原生工具调用使用 `{method, params}`，模型可以看到每个方法的完整参数定义。例如，`getApp` 返回 `listWindows`、`getState` 和输入操作所需的 `appHandle`。
 
-组合键用 `+` 分隔修饰键与按键。加号键写作 `+`，Command 加号写作 `cmd++`，也可以使用键名 `plus`；`cmd+` 这类缺少按键的输入会被拒绝。
+数字键盘名称（`KP_0` 到 `KP_9`、`KP_Enter` 和数字键盘运算键）保留独立的物理键码。组合键用 `+` 分隔修饰键与按键。加号键写作 `+`，Command 加号写作 `cmd++`，也可以使用键名 `plus`；`cmd+` 这类缺少按键的输入会被拒绝。
 
 Agent 销毁和插件卸载会取消并等待完整工具调用，包括图像接入检查和附件存储。已经开始的图像写入必须结束后，销毁才会返回；已取消的调用不会返回成功截图。
 
@@ -83,7 +83,7 @@ void await app.getScreenshot()
 
 AppKit sheet 可以通过其窗口 ID 单独选择，也会出现在所属文档窗口的控件树中。只有应用当前获得焦点的 sheet 指向唯一的 Apple 面板服务窗口，且该服务仍聚焦于同一面板时，键盘输入才转交系统打开或保存面板。无法确认或存在歧义的远端接收方会在输入前报错。
 
-元素索引支持右键单击以及左键单击、双击。辅助进程优先使用元素声明的辅助功能动作；需要发送鼠标事件时，会重新读取元素位置并核实所属窗口。动作返回只表示输入已分派。可视指针或点击标记可以独立绘制；AX 动作无需移动系统指针。窗口定向鼠标输入仍可能改变应用焦点、选区或对话框。输入后需要读取状态确认结果。`STALE_APP` 需要重新获取应用，`STALE_SNAPSHOT` 需要重新读取 AX。通信超时或取消会终止该 Agent 的辅助进程，使已有句柄失效。不能自动重试结果不确定的输入。关闭 Agent 会释放辅助进程和 AX 引用，但不会撤销应用中的修改。
+元素索引支持右键或中键单击以及左键单击、双击。点击和拖动选项可指定按键与修饰键；带修饰键的点击使用指针输入。拖动期间保持指定按键，并在移动和释放事件中携带修饰键。AX 文本标明禁用控件、`valueWritable=true` 和可读取的 `selected` 状态。不带修饰键的点击优先使用元素声明的辅助功能动作；需要发送鼠标事件时，会重新读取元素位置并核实所属窗口。动作返回只表示输入已分派。可视指针或点击标记可以独立绘制；AX 动作无需移动系统指针。窗口定向鼠标输入仍可能改变应用焦点、选区或对话框。输入后需要读取状态确认结果。`STALE_APP` 需要重新获取应用，`STALE_SNAPSHOT` 需要重新读取 AX。通信超时或取消会终止该 Agent 的辅助进程，使已有句柄失效。不能自动重试结果不确定的输入。关闭 Agent 会释放辅助进程和 AX 引用，但不会撤销应用中的修改。
 
 -----
 
@@ -126,7 +126,7 @@ AppKit sheet 可以通过其窗口 ID 单独选择，也会出现在所属文档
 ```markdown
 Use cua with method getCapabilities and params {} to inspect permissions and sessionLocked. If sessionLocked is true or an operation reports SESSION_LOCKED, stop UI attempts and ask the user to unlock macOS. A null sessionLocked means no usable console session was verified. After unlocking, read fresh state; screenshots from a locked desktop are not current observations. Use listApps and getApp to select an already running application. getApp requests user consent before application observations or input. If access is denied or revoked, stop using that application until the user explicitly grants access again. Never switch tools to bypass a refusal. Keep the returned appHandle; every app operation requires it. listWindows returns window IDs and point bounds. getState returns a complete AX tree and snapshotId. Use its element indices only with that snapshotId. Raw screenshot and coordinate operations require a windowId. Coordinates are window-local macOS points, which may differ from screenshot pixels. A verified window can expose no AX elements. Its empty snapshot permits screenshots and coordinate input; element-index actions require an element from a fresh AX observation.
 
-Initialize the object API once in persistent PTC. Reuse its variables in later calls; put temporary declarations inside { ... } blocks to avoid redeclaration errors. All object methods are async. getAXState returns text, not a structured state object.
+Initialize the object API once in persistent PTC. Reuse its variables in later calls; put temporary declarations inside { ... } blocks to avoid redeclaration errors. All object methods are async. getAXState returns text, not a structured state object. Its text marks disabled controls, writable values and available selection state.
 
 Use app methods directly for single-window tasks; getApp already reads initial AX state. Call app.getWindows() and await app.getWindow(windowId) only to target a particular window or resolve ambiguous window selection. App screenshots and coordinate actions use the latest AX observation: its focused on-screen, nonzero-size window, otherwise the sole such window. They do not refresh focus automatically. Read app.getAXState() to follow changed focus.
 
@@ -146,17 +146,17 @@ App and Window methods:
 - getAXState(options?: { emit?: boolean, disableDiffing?: boolean }) -> string
 - getScreenshot(options?: { emit?: boolean }) -> Uint8Array
 - getAXStateAndScreenshot(options?) -> { state: string, screenshot: Uint8Array }
-- click(target: number | [x, y], options?: { mouseButton?: "left" | "right", clickCount?: 1 | 2 }) -> action result
+- click(target: number | [x, y], options?: { mouseButton?: "left" | "right" | "middle", clickCount?: 1 | 2, modifiers?: Array<"command" | "control" | "option" | "shift" | "fn"> }) -> action result
 - setValue(elementIndex: number, value: string) -> action result
 - performSecondaryAction(elementIndex: number, action: string) -> action result
 - scroll({ x, y, deltaLinesX, deltaLinesY }) -> action result
-- drag(from: [x, y], to: [x, y]) -> action result
+- drag(from: [x, y], to: [x, y], options?: { mouseButton?: "left" | "right" | "middle", modifiers?: Array<"command" | "control" | "option" | "shift" | "fn"> }) -> action result
 
 Raw operation tools use { method, params }, including params: {} for parameterless methods. getApp selects without activating the app. Keep applications in the background for observation and routine input. Do not activate or raise an app during initialization, before each action, or merely because another app is foreground. Prefer advertised AX actions. If a hidden window, another Space or Stage Manager prevents usable observation, explain the foreground-dependent step before app.activate() or an advertised raise action, then read fresh state. Avoid repeated activation when the user switches away; continue background-capable steps and report what requires foreground access. Applications may still change focus in response to input.
 
 Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. WINDOW_CHANGED requires fresh state before any retry; use an advertised AX action or explicitly restore the window before screenshot or coordinate input, then observe again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording access in System Settings. After granting access, observe fresh state before continuing; do not automatically replay prior input.
 
-Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste inserts plain text using native Unicode input without changing the clipboard; rich-text formats are unavailable. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, use the host-provided initialization snippet below once. Its installation-owned file URL works independently of the project directory. Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.
+Left clicks support single/double clicks; right and middle clicks support single clicks. Modified clicks use pointer input. Keypad names such as KP_0 and KP_Enter retain their physical key identity. Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste inserts plain text using native Unicode input without changing the clipboard; rich-text formats are unavailable. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, use the host-provided initialization snippet below once. Its installation-owned file URL works independently of the project directory. Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.
 ```
 
 #### Token 影响

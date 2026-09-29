@@ -50,7 +50,7 @@ final class AXAccess {
         // and accessibility children remain readable.
         guard error == .failure else { return false }
         let optional: Set<String> = ["AXValue", "AXTitle", "AXDescription", "AXIdentifier", "AXPlaceholderValue",
-                                     "AXSubrole", "AXEnabled", "AXPosition", "AXSize", "AXMain", "AXMinimized"]
+                                     "AXSubrole", "AXEnabled", "AXSelected", "AXPosition", "AXSize", "AXMain", "AXMinimized"]
         return optional.contains(attribute)
     }
     static func actionsUnavailable(_ error: AXError) -> Bool {
@@ -189,7 +189,7 @@ final class AXAccess {
     private func metadata(_ element: AXUIElement) throws -> [String: CFTypeRef]? {
         try prepare(element)
         let names = ["AXRole", "AXTitle", "AXValue", "AXPlaceholderValue", "AXDescription", "AXEnabled",
-                     "AXIdentifier", "AXPosition", "AXSize", "AXChildren"]
+                     "AXIdentifier", "AXPosition", "AXSize", "AXChildren", "AXSelected"]
         var output: CFArray?
         let error = AXUIElementCopyMultipleAttributeValues(element, names as CFArray, [], &output)
         if error == .notImplemented || error == .attributeUnsupported { return nil }
@@ -328,6 +328,7 @@ final class AXAccess {
             if valueRoles.contains(role) { valueWritable = try writable(element, "AXValue") }
             else { valueWritable = false }
             let enabled = try booleanValue(observed("AXEnabled"), attribute: "AXEnabled")
+            let selected = try booleanValue(observed("AXSelected"), attribute: "AXSelected")
             let addressable = enabled != false && (!actionNames.isEmpty || valueWritable)
             let meaningful = [title, value, description].contains { !($0?.isEmpty ?? true) }
             if !addressable && !meaningful && role != "AXWindow" && role != "AXSheet" {
@@ -338,6 +339,9 @@ final class AXAccess {
             var line = String(repeating: "  ", count: level) + "- "
             if let index { indexed[index] = element; line += "[\(index)] " }
             line += role
+            if enabled == false { line += " disabled" }
+            if valueWritable { line += " valueWritable=true" }
+            if let selected { line += " selected=\(selected)" }
             if let title, !title.isEmpty { line += " \(String(reflecting: title))" }
             if let value, !value.isEmpty { line += " = \(String(reflecting: value))" }
             if let description, !description.isEmpty { line += " (\(description))" }
@@ -353,6 +357,7 @@ final class AXAccess {
                     "value": value.map(JSONValue.string) ?? .null, "description": description.map(JSONValue.string) ?? .null,
                     "identifier": try stringValue(observed("AXIdentifier"), attribute: "AXIdentifier").map(JSONValue.string) ?? .null,
                     "bounds": frameJSON, "actions": .array(actionNames.map(JSONValue.string)), "enabled": enabled.map(JSONValue.bool) ?? .null,
+                    "valueWritable": .bool(valueWritable), "selected": selected.map(JSONValue.bool) ?? .null,
                 ]))
             }
             for child in try childValues(observed("AXChildren"), attribute: "AXChildren") { try walk(child, level: level + 1, depth: depth + 1) }

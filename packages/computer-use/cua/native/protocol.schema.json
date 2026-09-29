@@ -178,9 +178,11 @@
               "minimum": 0
             },
             "mouseButton": {
+              "type": "string",
               "enum": [
                 "left",
-                "right"
+                "right",
+                "middle"
               ]
             },
             "clickCount": {
@@ -188,6 +190,19 @@
                 1,
                 2
               ]
+            },
+            "modifiers": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "command",
+                  "control",
+                  "option",
+                  "shift",
+                  "fn"
+                ]
+              }
             }
           },
           "required": [
@@ -235,9 +250,11 @@
               "type": "number"
             },
             "mouseButton": {
+              "type": "string",
               "enum": [
                 "left",
-                "right"
+                "right",
+                "middle"
               ]
             },
             "clickCount": {
@@ -245,6 +262,19 @@
                 1,
                 2
               ]
+            },
+            "modifiers": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "command",
+                  "control",
+                  "option",
+                  "shift",
+                  "fn"
+                ]
+              }
             }
           },
           "required": [
@@ -512,6 +542,27 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 240
+            },
+            "mouseButton": {
+              "type": "string",
+              "enum": [
+                "left",
+                "right",
+                "middle"
+              ]
+            },
+            "modifiers": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "command",
+                  "control",
+                  "option",
+                  "shift",
+                  "fn"
+                ]
+              }
             }
           },
           "required": [

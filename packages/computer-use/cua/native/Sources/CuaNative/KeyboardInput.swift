@@ -150,8 +150,31 @@ final class KeyboardInput {
         }
     }
 
-    private static func keyCode(_ key: String) throws -> CGKeyCode {
+    static func modifierFlags(_ names: [String]) throws -> CGEventFlags {
+        try names.reduce(into: CGEventFlags()) { flags, name in flags.formUnion(try modifier(name).flag) }
+    }
+
+    static func keyCode(_ key: String) throws -> CGKeyCode {
         switch key.lowercased() {
+        case "kp_0": return 82
+        case "kp_1": return 83
+        case "kp_2": return 84
+        case "kp_3": return 85
+        case "kp_4": return 86
+        case "kp_5": return 87
+        case "kp_6": return 88
+        case "kp_7": return 89
+        case "kp_8": return 91
+        case "kp_9": return 92
+        case "kp_decimal": return 65
+        case "kp_separator": return 95
+        case "kp_multiply": return 67
+        case "kp_add": return 69
+        case "kp_clear": return 71
+        case "kp_divide": return 75
+        case "kp_enter": return 76
+        case "kp_subtract": return 78
+        case "kp_equal": return 81
         case "return", "enter": return 36
         case "tab": return 48
         case "space": return 49

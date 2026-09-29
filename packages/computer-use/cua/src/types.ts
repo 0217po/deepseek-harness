@@ -53,8 +53,14 @@ export interface CuaWindowInfo {
 }
 /** Successful input dispatch; application outcome still requires observation. */
 export interface CuaActionResult { dispatched: true; verified: false }
-/** Indexed and coordinate clicks support left single/double clicks and right single clicks. */
-export interface CuaClickOptions { mouseButton?: 'left' | 'right'; clickCount?: 1 | 2 }
+/** Modifiers attached to a window-directed pointer gesture. */
+export type CuaPointerModifier = 'command' | 'control' | 'option' | 'shift' | 'fn'
+/** Buttons supported by window-directed clicks and drags. */
+export type CuaMouseButton = 'left' | 'right' | 'middle'
+/** Left clicks support one or two presses; right and middle clicks support one. */
+export interface CuaClickOptions { mouseButton?: CuaMouseButton; clickCount?: 1 | 2; modifiers?: readonly CuaPointerModifier[] }
+/** One same-window drag; omitted button is left and omitted modifiers are empty. */
+export interface CuaDragOptions { mouseButton?: CuaMouseButton; modifiers?: readonly CuaPointerModifier[] }
 /** Positive deltas reveal content above/left; each axis is an integer from -10 to 10. */
 export interface CuaScrollOptions { x: number; y: number; deltaLinesX: number; deltaLinesY: number }
 /** An observed AX tree and independently captured PNG; capture is not atomic. */
@@ -111,12 +117,13 @@ export interface CuaSurface {
    */
   scroll(options: CuaScrollOptions): Promise<CuaActionResult>
   /**
-   * Drag between points in one window.
+   * Drag between points in one window while holding the selected button and modifiers.
    * @param from - starting window point.
    * @param to - destination window point.
+   * @param options - Button and modifiers for the complete gesture.
    * @returns dispatch evidence.
    */
-  drag(from: readonly [number, number], to: readonly [number, number]): Promise<CuaActionResult>
+  drag(from: readonly [number, number], to: readonly [number, number], options?: CuaDragOptions): Promise<CuaActionResult>
 }
 /** One explicit window; keyboard operations remain app-scoped because they follow focus. */
 export interface CuaWindow extends CuaSurface { readonly windowId: number }

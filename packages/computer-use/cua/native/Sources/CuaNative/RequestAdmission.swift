@@ -6,12 +6,12 @@ struct RequestParameters: Sendable {
         "getCapabilities": [], "listApps": [], "getApp": ["selector"],
         "listWindows": ["appHandle"], "activate": ["appHandle"],
         "getState": ["appHandle", "windowId", "maxElements", "maxDepth"],
-        "click": ["appHandle", "snapshotId", "elementIndex", "windowId", "x", "y", "mouseButton", "clickCount"],
+        "click": ["appHandle", "snapshotId", "elementIndex", "windowId", "x", "y", "mouseButton", "clickCount", "modifiers"],
         "setValue": ["appHandle", "snapshotId", "elementIndex", "value"],
         "performSecondaryAction": ["appHandle", "snapshotId", "elementIndex", "action"],
         "typeText": ["appHandle", "text"], "pressKey": ["appHandle", "key", "modifiers"],
         "scroll": ["appHandle", "windowId", "snapshotId", "x", "y", "deltaLinesX", "deltaLinesY"],
-        "drag": ["appHandle", "windowId", "snapshotId", "fromX", "fromY", "toX", "toY", "durationMs", "steps"],
+        "drag": ["appHandle", "windowId", "snapshotId", "fromX", "fromY", "toX", "toY", "durationMs", "steps", "mouseButton", "modifiers"],
         "screenshot": ["appHandle", "windowId"],
     ]
     let values: [String: JSONValue]

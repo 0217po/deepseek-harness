@@ -91,6 +91,30 @@ describe('application discovery', () => {
   })
 })
 
+describe('pointer buttons and modifiers', () => {
+  it('retains middle-button and modifier intent through click and drag dispatch', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    await app.click(0, { mouseButton: 'middle', modifiers: ['shift'] })
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'click', params: {
+      appHandle: 'app-17', snapshotId: 'snapshot-1', elementIndex: 0, mouseButton: 'middle', modifiers: ['shift'],
+    } })
+    await app.click([10, 20], { modifiers: ['command'] })
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'click', params: {
+      appHandle: 'app-17', snapshotId: 'snapshot-1', windowId: 23, x: 10, y: 20,
+      mouseButton: 'left', clickCount: 1, modifiers: ['command'],
+    } })
+    await app.drag([10, 20], [30, 40], { mouseButton: 'middle', modifiers: ['shift', 'option'] })
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'drag', params: {
+      appHandle: 'app-17', snapshotId: 'snapshot-1', windowId: 23, fromX: 10, fromY: 20, toX: 30, toY: 40,
+      mouseButton: 'middle', modifiers: ['shift', 'option'],
+    } })
+    const count = f.dispatch.mock.calls.length
+    await expect(app.click(0, { mouseButton: 'middle', clickCount: 2 })).rejects.toThrow('Only left double-click')
+    expect(f.dispatch).toHaveBeenCalledTimes(count)
+  })
+})
+
 describe('application and window observations', () => {
   it('keeps the latest AX index scope separate for an app and each selected window', async () => {
     const f = fixture()

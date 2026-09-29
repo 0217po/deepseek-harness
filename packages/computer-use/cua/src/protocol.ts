@@ -6,6 +6,8 @@ import type { CuaAppHandle, CuaSnapshotId } from './types.ts'
 const id = z.number().int().positive()
 const point = z.number().nonnegative()
 const app = { appHandle: z.string().min(1) }
+const pointer = { mouseButton: z.enum(['left', 'right', 'middle']).optional(),
+  modifiers: z.array(z.enum(['command', 'control', 'option', 'shift', 'fn'])).optional() }
 const window = { ...app, windowId: id }
 const snapshot = { ...app, snapshotId: z.string().min(1), elementIndex: z.number().int().nonnegative() }
 const coordinate = { ...window, snapshotId: z.string().min(1).optional(), x: point, y: point }
@@ -29,15 +31,15 @@ export const Request = z.discriminatedUnion('method', [
   operation('listWindows', app),
   operation('getState', { ...app, windowId: id.optional() }),
   z.object({ method: z.literal('click'), params: z.union([
-    z.object({ ...snapshot, mouseButton: z.enum(['left', 'right']).optional(), clickCount: z.union([z.literal(1), z.literal(2)]).optional() }).strict(),
-    z.object({ ...coordinate, mouseButton: z.enum(['left', 'right']).optional(), clickCount: z.union([z.literal(1), z.literal(2)]).optional() }).strict(),
+    z.object({ ...snapshot, ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).optional() }).strict(),
+    z.object({ ...coordinate, ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).optional() }).strict(),
   ]) }).strict(),
   operation('setValue', { ...snapshot, value: z.string() }),
   operation('performSecondaryAction', { ...snapshot, action: z.string().min(1) }),
   operation('typeText', { ...app, text: z.string() }),
   operation('pressKey', { ...app, key: z.string().min(1), modifiers: z.array(z.enum(['command', 'control', 'option', 'shift', 'fn'])).optional() }),
   operation('scroll', { ...coordinate, deltaLinesX: z.number().int().min(-10).max(10), deltaLinesY: z.number().int().min(-10).max(10) }),
-  operation('drag', { ...window, snapshotId: z.string().min(1).optional(), fromX: point, fromY: point, toX: point, toY: point }),
+  operation('drag', { ...window, ...pointer, snapshotId: z.string().min(1).optional(), fromX: point, fromY: point, toX: point, toY: point }),
   operation('screenshot', window),
 ])
 
