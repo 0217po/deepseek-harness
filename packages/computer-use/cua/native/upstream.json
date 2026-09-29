@@ -38,14 +38,15 @@
   ],
   "localFiles": [
     "Sources/CuaNative/AXWorker.swift",
+    "Sources/CuaNative/ClipboardPaste.swift",
     "Sources/CuaNative/Main.swift",
     "Sources/CuaNative/Protocol.swift",
     "Sources/CuaNative/RequestAdmission.swift",
     "Sources/CuaNative/RequestCoordinator.swift",
     "Sources/CuaNative/Runtime.swift",
+    "Sources/CuaNative/TextSelection.swift",
     "Sources/CuaNative/WindowCapture.swift",
-    "Sources/CuaNative/WindowGeometry.swift",
-    "Sources/CuaNative/TextSelection.swift"
+    "Sources/CuaNative/WindowGeometry.swift"
   ],
   "references": [
     {

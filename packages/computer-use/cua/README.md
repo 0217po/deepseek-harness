@@ -44,6 +44,7 @@ The dump command checks profile composition without a model request. For a real 
 | `timeoutMs` | `30000` | Per-operation deadline; cancellation can leave partial input. |
 | `axTimeoutMs` | `3000` | Deadline per Accessibility system call, configured independently of the complete operation. |
 | `maxRequestBytes` / `maxResponseBytes` | `1048576` / `33554432` | UTF-8 request and response limits. |
+| `maxClipboardBytes` | `33554432` | Maximum original clipboard bytes preserved during a paste; oversized contents reject before replacement. |
 | `maxElements` / `maxDepth` | `2000` / `25` | Accessibility traversal limits. |
 | `dragDurationMs` / `dragSteps` | `400` / `20` | Duration and movement segments for a drag. |
 | `textEventIntervalMs` | `0.25` | Delay after each Unicode down/up event, from 0 to 1000 ms. Chord timing is independent. |
@@ -74,6 +75,8 @@ void await app.getScreenshot()
 Use app methods directly for single-window tasks. `getApp` reads initial AX state, so a screenshot needs no window enumeration or additional AX read. Use `app.getWindows()` and `app.getWindow(windowId)` when the task needs a particular window or default selection is ambiguous; choose by the observed title and bounds.
 
 `getWindow` emits its initial AX tree. An owned window without an AX surface returns an empty snapshot and remains available for screenshots and coordinate input. Window objects retain separate snapshots, so reading one window does not invalidate another. Re-reading the same scope invalidates old indices. An AX node removed during observation rejects the read with `STALE_SNAPSHOT` and publishes no partial tree; read again without repeating the preceding input. App-scoped screenshots and coordinates reuse the latest AX observation: its focused on-screen, nonzero-size window, otherwise the sole such window. They do not query current focus again; read `app.getAXState()` to follow a focus change. Explicit window objects retain their selected target. Keyboard methods stay on `app` because input follows the app’s current focus.
+
+`paste(text, { format: "text" | "html" })` temporarily publishes the requested clipboard format and invokes the application’s enabled standard Paste menu command. It restores every captured original format while it still owns the clipboard, preserving a later copy. Paste operations share a cross-process lock and cancellation joins helper cleanup. A forced process exit can prevent restoration. Unsupported Paste commands fail without typing fallback; `typeText` remains separate key-event input.
 
 `selectText` selects a unique literal occurrence or places the cursor before/after it through writable `AXSelectedTextRange`. Adjacent prefix/suffix disambiguate repeats. Selection preserves the remaining text and formatting, and verifies the resulting UTF-16 range; unsupported, missing, ambiguous or changed text fails without keyboard fallback. AX text includes `selectionWritable`, selection ranges and selected text when available.
 
@@ -141,7 +144,8 @@ Object API signatures (options default to { emit: true }):
 - app.activate() -> { dispatched: true, verified: false }
 - app.getWindows(options?) -> Array<{ windowId, pid, appName, title, bounds, isOnScreen, onCurrentSpace }>
 - app.getWindow(windowId: number) -> Window
-- app.typeText(text: string), app.paste(text: string), app.pressKey(chord: string) -> action result
+- app.typeText(text: string), app.pressKey(chord: string) -> action result
+- app.paste(text: string, options?: { format?: "text" | "html" }) -> action result
 
 App and Window methods:
 
@@ -159,7 +163,7 @@ Raw operation tools use { method, params }, including params: {} for parameterle
 
 Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. WINDOW_CHANGED requires fresh state before any retry; use an advertised AX action or explicitly restore the window before screenshot or coordinate input, then observe again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording access in System Settings. After granting access, observe fresh state before continuing; do not automatically replay prior input.
 
-Use selectText only on controls advertising selectionWritable. It selects a unique literal occurrence, or places the cursor before/after it; prefix and suffix must be immediately adjacent. AMBIGUOUS_TEXT requires more context; TEXT_NOT_FOUND or SELECTION_CHANGED requires a fresh observation before deciding on input. Left clicks support single/double clicks; right and middle clicks support single clicks. Modified clicks use pointer input. Keypad names such as KP_0 and KP_Enter retain their physical key identity. Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste inserts plain text using native Unicode input without changing the clipboard; rich-text formats are unavailable. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, use the host-provided initialization snippet below once. Its installation-owned file URL works independently of the project directory. Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.
+Use selectText only on controls advertising selectionWritable. It selects a unique literal occurrence, or places the cursor before/after it; prefix and suffix must be immediately adjacent. AMBIGUOUS_TEXT requires more context; TEXT_NOT_FOUND or SELECTION_CHANGED requires a fresh observation before deciding on input. Left clicks support single/double clicks; right and middle clicks support single clicks. Modified clicks use pointer input. Keypad names such as KP_0 and KP_Enter retain their physical key identity. Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste delivers plain text or HTML through the application's enabled standard Paste menu command. Original clipboard formats are restored if the clipboard still belongs to this paste; a later copy is preserved. Unsupported Paste commands fail without typing fallback. CLIPBOARD_CHANGED means another writer intervened; observe before deciding on further input. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, use the host-provided initialization snippet below once. Its installation-owned file URL works independently of the project directory. Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.
 ```
 
 #### Token effect
@@ -174,7 +178,7 @@ Tool results append to Session history. Changing plugin configuration or tool pr
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Only the macOS native implementation is provided. Browser tabs, app launching, rich-text clipboard formats, AX diffs, unassociated system panels and accessory-only apps are unsupported.
+- Only the macOS native implementation is provided. Browser tabs, app launching, AX diffs, unassociated system panels and accessory-only apps are unsupported.
 - Coordinates use window-local points including the title bar. PNG pixel dimensions can differ. Window movement, application changes and other desktop users can race observations and input.
 - macOS Stage Manager can reduce background window bounds and screenshots to thumbnails. Full-window observation and coordinate input in this state are not guaranteed; model guidance requires explaining foreground needs and avoiding repeated focus reclamation.
 - Background input depends on private SkyLight symbols; macOS updates can make them unavailable. Validate each target OS version.

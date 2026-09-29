@@ -44,6 +44,7 @@ pnpm dsh headless --patch packages/computer-use/cua/examples/macos.cordis.yml --
 | `timeoutMs` | `30000` | 单次操作截止时间，取消后可能已发生部分输入。 |
 | `axTimeoutMs` | `3000` | 每次 Accessibility 系统调用的截止时间，与完整操作截止独立配置。 |
 | `maxRequestBytes` / `maxResponseBytes` | `1048576` / `33554432` | UTF-8 请求与响应字节限制。 |
+| `maxClipboardBytes` | `33554432` | 粘贴时保存原剪贴板内容的字节上限；超限会在替换前拒绝。 |
 | `maxElements` / `maxDepth` | `2000` / `25` | 辅助功能树遍历限制。 |
 | `dragDurationMs` / `dragSteps` | `400` / `20` | 拖动时长和移动分段数。 |
 | `textEventIntervalMs` | `0.25` | 每个 Unicode 按下或抬起事件后的间隔，范围为 0 至 1000 毫秒。组合键的节奏独立。 |
@@ -74,6 +75,8 @@ void await app.getScreenshot()
 单窗口任务直接使用 app 方法。`getApp` 已读取初始 AX，截图不需要枚举窗口或额外读取 AX。任务需要指定窗口或默认选窗存在歧义时，再调用 `app.getWindows()` 和 `app.getWindow(windowId)`，根据观察到的标题与位置选择目标。
 
 `getWindow` 会输出初始 AX 树。已确认归属但没有 AX 界面的窗口返回空快照，仍可截图和发送坐标输入。不同窗口分别保留快照，读取一个窗口不会使另一个窗口失效；重新读取同一范围会使旧索引失效。观察期间节点被移除时，该次读取返回 `STALE_SNAPSHOT`，不发布部分树；可以重新读取，但不要重复此前的输入。应用级截图和坐标操作复用最近一次 AX 观察：优先使用其中在屏幕上且尺寸非零的焦点窗口，否则要求只有一个符合条件的窗口。它们不会重新查询即时焦点；需要跟随焦点变化时，先读取 `app.getAXState()`。显式窗口对象保持选定的目标。键盘方法保留在 `app` 上，因为输入跟随应用的当前焦点。
+
+`paste(text, { format: "text" | "html" })` 临时提供指定格式的剪贴板内容，并调用应用已启用的标准 Paste 菜单命令。只在仍持有剪贴板时恢复保存的全部原格式，保留期间产生的新复制内容。粘贴操作共用跨进程锁，取消会等待辅助进程清理。强制终止进程可能阻止恢复。应用不支持 Paste 命令时明确失败，不自动改成逐字输入；`typeText` 仍单独提供按键事件输入。
 
 `selectText` 通过可写的 `AXSelectedTextRange` 选中唯一的字面文本，或把光标放在它的前后。紧邻的前后文用于区分重复文本。选区操作保留其余文字和格式，并核对实际 UTF-16 范围；控件不支持、文本不存在、匹配不唯一或文字变化时明确失败，不自动改用键盘输入。AX 文本包含可用的 `selectionWritable`、选区范围和选中文字。
 
@@ -141,7 +144,8 @@ Object API signatures (options default to { emit: true }):
 - app.activate() -> { dispatched: true, verified: false }
 - app.getWindows(options?) -> Array<{ windowId, pid, appName, title, bounds, isOnScreen, onCurrentSpace }>
 - app.getWindow(windowId: number) -> Window
-- app.typeText(text: string), app.paste(text: string), app.pressKey(chord: string) -> action result
+- app.typeText(text: string), app.pressKey(chord: string) -> action result
+- app.paste(text: string, options?: { format?: "text" | "html" }) -> action result
 
 App and Window methods:
 
@@ -159,7 +163,7 @@ Raw operation tools use { method, params }, including params: {} for parameterle
 
 Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. WINDOW_CHANGED requires fresh state before any retry; use an advertised AX action or explicitly restore the window before screenshot or coordinate input, then observe again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording access in System Settings. After granting access, observe fresh state before continuing; do not automatically replay prior input.
 
-Use selectText only on controls advertising selectionWritable. It selects a unique literal occurrence, or places the cursor before/after it; prefix and suffix must be immediately adjacent. AMBIGUOUS_TEXT requires more context; TEXT_NOT_FOUND or SELECTION_CHANGED requires a fresh observation before deciding on input. Left clicks support single/double clicks; right and middle clicks support single clicks. Modified clicks use pointer input. Keypad names such as KP_0 and KP_Enter retain their physical key identity. Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste inserts plain text using native Unicode input without changing the clipboard; rich-text formats are unavailable. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, use the host-provided initialization snippet below once. Its installation-owned file URL works independently of the project directory. Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.
+Use selectText only on controls advertising selectionWritable. It selects a unique literal occurrence, or places the cursor before/after it; prefix and suffix must be immediately adjacent. AMBIGUOUS_TEXT requires more context; TEXT_NOT_FOUND or SELECTION_CHANGED requires a fresh observation before deciding on input. Left clicks support single/double clicks; right and middle clicks support single clicks. Modified clicks use pointer input. Keypad names such as KP_0 and KP_Enter retain their physical key identity. Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste delivers plain text or HTML through the application's enabled standard Paste menu command. Original clipboard formats are restored if the clipboard still belongs to this paste; a later copy is preserved. Unsupported Paste commands fail without typing fallback. CLIPBOARD_CHANGED means another writer intervened; observe before deciding on further input. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, use the host-provided initialization snippet below once. Its installation-owned file URL works independently of the project directory. Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.
 ```
 
 #### Token 影响
@@ -174,7 +178,7 @@ Use selectText only on controls advertising selectionWritable. It selects a uniq
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 只提供 macOS 原生实现。不支持浏览器标签、启动应用、富文本剪贴板格式、AX 差分、无法确认应用归属的系统面板，以及仅后台辅助类型的应用。
+- 只提供 macOS 原生实现。不支持浏览器标签、启动应用、AX 差分、无法确认应用归属的系统面板，以及仅后台辅助类型的应用。
 - 坐标使用包含标题栏的窗口内部 point，可能不同于 PNG 像素尺寸。窗口移动、应用变化及其他桌面使用者的操作可能与观察和输入交错。
 - macOS 台前调度可能将后台窗口的尺寸与截图变为缩略图，当前无法保证这种状态下的完整画面与坐标输入；模型指引要求说明前台需求并避免反复抢回焦点。
 - 后台输入依赖私有 SkyLight 符号，macOS 升级可能使其不可用，需在目标系统版本验证。

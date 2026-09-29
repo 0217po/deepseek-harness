@@ -745,6 +745,63 @@
         "method",
         "params"
       ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "const": "paste"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "appHandle": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "format": {
+              "type": "string",
+              "enum": [
+                "text",
+                "html"
+              ]
+            },
+            "maxClipboardBytes": {
+              "type": "integer",
+              "minimum": 1024
+            },
+            "maxElements": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "maxDepth": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          "required": [
+            "appHandle",
+            "text",
+            "maxClipboardBytes",
+            "maxElements",
+            "maxDepth"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ]
     }
   ]
 }
