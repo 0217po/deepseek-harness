@@ -1,5 +1,7 @@
 /** macOS computer use over a managed native helper. */
-import { isAbsolute, resolve } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
+import { withFileLock } from '@deepseek-ai/dsh-util-atomic-write'
 import { fileURLToPath } from 'node:url'
 import type { Context, Volatile } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
@@ -43,6 +45,8 @@ export interface Config {
   axTimeoutMs: number
   /** Maximum bytes retained for one helper response frame. */
   maxResponseBytes: number
+  /** Maximum bytes preserved from the system clipboard during one paste. */
+  maxClipboardBytes: number
   /** Maximum UTF-8 bytes admitted for one helper request frame. */
   maxRequestBytes: number
   /** Duration in milliseconds of one same-window drag. */
@@ -69,6 +73,7 @@ export const Config = Schema.object({
   buildTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(300_000),
   timeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(30_000),
   axTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(3000),
+  maxClipboardBytes: Schema.number().step(1).min(1024).default(32 * 1024 * 1024),
   maxRequestBytes: Schema.number().step(1).min(1024).default(1024 * 1024),
   dragDurationMs: Schema.number().step(1).min(1).max(5000).default(400),
   dragSteps: Schema.number().step(1).min(1).max(240).default(20),
@@ -95,7 +100,8 @@ Object API signatures (options default to { emit: true }):
 - app.activate() -> { dispatched: true, verified: false }
 - app.getWindows(options?) -> Array<{ windowId, pid, appName, title, bounds, isOnScreen, onCurrentSpace }>
 - app.getWindow(windowId: number) -> Window
-- app.typeText(text: string), app.paste(text: string), app.pressKey(chord: string) -> action result
+- app.typeText(text: string), app.pressKey(chord: string) -> action result
+- app.paste(text: string, options?: { format?: "text" | "html" }) -> action result
 
 App and Window methods:
 
@@ -113,7 +119,7 @@ Raw operation tools use { method, params }, including params: {} for parameterle
 
 Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. WINDOW_CHANGED requires fresh state before any retry; use an advertised AX action or explicitly restore the window before screenshot or coordinate input, then observe again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording access in System Settings. After granting access, observe fresh state before continuing; do not automatically replay prior input.
 
-Use selectText only on controls advertising selectionWritable. It selects a unique literal occurrence, or places the cursor before/after it; prefix and suffix must be immediately adjacent. AMBIGUOUS_TEXT requires more context; TEXT_NOT_FOUND or SELECTION_CHANGED requires a fresh observation before deciding on input. Left clicks support single/double clicks; right and middle clicks support single clicks. Modified clicks use pointer input. Keypad names such as KP_0 and KP_Enter retain their physical key identity. Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste inserts plain text using native Unicode input without changing the clipboard; rich-text formats are unavailable. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, use the host-provided initialization snippet below once. Its installation-owned file URL works independently of the project directory. Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.`
+Use selectText only on controls advertising selectionWritable. It selects a unique literal occurrence, or places the cursor before/after it; prefix and suffix must be immediately adjacent. AMBIGUOUS_TEXT requires more context; TEXT_NOT_FOUND or SELECTION_CHANGED requires a fresh observation before deciding on input. Left clicks support single/double clicks; right and middle clicks support single clicks. Modified clicks use pointer input. Keypad names such as KP_0 and KP_Enter retain their physical key identity. Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste delivers plain text or HTML through the application's enabled standard Paste menu command. Original clipboard formats are restored if the clipboard still belongs to this paste; a later copy is preserved. Unsupported Paste commands fail without typing fallback. CLIPBOARD_CHANGED means another writer intervened; observe before deciding on further input. Browser applications can be controlled with getApp like other native apps; browser tabs and app launching are unavailable. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, use the host-provided initialization snippet below once. Its installation-owned file URL works independently of the project directory. Retain app objects between calls. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.`
 
 function executionAgent(execution: Readonly<ToolExecution>): Agent {
   if (!execution.agent) throw new Error('dsh-cua requires an agent-owned execution')
@@ -229,11 +235,16 @@ function mount(ctx: Context, config: Config, helperPath: string): void {
         const signal = execution.signal
         signal.throwIfAborted()
         const client = (execution as Readonly<CuaExecution>).nativeClient
-        const nativeParams = method === 'getState'
-          ? { ...params, maxElements: config.maxElements, maxDepth: config.maxDepth }
-          : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
-            : params
-        const result = await client.request(method, nativeParams, signal, execution.callId)
+        const nativeParams = method === 'paste'
+          ? { ...params, maxClipboardBytes: config.maxClipboardBytes, maxElements: config.maxElements, maxDepth: config.maxDepth }
+          : method === 'getState'
+            ? { ...params, maxElements: config.maxElements, maxDepth: config.maxDepth }
+            : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
+              : params
+        const requestNative = () => client.request(method, nativeParams, signal, execution.callId)
+        const result = method === 'paste'
+          ? await withFileLock(join(tmpdir(), 'dsh-cua-system-clipboard'), requestNative, { waitMs: config.timeoutMs, signal })
+          : await requestNative()
         if (method === 'getApp') {
           const selected = AppResult.parse(result)
           const { authorization } = z.object({ authorization: ApplicationAuthorizationResult }).parse(result)

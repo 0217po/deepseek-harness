@@ -61,6 +61,8 @@ export type CuaMouseButton = 'left' | 'right' | 'middle'
 export interface CuaClickOptions { mouseButton?: CuaMouseButton; clickCount?: 1 | 2; modifiers?: readonly CuaPointerModifier[] }
 /** One same-window drag; omitted button is left and omitted modifiers are empty. */
 export interface CuaDragOptions { mouseButton?: CuaMouseButton; modifiers?: readonly CuaPointerModifier[] }
+/** Clipboard representation delivered through the application's Paste command. */
+export interface CuaPasteOptions { format?: 'text' | 'html' }
 /** Adjacent literal context disambiguates repeated text; cursor modes collapse the matched range. */
 export interface CuaSelectTextOptions { prefix?: string; suffix?: string; selectionType?: 'text' | 'cursor_before' | 'cursor_after' }
 /** Positive deltas reveal content above/left; each axis is an integer from -10 to 10. */
@@ -170,11 +172,12 @@ export interface CuaApp extends CuaSurface {
    */
   typeText(text: string): Promise<CuaActionResult>
   /**
-   * Insert plain text at current focus through native Unicode input, preserving the system clipboard.
-   * @param text - Literal text; rich-text clipboard formats are unsupported.
-   * @returns Dispatch evidence; cancellation may leave a prefix entered.
+   * Paste text or HTML through the application's standard Paste menu command.
+   * @param text - Clipboard contents in the selected format; defaults to plain text.
+   * @param options - Clipboard format. Original contents are restored unless another writer changes them.
+   * @returns Dispatch evidence; unsupported Paste commands fail without typing fallback.
    */
-  paste(text: string): Promise<CuaActionResult>
+  paste(text: string, options?: CuaPasteOptions): Promise<CuaActionResult>
   /**
    * Send a key/chord at current focus.
    * @param key - xdotool-style chord such as super+c, shift+Tab, + or cmd++; plus is also a key name.

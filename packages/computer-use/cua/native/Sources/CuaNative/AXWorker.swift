@@ -224,6 +224,16 @@ actor AXWorker {
             try NativePlatform.requireScreenRecording()
             let window = try coordinateWindow(identity, params.windowID())
             return .capture(CaptureTarget(appHandle: handle, process: identity, window: window))
+        case "paste":
+            try ClipboardPaste().perform(text: params.string("text"), format: params.optionalString("format") ?? "text",
+                                         maxBytes: params.integer("maxClipboardBytes", in: 1024...Int.max)) { requireClipboard in
+                try ax().paste(identity.pid, maxElements: params.integer("maxElements", in: 1...10000),
+                               maxDepth: params.integer("maxDepth", in: 1...100)) {
+                    try cancellation.check()
+                    _ = try validateIdentity(handle)
+                    try requireClipboard()
+                }
+            }
         case "typeText", "pressKey":
             let recipient = try ax().keyboardRecipient(identity, catalog: catalog)
             try NativePlatform.verify(recipient)

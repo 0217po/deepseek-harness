@@ -145,6 +145,36 @@ final class AXAccess {
         let error = AXUIElementSetAttributeValue(element, "AXValue" as CFString, value as CFString)
         guard error == .success else { throw failure(error, "set AXValue") }
     }
+    func paste(_ pid: Int32, maxElements: Int, maxDepth: Int, beforeDispatch: () throws -> Void) throws {
+        guard let menu = try element(AXUIElementCreateApplication(pid), "AXMenuBar") else {
+            throw NativeFailure(code: "UNSUPPORTED", message: "The application does not expose a Paste menu command")
+        }
+        var pending: [(AXUIElement, Int)] = [(menu, 0)]
+        var found: AXUIElement?
+        var seen: [CFHashCode: [AXUIElement]] = [:]
+        var count = 0
+        while let (node, depth) = pending.popLast() {
+            let hash = CFHash(node)
+            if seen[hash, default: []].contains(where: { CFEqual($0, node) }) { continue }
+            seen[hash, default: []].append(node)
+            guard count < maxElements, depth <= maxDepth else {
+                throw NativeFailure(code: "UNSUPPORTED", message: "Paste menu discovery exceeded its observation limits")
+            }
+            count += 1
+            if try string(node, "AXRole") == "AXMenuItem", try string(node, "AXMenuItemCmdChar")?.lowercased() == "v" {
+                let raw = try attribute(node, "AXMenuItemCmdModifiers")
+                if let raw, CFGetTypeID(raw) == CFNumberGetTypeID(), let number = raw as? NSNumber, number.intValue == 0,
+                   try actions(node).contains("AXPress"), try boolean(node, "AXEnabled") != false {
+                    guard found == nil else { throw NativeFailure(code: "UNSUPPORTED", message: "The application exposes ambiguous Paste commands") }
+                    found = node
+                }
+            }
+            for child in try children(node) { pending.append((child, depth + 1)) }
+        }
+        guard let found else { throw NativeFailure(code: "UNSUPPORTED", message: "No enabled standard Paste command is available") }
+        try beforeDispatch()
+        try perform(found, "AXPress")
+    }
     func selectText(_ element: AXUIElement, text: String, prefix: String?, suffix: String?, mode: String) throws {
         try requireEnabled(element)
         guard try writable(element, "AXSelectedTextRange"), let original = try string(element, "AXValue") else {

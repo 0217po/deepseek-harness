@@ -161,7 +161,9 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
           return window
         },
         async typeText(text) { return action('typeText', { appHandle, text }) },
-        async paste(text) { return action('typeText', { appHandle, text }) },
+        async paste(text, options) { return action('paste', { appHandle, text,
+          ...options?.format === undefined ? {} : { format: options.format },
+        }) },
         async pressKey(key) { return action('pressKey', { appHandle, ...keyChord(key) }) },
       }
       await app.getAXState()

@@ -10,6 +10,7 @@ struct RequestParameters: Sendable {
         "setValue": ["appHandle", "snapshotId", "elementIndex", "value"],
         "selectText": ["appHandle", "snapshotId", "elementIndex", "text", "prefix", "suffix", "selectionType"],
         "performSecondaryAction": ["appHandle", "snapshotId", "elementIndex", "action"],
+        "paste": ["appHandle", "text", "format", "maxClipboardBytes", "maxElements", "maxDepth"],
         "typeText": ["appHandle", "text"], "pressKey": ["appHandle", "key", "modifiers"],
         "scroll": ["appHandle", "windowId", "snapshotId", "x", "y", "deltaLinesX", "deltaLinesY"],
         "drag": ["appHandle", "windowId", "snapshotId", "fromX", "fromY", "toX", "toY", "durationMs", "steps", "mouseButton", "modifiers"],
