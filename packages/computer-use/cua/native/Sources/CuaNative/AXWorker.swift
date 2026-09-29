@@ -230,6 +230,9 @@ actor AXWorker {
             if method == "typeText" { try inputs().0.typeText(params.string("text"), to: recipient.pid) }
             else { try inputs().0.pressKey(params.string("key"), modifiers: params.modifiers(), to: recipient.pid) }
         case "setValue": try ax().setValue(element(handle, params), params.string("value"))
+        case "selectText":
+            try ax().selectText(element(handle, params), text: params.string("text"), prefix: params.optionalString("prefix"),
+                                suffix: params.optionalString("suffix"), mode: params.optionalString("selectionType") ?? "text")
         case "performSecondaryAction":
             let selected = try element(handle, params)
             let requested = try params.string("action")

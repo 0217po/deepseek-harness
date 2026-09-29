@@ -35,6 +35,8 @@ export const Request = z.discriminatedUnion('method', [
     z.object({ ...coordinate, ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).optional() }).strict(),
   ]) }).strict(),
   operation('setValue', { ...snapshot, value: z.string() }),
+  operation('selectText', { ...snapshot, text: z.string().min(1), prefix: z.string().optional(), suffix: z.string().optional(),
+    selectionType: z.enum(['text', 'cursor_before', 'cursor_after']).optional() }),
   operation('performSecondaryAction', { ...snapshot, action: z.string().min(1) }),
   operation('typeText', { ...app, text: z.string() }),
   operation('pressKey', { ...app, key: z.string().min(1), modifiers: z.array(z.enum(['command', 'control', 'option', 'shift', 'fn'])).optional() }),

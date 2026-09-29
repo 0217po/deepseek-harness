@@ -8,6 +8,7 @@ struct RequestParameters: Sendable {
         "getState": ["appHandle", "windowId", "maxElements", "maxDepth"],
         "click": ["appHandle", "snapshotId", "elementIndex", "windowId", "x", "y", "mouseButton", "clickCount", "modifiers"],
         "setValue": ["appHandle", "snapshotId", "elementIndex", "value"],
+        "selectText": ["appHandle", "snapshotId", "elementIndex", "text", "prefix", "suffix", "selectionType"],
         "performSecondaryAction": ["appHandle", "snapshotId", "elementIndex", "action"],
         "typeText": ["appHandle", "text"], "pressKey": ["appHandle", "key", "modifiers"],
         "scroll": ["appHandle", "windowId", "snapshotId", "x", "y", "deltaLinesX", "deltaLinesY"],

@@ -50,7 +50,7 @@ final class AXAccess {
         // and accessibility children remain readable.
         guard error == .failure else { return false }
         let optional: Set<String> = ["AXValue", "AXTitle", "AXDescription", "AXIdentifier", "AXPlaceholderValue",
-                                     "AXSubrole", "AXEnabled", "AXSelected", "AXPosition", "AXSize", "AXMain", "AXMinimized"]
+                                     "AXSubrole", "AXEnabled", "AXSelected", "AXSelectedText", "AXSelectedTextRange", "AXPosition", "AXSize", "AXMain", "AXMinimized"]
         return optional.contains(attribute)
     }
     static func actionsUnavailable(_ error: AXError) -> Bool {
@@ -145,6 +145,38 @@ final class AXAccess {
         let error = AXUIElementSetAttributeValue(element, "AXValue" as CFString, value as CFString)
         guard error == .success else { throw failure(error, "set AXValue") }
     }
+    func selectText(_ element: AXUIElement, text: String, prefix: String?, suffix: String?, mode: String) throws {
+        try requireEnabled(element)
+        guard try writable(element, "AXSelectedTextRange"), let original = try string(element, "AXValue") else {
+            throw NativeFailure(code: "UNSUPPORTED", message: "This control does not expose writable text selection")
+        }
+        var range = try TextSelection.range(in: original, text: text, prefix: prefix, suffix: suffix, mode: mode)
+        guard let value = AXValueCreate(.cfRange, &range) else {
+            throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create the text selection range")
+        }
+        guard try string(element, "AXValue") == original else {
+            throw NativeFailure(code: "STALE_SNAPSHOT", message: "Text changed before selection; read fresh state")
+        }
+        try prepare(element)
+        let error = AXUIElementSetAttributeValue(element, "AXSelectedTextRange" as CFString, value)
+        guard error == .success else { throw failure(error, "set text selection") }
+        let actual = try textRange(attribute(element, "AXSelectedTextRange"))
+        guard actual?.location == range.location, actual?.length == range.length, try string(element, "AXValue") == original else {
+            throw NativeFailure(code: "SELECTION_CHANGED", message: "The requested selection was not retained; read fresh state before input")
+        }
+    }
+    private func textRange(_ raw: CFTypeRef?) throws -> CFRange? {
+        guard let raw else { return nil }
+        guard CFGetTypeID(raw) == AXValueGetTypeID() else {
+            throw NativeFailure(code: "NATIVE_ERROR", message: "AXSelectedTextRange is not an accessibility value")
+        }
+        let value = unsafeDowncast(raw, to: AXValue.self)
+        var range = CFRange()
+        guard AXValueGetType(value) == .cfRange, AXValueGetValue(value, .cfRange, &range), range.location >= 0, range.length >= 0 else {
+            throw NativeFailure(code: "NATIVE_ERROR", message: "AXSelectedTextRange is not a valid range")
+        }
+        return range
+    }
     func bounds(_ element: AXUIElement) throws -> WindowBounds? {
         guard let position = try attribute(element, "AXPosition") else { return nil }
         return try bounds(position: position, size: attribute(element, "AXSize"))
@@ -189,7 +221,7 @@ final class AXAccess {
     private func metadata(_ element: AXUIElement) throws -> [String: CFTypeRef]? {
         try prepare(element)
         let names = ["AXRole", "AXTitle", "AXValue", "AXPlaceholderValue", "AXDescription", "AXEnabled",
-                     "AXIdentifier", "AXPosition", "AXSize", "AXChildren", "AXSelected"]
+                     "AXIdentifier", "AXPosition", "AXSize", "AXChildren", "AXSelected", "AXSelectedText", "AXSelectedTextRange"]
         var output: CFArray?
         let error = AXUIElementCopyMultipleAttributeValues(element, names as CFArray, [], &output)
         if error == .notImplemented || error == .attributeUnsupported { return nil }
@@ -299,6 +331,7 @@ final class AXAccess {
         var lines: [String] = []
         var elements: [JSONValue] = []
         var indexed: [Int: AXUIElement] = [:]
+        let textRoles: Set<String> = ["AXTextField", "AXTextArea", "AXComboBox", "AXStaticText"]
         let valueRoles: Set<String> = ["AXTextField", "AXTextArea", "AXComboBox", "AXSlider", "AXStepper", "AXCheckBox", "AXRadioButton"]
         func walk(_ element: AXUIElement, level: Int, depth: Int) throws {
             try cancellation.check()
@@ -329,7 +362,10 @@ final class AXAccess {
             else { valueWritable = false }
             let enabled = try booleanValue(observed("AXEnabled"), attribute: "AXEnabled")
             let selected = try booleanValue(observed("AXSelected"), attribute: "AXSelected")
-            let addressable = enabled != false && (!actionNames.isEmpty || valueWritable)
+            let selectionWritable = textRoles.contains(role) ? try writable(element, "AXSelectedTextRange") : false
+            let selectedRange = textRoles.contains(role) ? try textRange(observed("AXSelectedTextRange")) : nil
+            let selectedText = textRoles.contains(role) ? try stringValue(observed("AXSelectedText"), attribute: "AXSelectedText") : nil
+            let addressable = enabled != false && (!actionNames.isEmpty || valueWritable || selectionWritable)
             let meaningful = [title, value, description].contains { !($0?.isEmpty ?? true) }
             if !addressable && !meaningful && role != "AXWindow" && role != "AXSheet" {
                 for child in try childValues(observed("AXChildren"), attribute: "AXChildren") { try walk(child, level: level, depth: depth + 1) }
@@ -341,10 +377,13 @@ final class AXAccess {
             line += role
             if enabled == false { line += " disabled" }
             if valueWritable { line += " valueWritable=true" }
+            if selectionWritable { line += " selectionWritable=true" }
             if let selected { line += " selected=\(selected)" }
             if let title, !title.isEmpty { line += " \(String(reflecting: title))" }
             if let value, !value.isEmpty { line += " = \(String(reflecting: value))" }
             if let description, !description.isEmpty { line += " (\(description))" }
+            if let selectedRange { line += " selection=[\(selectedRange.location), \(selectedRange.length)]" }
+            if let selectedText, !selectedText.isEmpty { line += " selectedText=\(String(reflecting: selectedText))" }
             if !actionNames.isEmpty { line += " actions=[\(actionNames.joined(separator: ", "))]" }
             lines.append(line)
             if let index {
@@ -357,7 +396,10 @@ final class AXAccess {
                     "value": value.map(JSONValue.string) ?? .null, "description": description.map(JSONValue.string) ?? .null,
                     "identifier": try stringValue(observed("AXIdentifier"), attribute: "AXIdentifier").map(JSONValue.string) ?? .null,
                     "bounds": frameJSON, "actions": .array(actionNames.map(JSONValue.string)), "enabled": enabled.map(JSONValue.bool) ?? .null,
-                    "valueWritable": .bool(valueWritable), "selected": selected.map(JSONValue.bool) ?? .null,
+                    "valueWritable": .bool(valueWritable), "selectionWritable": .bool(selectionWritable),
+                    "selected": selected.map(JSONValue.bool) ?? .null,
+                    "selectedText": selectedText.map(JSONValue.string) ?? .null,
+                    "selectedRange": selectedRange.map { .array([.number(Double($0.location)), .number(Double($0.length))]) } ?? .null,
                 ]))
             }
             for child in try childValues(observed("AXChildren"), attribute: "AXChildren") { try walk(child, level: level + 1, depth: depth + 1) }

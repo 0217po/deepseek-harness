@@ -115,6 +115,25 @@ describe('pointer buttons and modifiers', () => {
   })
 })
 
+describe('text selections', () => {
+  it('binds literal text and optional disambiguation to the latest observed control', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    await app.selectText(1, 'target')
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'selectText', params: {
+      appHandle: 'app-17', snapshotId: 'snapshot-1', elementIndex: 1, text: 'target',
+    } })
+    await app.selectText(1, 'target', { prefix: 'second ', suffix: '.', selectionType: 'cursor_after' })
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'selectText', params: {
+      appHandle: 'app-17', snapshotId: 'snapshot-1', elementIndex: 1, text: 'target',
+      prefix: 'second ', suffix: '.', selectionType: 'cursor_after',
+    } })
+    const calls = f.dispatch.mock.calls.length
+    await expect(app.selectText(1, '')).rejects.toThrow()
+    expect(f.dispatch).toHaveBeenCalledTimes(calls)
+  })
+})
+
 describe('application and window observations', () => {
   it('keeps the latest AX index scope separate for an app and each selected window', async () => {
     const f = fixture()

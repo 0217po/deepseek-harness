@@ -61,6 +61,8 @@ export type CuaMouseButton = 'left' | 'right' | 'middle'
 export interface CuaClickOptions { mouseButton?: CuaMouseButton; clickCount?: 1 | 2; modifiers?: readonly CuaPointerModifier[] }
 /** One same-window drag; omitted button is left and omitted modifiers are empty. */
 export interface CuaDragOptions { mouseButton?: CuaMouseButton; modifiers?: readonly CuaPointerModifier[] }
+/** Adjacent literal context disambiguates repeated text; cursor modes collapse the matched range. */
+export interface CuaSelectTextOptions { prefix?: string; suffix?: string; selectionType?: 'text' | 'cursor_before' | 'cursor_after' }
 /** Positive deltas reveal content above/left; each axis is an integer from -10 to 10. */
 export interface CuaScrollOptions { x: number; y: number; deltaLinesX: number; deltaLinesY: number }
 /** An observed AX tree and independently captured PNG; capture is not atomic. */
@@ -103,6 +105,14 @@ export interface CuaSurface {
    * @returns dispatch evidence.
    */
   setValue(index: number, value: string): Promise<CuaActionResult>
+  /**
+   * Select one literal text occurrence through writable AXSelectedTextRange and verify its range.
+   * @param index - Text control index from this surface's latest tree.
+   * @param text - Nonempty literal text; multiple matches require adjacent context.
+   * @param options - Adjacent prefix/suffix and selection or cursor placement.
+   * @returns Dispatch evidence; rejects unsupported, ambiguous or changed text without keyboard fallback.
+   */
+  selectText(index: number, text: string, options?: CuaSelectTextOptions): Promise<CuaActionResult>
   /**
    * Invoke an action advertised by an observed element; raising a window activates its app.
    * @param index - Index from this surface's latest AX tree.
