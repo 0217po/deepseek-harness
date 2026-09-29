@@ -76,6 +76,16 @@ struct InstalledApplication: Sendable, Equatable {
                 else { continuation.resume(throwing: NativeFailure(code: "APP_UNAVAILABLE", message: "Application launch returned no process")) }
             }
         }
+        guard let running = NSRunningApplication(processIdentifier: pid) else {
+            throw NativeFailure(code: "APP_UNAVAILABLE", message: "Application exited during launch")
+        }
+        while !running.isFinishedLaunching {
+            try cancellation.check()
+            guard !running.isTerminated else {
+                throw NativeFailure(code: "APP_UNAVAILABLE", message: "Application exited during launch")
+            }
+            try await Task.sleep(for: .milliseconds(25))
+        }
         try cancellation.check()
         return pid
     }

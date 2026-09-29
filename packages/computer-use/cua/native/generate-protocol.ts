@@ -1,9 +1,10 @@
 /** Derive native field/enum admission and the wire schema from model and Host-only Zod definitions. */
 import { readFile, writeFile } from 'node:fs/promises'
 import { z } from 'zod'
+import type { JSONSchema } from 'zod/v4/core'
 import { NativeOnlyOperations, NativeResourceParameters, Request } from '../src/protocol.ts'
 
-type Schema = ReturnType<typeof z.toJSONSchema>
+type Schema = JSONSchema.JSONSchema
 
 function object(schema: Schema | boolean | undefined): Schema {
   if (schema === undefined || typeof schema === 'boolean') throw new Error('CUA protocol requires an object schema at this position')
@@ -82,7 +83,7 @@ if (import.meta.main) {
   const generated = renderNativeProtocol()
   for (const [file, content] of [
     ['protocol.schema.json', generated.json], ['Sources/CuaNative/NativeProtocol.generated.swift', generated.swift],
-  ]) {
+  ] as const) {
     const path = new URL(file, import.meta.url)
     if (process.argv.includes('--check')) {
       if (await readFile(path, 'utf8') !== content) throw new Error(`Stale generated CUA protocol: ${file}`)
