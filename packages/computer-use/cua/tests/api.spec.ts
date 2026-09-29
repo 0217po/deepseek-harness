@@ -70,8 +70,11 @@ describe('application discovery', () => {
     const app = await f.api.getApp('Editor')
     expect(app.pid).toBe(17)
     expect(app.appHandle).toBe('app-17')
-    expect(await app.getWindows()).toEqual([windowInfo(23)])
     expect(await app.getScreenshot()).toEqual(Uint8Array.from(Buffer.from(PNG, 'base64')))
+    expect(f.dispatch.mock.calls.map(([operation]) => operation.method)).toEqual([
+      'getCapabilities', 'listApps', 'getApp', 'getState', 'screenshot',
+    ])
+    expect(await app.getWindows()).toEqual([windowInfo(23)])
     expect(f.sink.text).not.toHaveBeenCalled()
     expect(f.sink.image).not.toHaveBeenCalled()
   })

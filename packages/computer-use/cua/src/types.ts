@@ -120,7 +120,12 @@ export interface CuaSurface {
 }
 /** One explicit window; keyboard operations remain app-scoped because they follow focus. */
 export interface CuaWindow extends CuaSurface { readonly windowId: number }
-/** Native app handle; implicit coordinates use the focused window or the sole visible window. */
+/**
+ * Native app handle supporting direct observations and actions without window enumeration.
+ * Screenshots and coordinates reuse the latest AX observation's focused on-screen,
+ * nonzero-size window, or require exactly one such window. Read fresh AX to follow
+ * focus changes; explicit window objects retain their selected target.
+ */
 export interface CuaApp extends CuaSurface {
   readonly pid: number
   readonly appHandle: CuaAppHandle
