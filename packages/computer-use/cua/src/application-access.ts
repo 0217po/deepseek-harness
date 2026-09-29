@@ -81,6 +81,8 @@ export class ApplicationAccess {
       const saved = identity.persistable && this.options.grants().some(grant => grant.id === identity.id)
       let scope: Selection['scope'] = 'persistent'
       if (!saved && this.rejected.get(agent)?.has(identity.id)) throw this.denied(identity)
+      // The awaited user decision can outlive the helper, so re-read its live getter.
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       if (client.disposed) throw new NativeError('NATIVE_CLOSED', 'Helper is closed; acquire fresh application handles')
       if (!saved) {
         const questions = this.ctx.get('userQuestions')

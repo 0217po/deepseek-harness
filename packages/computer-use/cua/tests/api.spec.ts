@@ -30,7 +30,7 @@ function fixture(withSink = true) {
         snapshotId: `snapshot-${++generation}`, tree: `Tree ${generation}`, truncated: false,
         windows: params.windowId === undefined ? windows : windows.filter(window => window.windowId === params.windowId),
       }
-      case 'screenshot': return { mimeType: 'image/png', data: PNG, pixelWidth: 1, pixelHeight: 1, windowId: params.windowId!, bounds, coordinateSpace: 'window-points' }
+      case 'screenshot': return { mimeType: 'image/png', data: PNG, pixelWidth: 1, pixelHeight: 1, windowId: params.windowId, bounds, coordinateSpace: 'window-points' }
       default: return delivered
     }
   })

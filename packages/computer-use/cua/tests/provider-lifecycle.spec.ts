@@ -24,12 +24,13 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import Subprocess from '@deepseek-ai/dsh-subprocess'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import * as NativeProvider from '../src/index.ts'
+import type { NativeClient } from '../src/native-client.ts'
 import type { NativeBuildSpec } from '../src/native-build.ts'
 
 const native = vi.hoisted(() => ({
   prepare: vi.fn<(spec: NativeBuildSpec) => Promise<string>>(),
   architecture: vi.fn(() => 'arm64' as const),
-  request: vi.fn(), dispose: vi.fn(), instances: [] as Array<{ disposed: boolean }>,
+  request: vi.fn<NativeClient['request']>(), dispose: vi.fn(), instances: [] as Array<{ disposed: boolean }>,
 }))
 vi.mock('../src/native-build.ts', async importOriginal => ({
   ...await importOriginal<typeof import('../src/native-build.ts')>(),
