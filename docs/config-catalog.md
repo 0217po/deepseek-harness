@@ -787,7 +787,7 @@ export interface Config {
 
 - `inject`: `computerUse` · `tools` · `systemPrompt` · `subprocess` · `agents`
 - `refs`: [`Branded`](../packages/util/brand/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/computer-use/cua/src/index.ts:30`](../packages/computer-use/cua/src/index.ts)
+- `source`: [`packages/computer-use/cua/src/index.ts:32`](../packages/computer-use/cua/src/index.ts)
 
 ```ts config-catalog
 /** Native executable and per-operation resource bounds. */
@@ -807,6 +807,10 @@ export interface Config {
   axTimeoutMs: number
   /** Maximum bytes retained for one helper response frame. */
   maxResponseBytes: number
+  /** Maximum installed application matches returned for one discovery query. */
+  maxAppMatches: number
+  /** Maximum bytes preserved from the system clipboard during one paste. */
+  maxClipboardBytes: number
   /** Maximum UTF-8 bytes admitted for one helper request frame. */
   maxRequestBytes: number
   /** Duration in milliseconds of one same-window drag. */
@@ -833,7 +837,7 @@ export interface CuaApplicationGrant {
   executablePath: string
 }
 
-/** Native digest of an executable path and its signing requirement or process lifetime. */
+/** Native digest of an executable path and its signing requirement, process lifetime or pending executable identity. */
 export type CuaApplicationId = Branded<'CuaApplicationId'>
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-cua -->

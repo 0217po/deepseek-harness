@@ -114,6 +114,34 @@
             "properties": {
               "method": {
                 "type": "string",
+                "const": "findApps"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "\\S"
+                  }
+                },
+                "required": [
+                  "query"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
                 "const": "getApp"
               },
               "params": {
@@ -207,7 +235,7 @@
                   "windowId": {
                     "type": "integer",
                     "exclusiveMinimum": 0,
-                    "maximum": 9007199254740991
+                    "maximum": 4294967295
                   }
                 },
                 "required": [
@@ -251,8 +279,22 @@
                         "type": "string",
                         "enum": [
                           "left",
-                          "right"
+                          "right",
+                          "middle"
                         ]
+                      },
+                      "modifiers": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "command",
+                            "control",
+                            "option",
+                            "shift",
+                            "fn"
+                          ]
+                        }
                       },
                       "clickCount": {
                         "anyOf": [
@@ -284,7 +326,7 @@
                       "windowId": {
                         "type": "integer",
                         "exclusiveMinimum": 0,
-                        "maximum": 9007199254740991
+                        "maximum": 4294967295
                       },
                       "snapshotId": {
                         "type": "string",
@@ -302,8 +344,22 @@
                         "type": "string",
                         "enum": [
                           "left",
-                          "right"
+                          "right",
+                          "middle"
                         ]
+                      },
+                      "modifiers": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "command",
+                            "control",
+                            "option",
+                            "shift",
+                            "fn"
+                          ]
+                        }
                       },
                       "clickCount": {
                         "anyOf": [
@@ -367,6 +423,63 @@
                   "snapshotId",
                   "elementIndex",
                   "value"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
+                "const": "selectText"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "appHandle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "snapshotId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "elementIndex": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "prefix": {
+                    "type": "string"
+                  },
+                  "suffix": {
+                    "type": "string"
+                  },
+                  "selectionType": {
+                    "type": "string",
+                    "enum": [
+                      "text",
+                      "cursor_before",
+                      "cursor_after"
+                    ]
+                  }
+                },
+                "required": [
+                  "appHandle",
+                  "snapshotId",
+                  "elementIndex",
+                  "text"
                 ],
                 "additionalProperties": false
               }
@@ -456,6 +569,44 @@
             "properties": {
               "method": {
                 "type": "string",
+                "const": "paste"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "appHandle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "text",
+                      "html"
+                    ]
+                  }
+                },
+                "required": [
+                  "appHandle",
+                  "text"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
                 "const": "pressKey"
               },
               "params": {
@@ -513,7 +664,7 @@
                   "windowId": {
                     "type": "integer",
                     "exclusiveMinimum": 0,
-                    "maximum": 9007199254740991
+                    "maximum": 4294967295
                   },
                   "snapshotId": {
                     "type": "string",
@@ -572,7 +723,28 @@
                   "windowId": {
                     "type": "integer",
                     "exclusiveMinimum": 0,
-                    "maximum": 9007199254740991
+                    "maximum": 4294967295
+                  },
+                  "mouseButton": {
+                    "type": "string",
+                    "enum": [
+                      "left",
+                      "right",
+                      "middle"
+                    ]
+                  },
+                  "modifiers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "command",
+                        "control",
+                        "option",
+                        "shift",
+                        "fn"
+                      ]
+                    }
                   },
                   "snapshotId": {
                     "type": "string",
@@ -629,7 +801,7 @@
                   "windowId": {
                     "type": "integer",
                     "exclusiveMinimum": 0,
-                    "maximum": 9007199254740991
+                    "maximum": 4294967295
                   }
                 },
                 "required": [
