@@ -1933,9 +1933,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote(\'create\') create(request: SessionCreateRequest): Promise<SessionCreateValue>',
-        description: 'Create or idempotently adopt one ordinary Session.',
-        parameters: [{ name: 'request', description: 'requested identity, location, and Agent preset.' }],
-        returns: 'the Session identity and resolved preset when configured.',
+        description: 'Create one ordinary Session for a new conversation, reusing the named blank Session while it is reusable.',
+        parameters: [{ name: 'request', description: 'optional blank Session to reuse, location, and Agent preset.' }],
+        returns: 'the created or reused Session identity and its preset when configured.',
       },
       {
         signature: '@Remote(\'selectModel\') selectModel(request: SessionSelectModelRequest): Promise<SessionSelectModelValue>',

@@ -341,9 +341,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'target', description: 'known Session identity or durable direct-parent subagent address to display.' }],
       },
       {
-        signature: 'openWorkspace(workspaceId: WorkspaceId, beforeOpen?: (sessionId: SessionId) => void): Promise<void>',
+        signature: 'openWorkspace( workspaceId: WorkspaceId, beforeOpen?: (sessionId: SessionId) => void, options?: NewSessionOptions, ): Promise<void>',
         description: 'Connect a Workspace and open its Session unless a later navigation supersedes it.',
-        parameters: [{ name: 'workspaceId', description: 'target Workspace.' }, { name: 'beforeOpen', description: 'optional synchronous preparation for the selected Session, skipped after supersession; a throw aborts the open and releases the retained reference.' }],
+        parameters: [{ name: 'workspaceId', description: 'target Workspace.' }, { name: 'beforeOpen', description: 'optional synchronous preparation for the selected Session, skipped after supersession; a throw aborts the open and releases the retained reference.' }, { name: 'options', description: 'choices for the Session the connection creates or reuses.' }],
         returns: 'completion; a superseded request may create a Session but does not open it.',
         throws: ['on failure; a refused creation is also shown through the Workspace notice unless a later navigation or disposal superseded the request.'],
       },
@@ -354,15 +354,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the child SessionId after creation and inherited-title increment.',
       },
       {
-        signature: 'connectWorkspace(workspaceId: WorkspaceId): Promise<SessionId>',
-        description: 'Resolve the reusable or newly created blank Session for a Workspace.',
-        parameters: [{ name: 'workspaceId', description: 'target Workspace.' }],
+        signature: 'connectWorkspace(workspaceId: WorkspaceId, options?: NewSessionOptions): Promise<SessionId>',
+        description: 'Resolve the Session for a new conversation in a Workspace: the Host reuses the first listed blank member while it is reusable and otherwise creates one, under the requested preset or the Host default.',
+        parameters: [{ name: 'workspaceId', description: 'target Workspace.' }, { name: 'options', description: 'choices for the created or reused Session.' }],
         returns: 'a Session already addressable through the Session Controller.',
       },
       {
-        signature: 'startSession(workspaceId?: WorkspaceId): void',
+        signature: 'startSession(workspaceId?: WorkspaceId, options?: NewSessionOptions): void',
         description: 'Start a New Session flow and navigate to its Session; a creation the Host refuses is shown through the Workspace notice and leaves the selection as it was.',
-        parameters: [{ name: 'workspaceId', description: 'explicit target; absent inherits the current or most recent Workspace.' }],
+        parameters: [{ name: 'workspaceId', description: 'explicit target; absent inherits the current or most recent Workspace.' }, { name: 'options', description: 'choices for the Session the flow creates or reuses.' }],
       },
       {
         signature: 'archiveSession(sessionId: SessionId, options?: { readonly stopActivity?: boolean }): Promise<void>',
@@ -702,6 +702,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'MatchedShare',
     declaration: 'export type MatchedShare<E extends SlotEntryDef, M> = E[\'kind\'] extends \'chain\' ? {\n    matched: M;\n} : object;',
+  },
+  {
+    name: 'NewSessionOptions',
+    declaration: 'export interface NewSessionOptions {\n    readonly agentPreset?: string;\n}',
   },
   {
     name: 'ObservableSnapshot',
