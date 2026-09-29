@@ -1,7 +1,7 @@
 /** macOS computer use over a managed native helper. */
 import { isAbsolute, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
-import { withFileLock } from '@deepseek-ai/dsh-util-atomic-write'
+import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import { fileURLToPath } from 'node:url'
 import type { Context, Volatile } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
