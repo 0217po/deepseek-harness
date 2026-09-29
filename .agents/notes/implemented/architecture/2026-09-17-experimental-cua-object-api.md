@@ -29,3 +29,5 @@ A CUA-specific persistent evaluator duplicates execution lifecycle policy and pr
 ## Consequences
 
 The package remains opt-in and macOS-only. Observations do not lock the desktop, and input success records dispatch rather than task completion. Callers must verify effects and must not retry uncertain input automatically. Native fixture tests verify actual window state separately from protocol and model-transcript tests. Persistent execution, binary distribution, permission onboarding and real-model task success remain separately owned work.
+
+Source builds retain a content-addressed executable per compiled generation. On macOS 26.6.2, byte-identical release helpers captured successfully from new paths but timed out through ScreenCaptureKit at a reused publication path with older helpers still running. This observation does not establish the operating system’s internal cause; retaining generations avoids replacing a live helper’s file. The package payload remains separately published for distribution.

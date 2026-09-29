@@ -12,7 +12,7 @@ async function fixture(diagnostics = true) {
   const packageRoot = join(root, 'packages/computer-use/cua')
   await mkdir(packageRoot, { recursive: true })
   const controller = new AbortController()
-  const output = Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 0, 255, 128])
+  let output = Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 0, 255, 128])
   let outcome: SubprocessOutcome = { exitCode: 0, signal: null }
   let beforeExit = async () => {}
   const terminate = vi.fn()
@@ -37,6 +37,7 @@ async function fixture(diagnostics = true) {
   })
   const spec = { packageRoot, architecture: 'arm64' as const, subprocess: { spawn }, signal: controller.signal, timeoutMs: 60_000, graceMs: 100 }
   return { root, spec, spawn, output, controller, terminate, waitForExit,
+    setOutput: (value: Buffer) => { output = value },
     setOutcome: (value: SubprocessOutcome) => { outcome = value },
     beforeExit: (callback: () => Promise<void>) => { beforeExit = callback },
   }
@@ -79,7 +80,8 @@ it('checks source builds on activation and maps Intel architecture to the compil
   await writeFile(join(f.root, 'package.json'), '{"name":"@deepseek-ai/dsh-root"}')
   const path = await prepareNativeExecutable({ ...f.spec, architecture: 'x64' })
   expect(f.spawn.mock.calls[0]![0].argv).toContain('x86_64')
-  expect(path).toBe(nativeExecutablePath(f.spec.packageRoot, 'x64'))
+  expect(path).toContain(join('native', '.build', 'prepared', 'x64'))
+  expect(await readFile(nativeExecutablePath(f.spec.packageRoot, 'x64'))).toEqual(f.output)
 })
 
 it('uses an installed executable without starting a compiler', async () => {
@@ -149,4 +151,29 @@ it('preserves an invalid existing artifact location instead of treating every re
   await mkdir(target, { recursive: true })
   await expect(buildNativeExecutable(f.spec)).rejects.toMatchObject({ code: 'EISDIR' })
   expect((await stat(target)).isDirectory()).toBe(true)
+})
+
+it('keeps running generations immutable while publishing a newer package payload', async () => {
+  const f = await fixture()
+  const first = await buildNativeExecutable(f.spec)
+  const firstInode = (await stat(first)).ino
+  const replacement = Buffer.from('new executable')
+  f.setOutput(replacement)
+  const second = await buildNativeExecutable(f.spec)
+  expect(second).not.toBe(first)
+  expect(await readFile(first)).toEqual(f.output)
+  expect((await stat(first)).ino).toBe(firstInode)
+  expect(await readFile(second)).toEqual(replacement)
+  expect(await readFile(nativeExecutablePath(f.spec.packageRoot, 'arm64'))).toEqual(replacement)
+})
+
+it('refuses a corrupted retained generation without replacing it', async () => {
+  const f = await fixture()
+  const path = await buildNativeExecutable(f.spec)
+  await writeFile(path, 'corrupted')
+  await expect(buildNativeExecutable(f.spec)).rejects.toThrow('does not match its content digest')
+  expect(await readFile(path, 'utf8')).toBe('corrupted')
+  await rm(path)
+  await mkdir(path)
+  await expect(buildNativeExecutable(f.spec)).rejects.toMatchObject({ code: 'EISDIR' })
 })

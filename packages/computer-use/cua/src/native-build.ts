@@ -1,5 +1,6 @@
 /** Source-checkout preparation and installed native executable resolution. */
 import { constants } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { access, mkdir, readFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
@@ -58,9 +59,9 @@ export async function isSourcePackage(packageRoot: string): Promise<boolean> {
 }
 
 /**
- * Let the native build system check sources and its retained compiler cache, then publish atomically.
+ * Build the package payload and retain an immutable executable for source-runtime processes.
  * @param spec - Checkout, target, managed process provider and cancellation/deadline limits.
- * @returns Executable path after compilation and complete process cleanup.
+ * @returns Content-addressed runtime path after compilation and complete process cleanup.
  * @throws When compilation, cancellation, resource cleanup or artifact publication fails.
  */
 export async function buildNativeExecutable(spec: NativeBuildSpec): Promise<string> {
@@ -99,8 +100,18 @@ async function compileNative(spec: NativeBuildSpec, signal: AbortSignal, executa
   }
   signal.throwIfAborted()
   if (!previous?.equals(built)) await writeFileAtomic(executable, built, { mode: 0o755 })
-  await access(executable, constants.X_OK)
-  return executable
+  const digest = createHash('sha256').update(built).digest('hex')
+  const runtime = join(nativeRoot, '.build', 'prepared', spec.architecture, digest, 'dsh-cua-native')
+  await mkdir(dirname(runtime), { recursive: true })
+  let retained: Buffer | undefined
+  try { retained = await readFile(runtime) } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
+  if (retained && !retained.equals(built)) throw new Error('Computer Use retained executable does not match its content digest')
+  signal.throwIfAborted()
+  if (!retained) await writeFileAtomic(runtime, built, { mode: 0o755 })
+  await access(runtime, constants.X_OK)
+  return runtime
 }
 
 /**

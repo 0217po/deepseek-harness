@@ -60,7 +60,7 @@ Application consent is enforced before AX reads, window-title reads, screenshots
 
 Raw `getState` exposes the validated state fields and its complete `tree`. The native helper also returns structured element diagnostics for native checks; the tool projection omits that duplicate array from model text and structured tool values.
 
-Native preparation serializes compiler checks and executable publication with the shared file lock, retains the native build cache, and replaces the executable atomically only when its bytes change. Cancellation and preparation failure finish managed process cleanup before releasing the lock.
+Native preparation serializes compiler checks and publication with the shared file lock. It updates the package payload and runs a content-addressed copy under native/.build/prepared, preserving executable files used by earlier source-runtime processes. Identical builds reuse the same file; corrupted retained copies fail validation. Cancellation and preparation failure finish managed process cleanup before releasing the lock.
 
 ### Connect an external execution environment
 
