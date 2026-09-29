@@ -25,7 +25,7 @@ final class CapabilityPad: NSView {
     }
 }
 
-final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSTextViewDelegate {
+final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTextViewDelegate {
     let statePath: String
     var window: NSWindow!
     var text: NSTextView!
@@ -44,6 +44,7 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSTextViewDele
         NSApplication.shared.mainMenu = bar
         window = NSWindow(contentRect: NSRect(x: 140, y: 160, width: 640, height: 500),
                           styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.delegate = self
         window.title = "DSH CUA capability checks"
         window.isReleasedWhenClosed = false
         window.animationBehavior = .none
@@ -74,6 +75,10 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSTextViewDele
         NSApplication.shared.activate(ignoringOtherApps: true)
         persist()
     }
+    func applicationDidBecomeActive(_ notification: Notification) { persist() }
+    func applicationDidResignActive(_ notification: Notification) { persist() }
+    func windowDidBecomeKey(_ notification: Notification) { persist() }
+    func windowDidResignKey(_ notification: Notification) { persist() }
     func textDidChange(_ notification: Notification) { persist() }
     func textViewDidChangeSelection(_ notification: Notification) { if pad != nil { persist() } }
     func persist() {
@@ -91,6 +96,8 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSTextViewDele
         let frame = pad.convert(pad.bounds, to: nil)
         let selection = text.selectedRange()
         let result: [String: Any] = ["pid": ProcessInfo.processInfo.processIdentifier, "windowId": window.windowNumber,
+            "active": NSApplication.shared.isActive, "keyWindow": window.isKeyWindow,
+            "textFocused": window.firstResponder === text,
             "text": text.string, "selection": [selection.location, selection.length], "runs": runs, "events": events,
             "pad": [frame.minX, window.frame.height - frame.maxY, frame.width, frame.height]]
         try! JSONSerialization.data(withJSONObject: result).write(to: URL(fileURLWithPath: statePath), options: .atomic)

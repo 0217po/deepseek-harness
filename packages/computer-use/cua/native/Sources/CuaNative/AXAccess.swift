@@ -164,14 +164,14 @@ final class AXAccess {
             if try string(node, "AXRole") == "AXMenuItem", try string(node, "AXMenuItemCmdChar")?.lowercased() == "v" {
                 let raw = try attribute(node, "AXMenuItemCmdModifiers")
                 if let raw, CFGetTypeID(raw) == CFNumberGetTypeID(), let number = raw as? NSNumber, number.intValue == 0,
-                   try actions(node).contains("AXPress"), try boolean(node, "AXEnabled") != false {
+                   try actions(node).contains("AXPress") {
                     guard found == nil else { throw NativeFailure(code: "UNSUPPORTED", message: "The application exposes ambiguous Paste commands") }
                     found = node
                 }
             }
             for child in try children(node) { pending.append((child, depth + 1)) }
         }
-        guard let found else { throw NativeFailure(code: "UNSUPPORTED", message: "No enabled standard Paste command is available") }
+        guard let found else { throw NativeFailure(code: "UNSUPPORTED", message: "No standard Paste command is available") }
         try beforeDispatch()
         try perform(found, "AXPress")
     }

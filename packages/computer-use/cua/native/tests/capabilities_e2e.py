@@ -78,7 +78,8 @@ def main():
             # The Host consent barrier is separately exercised by provider-lifecycle.spec.ts.
             app = call("launchApp", owner)
             pid = app["pid"]
-            state = wait_for_state(state_file, lambda value: value["pid"] == pid)
+            call("activate", owner)
+            state = wait_for_state(state_file, lambda value: value["pid"] == pid and value["active"] and value["keyWindow"])
             assert call("findApps", {"query": str(application), "maxAppMatches": 20})[0]["pid"] == pid
             observed = call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
             field = next(item for item in observed["elements"] if item["role"] == "AXTextArea")
@@ -120,8 +121,10 @@ def main():
                 pid = json.loads(state_file.read_text())["pid"]
             if args.artifacts:
                 args.artifacts.mkdir(parents=True, exist_ok=True)
+                if state_file.exists():
+                    (args.artifacts / "state-final.json").write_bytes(state_file.read_bytes())
                 (args.artifacts / "transcript.json").write_text(json.dumps(transcript, ensure_ascii=False, indent=2))
-            run_cleanup(*([helper.close] if helper else []), *([lambda: stop_application(pid)] if pid else []))
+            run_cleanup(*([helper.stop] if helper else []), *([lambda: stop_application(pid)] if pid else []))
 
 
 if __name__ == "__main__":
