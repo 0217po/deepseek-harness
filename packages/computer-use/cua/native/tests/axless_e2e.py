@@ -119,6 +119,19 @@ def main():
                 helper.call('click', {**owner, 'windowId': window_id, 'x': x, 'y': y})
                 wait_state(lambda state: state['count'] == 4, 'fresh screenshot did not admit resized-window input')
 
+                # Restoration uses an app whose AX roots have never been replaced by the AXless fixture.
+                stop_application(fixture)
+                fixture = None
+                original_binary = binary
+                state_path = root / 'restoration.json'
+                binary = app_binary('Restoration', state_path)
+                shutil.copy2(original_binary, binary)
+                pending = helper.call('getApp', {'selector': str(binary.parents[2])})
+                fixture = helper.call('launchApp', {'appHandle': pending['appHandle']})['pid']
+                actual = wait_state(lambda state: bool(state.get('windowId')), 'restoration fixture did not initialize')
+                owner = {'appHandle': pending['appHandle']}
+                window_id = actual['windowId']
+
                 foreground_path = root / 'foreground.json'
                 foreground_binary = app_binary('Foreground', foreground_path)
                 shutil.copy2(binary, foreground_binary)
