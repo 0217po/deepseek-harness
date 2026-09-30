@@ -15,7 +15,8 @@ import subprocess
 import tempfile
 import time
 
-from native_test_support import ROOT, NativeHelper, line, run_cleanup, stop
+from native_test_support import ROOT, NativeHelper, run_cleanup
+from capabilities_e2e import stop_application
 
 
 def main():
@@ -36,35 +37,36 @@ def main():
         with tempfile.TemporaryDirectory(prefix='dsh-cua-axless-') as directory:
             root = Path(directory)
             state_path = root / 'state.json'
-            def app_binary(name):
+            def app_binary(name, state_file):
                 contents = root / (name + '.app') / 'Contents'
                 (contents / 'MacOS').mkdir(parents=True)
                 (contents / 'Info.plist').write_bytes(plistlib.dumps({
                     'CFBundleIdentifier': 'org.deepseek-harness.cua.' + root.name + '.' + name,
                     'CFBundleExecutable': 'fixture', 'CFBundleName': name, 'CFBundlePackageType': 'APPL',
+                    'DSHFixtureStatePath': str(state_file),
                 }))
                 return contents / 'MacOS/fixture'
 
-            binary = app_binary('Target')
+            binary = app_binary('Target', state_path)
             subprocess.run(['swiftc', str(ROOT / 'tests/AxlessFixture.swift'), '-o', str(binary)], check=True)
-            fixture = subprocess.Popen([str(binary), str(state_path)], stdout=subprocess.PIPE,
-                                       text=True, start_new_session=True)
+            pending = helper.call('getApp', {'selector': str(binary.parents[2])})
+            fixture = helper.call('launchApp', {'appHandle': pending['appHandle']})['pid']
             try:
-                assert line(fixture).strip() == 'READY'
 
                 def wait_state(predicate, description):
                     deadline = time.monotonic() + 5
                     while True:
-                        state = json.loads(state_path.read_text())
-                        assert state['pid'] == fixture.pid
-                        if predicate(state):
-                            return state
+                        state = json.loads(state_path.read_text()) if state_path.exists() else {}
+                        if state:
+                            assert state['pid'] == fixture
+                            if predicate(state):
+                                return state
                         if time.monotonic() >= deadline:
                             raise AssertionError(description + ': ' + json.dumps(state))
                         time.sleep(0.025)
 
                 actual = wait_state(lambda state: not state['hiddenAX'], 'fixture did not initialize')
-                app = helper.call('getApp', {'selector': str(fixture.pid)})
+                app = helper.call('getApp', {'selector': str(fixture)})
                 owner = {'appHandle': app['appHandle']}
                 window_id = actual['windowId']
                 params = {**owner, 'windowId': window_id, 'maxElements': 100, 'maxDepth': 15}
@@ -73,7 +75,7 @@ def main():
                 buttons = [element for element in first['elements'] if element['title'] == 'Increment AXless fixture']
                 assert len(buttons) == 1, first
                 old_index = {**owner, 'snapshotId': first['snapshotId'], 'elementIndex': buttons[0]['index']}
-                os.kill(fixture.pid, signal.SIGUSR1)
+                os.kill(fixture, signal.SIGUSR1)
                 actual = wait_state(lambda state: state['hiddenAX'], 'fixture did not remove its AX roots')
                 empty = helper.call('getState', params)
                 assert empty['tree'] == '' and empty['elements'] == [] and empty['truncated'] is False, empty
@@ -85,13 +87,13 @@ def main():
                 x, y = actual['buttonPoint']
                 helper.call('click', {**owner, 'windowId': window_id, 'snapshotId': empty['snapshotId'], 'x': x, 'y': y})
                 wait_state(lambda state: state['count'] == 1, 'AXless coordinate click did not reach the native button exactly once')
-                os.kill(fixture.pid, signal.SIGUSR2)
+                os.kill(fixture, signal.SIGUSR2)
                 wait_state(lambda state: not state['hiddenAX'], 'fixture did not restore AX')
                 recovered = helper.call('getState', params)
                 assert 'Increment AXless fixture' in recovered['tree']
                 helper.call('click', {**owner, 'windowId': window_id, 'snapshotId': empty['snapshotId'], 'x': x, 'y': y}, 'STALE_SNAPSHOT')
 
-                os.kill(fixture.pid, signal.SIGWINCH)
+                os.kill(fixture, signal.SIGWINCH)
                 actual = wait_state(lambda state: state['resizeCount'] == 1, 'fixture did not resize')
                 for snapshot in [{}, {'snapshotId': recovered['snapshotId']}]:
                     target = {**owner, 'windowId': window_id, **snapshot}
@@ -105,12 +107,12 @@ def main():
                 helper.call('click', {**owner, 'windowId': window_id, 'x': x, 'y': y})
                 wait_state(lambda state: state['count'] == 2, 'fresh AX did not admit resized-window input')
 
-                os.kill(fixture.pid, signal.SIGURG)
+                os.kill(fixture, signal.SIGURG)
                 wait_state(lambda state: state['moved'], 'fixture did not move')
                 helper.call('click', {**owner, 'windowId': window_id, 'x': x, 'y': y})
                 wait_state(lambda state: state['count'] == 3, 'window movement invalidated local coordinates')
 
-                os.kill(fixture.pid, signal.SIGWINCH)
+                os.kill(fixture, signal.SIGWINCH)
                 actual = wait_state(lambda state: state['resizeCount'] == 2, 'fixture did not resize again')
                 helper.call('screenshot', {**owner, 'windowId': window_id})
                 x, y = actual['buttonPoint']
@@ -118,15 +120,14 @@ def main():
                 wait_state(lambda state: state['count'] == 4, 'fresh screenshot did not admit resized-window input')
 
                 foreground_path = root / 'foreground.json'
-                foreground_binary = app_binary('Foreground')
+                foreground_binary = app_binary('Foreground', foreground_path)
                 shutil.copy2(binary, foreground_binary)
-                foreground = subprocess.Popen([str(foreground_binary), str(foreground_path)], stdout=subprocess.PIPE,
-                                              text=True, start_new_session=True)
-                assert line(foreground).strip() == 'READY'
+                pending_foreground = helper.call('getApp', {'selector': str(foreground_binary.parents[2])})
+                foreground = helper.call('launchApp', {'appHandle': pending_foreground['appHandle']})['pid']
                 wait_state(lambda state: not state['active'], 'foreground fixture did not take focus')
                 for number, key, target in [(signal.SIGALRM, 'hidden', owner),
                                             (signal.SIGHUP, 'minimized', {**owner, 'windowId': window_id})]:
-                    os.kill(fixture.pid, number)
+                    os.kill(fixture, number)
                     wait_state(lambda state: state[key], 'fixture did not ' + key)
                     restored = helper.call('show', target)
                     actual = wait_state(lambda state: not state[key], 'show did not restore ' + key)
@@ -138,11 +139,13 @@ def main():
                 helper.eof()
                 print('PASS: AXless input, resize guards, fresh observation, movement and background unhide/unminimize')
             finally:
-                stop(fixture)
+                run_cleanup(lambda: stop_application(foreground) if foreground is not None else None,
+                            lambda: stop_application(fixture))
                 fixture = None
+                foreground = None
     finally:
-        run_cleanup(lambda: stop(foreground) if foreground is not None else None,
-                    lambda: stop(fixture) if fixture is not None else None,
+        run_cleanup(lambda: stop_application(foreground) if foreground is not None else None,
+                    lambda: stop_application(fixture) if fixture is not None else None,
                     helper.stop)
 
 
