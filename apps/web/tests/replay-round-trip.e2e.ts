@@ -19,7 +19,7 @@ import type { Browser, Page, Route, WebSocketRoute } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { ToolCallId, expandAssistantStream } from '@deepseek-ai/dsh-llm'
-import type { Session, SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
+import { SessionId, type Session, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SessionListValue } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import {
@@ -232,22 +232,34 @@ describe('web e2e: fresh round trip through the real assembly', () => {
   })
 
   it('exposes the assembled Web URL to the real bash tool', async () => {
-    if (settledSessionId === undefined) throw new Error('the drive turn did not publish a session id')
-    const agent = scaffold.ctx.agents.get(settledSessionId)
-    if (agent === undefined) throw new Error(`the settled Web agent ${settledSessionId} is no longer live`)
-    const result = await scaffold.ctx.tools.execute({
-      signal: AbortSignal.timeout(5_000),
-      callId: ToolCallId('web-url-probe'),
-      name: 'bash',
-      arguments: {
-        command: 'printf \'%s\\n\' "$DSH_WEB_URL"',
-        description: 'Print current Web runtime',
-      },
-      agent,
-    })
-    expect(result.isError).toBe(false)
-    expect(result.content.filter(block => block.type === 'text').map(block => block.text).join(''))
-      .toBe(`${scaffold.baseUrl}\n`)
+    // This host probe records job events too; keep it out of the shared
+    // conversation fixture that other browser scenarios replay.
+    const probe = await launchWebScaffold()
+    try {
+      const handle = await probe.ctx.agents.create({
+        sessionId: SessionId('web-url-probe'),
+        setup: agentCtx => probe.ctx.agentPresets.mount(agentCtx).then(() => undefined),
+      })
+      try {
+        const result = await probe.ctx.tools.execute({
+          signal: AbortSignal.timeout(5_000),
+          callId: ToolCallId('web-url-probe'),
+          name: 'bash',
+          arguments: {
+            command: 'printf \'%s\\n\' "$DSH_WEB_URL"',
+            description: 'Print current Web runtime',
+          },
+          agent: handle.agent,
+        })
+        expect(result.isError).toBe(false)
+        expect(result.content.filter(block => block.type === 'text').map(block => block.text).join(''))
+          .toBe(`${probe.baseUrl}\n`)
+      } finally {
+        await handle.dispose()
+      }
+    } finally {
+      await probe.close()
+    }
   })
 
   it.skipIf(MODE === 'record')('rendered the settled turn: markdown, tool row, composer restore', async () => {
