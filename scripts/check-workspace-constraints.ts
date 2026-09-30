@@ -17,7 +17,6 @@ import { hasTypertRemoteNavigation, isForbiddenPublicationFile } from './publica
 import type { DshBundleManifest } from '../packages/util/package-manifest/src/types.ts'
 import { OPTIONAL_BUNDLES, bundlePatchFiles } from '../packages/boot/app-boot/src/profile.ts'
 import { collectProjectReferenceFaceViolations } from './project-reference-faces.ts'
-import { KOFFI_VERSION } from './koffi-policy.ts'
 
 const root = resolve(import.meta.dirname, '..')
 // Publication rules cover these package trees; dependency rules read all pnpm members.
@@ -552,6 +551,8 @@ function checkRepositoryVersion(): string[] {
 const dependencySections = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'] as const
 /** Dependency sections present in an installed runtime. */
 const runtimeDependencySections = ['dependencies', 'optionalDependencies', 'peerDependencies'] as const
+/** Koffi version qualified for source builds without optional native prebuilts. */
+const KOFFI_VERSION = '3.1.1'
 
 /**
  * Prevent an official runtime from requiring an experimental package. The dsh installation's `dependencies`
