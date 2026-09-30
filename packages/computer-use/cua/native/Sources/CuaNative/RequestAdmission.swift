@@ -27,6 +27,11 @@ struct RequestParameters: Sendable {
         return value
     }
     func optionalString(_ key: String) throws -> String? { contains(key) ? try string(key) : nil }
+    func optionalBoolean(_ key: String) throws -> Bool? {
+        guard let raw = values[key] else { return nil }
+        guard case .bool(let value) = raw else { throw Self.invalid("\(key) must be a boolean") }
+        return value
+    }
     func number(_ key: String) throws -> Double {
         guard let value = values[key]?.number, value.isFinite else { throw Self.invalid("\(key) must be finite") }
         return value

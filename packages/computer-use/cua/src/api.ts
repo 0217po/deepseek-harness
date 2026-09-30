@@ -57,7 +57,11 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
     const result: CuaSurface = {
       async getAXState(options) {
         observed = undefined
-        const state = StateResult.parse(await call('getState', { appHandle, ...selectedWindow === undefined ? {} : { windowId: selectedWindow } }))
+        const state = StateResult.parse(await call('getState', { appHandle,
+          ...selectedWindow === undefined ? {} : { windowId: selectedWindow },
+          ...options?.includeMenus === undefined ? {} : { includeMenus: options.includeMenus },
+          ...options?.details === undefined ? {} : { details: options.details },
+        }))
         if (state.appHandle !== appHandle || state.pid !== pid || state.windowId !== (selectedWindow ?? null)) {
           throw new Error('Native observation belongs to another application or window')
         }

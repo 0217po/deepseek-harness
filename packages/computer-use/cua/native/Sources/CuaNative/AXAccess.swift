@@ -13,9 +13,9 @@ struct AXProjection {
     let truncated: Bool
 }
 
-enum AXNodeObservation {
-    case children([AXUIElement])
-    case element(role: String, attribute: (String) throws -> CFTypeRef?)
+struct AXNodeObservation {
+    let role: String
+    let attribute: (String) throws -> CFTypeRef?
 }
 
 final class AXAccess {
@@ -50,7 +50,7 @@ final class AXAccess {
         // and accessibility children remain readable.
         guard error == .failure else { return false }
         let optional: Set<String> = ["AXValue", "AXTitle", "AXDescription", "AXIdentifier", "AXPlaceholderValue",
-                                     "AXSubrole", "AXEnabled", "AXSelected", "AXSelectedText", "AXSelectedTextRange", "AXPosition", "AXSize", "AXMain", "AXMinimized"]
+                                     "AXSubrole", "AXHelp", "AXURL", "AXFocused", "AXExpanded", "AXEnabled", "AXSelected", "AXSelectedText", "AXSelectedTextRange", "AXPosition", "AXSize", "AXMain", "AXMinimized"]
         return optional.contains(attribute)
     }
     static func actionsUnavailable(_ error: AXError) -> Bool {
@@ -122,11 +122,11 @@ final class AXAccess {
         guard let result = names as? [String] else { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility actions are not strings") }
         return result
     }
-    func writable(_ element: AXUIElement, _ name: String) throws -> Bool {
+    func writable(_ element: AXUIElement, _ name: String) throws -> Bool? {
         try prepare(element)
         var result: DarwinBoolean = false
         let error = AXUIElementIsAttributeSettable(element, name as CFString, &result)
-        if absent(error) { return false }
+        if absent(error) { return nil }
         guard error == .success else { throw failure(error, "read attribute writability") }
         return result.boolValue
     }
@@ -176,7 +176,7 @@ final class AXAccess {
     }
     func selectText(_ element: AXUIElement, text: String, prefix: String?, suffix: String?, mode: String) throws {
         try requireEnabled(element)
-        guard try writable(element, "AXSelectedTextRange"), let original = try string(element, "AXValue") else {
+        guard try writable(element, "AXSelectedTextRange") == true, let original = try string(element, "AXValue") else {
             throw NativeFailure(code: "UNSUPPORTED", message: "This control does not expose writable text selection")
         }
         var range = try TextSelection.range(in: original, text: text, prefix: prefix, suffix: suffix, mode: mode)
@@ -250,7 +250,8 @@ final class AXAccess {
     private func metadata(_ element: AXUIElement) throws -> [String: CFTypeRef]? {
         try prepare(element)
         let names = ["AXRole", "AXTitle", "AXValue", "AXPlaceholderValue", "AXDescription", "AXEnabled",
-                     "AXIdentifier", "AXPosition", "AXSize", "AXChildren", "AXSelected", "AXSelectedText", "AXSelectedTextRange"]
+                     "AXIdentifier", "AXPosition", "AXSize", "AXChildren", "AXSelected", "AXSelectedText", "AXSelectedTextRange",
+                     "AXSubrole", "AXHelp", "AXURL", "AXFocused", "AXExpanded"]
         var output: CFArray?
         let error = AXUIElementCopyMultipleAttributeValues(element, names as CFArray, [], &output)
         if error == .notImplemented || error == .attributeUnsupported { return nil }
@@ -279,8 +280,7 @@ final class AXAccess {
         return value
     }
 
-    // Only consumed attributes are decoded: transparent containers require role
-    // and children even when optional metadata carries an accessibility error.
+    // Decode metadata lazily while retaining errors for every consumed attribute.
     func nodeObservation(attributes: [String: CFTypeRef]?, fallback: @escaping (String) throws -> CFTypeRef?) throws -> AXNodeObservation {
         func observed(_ name: String) throws -> CFTypeRef? {
             guard let attributes else { return try fallback(name) }
@@ -288,10 +288,7 @@ final class AXAccess {
             return try Self.batchAttribute(value, name: name)
         }
         let role = try stringValue(observed("AXRole"), attribute: "AXRole") ?? "AXUnknown"
-        if role == "AXGroup" || role == "AXScrollArea" {
-            return .children(try childValues(observed("AXChildren"), attribute: "AXChildren"))
-        }
-        return .element(role: role, attribute: observed)
+        return AXNodeObservation(role: role, attribute: observed)
     }
 
     private func enableAX(_ app: AXUIElement, identity: ProcessIdentity) throws {
@@ -304,7 +301,7 @@ final class AXAccess {
         if error == .success { enabledProcesses.insert(key) }
     }
 
-    func project(identity: ProcessIdentity, windowID requested: UInt32?, maxElements: Int, maxDepth: Int) throws -> AXProjection {
+    func project(identity: ProcessIdentity, windowID requested: UInt32?, maxElements: Int, maxDepth: Int, includeMenus: Bool = false, details: Bool = false) throws -> AXProjection {
         let app = AXUIElementCreateApplication(identity.pid)
         try enableAX(app, identity: identity)
         var roots = try children(app)
@@ -356,77 +353,82 @@ final class AXAccess {
         }
         var visited: [CFHashCode: [AXUIElement]] = [:]
         var count = 0
-        var truncated = false
-        var lines: [String] = []
+        var elementLimitReached = false
+        var depthLimitReached = false
+        var menusCollapsed = false
+        var lines = ["AX scope=\(requested == nil ? "application" : "window") offsets=UTF-16\(details ? " bounds=global-points" : "")"]
         var elements: [JSONValue] = []
         var indexed: [Int: AXUIElement] = [:]
-        let textRoles: Set<String> = ["AXTextField", "AXTextArea", "AXComboBox", "AXStaticText"]
-        let valueRoles: Set<String> = ["AXTextField", "AXTextArea", "AXComboBox", "AXSlider", "AXStepper", "AXCheckBox", "AXRadioButton"]
         func walk(_ element: AXUIElement, level: Int, depth: Int) throws {
             try cancellation.check()
             let hash = CFHash(element)
             if visited[hash, default: []].contains(where: { CFEqual($0, element) }) { return }
-            guard count < maxElements, depth <= maxDepth else { truncated = true; return }
+            guard count < maxElements else { elementLimitReached = true; return }
+            guard depth <= maxDepth else { depthLimitReached = true; return }
             visited[hash, default: []].append(element)
             count += 1
-            let role: String
-            let observed: (String) throws -> CFTypeRef?
-            switch try nodeObservation(attributes: metadata(element), fallback: { try self.attribute(element, $0) }) {
-            case .children(let children):
-                for child in children { try walk(child, level: level, depth: depth + 1) }
-                return
-            case .element(let value, let read):
-                role = value
-                observed = read
-            }
+            let observation = try nodeObservation(attributes: metadata(element), fallback: { try self.attribute(element, $0) })
+            let role = observation.role
+            let observed = observation.attribute
             let title = try stringValue(observed("AXTitle"), attribute: "AXTitle")
-            let rawValue = try controlValue(observed("AXValue"))
-            let value: String?
-            if let rawValue, !rawValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { value = rawValue }
-            else { value = try stringValue(observed("AXPlaceholderValue"), attribute: "AXPlaceholderValue") }
+            let value = try controlValue(observed("AXValue"))
+            let placeholder = try stringValue(observed("AXPlaceholderValue"), attribute: "AXPlaceholderValue")
             let description = try stringValue(observed("AXDescription"), attribute: "AXDescription")
             let actionNames = try self.actions(element)
-            let valueWritable: Bool
-            if valueRoles.contains(role) { valueWritable = try writable(element, "AXValue") }
-            else { valueWritable = false }
+            let valueWritable = AXTextNode.valueRoles.contains(role) ? try writable(element, "AXValue") : nil
             let enabled = try booleanValue(observed("AXEnabled"), attribute: "AXEnabled")
             let selected = try booleanValue(observed("AXSelected"), attribute: "AXSelected")
-            let selectionWritable = textRoles.contains(role) ? try writable(element, "AXSelectedTextRange") : false
-            let selectedRange = textRoles.contains(role) ? try textRange(observed("AXSelectedTextRange")) : nil
-            let selectedText = textRoles.contains(role) ? try stringValue(observed("AXSelectedText"), attribute: "AXSelectedText") : nil
-            let addressable = enabled != false && (!actionNames.isEmpty || valueWritable || selectionWritable)
-            let meaningful = [title, value, description].contains { !($0?.isEmpty ?? true) }
-            if !addressable && !meaningful && role != "AXWindow" && role != "AXSheet" {
+            let selectionWritable = AXTextNode.textRoles.contains(role) ? try writable(element, "AXSelectedTextRange") : nil
+            let selectedRange = AXTextNode.textRoles.contains(role) ? try textRange(observed("AXSelectedTextRange")) : nil
+            let selectedText = AXTextNode.textRoles.contains(role) ? try stringValue(observed("AXSelectedText"), attribute: "AXSelectedText") : nil
+            let identifier = try stringValue(observed("AXIdentifier"), attribute: "AXIdentifier")
+            let subrole = try stringValue(observed("AXSubrole"), attribute: "AXSubrole")
+            let help = try stringValue(observed("AXHelp"), attribute: "AXHelp")
+            let rawURL = try observed("AXURL")
+            let url: String?
+            if let rawURL, CFGetTypeID(rawURL) == CFURLGetTypeID() { url = (rawURL as? URL)?.absoluteString }
+            else { url = try stringValue(rawURL, attribute: "AXURL") }
+            let focused = try booleanValue(observed("AXFocused"), attribute: "AXFocused")
+            let expanded = try booleanValue(observed("AXExpanded"), attribute: "AXExpanded")
+            let addressable = enabled != false && (!actionNames.isEmpty || valueWritable == true || selectionWritable == true)
+            var node = AXTextNode(index: nil, role: role, title: title, value: value, description: description,
+                                  actions: actionNames, enabled: enabled, valueWritable: valueWritable,
+                                  selectionWritable: selectionWritable, selected: selected, selectedRange: selectedRange,
+                                  selectedText: selectedText, subrole: subrole, placeholder: placeholder, help: help,
+                                  identifier: identifier, url: url, focused: focused, expanded: expanded)
+            node.validateSelection()
+            if node.transparent || (!addressable && !node.hasMeaning && role != "AXWindow" && role != "AXSheet") {
                 for child in try childValues(observed("AXChildren"), attribute: "AXChildren") { try walk(child, level: level, depth: depth + 1) }
                 return
             }
             let index: Int? = addressable ? indexed.count : nil
             if let index { indexed[index] = element }
-            let node = AXTextNode(index: index, role: role, title: title, value: value, description: description,
-                                  actions: actionNames, enabled: enabled, valueWritable: valueWritable,
-                                  selectionWritable: selectionWritable, selected: selected, selectedRange: selectedRange,
-                                  selectedText: selectedText)
-            lines.append(AXTextFormatter.line(node, level: level))
+            node.index = index
+            let frame: WindowBounds?
+            if let position = try observed("AXPosition") { frame = try bounds(position: position, size: observed("AXSize")) }
+            else { frame = nil }
+            node.bounds = frame
+            lines.append(AXTextFormatter.line(node, level: level, details: details))
             if let index {
-                let frame: WindowBounds?
-                if let position = try observed("AXPosition") { frame = try bounds(position: position, size: observed("AXSize")) }
-                else { frame = nil }
                 let frameJSON: JSONValue = frame.map { .array([.number($0.x), .number($0.y), .number($0.width), .number($0.height)]) } ?? .null
                 elements.append(.object([
                     "index": .number(Double(index)), "role": .string(role), "title": title.map(JSONValue.string) ?? .null,
                     "value": value.map(JSONValue.string) ?? .null, "description": description.map(JSONValue.string) ?? .null,
-                    "identifier": try stringValue(observed("AXIdentifier"), attribute: "AXIdentifier").map(JSONValue.string) ?? .null,
+                    "identifier": identifier.map(JSONValue.string) ?? .null,
                     "bounds": frameJSON, "actions": .array(actionNames.map(JSONValue.string)), "enabled": enabled.map(JSONValue.bool) ?? .null,
-                    "valueWritable": .bool(valueWritable), "selectionWritable": .bool(selectionWritable),
+                    "valueWritable": valueWritable.map(JSONValue.bool) ?? .null, "selectionWritable": selectionWritable.map(JSONValue.bool) ?? .null,
                     "selected": selected.map(JSONValue.bool) ?? .null,
-                    "selectedText": selectedText.map(JSONValue.string) ?? .null,
-                    "selectedRange": selectedRange.map { .array([.number(Double($0.location)), .number(Double($0.length))]) } ?? .null,
+                    "selectedText": node.selectedText.map(JSONValue.string) ?? .null,
+                    "selectedRange": node.selectedRange.map { .array([.number(Double($0.location)), .number(Double($0.length))]) } ?? .null,
                 ]))
             }
+            if role == "AXMenuBarItem" && !includeMenus { menusCollapsed = true; return }
             for child in try childValues(observed("AXChildren"), attribute: "AXChildren") { try walk(child, level: level + 1, depth: depth + 1) }
         }
         for root in roots { try walk(root, level: 0, depth: 0) }
-        if truncated { lines.append(AXTextFormatter.truncated) }
+        if menusCollapsed { lines.append("Menu contents omitted; request includeMenus=true to expand.") }
+        let truncated = elementLimitReached || depthLimitReached
+        if truncated { lines.append(AXTextFormatter.truncation(maxElements: elementLimitReached ? maxElements : nil, maxDepth: depthLimitReached ? maxDepth : nil)) }
         return AXProjection(tree: lines.joined(separator: "\n"), elements: elements, indexed: indexed, focusedWindowID: focusedID, truncated: truncated)
     }
 

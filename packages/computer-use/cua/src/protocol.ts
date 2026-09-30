@@ -30,7 +30,10 @@ export const Request = z.discriminatedUnion('method', [
   operation('getApp', { selector: z.string().min(1) }),
   operation('activate', app),
   operation('listWindows', app),
-  operation('getState', { ...app, windowId: id.optional() }),
+  operation('getState', { ...app, windowId: id.optional(),
+    includeMenus: z.boolean().optional().describe('Expand menu contents; omitted or false shows menu-bar entries only.'),
+    details: z.boolean().optional().describe('Include identifiers, global-point bounds and complete action names.'),
+  }),
   z.object({ method: z.literal('click'), params: z.union([
     z.object({ ...snapshot, ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).optional() }).strict(),
     z.object({ ...coordinate, ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).optional() }).strict(),

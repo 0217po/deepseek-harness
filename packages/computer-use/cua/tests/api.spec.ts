@@ -479,3 +479,12 @@ describe('input actions', () => {
     expect(f.dispatch).toHaveBeenCalledTimes(calls)
   })
 })
+
+it('expands menu contents and details only for the requested observation', async () => {
+  const f = fixture()
+  const app = await f.api.getApp('Editor')
+  await app.getAXState({ includeMenus: true, details: true, emit: false })
+  expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'getState', params: { appHandle: selected.appHandle, includeMenus: true, details: true } })
+  await app.getAXState({ includeMenus: false, details: false })
+  expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'getState', params: { appHandle: selected.appHandle, includeMenus: false, details: false } })
+})

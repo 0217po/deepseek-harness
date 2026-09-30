@@ -104,3 +104,15 @@ func rejectsInvalidWindowIDs(_ value: String) throws {
         }
     }
 }
+
+@Test func disclosureFlagsRejectNonBooleanWireValues() throws {
+    for source in ["true", "false"] {
+        let params = try RequestParameters(NativeRequest(data: Data("{\"id\":\"read\",\"method\":\"getState\",\"params\":{\"details\":\(source)}}".utf8)))
+        #expect(try params.optionalBoolean("details") == (source == "true"))
+        #expect(try params.optionalBoolean("includeMenus") == nil)
+    }
+    for source in ["1", "null", "\"true\""] {
+        let params = try RequestParameters(NativeRequest(data: Data("{\"id\":\"read\",\"method\":\"getState\",\"params\":{\"includeMenus\":\(source)}}".utf8)))
+        #expect(throws: NativeFailure.self) { try params.optionalBoolean("includeMenus") }
+    }
+}

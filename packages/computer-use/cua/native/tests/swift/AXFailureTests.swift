@@ -92,40 +92,26 @@ private func wrappedAXError(_ code: AXError) throws -> AXValue {
         Issue.record("Unexpected fallback read: \(name)")
         return nil
     }
-    guard case .element(let role, let attribute) = observation else { Issue.record("Window was flattened"); return }
+    let (role, attribute) = (observation.role, observation.attribute)
     #expect(role == "AXWindow")
     #expect(CFEqual(try #require(try attribute("AXTitle")), "Window" as CFString))
 }
 
 @Test(arguments: ["AXGroup", "AXScrollArea"])
-func transparentNodesIgnoreUnconsumedBatchFailures(role: String) throws {
+func containersRetainTheirOwnMetadata(role: String) throws {
     let access = AXAccess(timeout: 1, cancellation: CancellationLatch())
-    let child = AXUIElementCreateApplication(ProcessInfo.processInfo.processIdentifier)
-    let observation = try access.nodeObservation(attributes: [
-        "AXRole": role as CFString, "AXChildren": [child] as CFArray,
-        "AXTitle": try wrappedAXError(.invalidUIElement), "AXValue": try wrappedAXError(.cannotComplete),
-        "AXPosition": kCFBooleanTrue,
-    ]) { _ in Issue.record("Batch unexpectedly fell back"); return nil }
-    guard case .children(let children) = observation else { Issue.record("Container was not flattened"); return }
-    #expect(children.count == 1)
-    #expect(CFEqual(try #require(children.first), child))
+    let observation = try access.nodeObservation(attributes: ["AXRole": role as CFString, "AXTitle": "Results" as CFString]) { _ in nil }
+    #expect(observation.role == role)
+    #expect(CFEqual(try #require(try observation.attribute("AXTitle")), "Results" as CFString))
 }
 
 @Test(arguments: ["AXGroup", "AXScrollArea"])
-func transparentNodeFallbackReadsOnlyRoleAndChildren(role: String) throws {
+func consumedContainerMetadataPreservesStaleAndCommunicationErrors(role: String) throws {
     let access = AXAccess(timeout: 1, cancellation: CancellationLatch())
-    var reads: [String] = []
-    let observation = try access.nodeObservation(attributes: nil) { name in
-        reads.append(name)
-        switch name {
-        case "AXRole": return role as CFString
-        case "AXChildren": return [] as CFArray
-        default: Issue.record("Unexpected container metadata read: \(name)"); return nil
-        }
+    for error in [AXError.invalidUIElement, .cannotComplete] {
+        let observation = try access.nodeObservation(attributes: ["AXRole": role as CFString, "AXTitle": try wrappedAXError(error)]) { _ in nil }
+        #expect(throws: NativeFailure.self) { try observation.attribute("AXTitle") }
     }
-    guard case .children(let children) = observation else { Issue.record("Container fallback was not flattened"); return }
-    #expect(children.isEmpty)
-    #expect(reads == ["AXRole", "AXChildren"])
 }
 
 @Test func ordinaryNodeFallbackRetainsIndividualAttributeReads() throws {
@@ -135,7 +121,7 @@ func transparentNodeFallbackReadsOnlyRoleAndChildren(role: String) throws {
         reads.append(name)
         return name == "AXRole" ? "AXButton" as CFString : "Title" as CFString
     }
-    guard case .element(let role, let attribute) = observation else { Issue.record("Button fallback was flattened"); return }
+    let (role, attribute) = (observation.role, observation.attribute)
     #expect(role == "AXButton")
     #expect(reads == ["AXRole"])
     #expect(CFEqual(try #require(try attribute("AXTitle")), "Title" as CFString))
@@ -146,8 +132,7 @@ func transparentNodeFallbackReadsOnlyRoleAndChildren(role: String) throws {
     let access = AXAccess(timeout: 1, cancellation: CancellationLatch())
     for missing in [NSNull() as CFTypeRef, try wrappedAXError(.noValue)] {
         let observation = try access.nodeObservation(attributes: ["AXRole": missing]) { _ in nil }
-        guard case .element(let role, _) = observation else { Issue.record("Unknown role was flattened"); return }
-        #expect(role == "AXUnknown")
+        #expect(observation.role == "AXUnknown")
     }
     do {
         _ = try access.nodeObservation(attributes: ["AXRole": kCFBooleanTrue]) { _ in nil }
@@ -165,7 +150,8 @@ func transparentNodeFallbackReadsOnlyRoleAndChildren(role: String) throws {
             var attributes: [String: CFTypeRef] = ["AXRole": "AXGroup" as CFString, "AXChildren": [] as CFArray]
             attributes[name] = try wrappedAXError(code)
             do {
-                _ = try access.nodeObservation(attributes: attributes) { _ in nil }
+                let observation = try access.nodeObservation(attributes: attributes) { _ in nil }
+                _ = try observation.attribute("AXChildren")
                 Issue.record("Structural node error was ignored")
             } catch let error as NativeFailure {
                 #expect(error.accessibilityError == code.rawValue)
@@ -175,6 +161,6 @@ func transparentNodeFallbackReadsOnlyRoleAndChildren(role: String) throws {
         }
     }
     #expect(throws: NativeFailure.self) {
-        try access.nodeObservation(attributes: ["AXRole": "AXGroup" as CFString, "AXChildren": "invalid" as CFString]) { _ in nil }
+        try access.nodeObservation(attributes: ["AXRole": "AXGroup" as CFString, "AXChildren": try wrappedAXError(.illegalArgument)]) { _ in nil }.attribute("AXChildren")
     }
 }

@@ -70,7 +70,7 @@ function call(requestId, method, params) {
     if (axless) return { appHandle: app.appHandle, pid: 9, windowId: 8, snapshotId,
       tree: '', elements: [], windows: [axlessWindow], truncated: false }
     return { appHandle: app.appHandle, pid: 9, windowId: params.windowId ?? null,
-      snapshotId: `fixture-snapshot-${generation}`, tree: `0 AXButton Increment\n1 AXTextField value: ${value}\n2 AXStaticText Count: ${count}`,
+      snapshotId: `fixture-snapshot-${generation}`, tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16${params.details ? ' bounds=global-points' : ''}\n- [0] AXButton "Increment"${params.details ? ' id="increment" actions=["AXPress"] bounds=[60,80,100,20]' : ''}\n- [1] AXTextField valueWritable=true selectionWritable=true value=${JSON.stringify(value)} placeholder="Fixture text"\n- AXStaticText "Count: ${count}"\n- [2] AXMenuBarItem "File"${params.includeMenus ? '\n  - [3] AXMenuItem "Fixture command"' : '\nMenu contents omitted; request includeMenus=true to expand.'}`,
       elements: [{ index: 0, role: 'AXButton', title: 'Increment', value: null, description: null,
         identifier: null, bounds: [60, 80, 100, 20], actions: ['AXPress'], enabled: true }],
       windows: [params.windowId === 9 ? transformedWindow : window], truncated: false }

@@ -80,7 +80,7 @@
           "type": "tool-call",
           "id": "cua-native-3",
           "name": "cua",
-          "arguments": "{\"method\":\"getState\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7}}"
+          "arguments": "{\"method\":\"getState\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"includeMenus\":true,\"details\":true}}"
         }
       },
       {

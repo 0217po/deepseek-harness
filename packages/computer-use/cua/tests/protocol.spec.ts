@@ -36,3 +36,10 @@ it.each([
     bounds: { x: 0, y: 0, width: 10, height: 10 }, coordinateSpace: 'window-points', ...invalid,
   }).success).toBe(false)
 })
+
+it('accepts disclosure options without accepting host traversal limits', () => {
+  const params = { appHandle: 'app', includeMenus: true, details: false }
+  expect(Request.parse({ method: 'getState', params })).toEqual({ method: 'getState', params })
+  expect(Request.safeParse({ method: 'getState', params: { ...params, details: 'all' } }).success).toBe(false)
+  expect(Request.safeParse({ method: 'getState', params: { ...params, maxDepth: 100 } }).success).toBe(false)
+})

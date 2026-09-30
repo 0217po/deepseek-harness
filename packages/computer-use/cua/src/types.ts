@@ -28,8 +28,15 @@ export interface CuaObservationSink {
 }
 /** Observations emit by default. Returned values are unaffected by this option. */
 export interface CuaObservationOptions { emit?: boolean }
-/** Diffing is not implemented; all reads return a complete tree. */
-export interface CuaAxOptions extends CuaObservationOptions { disableDiffing?: boolean }
+/** Full observations of the requested content; each read replaces this surface's indices. */
+export interface CuaAxOptions extends CuaObservationOptions {
+  /** Reserved compatibility option; observations are never diffs. */
+  disableDiffing?: boolean
+  /** Expand menu contents. The default shows menu-bar entries only. */
+  includeMenus?: boolean
+  /** Include identifiers, global-point bounds and complete action names. */
+  details?: boolean
+}
 /** Reported permissions and operations; null sessionLocked means no usable console session was verified. */
 export type CuaCapabilities = z.output<typeof CapabilitiesResult>
 /** App discovery result accepted by getApp. */
@@ -65,8 +72,8 @@ export interface CuaObservation { state: string; screenshot: Uint8Array }
  */
 export interface CuaSurface {
   /**
-   * Read a fresh full tree.
-   * @param options - emission and diff options.
+   * Read fresh AX text, with menu contents collapsed by default.
+   * @param options - emission, menu expansion and field detail options.
    * @returns AX text with element indices.
    */
   getAXState(options?: CuaAxOptions): Promise<string>

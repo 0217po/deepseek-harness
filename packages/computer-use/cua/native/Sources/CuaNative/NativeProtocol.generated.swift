@@ -8,7 +8,7 @@ enum NativeProtocol {
         "findApps": ["maxAppMatches", "query"],
         "getApp": ["selector"],
         "getCapabilities": [],
-        "getState": ["appHandle", "maxDepth", "maxElements", "windowId"],
+        "getState": ["appHandle", "details", "includeMenus", "maxDepth", "maxElements", "windowId"],
         "launchApp": ["appHandle"],
         "listApps": [],
         "listWindows": ["appHandle"],

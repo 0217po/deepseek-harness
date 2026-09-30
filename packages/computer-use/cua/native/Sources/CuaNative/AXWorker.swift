@@ -158,8 +158,16 @@ actor AXWorker {
         }
     }
     static func actionKey(_ value: String) -> String {
-        let name = value.hasPrefix("AX") ? String(value.dropFirst(2)) : value
+        let name = AXTextFormatter.actionName(value)
         return name.filter { !$0.isWhitespace }.lowercased()
+    }
+    static func resolveAction(_ requested: String, names: [String]) throws -> String {
+        if names.contains(requested) { return requested }
+        let matches = names.filter { actionKey($0) == actionKey(requested) }
+        guard matches.count == 1, let action = matches.first else {
+            throw NativeFailure(code: "NATIVE_ERROR", message: "Action is missing or ambiguous; read details=true and use its complete name")
+        }
+        return action
     }
     static var actionResult: JSONValue { .object(["dispatched": .bool(true), "verified": .bool(false)]) }
 
@@ -238,7 +246,8 @@ actor AXWorker {
             let projection: AXProjection
             do {
                 projection = try ax().project(identity: identity, windowID: window,
-                    maxElements: params.integer("maxElements", in: 1...10000), maxDepth: params.integer("maxDepth", in: 1...100))
+                    maxElements: params.integer("maxElements", in: 1...10000), maxDepth: params.integer("maxDepth", in: 1...100),
+                    includeMenus: params.optionalBoolean("includeMenus") ?? false, details: params.optionalBoolean("details") ?? false)
             } catch let failure as NativeFailure {
                 throw Self.observationFailure(failure)
             }
@@ -276,9 +285,7 @@ actor AXWorker {
         case "performSecondaryAction":
             let selected = try element(handle, params)
             let requested = try params.string("action")
-            guard let action = try ax().actions(selected).first(where: { Self.actionKey($0) == Self.actionKey(requested) }) else {
-                throw NativeFailure(code: "NATIVE_ERROR", message: "Element does not advertise this action; refresh getAXState")
-            }
+            let action = try Self.resolveAction(requested, names: ax().actions(selected))
             if action == "AXRaise" {
                 try ax().requireEnabled(selected)
                 return .foreground(ForegroundPlan(appHandle: handle, identity: identity, snapshotID: try params.string("snapshotId"),
