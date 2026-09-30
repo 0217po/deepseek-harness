@@ -1,7 +1,7 @@
 /** Object facade over logged native operations; its caller owns evaluator persistence. */
 import { Buffer } from 'node:buffer'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, Request, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
+import { ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, Request, ScreenshotResult, ShowResult, StateResult, WindowsResult } from './protocol.ts'
 import type { CuaApi, CuaApp, CuaAppHandle, CuaDispatch, CuaObservationOptions, CuaObservationSink, CuaOperation, CuaSurface, CuaWindow } from './types.ts'
 export type * from './types.ts'
 
@@ -55,6 +55,11 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
       return first.windowId
     }
     const result: CuaSurface = {
+      async show() {
+        return ShowResult.parse(await call('show', { appHandle,
+          ...selectedWindow === undefined ? {} : { windowId: selectedWindow },
+        }))
+      },
       async getAXState(options) {
         observed = undefined
         const state = StateResult.parse(await call('getState', { appHandle,

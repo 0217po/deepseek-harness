@@ -29,6 +29,7 @@ export const Request = z.discriminatedUnion('method', [
   operation('getCapabilities', {}), operation('listApps', {}), operation('findApps', { query: z.string().min(1).regex(/\S/) }),
   operation('getApp', { selector: z.string().min(1) }),
   operation('activate', app),
+  operation('show', { ...app, windowId: id.optional() }),
   operation('listWindows', app),
   operation('getState', { ...app, windowId: id.optional(),
     includeMenus: z.boolean().optional().describe('Expand menu contents; omitted or false shows menu-bar entries only.'),
@@ -97,3 +98,5 @@ export const CapabilitiesResult = z.object({
 })
 /** An action has reached native dispatch; application state was not verified. */
 export const ActionResult = z.object({ dispatched: z.literal(true), verified: z.literal(false) })
+/** Background restoration dispatch and sampled foreground changes; null means the observation was unavailable. */
+export const ShowResult = ActionResult.extend({ windowId: id.nullable(), foregroundChanged: z.boolean().nullable() })

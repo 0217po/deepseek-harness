@@ -24,6 +24,7 @@ struct CaptureTarget: Sendable {
     let process: ProcessIdentity
     let window: WindowInfo
 }
+struct ShowPlan: Sendable { let appHandle: String; let identity: ProcessIdentity; let windowID: UInt32? }
 struct ForegroundPlan: Sendable {
     let appHandle: String
     let identity: ProcessIdentity
@@ -64,7 +65,7 @@ private enum ApplicationTarget {
     case running(ProcessIdentity)
     case pending(InstalledApplication, JSONValue)
 }
-enum DriverOutcome: Sendable { case result(JSONValue), capture(CaptureTarget), foreground(ForegroundPlan), launch(ApplicationLaunch), paste(PastePlan) }
+enum DriverOutcome: Sendable { case result(JSONValue), capture(CaptureTarget), foreground(ForegroundPlan), show(ShowPlan), launch(ApplicationLaunch), paste(PastePlan) }
 
 actor AXWorker {
     nonisolated let executor = NativeSerialExecutor()
@@ -73,6 +74,7 @@ actor AXWorker {
     private var generation: UInt64 = 0
     private var targets: [String: ApplicationTarget] = [:]
     private var snapshots: [SnapshotScope: NativeSnapshot] = [:]
+    private var observedWindowBounds: [String: [UInt32: WindowBounds]] = [:]
     private let cancellation: CancellationLatch
     private let axTimeout: Float
     private let textEventInterval: Double
@@ -108,12 +110,13 @@ actor AXWorker {
     }
     private func observeSession() -> Bool? {
         let state = NativePlatform.sessionLocked()
-        if state != false { snapshots.removeAll() }
+        if state != false { snapshots.removeAll(); observedWindowBounds.removeAll() }
         return state
     }
     private func forget(_ handle: String) {
         targets.removeValue(forKey: handle)
         snapshots = snapshots.filter { $0.key.appHandle != handle }
+        observedWindowBounds.removeValue(forKey: handle)
     }
     func validateIdentity(_ handle: String) throws -> ProcessIdentity {
         guard !closed else { throw NativeFailure(code: "STALE_APP", message: "Helper is closing; acquire fresh application handles") }
@@ -156,6 +159,11 @@ actor AXWorker {
             guard AXIsProcessTrusted() else { return nil }
             return try ax().windowBounds(windowID, owner: identity)
         }
+    }
+    private func observedCoordinateWindow(_ handle: String, _ identity: ProcessIdentity, _ windowID: UInt32) throws -> WindowInfo {
+        let window = try coordinateWindow(identity, windowID)
+        try WindowGeometry.validateObservedSize(observed: observedWindowBounds[handle]?[windowID], current: window.bounds)
+        return window
     }
     static func actionKey(_ value: String) -> String {
         let name = AXTextFormatter.actionName(value)
@@ -233,11 +241,21 @@ actor AXWorker {
             // Remove closed window scopes using the current WindowServer identity set.
             let ids = Set(windows.map(\.windowID))
             snapshots = snapshots.filter { key, _ in key.appHandle != handle || (key.windowID.map { ids.contains($0) } ?? true) }
+            observedWindowBounds[handle] = observedWindowBounds[handle]?.filter { ids.contains($0.key) }
             return .result(.array(windows.map(\.json)))
         }
-        if method == "getState" { snapshots.removeValue(forKey: SnapshotScope(appHandle: handle, windowID: try params.optionalWindowID())) }
+        if method == "getState" {
+            let windowID = try params.optionalWindowID()
+            snapshots.removeValue(forKey: SnapshotScope(appHandle: handle, windowID: windowID))
+            if let windowID { observedWindowBounds[handle]?.removeValue(forKey: windowID) }
+            else { observedWindowBounds.removeValue(forKey: handle) }
+        }
         if method != "screenshot" { try NativePlatform.requireAccessibility() }
         switch method {
+        case "show":
+            let windowID = try params.optionalWindowID()
+            if let windowID { _ = try NativePlatform.ownedWindow(identity.pid, windowID) }
+            return .show(ShowPlan(appHandle: handle, identity: identity, windowID: windowID))
         case "activate":
             return .foreground(ForegroundPlan(appHandle: handle, identity: identity, snapshotID: nil, index: nil, targetWindowID: nil, role: nil, main: nil, minimized: nil))
         case "getState":
@@ -260,6 +278,9 @@ actor AXWorker {
             let id = try identifier("snapshot")
             let scope = SnapshotScope(appHandle: handle, windowID: window)
             snapshots[scope] = NativeSnapshot(id: id, scope: scope, elements: projection.indexed)
+            for observed in observedWindows where window == nil || observed.windowID == window {
+                observedWindowBounds[handle, default: [:]][observed.windowID] = observed.bounds
+            }
             return .result(.object(["appHandle": .string(handle), "pid": .number(Double(identity.pid)),
                 "windowId": window.map { .number(Double($0)) } ?? .null,
                 "focusedWindowId": projection.focusedWindowID.map { .number(Double($0)) } ?? .null,
@@ -315,13 +336,13 @@ actor AXWorker {
             } else {
                 let id = try params.windowID()
                 try coordinateSnapshot(handle, params, id)
-                let window = try coordinateWindow(identity, id)
+                let window = try observedCoordinateWindow(handle, identity, id)
                 try inputs().1.click(in: WindowRoute(owner: identity, windowID: id, bounds: window.bounds), at: params.point(), button: button, count: count, modifiers: modifiers)
             }
         case "scroll", "drag":
             let id = try params.windowID()
             try coordinateSnapshot(handle, params, id)
-            let window = try coordinateWindow(identity, id)
+            let window = try observedCoordinateWindow(handle, identity, id)
             let route = WindowRoute(owner: identity, windowID: id, bounds: window.bounds)
             if method == "scroll" {
                 let dx = params.contains("deltaLinesX") ? try params.integer("deltaLinesX", in: -10...10) : 0
@@ -378,6 +399,14 @@ actor AXWorker {
         return ForegroundObservation(frontPID: NativePlatform.frontPID(), focusedWindowID: try ax().focusedWindowID(plan.identity.pid),
                                      frontWindowID: top?.windowID, frontWindowPID: top?.pid)
     }
+    func restoreWindow(_ plan: ShowPlan) throws -> UInt32? {
+        try cancellation.check()
+        let identity = try validateIdentity(plan.appHandle)
+        guard identity == plan.identity else { throw NativeFailure(code: "STALE_APP", message: "Application changed before restoring its window") }
+        try NativePlatform.requireUnlocked(observeSession())
+        try NativePlatform.requireAccessibility()
+        return try ax().restoreWindow(plan.windowID, owner: identity)
+    }
     static func shouldRaise(_ plan: ForegroundPlan, before: ForegroundObservation) -> Bool {
         guard let id = plan.targetWindowID else { return true }
         return !(plan.role == "AXWindow" && plan.main == true && plan.minimized == false && before.frontPID == plan.identity.pid
@@ -400,9 +429,10 @@ actor AXWorker {
         try NativePlatform.requireScreenRecording()
         let after = try coordinateWindow(identity, target.window.windowID)
         guard after.bounds == target.window.bounds else { throw NativeFailure(code: "WINDOW_CHANGED", message: "Window moved or resized during capture; observe again") }
+        observedWindowBounds[target.appHandle, default: [:]][after.windowID] = after.bounds
         return .object(["mimeType": .string("image/png"), "data": .string(image.bytes.base64EncodedString()),
             "pixelWidth": .number(Double(image.width)), "pixelHeight": .number(Double(image.height)), "bounds": after.bounds.json,
             "coordinateSpace": .string("window-points"), "windowId": .number(Double(after.windowID))])
     }
-    func shutdown() { closed = true; snapshots.removeAll(); targets.removeAll(); access = nil; keyboard = nil; pointer = nil }
+    func shutdown() { closed = true; snapshots.removeAll(); observedWindowBounds.removeAll(); targets.removeAll(); access = nil; keyboard = nil; pointer = nil }
 }

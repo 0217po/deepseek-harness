@@ -112,6 +112,29 @@ final class AXAccess {
         guard let focused = try element(AXUIElementCreateApplication(pid), "AXFocusedWindow") else { return nil }
         return try windowID(focused)
     }
+    /// Restore a selected or unambiguous window without raising it or requesting application activation.
+    func restoreWindow(_ requested: UInt32?, owner: ProcessIdentity) throws -> UInt32? {
+        let app = AXUIElementCreateApplication(owner.pid)
+        let windows = try children(app, "AXWindows")
+        let selected: AXUIElement?
+        if let requested {
+            _ = try NativePlatform.ownedWindow(owner.pid, requested)
+            selected = try windows.first { try windowID($0) == requested }
+            guard selected != nil else { throw NativeFailure(code: "WINDOW_UNAVAILABLE", message: "Window is not exposed for restoration; read fresh state before deciding whether to activate") }
+        } else {
+            selected = try element(app, "AXFocusedWindow") ?? element(app, "AXMainWindow") ?? (windows.count == 1 ? windows[0] : nil)
+        }
+        guard let selected else { return nil }
+        if try boolean(selected, "AXMinimized") == true {
+            guard try writable(selected, "AXMinimized") == true else {
+                throw NativeFailure(code: "UNSUPPORTED", message: "Window cannot be restored without activation; read fresh state before deciding whether to activate")
+            }
+            try prepare(selected)
+            let error = AXUIElementSetAttributeValue(selected, "AXMinimized" as CFString, kCFBooleanFalse)
+            guard error == .success else { throw failure(error, "restore minimized window") }
+        }
+        return try windowID(selected)
+    }
     func actions(_ element: AXUIElement) throws -> [String] {
         try prepare(element)
         var names: CFArray?

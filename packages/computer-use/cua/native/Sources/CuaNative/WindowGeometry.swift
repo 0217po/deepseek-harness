@@ -4,6 +4,16 @@ import CoreGraphics
 enum WindowGeometry {
     static let conflictMessage = "Window display and accessibility bounds disagree. Read fresh state; if unchanged, use AX actions or explicitly restore the window before capture or coordinate input"
 
+    /// Window-local coordinates survive movement, but require a fresh observation after resizing.
+    static func validateObservedSize(observed: WindowBounds?, current: WindowBounds) throws {
+        guard let observed else {
+            throw NativeFailure(code: "STALE_SNAPSHOT", message: "Window has no observation; read getAXState or take a screenshot before coordinate input")
+        }
+        guard observed.width == current.width, observed.height == current.height else {
+            throw NativeFailure(code: "WINDOW_CHANGED", message: "Window size changed since observation; read getAXState or take a screenshot before coordinate input")
+        }
+    }
+
     /// Read CG bounds around the AX query; missing AX geometry does not disable an owned window.
     static func resolve(
         owner: ProcessIdentity, windowID: UInt32,

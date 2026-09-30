@@ -2,7 +2,7 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { z } from 'zod'
-import type { ActionResult, CapabilitiesResult, FoundAppsResult, Request, WindowsResult } from './protocol.ts'
+import type { ActionResult, CapabilitiesResult, FoundAppsResult, Request, ShowResult, WindowsResult } from './protocol.ts'
 
 /** Helper-issued application selection; public app objects bind it to one process lifetime. */
 export type CuaAppHandle = Branded<'CuaAppHandle'>
@@ -49,6 +49,8 @@ export type CuaBounds = CuaWindowInfo['bounds']
 export type CuaWindowInfo = z.output<typeof WindowsResult>[number]
 /** Successful input dispatch; application outcome still requires observation. */
 export type CuaActionResult = z.output<typeof ActionResult>
+/** Restoration dispatch; foregroundChanged compares the front app and top window before and after the request. */
+export type CuaShowResult = z.output<typeof ShowResult>
 /** Modifiers attached to a window-directed pointer gesture. */
 export type CuaPointerModifier = NonNullable<CuaParameters<'click'>['modifiers']>[number]
 /** Buttons supported by window-directed clicks and drags. */
@@ -68,9 +70,15 @@ export interface CuaObservation { state: string; screenshot: Uint8Array }
 /**
  * App-wide or explicitly scoped window observations and actions.
  * Capture and pointer delivery reject known AX/display frame conflicts with WINDOW_CHANGED.
+ * Coordinate input also rejects resizing since the latest successful AX read or screenshot.
  * Advertised AX actions remain available; failed actions are not retried through pointer input.
  */
 export interface CuaSurface {
+  /**
+   * Unhide the app and restore a minimized selected, focused, main or sole window without requesting activation.
+   * @returns Dispatch evidence, the selected window when available, and sampled foreground change; read fresh state before input.
+   */
+  show(): Promise<CuaShowResult>
   /**
    * Read fresh AX text, with menu contents collapsed by default.
    * @param options - emission, menu expansion and field detail options.

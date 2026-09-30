@@ -25,6 +25,7 @@ function fixture(withSink = true) {
       case 'listApps': return [selected, { pid: 18, name: 'Utility' }]
       case 'getApp': return selected
       case 'listWindows': return windows
+      case 'show': return { ...delivered, windowId: params.windowId ?? 23, foregroundChanged: false }
       case 'getState': return {
         appHandle: selected.appHandle, pid: 17, windowId: params.windowId ?? null,
         snapshotId: `snapshot-${++generation}`, tree: `Tree ${generation}`, truncated: false,
@@ -101,6 +102,39 @@ describe('application discovery', () => {
     f.dispatch.mockResolvedValueOnce({ ...selected, appHandle: '' })
     await expect(f.api.getApp('Editor')).rejects.toThrow()
     expect(f.sink.text).not.toHaveBeenCalled()
+  })
+})
+
+describe('background window restoration', () => {
+  it('shows an app or selected window without dispatching activation or AXRaise', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    const window = await app.getWindow(24)
+    f.dispatch.mockClear()
+    expect(await app.show()).toEqual({ ...delivered, windowId: 23, foregroundChanged: false })
+    expect(await window.show()).toEqual({ ...delivered, windowId: 24, foregroundChanged: false })
+    expect(f.dispatch.mock.calls.map(([operation]) => operation)).toEqual([
+      { method: 'show', params: { appHandle: 'app-17' } },
+      { method: 'show', params: { appHandle: 'app-17', windowId: 24 } },
+    ])
+  })
+
+  it.each([true, null])('preserves foreground change evidence %j without switching focus back', async (foregroundChanged) => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.dispatch.mockClear()
+    f.dispatch.mockResolvedValueOnce({ ...delivered, windowId: null, foregroundChanged })
+    expect(await app.show()).toEqual({ ...delivered, windowId: null, foregroundChanged })
+    expect(f.dispatch).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves foreground fallback to the caller after restoration fails', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.dispatch.mockClear()
+    f.dispatch.mockRejectedValueOnce(new Error('UNSUPPORTED: Window cannot be restored'))
+    await expect(app.show()).rejects.toThrow('UNSUPPORTED')
+    expect(f.dispatch).toHaveBeenCalledTimes(1)
   })
 })
 

@@ -158,6 +158,42 @@
         },
         "method": {
           "type": "string",
+          "const": "show"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "appHandle": {
+              "type": "string",
+              "minLength": 1
+            },
+            "windowId": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 4294967295
+            }
+          },
+          "required": [
+            "appHandle"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
           "const": "listWindows"
         },
         "params": {

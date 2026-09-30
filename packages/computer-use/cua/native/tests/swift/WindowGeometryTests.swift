@@ -6,6 +6,28 @@ private func frame(_ x: Double, _ y: Double, _ width: Double, _ height: Double) 
     WindowBounds(x: x, y: y, width: width, height: height)
 }
 
+@Test func coordinateInputRequiresAnObservedWindowSize() {
+    do {
+        try WindowGeometry.validateObservedSize(observed: nil, current: frame(0, 0, 320, 200))
+        Issue.record("Unobserved coordinates were accepted")
+    } catch let error as NativeFailure { #expect(error.code == "STALE_SNAPSHOT") }
+    catch { Issue.record("Unexpected error: \(error)") }
+}
+
+@Test(arguments: [frame(0, 0, 321, 200), frame(0, 0, 320, 201), frame(0, 0, 320.5, 200)])
+func coordinateInputRejectsAWindowResizedSinceObservation(_ current: WindowBounds) {
+    do {
+        try WindowGeometry.validateObservedSize(observed: frame(0, 0, 320, 200), current: current)
+        Issue.record("Coordinates from before resizing were accepted")
+    } catch let error as NativeFailure { #expect(error.code == "WINDOW_CHANGED") }
+    catch { Issue.record("Unexpected error: \(error)") }
+}
+
+@Test func coordinateInputAllowsWindowMovementAndFreshlyObservedSizes() throws {
+    try WindowGeometry.validateObservedSize(observed: frame(0, 0, 320, 200), current: frame(-900, 120, 320, 200))
+    try WindowGeometry.validateObservedSize(observed: frame(0, 0, 500, 400), current: frame(0, 0, 500, 400))
+}
+
 @Test(arguments: [
     (frame(221, 50, 1200, 832), frame(16, 512, 131, 145)),
     (frame(-600, -100, 320, 200), frame(-599, -100, 320, 200)),

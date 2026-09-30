@@ -17,7 +17,7 @@ const window = { windowId: 7, pid: 9, appName: 'Fixture', title: 'CUA fixture', 
 const axlessWindow = { ...window, windowId: 8, title: 'AXless canvas' }
 const transformedWindow = { ...window, windowId: 9, title: 'Transformed window', bounds: { x: 16, y: 512, width: 131, height: 145 } }
 const snapshots = new Map()
-const methods = ['getCapabilities', 'listApps', 'getApp', 'activate', 'listWindows', 'getState', 'click', 'setValue', 'typeText', 'pressKey', 'scroll', 'drag', 'screenshot']
+const methods = ['getCapabilities', 'listApps', 'getApp', 'activate', 'show', 'listWindows', 'getState', 'click', 'setValue', 'typeText', 'pressKey', 'scroll', 'drag', 'screenshot']
 let acquired = false
 let generation = 0
 let count = 0
@@ -43,6 +43,7 @@ function call(requestId, method, params) {
     return { ...app, authorization: {"id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "name": "Fixture", "executablePath": "/fixture/app", "persistable": true} }
   }
   if (!acquired || params.appHandle !== app.appHandle) refuse('APP_NOT_FOUND', 'Acquire an application in this helper first')
+  if (method === 'show') return { dispatched: true, verified: false, windowId: params.windowId ?? window.windowId, foregroundChanged: false }
   if (method === 'activate') {
     const before = { frontPid, focusedWindowId: window.windowId, frontWindowId, frontWindowPid: frontPid }
     const activationRequested = frontPid !== app.pid
