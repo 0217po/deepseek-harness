@@ -124,7 +124,8 @@ def main():
                 shutil.copy2(binary, foreground_binary)
                 pending_foreground = helper.call('getApp', {'selector': str(foreground_binary.parents[2])})
                 foreground = helper.call('launchApp', {'appHandle': pending_foreground['appHandle']})['pid']
-                wait_state(lambda state: not state['active'], 'foreground fixture did not take focus')
+                wait_state(lambda state: foreground_path.exists() and json.loads(foreground_path.read_text()).get('active')
+                           and not state['active'], 'foreground fixture did not take focus')
                 for number, key, target in [(signal.SIGALRM, 'hidden', owner),
                                             (signal.SIGHUP, 'minimized', {**owner, 'windowId': window_id})]:
                     os.kill(fixture, number)
