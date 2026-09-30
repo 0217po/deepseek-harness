@@ -136,7 +136,7 @@ export async function readPrimaryRuntime(root: string): Promise<PrimaryRuntimeMa
  * Identify POSIX interpreter aliases that can survive payload relocation.
  * @param root - Payload directory.
  * @param manifest - Validated payload metadata.
- * @returns Relative alias paths mapped to their sibling interpreter filename; legacy regular files are omitted.
+ * @returns Relative alias paths mapped to their sibling interpreter filename; regular command files are omitted.
  * @throws When an interpreter alias does not point directly to the versioned regular file.
  */
 export async function primaryRuntimePythonAliases(root: string, manifest: PrimaryRuntimeManifest): Promise<ReadonlyMap<string, string>> {

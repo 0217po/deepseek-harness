@@ -55,7 +55,9 @@ it.skipIf(process.platform === 'win32').each(['unknown', 'absolute', 'escaping',
   }
   const target = kind === 'absolute' ? canonical : kind === 'escaping' ? '../outside' : 'python3.12'
   symlinkSync(target, join(bin, kind === 'unknown' ? 'unlisted' : 'python3'))
-  await expect(signMacOSRuntime(path, 'com.example.app', identity, 'arm64', undefined, 'primary')).rejects.toThrow()
+  const result = signMacOSRuntime(path, 'com.example.app', identity, 'arm64', undefined, 'primary')
+  if (kind === 'dangling') await expect(result).rejects.toMatchObject({ code: 'ENOENT', path: canonical })
+  else await expect(result).rejects.toThrow(kind === 'unknown' ? 'unsupported filesystem entry' : 'invalid Python alias')
   expect(signMacOSRuntimeCode).not.toHaveBeenCalled()
 })
 it('awaits other signers before rejecting and permitting output cleanup', async () => {

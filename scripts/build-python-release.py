@@ -232,6 +232,7 @@ def stage_runtime(destination: Path, version: str, executable: Path, executable_
     office = office_sidecar_name(executable_name)
     shutil.copytree(source_directory / office, runtime_dir / office)
     resources = executable_name.removeprefix("deepseek-harness-sdk-runtime-").removesuffix(".exe")
+    # Wheels materialize interpreter aliases because pip does not restore symlinks.
     shutil.copytree(source_directory / resources, runtime_dir / resources)
 
 
