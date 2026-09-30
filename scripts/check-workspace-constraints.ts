@@ -17,6 +17,7 @@ import { hasTypertRemoteNavigation, isForbiddenPublicationFile } from './publica
 import type { DshBundleManifest } from '../packages/util/package-manifest/src/types.ts'
 import { OPTIONAL_BUNDLES, bundlePatchFiles } from '../packages/boot/app-boot/src/profile.ts'
 import { collectProjectReferenceFaceViolations } from './project-reference-faces.ts'
+import { KOFFI_VERSION } from './koffi-policy.ts'
 
 const root = resolve(import.meta.dirname, '..')
 // Publication rules cover these package trees; dependency rules read all pnpm members.
@@ -613,6 +614,24 @@ export function checkWorkspaceProtocol(manifests: readonly WorkspaceManifest[]):
   return errors
 }
 
+/**
+ * Require the qualified Koffi pin in every workspace, including private applications.
+ * @param manifests - Root and all declared workspace manifests.
+ * @returns Diagnostics for declarations that could install a different Koffi version.
+ */
+export function checkKoffiVersions(manifests: readonly WorkspaceManifest[]): string[] {
+  const errors: string[] = []
+  for (const { dir, manifest } of manifests) {
+    for (const section of dependencySections) {
+      const version = manifest[section]?.koffi
+      if (version !== undefined && version !== KOFFI_VERSION) {
+        errors.push(`${manifest.name ?? dir}: ${section}.koffi must use ${KOFFI_VERSION}, got ${version}`)
+      }
+    }
+  }
+  return errors
+}
+
 /** Run the repository constraint gate. */
 export function main(): void {
   const manifests = readWorkspaceManifests(root)
@@ -620,6 +639,7 @@ export function main(): void {
     ...checkRepositoryVersion(),
     ...workspaceManifests().flatMap(checkWorkspaceManifest),
     ...checkWorkspaceProtocol(manifests),
+    ...checkKoffiVersions(manifests),
     ...checkExperimentalDependencyIsolation(manifests),
     ...checkHierarchyShape(),
     ...collectProjectReferenceFaceViolations(root),

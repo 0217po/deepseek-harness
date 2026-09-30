@@ -396,6 +396,8 @@ Every package command builds the repository, packs the first-party production cl
 
 macOS packaging writes `Contents/Resources/app-update.yml` while assembling the App and before code signing, including the directory build that feeds the parallel ZIP and DMG lanes. The signing hook verifies the exact feed and updater cache directory. Both lane copies and the promoted App are checked again before the release completion record is written; a missing or mismatched configuration prevents artifact promotion and therefore prevents upload.
 
+Koffi consumers, including the private Desktop Host, pin `3.1.1`; `pnpm run constraints` checks every workspace declaration. `prepare:dsh` generates a fresh production lockfile from the packed manifests, independently of the repository lockfile, and rejects missing Koffi or any other Koffi JavaScript/native package version before installation. Upgrade all consumers and the shared [version check](../../scripts/koffi-policy.ts) together after qualifying source builds without optional prebuilts and the packed production install.
+
 An unpacked artifact contains Electron, the materialized dsh production tree, pnpm, and the shell application. Installer size and filesystem size differ; release qualification measures both, plus the profile’s plugin storage and first-launch latency. The runtime trades more application files for eliminating core package installation on the user’s machine.
 
 ## Updates

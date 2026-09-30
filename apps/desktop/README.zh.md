@@ -398,6 +398,8 @@ pnpm run prepare:desktop
 
 macOS 打包在组装 App 时、代码签名前写入 `Contents/Resources/app-update.yml`，供并行 ZIP 与 DMG 路线使用的目录构建也执行此操作。签名钩子验证准确的更新源和 updater 缓存目录。写入发布完成记录前，流程会再次检查两条路线的副本和最终移入的 App；配置缺失或不匹配会阻止移入产物，因而也会阻止上传。
 
+所有 Koffi 使用方（包括私有 Desktop Host）固定使用 `3.1.1`；`pnpm run constraints` 检查每个工作区的声明。`prepare:dsh` 根据打包后的 manifest 生成独立于仓库锁文件的新生产锁文件，并在安装前拒绝缺失 Koffi 或包含其他版本 Koffi JavaScript／原生包的结果。升级前须验证不含可选预编译包的源码构建和打包后的生产安装，再同步更新所有使用方及共享的[版本检查](../../scripts/koffi-policy.ts)。
+
 未压缩产物包含 Electron、物化后的 dsh 生产依赖树、pnpm，以及壳应用。安装包大小与文件系统占用不同；发布验收需要测量两者，以及 profile 插件存储和首次启动耗时。此布局用更多应用内文件换取消除用户机器上的核心包安装过程。
 
 ## 更新
