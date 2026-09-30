@@ -257,6 +257,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         const jobId = jobs.start({
           kind: 'pty-send',
           label: `${id}: ${args.text || '(input)'}`,
+          toolCall: { callId: exec.callId, rootCallId: exec.rootCallId },
           owner: owner.id,
           outputLimitBytes: maxResultBytes,
           output: [sendSource(() => operation)],

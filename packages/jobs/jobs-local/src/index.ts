@@ -10,16 +10,17 @@
  * @module @deepseek-ai/dsh-jobs-local
  */
 
+import { randomUUID } from 'node:crypto'
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ScopedLayers, scopeOf } from '@deepseek-ai/dsh-scope'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
-import { JobRegistry, JobId } from '@deepseek-ai/dsh-jobs'
+import { JobRegistry, JobExecutionId, JobId } from '@deepseek-ai/dsh-jobs'
 import type {
   JobAppendOptions, JobEvent, JobEvents, JobHandle, JobKind, JobOutcome, JobOutputRead, JobOutputSource,
-  JobRead, JobSettleCause, JobSpec, JobStatus, JobView,
+  JobRead, JobRegisteredData, JobSettleCause, JobSettledData, JobSpec, JobStatus, JobToolCall, JobView,
 } from '@deepseek-ai/dsh-jobs'
 import { JobEventHub, JobLayer } from './events.ts'
 import { startPump } from './pump.ts'
@@ -75,6 +76,8 @@ interface ProducerState {
 /** The registry's mutable per-job record (never handed out — see {@link LocalJobRegistry.view}). */
 interface TrackedJob {
   id: JobId
+  executionId: JobExecutionId
+  toolCall: JobToolCall | undefined
   kind: JobKind
   label: string
   outputLimitBytes: number | undefined
@@ -229,6 +232,8 @@ export class LocalJobRegistry extends JobRegistry {
     const count = (this.counters.get(spec.kind) ?? 0) + 1
     this.counters.set(spec.kind, count)
     const id = JobId(`${spec.kind}-${count}`)
+    const executionId = JobExecutionId(randomUUID())
+    const toolCall = spec.toolCall === undefined ? undefined : { ...spec.toolCall }
     const ring = new OutputRing()
     const state: ProducerState = { progress: undefined, job: undefined }
     const handle: JobHandle = {
@@ -242,6 +247,8 @@ export class LocalJobRegistry extends JobRegistry {
     const settled = new Promise<void>((resolve) => { markSettled = resolve })
     const job: TrackedJob = {
       id,
+      executionId,
+      toolCall,
       kind: spec.kind,
       label: spec.label,
       outputLimitBytes: spec.outputLimitBytes,
@@ -269,6 +276,7 @@ export class LocalJobRegistry extends JobRegistry {
     // call reaches the registered record for its terminal checks and signals.
     state.job = job
     this.store.set(id, job)
+    this.recordSessionEvent(job)
     // Registration is complete and cannot fail from here, so the visible set
     // has genuinely changed. The announcement precedes the pump because the
     // pump drains its sources once synchronously, and that drain may append
@@ -278,11 +286,11 @@ export class LocalJobRegistry extends JobRegistry {
     // The producer's settlement or a registry-forced one ends the pump; the
     // pump's final drain then lands before this registry trims the ring.
     const producerDone = hooks.done.then(
-      outcome => outcome,
-      (error: unknown): JobOutcome => {
+      outcome => ({ outcome, terminationConfirmed: true }),
+      (error: unknown): { outcome: JobOutcome; terminationConfirmed: boolean } => {
         // Contain a producer contract violation (`done` rejected) so cleanup and waiters cannot hang.
         this.selfCtx.logger.warn(`jobs: job ${job.id} producer done promise rejected (producer contract violation): ${String(error)}`)
-        return { status: 'failed', detail: String(error) }
+        return { outcome: { status: 'failed', detail: String(error) }, terminationConfirmed: false }
       },
     )
     if (spec.output !== undefined && spec.output.length > 0) {
@@ -296,9 +304,9 @@ export class LocalJobRegistry extends JobRegistry {
         Promise.race([producerDone, settled]),
       )
     }
-    void producerDone.then(async (outcome) => {
+    void producerDone.then(async ({ outcome, terminationConfirmed }) => {
       if (job.pump !== undefined) await job.pump.done
-      this.settle(job, outcome, job.settleCause ?? 'producer')
+      this.settle(job, outcome, job.settleCause ?? 'producer', terminationConfirmed)
     })
     return id
   }
@@ -434,6 +442,32 @@ export class LocalJobRegistry extends JobRegistry {
 
   private emit(event: JobEvent, owner: Agent | undefined): void {
     this.hub.emit(event, owner)
+  }
+
+  /** Capture facts at commit and publish after any enclosing Session append has returned. */
+  private recordSessionEvent(
+    job: TrackedJob,
+    settlement?: Pick<JobSettledData, 'finishedAt' | 'status' | 'cause' | 'terminationConfirmed' | 'detail'>,
+  ): void {
+    const owner = job.owner
+    if (owner === undefined) return
+    const session = owner.session
+    const data: JobRegisteredData = {
+      executionId: job.executionId, jobId: job.id, owner: owner.id,
+      kind: job.kind, label: job.label, startedAt: job.startedAt,
+      ...job.toolCall !== undefined ? { toolCall: job.toolCall } : {},
+    }
+    // A job may be started from a Session observer. Deferred publication avoids
+    // append reentrancy and runs before settlement waiters or teardown can resume.
+    queueMicrotask(() => {
+      try {
+        if (settlement === undefined) session.append('job/registered', data)
+        else session.append('job/settled', { ...data, ...settlement })
+      } catch (error: unknown) {
+        // Recording cannot orphan already-started work or prevent waiter release.
+        this.selfCtx.logger.warn(`jobs: failed to record lifecycle for ${job.executionId}: ${String(error)}`)
+      }
+    })
   }
 
   /**
@@ -574,7 +608,7 @@ export class LocalJobRegistry extends JobRegistry {
    * reports whether it released one: a timed-out or aborted wait has already
    * left the set, so only a wait still owed the projection counts.
    */
-  private settle(job: TrackedJob, outcome: JobOutcome, cause: JobSettleCause): void {
+  private settle(job: TrackedJob, outcome: JobOutcome, cause: JobSettleCause, terminationConfirmed: boolean): void {
     if (isTerminal(job.status)) return
     job.status = outcome.status
     // A killed settlement carries the recorded kill reason in its detail:
@@ -591,6 +625,10 @@ export class LocalJobRegistry extends JobRegistry {
     job.state.progress = undefined
     job.result = outcome.result
     job.finishedAt = Date.now()
+    this.recordSessionEvent(job, {
+      finishedAt: job.finishedAt, status: outcome.status, cause, terminationConfirmed,
+      ...job.detail !== undefined ? { detail: job.detail } : {},
+    })
     // Settlement ends the stream: trim to the settled cap before any observer
     // reads the terminal projection, but never below the bytes the model
     // cursor has not consumed. A job that finishes before its first model
@@ -678,7 +716,7 @@ export class LocalJobRegistry extends JobRegistry {
       } catch (error: unknown) {
         const detail = `cancel threw during teardown; work may be orphaned: ${String(error)}`
         this.selfCtx.logger.warn(`jobs: cancel of ${job.id} threw during teardown; job record forced failed and work may be orphaned: ${String(error)}`)
-        this.settle(job, { status: 'failed', detail }, 'teardown')
+        this.settle(job, { status: 'failed', detail }, 'teardown', false)
       }
     }
   }

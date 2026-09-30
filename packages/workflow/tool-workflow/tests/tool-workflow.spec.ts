@@ -514,7 +514,8 @@ describe('dsh-tool-workflow', () => {
       expect(engine.disposed).toBe(1)
       // The durable session record still brackets the background run.
       expect(session.snapshotEvents().map(event => event.type)).toEqual([
-        'tool-workflow/run-start', 'tool-workflow/agent-start', 'tool-workflow/agent-end', 'tool-workflow/run-end',
+        'tool-workflow/run-start', 'job/registered', 'tool-workflow/agent-start',
+        'tool-workflow/agent-end', 'tool-workflow/run-end', 'job/settled',
       ])
       // A straggling event after settlement finds no tracked run and is dropped.
       engine.phase(runId, 'Late')
@@ -560,7 +561,7 @@ describe('dsh-tool-workflow', () => {
       expect(jobs.get('workflow-2' as never, parent.id).detail).toBe('unknown error')
     })
 
-    it('a nested transport call mirrors the ring but records no session events, and a dispose failure still settles', async () => {
+    it('a nested transport call records job lifecycle but no workflow events, and a dispose failure still settles', async () => {
       const { ctx, engine, parent, session } = await setupBackground()
       engine.disposeError = new Error('worker already gone')
       const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
@@ -575,7 +576,7 @@ describe('dsh-tool-workflow', () => {
       await vi.waitFor(() => { expect(jobs.get('workflow-1' as never, parent.id).status).toBe('completed') })
       expect(jobs.get('workflow-1' as never, parent.id).detail).toBe('1 agent')
       expect(warn.mock.calls.map(args => String(args[0])).join('\n')).toContain('dispose failed')
-      expect(session.snapshotEvents()).toEqual([])
+      expect(session.snapshotEvents().map(event => event.type)).toEqual(['job/registered', 'job/settled'])
     })
 
     it('a synchronous engine rejection registers no job', async () => {

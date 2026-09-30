@@ -21,9 +21,63 @@ interface JobKindMap {
 
 `JobStatus` is `'running' | 'stopping' | 'completed' | 'killed' | 'failed'`; producer-specific facts belong in `JobView.progress` while the job runs and in `JobView.detail` once it settled.
 
+<a id="session-lifecycle-records"></a>
+
+## Session lifecycle records
+
+Owned jobs publish `job/registered` and `job/settled` in their original owner Session. `executionId` identifies one execution across registry restarts and copied history; `jobId` remains the process-local control id. The SDK forwards these log-only records through `session.event`, independently of output reads. Timestamps describe registry commits, not CPU time or exact OS process boundaries; a missing settlement remains incomplete. `terminationConfirmed` means the producer fulfilled its resource-release promise, and is false for forced teardown or a rejected promise.
+
+`job/settled` may follow `turn/end`. An SDK run result covers only its own observation window; consumers needing later settlements retain a Session subscription or read persisted history. Turn completion does not imply that every owned job stopped.
+
+```ts type-equiv
+/** Durable identity and registration time of one owned job execution. */
+interface JobRegisteredData {
+  /** UUID unique to this execution, even when the registry reuses a display id. */
+  executionId: JobExecutionId
+  /** Runtime-local id accepted by job controls. */
+  jobId: JobId
+  /** Original owner; copied history does not transfer execution ownership. */
+  owner: SessionId
+  /** Producer kind. */
+  kind: string
+  /** Producer-supplied label. */
+  label: string
+  /** Unix epoch milliseconds when registration committed. */
+  startedAt: number
+  /** Creating tool invocation, when the producer was called through a tool. */
+  toolCall?: JobToolCall
+}
+```
+
+```ts type-equiv
+/** Registry settlement, including whether the producer confirmed resource release. */
+interface JobSettledData extends JobRegisteredData {
+  /** Unix epoch milliseconds when the registry committed the terminal record. */
+  finishedAt: number
+  /** Recorded terminal outcome. */
+  status: JobOutcome['status']
+  /** Source of the termination request, or producer completion. */
+  cause: JobSettleCause
+  /** False for a rejected producer promise or forced teardown failure; work may remain alive. */
+  terminationConfirmed: boolean
+  /** Terminal reason, including a recorded kill reason when applicable. */
+  detail?: string
+}
+```
+
 ## Producer contract
 
 A `JobSpec` declares identity, the owning session, optional pull `output` sources, and a starter. The runtime finishes preflight before calling `run()` with the job's `JobHandle` and commits without a later failable step. Producers own execution resources; the runtime owns identity, access, lifecycle state, and the output ring.
+
+```ts type-equiv
+/** Tool dispatch that created a job; nested calls retain their root invocation. */
+interface JobToolCall {
+  /** Exact invocation, including a PTC sub-call when applicable. */
+  readonly callId: SessionEventMap['tool/call']['callId']
+  /** Root model-requested invocation owning this execution. */
+  readonly rootCallId: SessionEventMap['tool/call']['callId']
+}
+```
 
 ```ts type-equiv
 /**
@@ -44,6 +98,8 @@ interface JobSpec {
    * caller until service disposal.
    */
   owner?: SessionId
+  /** Creating tool invocation, retained in the durable lifecycle records. */
+  toolCall?: JobToolCall
   /**
    * Optional UTF-8 byte cap for each complete model-facing completion notice or
    * output read, including controller status metadata. Independent of ring

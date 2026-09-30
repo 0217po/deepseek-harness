@@ -1,6 +1,7 @@
-import { describe, expect, expectTypeOf, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { bindScopeParent, createScope, scopeOf } from '@deepseek-ai/dsh-scope'
@@ -1486,5 +1487,144 @@ describe('LocalJobRegistry pull sources', () => {
     await new Promise(resolve => setTimeout(resolve, 5))
     // The forced failure is the only warning: the pump's later drains are silent.
     expect(warn.mock.calls.map(call => String(call[0]))).toEqual([expect.stringContaining('work may be orphaned')])
+  })
+})
+
+describe('owned job Session lifecycle records', () => {
+  let ctx: Context
+  beforeEach(async () => { ctx = await harness() })
+  afterEach(async () => { await ctx.fiber.dispose() })
+
+  it('publishes original timestamps and nested tool identity without consuming output', async () => {
+    const owner = await liveAgent(ctx, 'journal-owner')
+    const p = producer({ owner, cancel: () => { p.settle({ status: 'killed' }) } })
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1000)
+    try {
+      const toolCall = { callId: ToolCallId('root:ptc:1'), rootCallId: ToolCallId('root') }
+      const id = ctx.jobs.start({ ...p.spec, toolCall })
+      p.job().append('unread output')
+      await Promise.resolve()
+      const registered = owner.session.snapshotEvents().find(event => event.type === 'job/registered')
+      expect(registered?.data).toMatchObject({ jobId: id, owner: owner.id, startedAt: 1000, toolCall })
+      clock.mockReturnValue(2500)
+      p.settle({ status: 'completed', detail: 'exit code: 0' })
+      await ctx.jobs.wait(id, 1000, owner.id)
+      const settled = owner.session.snapshotEvents().find(event => event.type === 'job/settled')
+      expect(settled?.data).toEqual({
+        ...registered?.data, finishedAt: 2500, status: 'completed', cause: 'producer',
+        terminationConfirmed: true, detail: 'exit code: 0',
+      })
+      expect(ctx.jobs.read(id, owner.id).chunks.map(chunk => chunk.text)).toEqual(['unread output'])
+      expect(owner.session.deriveMessages()).toEqual([])
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
+  it('records cancellation only after producer settlement', async () => {
+    const owner = await liveAgent(ctx, 'cancel-owner')
+    const p = producer({ owner, cancel: () => { p.settle({ status: 'killed' }) } })
+    const id = ctx.jobs.start(p.spec)
+    expect(ctx.jobs.kill(id, owner.id, 'requested by user')).toBe('requested')
+    expect(ctx.jobs.get(id, owner.id).status).toBe('stopping')
+    expect(owner.session.snapshotEvents().filter(event => event.type === 'job/settled')).toEqual([])
+    await ctx.jobs.wait(id, 1000, owner.id)
+    expect(owner.session.snapshotEvents().find(event => event.type === 'job/settled')?.data)
+      .toMatchObject({ status: 'killed', cause: 'kill', terminationConfirmed: true, detail: 'requested by user' })
+  })
+
+  it('records a producer-reported failure as confirmed settlement', async () => {
+    const owner = await liveAgent(ctx, 'failed-owner')
+    const p = producer({ owner, cancel: () => { p.settle({ status: 'killed' }) } })
+    const id = ctx.jobs.start(p.spec)
+    p.settle({ status: 'failed', detail: 'operation failed after cleanup' })
+    await ctx.jobs.wait(id, 1000, owner.id)
+    expect(owner.session.snapshotEvents().find(event => event.type === 'job/settled')?.data)
+      .toMatchObject({ status: 'failed', cause: 'producer', terminationConfirmed: true })
+  })
+
+  it('does not certify resource release when a producer rejects its done promise', async () => {
+    const owner = await liveAgent(ctx, 'rejected-owner')
+    const p = producer({ owner, cancel: () => { p.settle({ status: 'killed' }) } })
+    const id = ctx.jobs.start(p.spec)
+    p.reject(new Error('producer rejected'))
+    await ctx.jobs.wait(id, 1000, owner.id)
+    expect(owner.session.snapshotEvents().find(event => event.type === 'job/settled')?.data)
+      .toMatchObject({ status: 'failed', cause: 'producer', terminationConfirmed: false })
+  })
+
+  it('preserves an unconfirmed teardown record against late completion', async () => {
+    const owner = await liveAgent(ctx, 'teardown-owner')
+    const p = producer({ owner, cancel: () => { throw new Error('cancel failed') } })
+    ctx.jobs.start(p.spec)
+    await disposeAgentScope(owner)
+    p.settle({ status: 'completed' })
+    await tick()
+    const events = owner.session.snapshotEvents().filter(event => event.type === 'job/settled')
+    expect(events).toHaveLength(1)
+    expect(events[0]?.data).toMatchObject({ status: 'failed', cause: 'teardown', terminationConfirmed: false })
+    expect(ctx.jobs.list(owner.id)).toEqual([])
+  })
+
+  it('publishes registration outside an enclosing Session event callback', async () => {
+    await ctx.plugin(SessionStore)
+    const owner = await liveAgent(ctx, 'reentrant-owner')
+    const detach = ctx.sessions.enter(owner.session)
+    const p = producer({ owner, cancel: () => { p.settle({ status: 'killed' }) } })
+    let id: JobId | undefined
+    ctx.on('session/event', (_session, event) => {
+      if (event.type === 'turn/start') id = ctx.jobs.start(p.spec)
+    })
+    try {
+      owner.session.append('turn/start', { turn: 1 })
+      await Promise.resolve()
+      expect(owner.session.snapshotEvents().map(event => event.type)).toEqual(['turn/start', 'job/registered'])
+      if (id === undefined) throw new Error('job was not started')
+      p.settle({ status: 'completed' })
+      await ctx.jobs.wait(id, 1000, owner.id)
+      expect(owner.session.snapshotEvents().at(-1)?.type).toBe('job/settled')
+    } finally {
+      detach()
+    }
+  })
+
+  it('keeps execution identity distinct when a fresh registry reuses a job id', async () => {
+    const other = await harness()
+    try {
+      const ids: JobId[] = []
+      const executions: string[] = []
+      for (const registry of [ctx, other]) {
+        const owner = await liveAgent(registry, 'same-owner')
+        const p = producer({ owner, cancel: () => { p.settle({ status: 'killed' }) } })
+        const id = registry.jobs.start(p.spec)
+        ids.push(id)
+        p.settle({ status: 'completed' })
+        await registry.jobs.wait(id, 1000, owner.id)
+        const event = owner.session.snapshotEvents().find(event => event.type === 'job/registered')
+        if (event?.type !== 'job/registered') throw new Error('missing registration')
+        executions.push(event.data.executionId)
+      }
+      expect(ids).toEqual(['bash-1', 'bash-1'])
+      expect(new Set(executions).size).toBe(2)
+    } finally {
+      await other.fiber.dispose()
+    }
+  })
+
+  it('reports append failures without breaking execution or waiter release', async () => {
+    const owner = await liveAgent(ctx, 'record-error-owner')
+    const p = producer({ owner, cancel: () => { p.settle({ status: 'killed' }) } })
+    const append = vi.spyOn(owner.session, 'append').mockImplementation(() => { throw new Error('record unavailable') })
+    const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
+    try {
+      const id = ctx.jobs.start(p.spec)
+      p.settle({ status: 'completed' })
+      await expect(ctx.jobs.wait(id, 1000, owner.id)).resolves.toMatchObject({ status: 'completed' })
+      expect(warn).toHaveBeenCalledTimes(2)
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('failed to record lifecycle'))
+    } finally {
+      append.mockRestore()
+      warn.mockRestore()
+    }
   })
 })

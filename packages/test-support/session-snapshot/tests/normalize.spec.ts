@@ -525,6 +525,26 @@ describe('normalizeSessionLog', () => {
     expect(out).toContain('"operation":"resume"')
   })
 
+  it('normalizes job lifecycle clocks while preserving user timestamps and uncertainty', () => {
+    const input = [
+      header({}),
+      { type: 'job/registered', data: { startedAt: 100, jobId: 'bash-1' } },
+      { type: 'job/settled', data: { startedAt: 100, finishedAt: 200, terminationConfirmed: false } },
+      { type: 'job/registered', data: {} },
+      { type: 'job/settled', data: null },
+      { type: 'job/settled', data: 'invalid fixture remains invalid' },
+      { type: 'tool/result', data: { startedAt: 300, finishedAt: 400 } },
+    ].map(value => typeof value === 'string' ? value : JSON.stringify(value)).join('\n') + '\n'
+    const normalized = normalizeSessionLog(input, ctx).trim().split('\n')
+      .map(line => JSON.parse(line) as { data?: unknown })
+    expect(normalized[1]?.data).toEqual({ startedAt: 0, jobId: 'bash-1' })
+    expect(normalized[2]?.data).toEqual({ startedAt: 0, finishedAt: 0, terminationConfirmed: false })
+    expect(normalized[3]?.data).toEqual({})
+    expect(normalized[4]?.data).toBeNull()
+    expect(normalized[5]?.data).toBe('invalid fixture remains invalid')
+    expect(normalized[6]?.data).toEqual({ startedAt: 300, finishedAt: 400 })
+  })
+
   it('normalizes subagent catalog child creation clocks', () => {
     const catalog = JSON.stringify({
       type: 'subagent/catalog',

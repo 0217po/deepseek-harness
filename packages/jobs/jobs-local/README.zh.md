@@ -56,9 +56,15 @@ kind: "package-reference"
 
 任务属于其所有者和后端，而非生产方工具，因此重载生产方或控制器不会停止任务。拥有任务的 agent 被释放时，其任务会被取消、生产方会被等待、快照会被移除；服务释放对每个剩余任务执行同样的操作。销毁期间抛出的取消会强制失败记录并警告工作可能成为孤立工作，因此销毁永远不会死锁。
 
+### Session 时间记录
+
+有所有者的 job 在原始 Session 中记录注册与结算，不依赖模型收集输出。SDK 消费方通过 `session.event` 收到同样的事件；[jobs 参考](../../../docs/subsystems/jobs.zh.md#session-lifecycle-records)定义标识、时间戳和终止确认。这些记录通过正常 Session 持久化保留；运行中的 job 和输出环不会被恢复。
+
+事实在提交时捕获，并在完成等待方恢复前通过微任务发布。这也允许 Session 观察者启动工作而不重入 Session append。追加失败会记录警告，不放弃执行或阻塞清理；消费方必须将不完整历史保留为不完整。
+
 ### 可能出什么问题
 
-没有服务于所有者的控制器时无法启动工作——加载 `dsh-tool-jobs` 即附加一个，否则 `start()` 会以指出它的消息拒绝。返回但始终未结算 `done` 的生产方取消与缓慢停止无法区分，可能使销毁停滞并持续占用一个容量名额。每条记录都会在 harness 进程退出时消失。
+没有服务于所有者的控制器时无法启动工作——加载 `dsh-tool-jobs` 即附加一个，否则 `start()` 会以指出它的消息拒绝。返回但始终未结算 `done` 的生产方取消与缓慢停止无法区分，可能使销毁停滞并持续占用一个容量名额。运行期注册表记录会在 harness 进程退出时消失；已持久化的生命周期事件会保留。
 
 -----
 
@@ -115,6 +121,7 @@ kind: "package-reference"
 - [注册表约定](../jobs/README.zh.md)——本包实现的抽象 `ctx.jobs` 服务。
 - [模型侧任务控制](../tool-jobs/README.zh.md)——`job_output`、`job_list` 与 `job_kill` 工具及完成通知。
 - [通用长时间运行工具运行时 Agent Note](../../../.agents/notes/implemented/architecture/2026-06-20-generic-long-running-tool-runtime.zh.md)——后台任务运行时背后的设计。
+- [job 生命周期记录决策](../../../.agents/notes/implemented/bug-fix/2026-09-30-job-session-lifecycle.zh.md)——持久化时间、执行标识及记录失败行为。
 - [任务注册表 seam Agent Note](../../../.agents/notes/archived/architecture/2026-07-26-job-registry-seam.md)——按所有者隔离的注册表约定及其理由。
 
 -----
@@ -135,7 +142,7 @@ kind: "package-reference"
 
 这些限制说明注册表何时不合适。它们是当前包约束，不是任务积压。
 
-- **任务只存在于进程本地**——记录会随 harness 进程终止而消失；持久或跨重启执行需要一个单独实现该 seam 的后端。
+- **任务只存在于进程本地**——运行期执行与输出环会随 harness 进程终止而消失；持久或跨重启执行需要一个单独实现该 seam 的后端。
 - **静默无效的取消可能使销毁停滞并持续占用容量**——如果 `cancel` 返回后始终未结算 `done`，注册表就无法将其与缓慢停止区分开；该任务会在服务剩余生命周期内持续占用一个桶名额，只有显式抛出异常才能安全地强制标为失败。
 
 <a id="dev-note"></a>

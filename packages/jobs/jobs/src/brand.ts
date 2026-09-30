@@ -26,3 +26,15 @@ export type JobId = Branded<'JobId'>
 export function JobId(id: string): JobId {
   return id as JobId
 }
+
+/** Identifies one job execution across registry restarts and copied Session history. */
+export type JobExecutionId = Branded<'JobExecutionId'>
+
+/**
+ * Brand the registry-issued UUID of one execution.
+ * @param id - the execution UUID.
+ * @returns the same string, branded; no validation is performed.
+ */
+export function JobExecutionId(id: string): JobExecutionId {
+  return id as JobExecutionId
+}

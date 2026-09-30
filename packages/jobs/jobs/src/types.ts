@@ -5,12 +5,61 @@
  * @module @deepseek-ai/dsh-jobs/types
  */
 
-import type { SessionId } from '@deepseek-ai/dsh-session'
-import type { JobId } from './brand.ts'
+import type { SessionEventMap, SessionId } from '@deepseek-ai/dsh-session'
+import type { JobExecutionId, JobId } from './brand.ts'
 import type { JobChannel, JobChunk, JobKind, JobView } from './view.ts'
 
 export { JobId } from './brand.ts'
 export type { JobChannel, JobChunk, JobKind, JobKindMap, JobStatus, JobView } from './view.ts'
+
+/** Tool dispatch that created a job; nested calls retain their root invocation. */
+export interface JobToolCall {
+  /** Exact invocation, including a PTC sub-call when applicable. */
+  readonly callId: SessionEventMap['tool/call']['callId']
+  /** Root model-requested invocation owning this execution. */
+  readonly rootCallId: SessionEventMap['tool/call']['callId']
+}
+
+/** Durable identity and registration time of one owned job execution. */
+export interface JobRegisteredData {
+  /** UUID unique to this execution, even when the registry reuses a display id. */
+  executionId: JobExecutionId
+  /** Runtime-local id accepted by job controls. */
+  jobId: JobId
+  /** Original owner; copied history does not transfer execution ownership. */
+  owner: SessionId
+  /** Producer kind. */
+  kind: string
+  /** Producer-supplied label. */
+  label: string
+  /** Unix epoch milliseconds when registration committed. */
+  startedAt: number
+  /** Creating tool invocation, when the producer was called through a tool. */
+  toolCall?: JobToolCall
+}
+
+/** Registry settlement, including whether the producer confirmed resource release. */
+export interface JobSettledData extends JobRegisteredData {
+  /** Unix epoch milliseconds when the registry committed the terminal record. */
+  finishedAt: number
+  /** Recorded terminal outcome. */
+  status: JobOutcome['status']
+  /** Source of the termination request, or producer completion. */
+  cause: JobSettleCause
+  /** False for a rejected producer promise or forced teardown failure; work may remain alive. */
+  terminationConfirmed: boolean
+  /** Terminal reason, including a recorded kill reason when applicable. */
+  detail?: string
+}
+
+declare module '@deepseek-ai/dsh-session/types' {
+  interface SessionEventMap {
+    /** Log-only job registration; model output collection is not required. */
+    'job/registered': JobRegisteredData
+    /** Log-only terminal record, paired by executionId rather than a reusable jobId. */
+    'job/settled': JobSettledData
+  }
+}
 
 /** Terminal result supplied by a producer through {@link JobHooks.done}. */
 export interface JobOutcome {
@@ -135,6 +184,8 @@ export interface JobSpec {
    * caller until service disposal.
    */
   owner?: SessionId
+  /** Creating tool invocation, retained in the durable lifecycle records. */
+  toolCall?: JobToolCall
   /**
    * Optional UTF-8 byte cap for each complete model-facing completion notice or
    * output read, including controller status metadata. Independent of ring

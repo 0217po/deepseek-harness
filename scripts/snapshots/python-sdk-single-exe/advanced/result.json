@@ -469,8 +469,46 @@
       }
     },
     {
-      "type": "tool/ptc-dispatch",
+      "type": "job/registered",
       "seq": 24,
+      "time": 0,
+      "data": {
+        "executionId": "{{id:1}}",
+        "jobId": "snapshot-1",
+        "owner": "{{parent}}",
+        "kind": "snapshot",
+        "label": "snapshot_double",
+        "startedAt": 0,
+        "toolCall": {
+          "callId": "advanced-code:ptc:1",
+          "rootCallId": "advanced-code"
+        }
+      }
+    },
+    {
+      "type": "job/settled",
+      "seq": 25,
+      "time": 0,
+      "data": {
+        "executionId": "{{id:1}}",
+        "jobId": "snapshot-1",
+        "owner": "{{parent}}",
+        "kind": "snapshot",
+        "label": "snapshot_double",
+        "startedAt": 0,
+        "toolCall": {
+          "callId": "advanced-code:ptc:1",
+          "rootCallId": "advanced-code"
+        },
+        "finishedAt": 0,
+        "status": "completed",
+        "cause": "producer",
+        "terminationConfirmed": true
+      }
+    },
+    {
+      "type": "tool/ptc-dispatch",
+      "seq": 26,
       "time": 0,
       "data": {
         "rootCallId": "advanced-code",
@@ -491,7 +529,7 @@
     },
     {
       "type": "tool/result",
-      "seq": 25,
+      "seq": 27,
       "time": 0,
       "data": {
         "turn": 1,
@@ -520,7 +558,7 @@
     },
     {
       "type": "step/end",
-      "seq": 26,
+      "seq": 28,
       "time": 0,
       "data": {
         "turn": 1,
@@ -529,7 +567,7 @@
     },
     {
       "type": "step/start",
-      "seq": 27,
+      "seq": 29,
       "time": 0,
       "data": {
         "turn": 1,
@@ -538,17 +576,17 @@
     },
     {
       "type": "session-log-deepseek/delivery-accepted",
-      "seq": 28,
+      "seq": 30,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
         "sessionFormatVersion": 4,
-        "throughSeq": 27
+        "throughSeq": 29
       }
     },
     {
       "type": "assistant/message",
-      "seq": 29,
+      "seq": 31,
       "time": 0,
       "data": {
         "turn": 1,
@@ -672,7 +710,7 @@
     },
     {
       "type": "tool/call",
-      "seq": 30,
+      "seq": 32,
       "time": 0,
       "data": {
         "turn": 1,
@@ -684,7 +722,7 @@
     },
     {
       "type": "tool/result",
-      "seq": 31,
+      "seq": 33,
       "time": 0,
       "data": {
         "turn": 1,
@@ -712,13 +750,13 @@
         }
       },
       "sourceEventSeqs": [
-        30
+        32
       ],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 32,
+      "seq": 34,
       "time": 0,
       "data": {
         "turn": 1,
@@ -727,7 +765,7 @@
     },
     {
       "type": "step/start",
-      "seq": 33,
+      "seq": 35,
       "time": 0,
       "data": {
         "turn": 1,
@@ -736,17 +774,17 @@
     },
     {
       "type": "session-log-deepseek/delivery-accepted",
-      "seq": 34,
+      "seq": 36,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
         "sessionFormatVersion": 4,
-        "throughSeq": 33
+        "throughSeq": 35
       }
     },
     {
       "type": "assistant/message",
-      "seq": 35,
+      "seq": 37,
       "time": 0,
       "data": {
         "turn": 1,
@@ -870,7 +908,7 @@
     },
     {
       "type": "tool/call",
-      "seq": 36,
+      "seq": 38,
       "time": 0,
       "data": {
         "turn": 1,
@@ -882,7 +920,7 @@
     },
     {
       "type": "tool/ptc-dispatch-start",
-      "seq": 37,
+      "seq": 39,
       "time": 0,
       "data": {
         "rootCallId": "advanced-denied-ptc",
@@ -896,7 +934,7 @@
     },
     {
       "type": "tool/ptc-dispatch",
-      "seq": 38,
+      "seq": 40,
       "time": 0,
       "data": {
         "rootCallId": "advanced-denied-ptc",
@@ -922,7 +960,7 @@
     },
     {
       "type": "tool/result",
-      "seq": 39,
+      "seq": 41,
       "time": 0,
       "data": {
         "turn": 1,
@@ -945,13 +983,13 @@
         }
       },
       "sourceEventSeqs": [
-        36
+        38
       ],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 40,
+      "seq": 42,
       "time": 0,
       "data": {
         "turn": 1,
@@ -960,7 +998,7 @@
     },
     {
       "type": "step/start",
-      "seq": 41,
+      "seq": 43,
       "time": 0,
       "data": {
         "turn": 1,
@@ -969,17 +1007,17 @@
     },
     {
       "type": "session-log-deepseek/delivery-accepted",
-      "seq": 42,
+      "seq": 44,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
         "sessionFormatVersion": 4,
-        "throughSeq": 41
+        "throughSeq": 43
       }
     },
     {
       "type": "assistant/message",
-      "seq": 43,
+      "seq": 45,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1103,7 +1141,7 @@
     },
     {
       "type": "tool/call",
-      "seq": 44,
+      "seq": 46,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1115,7 +1153,7 @@
     },
     {
       "type": "subagent/catalog",
-      "seq": 45,
+      "seq": 47,
       "time": 0,
       "data": {
         "version": 0,
@@ -1127,7 +1165,7 @@
     },
     {
       "type": "tool/result",
-      "seq": 46,
+      "seq": 48,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1150,13 +1188,13 @@
         }
       },
       "sourceEventSeqs": [
-        44
+        46
       ],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 47,
+      "seq": 49,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1165,7 +1203,7 @@
     },
     {
       "type": "step/start",
-      "seq": 48,
+      "seq": 50,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1174,17 +1212,17 @@
     },
     {
       "type": "session-log-deepseek/delivery-accepted",
-      "seq": 49,
+      "seq": 51,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
         "sessionFormatVersion": 4,
-        "throughSeq": 48
+        "throughSeq": 50
       }
     },
     {
       "type": "assistant/message",
-      "seq": 50,
+      "seq": 52,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1308,7 +1346,7 @@
     },
     {
       "type": "tool/call",
-      "seq": 51,
+      "seq": 53,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1320,7 +1358,7 @@
     },
     {
       "type": "tool-workflow/run-start",
-      "seq": 52,
+      "seq": 54,
       "time": 0,
       "data": {
         "runId": "{{workflow-run}}",
@@ -1329,7 +1367,7 @@
     },
     {
       "type": "subagent/catalog",
-      "seq": 53,
+      "seq": 55,
       "time": 0,
       "data": {
         "version": 0,
@@ -1340,7 +1378,7 @@
     },
     {
       "type": "tool-workflow/agent-start",
-      "seq": 54,
+      "seq": 56,
       "time": 0,
       "data": {
         "runId": "{{workflow-run}}",
@@ -1352,7 +1390,7 @@
     },
     {
       "type": "tool-workflow/agent-end",
-      "seq": 55,
+      "seq": 57,
       "time": 0,
       "data": {
         "runId": "{{workflow-run}}",
@@ -1362,7 +1400,7 @@
     },
     {
       "type": "tool-workflow/run-end",
-      "seq": 56,
+      "seq": 58,
       "time": 0,
       "data": {
         "runId": "{{workflow-run}}",
@@ -1371,7 +1409,7 @@
     },
     {
       "type": "tool/result",
-      "seq": 57,
+      "seq": 59,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1394,13 +1432,13 @@
         }
       },
       "sourceEventSeqs": [
-        51
+        53
       ],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 58,
+      "seq": 60,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1409,7 +1447,7 @@
     },
     {
       "type": "step/start",
-      "seq": 59,
+      "seq": 61,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1418,17 +1456,17 @@
     },
     {
       "type": "session-log-deepseek/delivery-accepted",
-      "seq": 60,
+      "seq": 62,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
         "sessionFormatVersion": 4,
-        "throughSeq": 59
+        "throughSeq": 61
       }
     },
     {
       "type": "assistant/message",
-      "seq": 61,
+      "seq": 63,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1536,7 +1574,7 @@
     },
     {
       "type": "step/end",
-      "seq": 62,
+      "seq": 64,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1545,7 +1583,7 @@
     },
     {
       "type": "command/run",
-      "seq": 63,
+      "seq": 65,
       "time": 0,
       "data": {
         "commandId": "{{command:1}}",
@@ -1557,7 +1595,7 @@
     },
     {
       "type": "feedback/record",
-      "seq": 64,
+      "seq": 66,
       "time": 0,
       "data": {
         "text": "The session needs a clearer explanation."
@@ -1565,7 +1603,7 @@
     },
     {
       "type": "command/done",
-      "seq": 65,
+      "seq": 67,
       "time": 0,
       "data": {
         "commandId": "{{command:1}}",
@@ -1575,7 +1613,7 @@
     },
     {
       "type": "feedback/record",
-      "seq": 66,
+      "seq": 68,
       "time": 0,
       "data": {
         "category": "other"
@@ -1583,7 +1621,7 @@
     },
     {
       "type": "feedback/message-put",
-      "seq": 67,
+      "seq": 69,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
@@ -1600,7 +1638,7 @@
     },
     {
       "type": "feedback/message-put",
-      "seq": 68,
+      "seq": 70,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
@@ -1616,7 +1654,7 @@
     },
     {
       "type": "feedback/message-delete",
-      "seq": 69,
+      "seq": 71,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
@@ -1625,7 +1663,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 70,
+      "seq": 72,
       "time": 0,
       "data": {
         "turn": 1,
@@ -2234,8 +2272,58 @@
       "payload": {
         "sessionId": "{{parent}}",
         "event": {
-          "type": "tool/ptc-dispatch",
+          "type": "job/registered",
           "seq": 24,
+          "time": 0,
+          "data": {
+            "executionId": "{{id:1}}",
+            "jobId": "snapshot-1",
+            "owner": "{{parent}}",
+            "kind": "snapshot",
+            "label": "snapshot_double",
+            "startedAt": 0,
+            "toolCall": {
+              "callId": "advanced-code:ptc:1",
+              "rootCallId": "advanced-code"
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "job/settled",
+          "seq": 25,
+          "time": 0,
+          "data": {
+            "executionId": "{{id:1}}",
+            "jobId": "snapshot-1",
+            "owner": "{{parent}}",
+            "kind": "snapshot",
+            "label": "snapshot_double",
+            "startedAt": 0,
+            "toolCall": {
+              "callId": "advanced-code:ptc:1",
+              "rootCallId": "advanced-code"
+            },
+            "finishedAt": 0,
+            "status": "completed",
+            "cause": "producer",
+            "terminationConfirmed": true
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "tool/ptc-dispatch",
+          "seq": 26,
           "time": 0,
           "data": {
             "rootCallId": "advanced-code",
@@ -2262,7 +2350,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/result",
-          "seq": 25,
+          "seq": 27,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2297,7 +2385,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 26,
+          "seq": 28,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2312,7 +2400,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/start",
-          "seq": 27,
+          "seq": 29,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2327,12 +2415,12 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 28,
+          "seq": 30,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 27
+            "throughSeq": 29
           }
         }
       }
@@ -2343,7 +2431,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "assistant/message",
-          "seq": 29,
+          "seq": 31,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2473,7 +2561,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/call",
-          "seq": 30,
+          "seq": 32,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2491,7 +2579,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/result",
-          "seq": 31,
+          "seq": 33,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2519,7 +2607,7 @@
             }
           },
           "sourceEventSeqs": [
-            30
+            32
           ],
           "surfaceOp": "append"
         }
@@ -2531,7 +2619,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 32,
+          "seq": 34,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2546,7 +2634,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/start",
-          "seq": 33,
+          "seq": 35,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2561,12 +2649,12 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 34,
+          "seq": 36,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 33
+            "throughSeq": 35
           }
         }
       }
@@ -2577,7 +2665,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "assistant/message",
-          "seq": 35,
+          "seq": 37,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2707,7 +2795,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/call",
-          "seq": 36,
+          "seq": 38,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2725,7 +2813,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/ptc-dispatch-start",
-          "seq": 37,
+          "seq": 39,
           "time": 0,
           "data": {
             "rootCallId": "advanced-denied-ptc",
@@ -2745,7 +2833,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/ptc-dispatch",
-          "seq": 38,
+          "seq": 40,
           "time": 0,
           "data": {
             "rootCallId": "advanced-denied-ptc",
@@ -2777,7 +2865,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/result",
-          "seq": 39,
+          "seq": 41,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2800,7 +2888,7 @@
             }
           },
           "sourceEventSeqs": [
-            36
+            38
           ],
           "surfaceOp": "append"
         }
@@ -2812,7 +2900,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 40,
+          "seq": 42,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2827,7 +2915,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/start",
-          "seq": 41,
+          "seq": 43,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2842,12 +2930,12 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 42,
+          "seq": 44,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 41
+            "throughSeq": 43
           }
         }
       }
@@ -2858,7 +2946,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "assistant/message",
-          "seq": 43,
+          "seq": 45,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2988,7 +3076,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/call",
-          "seq": 44,
+          "seq": 46,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3128,7 +3216,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "subagent/catalog",
-          "seq": 45,
+          "seq": 47,
           "time": 0,
           "data": {
             "version": 0,
@@ -3555,7 +3643,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/result",
-          "seq": 46,
+          "seq": 48,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3578,7 +3666,7 @@
             }
           },
           "sourceEventSeqs": [
-            44
+            46
           ],
           "surfaceOp": "append"
         }
@@ -3590,7 +3678,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 47,
+          "seq": 49,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3605,7 +3693,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/start",
-          "seq": 48,
+          "seq": 50,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3620,12 +3708,12 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 49,
+          "seq": 51,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 48
+            "throughSeq": 50
           }
         }
       }
@@ -3636,7 +3724,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "assistant/message",
-          "seq": 50,
+          "seq": 52,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3766,7 +3854,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/call",
-          "seq": 51,
+          "seq": 53,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3784,7 +3872,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool-workflow/run-start",
-          "seq": 52,
+          "seq": 54,
           "time": 0,
           "data": {
             "runId": "{{workflow-run}}",
@@ -3921,7 +4009,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "subagent/catalog",
-          "seq": 53,
+          "seq": 55,
           "time": 0,
           "data": {
             "version": 0,
@@ -3938,7 +4026,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool-workflow/agent-start",
-          "seq": 54,
+          "seq": 56,
           "time": 0,
           "data": {
             "runId": "{{workflow-run}}",
@@ -4364,7 +4452,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool-workflow/agent-end",
-          "seq": 55,
+          "seq": 57,
           "time": 0,
           "data": {
             "runId": "{{workflow-run}}",
@@ -4380,7 +4468,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool-workflow/run-end",
-          "seq": 56,
+          "seq": 58,
           "time": 0,
           "data": {
             "runId": "{{workflow-run}}",
@@ -4395,7 +4483,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/result",
-          "seq": 57,
+          "seq": 59,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4418,7 +4506,7 @@
             }
           },
           "sourceEventSeqs": [
-            51
+            53
           ],
           "surfaceOp": "append"
         }
@@ -4430,7 +4518,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 58,
+          "seq": 60,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4445,7 +4533,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/start",
-          "seq": 59,
+          "seq": 61,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4460,12 +4548,12 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 60,
+          "seq": 62,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 59
+            "throughSeq": 61
           }
         }
       }
@@ -4476,7 +4564,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "assistant/message",
-          "seq": 61,
+          "seq": 63,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4590,7 +4678,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 62,
+          "seq": 64,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4605,7 +4693,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "command/run",
-          "seq": 63,
+          "seq": 65,
           "time": 0,
           "data": {
             "commandId": "{{command:1}}",
@@ -4623,7 +4711,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/record",
-          "seq": 64,
+          "seq": 66,
           "time": 0,
           "data": {
             "text": "The session needs a clearer explanation."
@@ -4637,7 +4725,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "command/done",
-          "seq": 65,
+          "seq": 67,
           "time": 0,
           "data": {
             "commandId": "{{command:1}}",
@@ -4653,7 +4741,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/record",
-          "seq": 66,
+          "seq": 68,
           "time": 0,
           "data": {
             "category": "other"
@@ -4667,7 +4755,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/message-put",
-          "seq": 67,
+          "seq": 69,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
@@ -4690,7 +4778,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/message-put",
-          "seq": 68,
+          "seq": 70,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
@@ -4712,7 +4800,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/message-delete",
-          "seq": 69,
+          "seq": 71,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
@@ -4727,7 +4815,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "turn/end",
-          "seq": 70,
+          "seq": 72,
           "time": 0,
           "data": {
             "turn": 1,

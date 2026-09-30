@@ -15,6 +15,7 @@ import { installJobArchiveAdmission } from './archive-admission.ts'
 import type { JobEvents, JobId, JobOutputRead, JobRead, JobSpec, JobView } from './types.ts'
 
 export { JobId } from './types.ts'
+export { JobExecutionId } from './brand.ts'
 export type {
   JobAppendOptions,
   JobChannel,
@@ -31,10 +32,13 @@ export type {
   JobOutputRead,
   JobOutputSource,
   JobRead,
+  JobRegisteredData,
+  JobSettledData,
   JobSettleCause,
   JobSourceRead,
   JobSpec,
   JobStatus,
+  JobToolCall,
   JobView,
 } from './types.ts'
 

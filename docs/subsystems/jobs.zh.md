@@ -21,9 +21,63 @@ interface JobKindMap {
 
 `JobStatus` 为 `'running' | 'stopping' | 'completed' | 'killed' | 'failed'`；生产方特有的事实在运行期间归入 `JobView.progress`，结算后归入 `JobView.detail`。
 
+<a id="session-lifecycle-records"></a>
+
+## Session 生命周期记录
+
+有所有者的 job 在原始所有者 Session 中发布 `job/registered` 与 `job/settled`。`executionId` 在注册表重启和历史复制后仍标识同一次执行；`jobId` 仍是进程内控制 id。SDK 通过 `session.event` 转发这些仅日志记录，不依赖输出读取。时间戳描述注册表提交时刻，不是 CPU 时间或精确的 OS 进程边界；缺少结算时保持不完整。`terminationConfirmed` 表示生产方兑现了释放资源的 promise，强制销毁或 promise 拒绝时为 false。
+
+`job/settled` 可能出现在 `turn/end` 之后。SDK run 结果只覆盖自身观测窗口；需要较晚结算的消费方应保留 Session 订阅或读取持久化历史。轮次完成不表示所有有主 job 都已停止。
+
+```ts type-equiv
+/** Durable identity and registration time of one owned job execution. */
+interface JobRegisteredData {
+  /** UUID unique to this execution, even when the registry reuses a display id. */
+  executionId: JobExecutionId
+  /** Runtime-local id accepted by job controls. */
+  jobId: JobId
+  /** Original owner; copied history does not transfer execution ownership. */
+  owner: SessionId
+  /** Producer kind. */
+  kind: string
+  /** Producer-supplied label. */
+  label: string
+  /** Unix epoch milliseconds when registration committed. */
+  startedAt: number
+  /** Creating tool invocation, when the producer was called through a tool. */
+  toolCall?: JobToolCall
+}
+```
+
+```ts type-equiv
+/** Registry settlement, including whether the producer confirmed resource release. */
+interface JobSettledData extends JobRegisteredData {
+  /** Unix epoch milliseconds when the registry committed the terminal record. */
+  finishedAt: number
+  /** Recorded terminal outcome. */
+  status: JobOutcome['status']
+  /** Source of the termination request, or producer completion. */
+  cause: JobSettleCause
+  /** False for a rejected producer promise or forced teardown failure; work may remain alive. */
+  terminationConfirmed: boolean
+  /** Terminal reason, including a recorded kill reason when applicable. */
+  detail?: string
+}
+```
+
 ## 生产方约定
 
 `JobSpec` 声明身份、拥有者会话、可选的拉取式 `output` 源与启动器。运行时会在完成预检后携带该 job 的 `JobHandle` 调用 `run()`，随后提交注册，不再执行可能失败的步骤。生产方拥有执行资源；运行时拥有身份、访问、生命周期状态与输出环。
+
+```ts type-equiv
+/** Tool dispatch that created a job; nested calls retain their root invocation. */
+interface JobToolCall {
+  /** Exact invocation, including a PTC sub-call when applicable. */
+  readonly callId: SessionEventMap['tool/call']['callId']
+  /** Root model-requested invocation owning this execution. */
+  readonly rootCallId: SessionEventMap['tool/call']['callId']
+}
+```
 
 ```ts type-equiv
 /**
@@ -44,6 +98,8 @@ interface JobSpec {
    * caller until service disposal.
    */
   owner?: SessionId
+  /** Creating tool invocation, retained in the durable lifecycle records. */
+  toolCall?: JobToolCall
   /**
    * Optional UTF-8 byte cap for each complete model-facing completion notice or
    * output read, including controller status metadata. Independent of ring

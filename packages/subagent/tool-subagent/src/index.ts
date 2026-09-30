@@ -544,6 +544,7 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
             const id = jobs.start({
               kind: 'subagent',
               label: args.description,
+              toolCall: { callId: exec.callId, rootCallId: exec.rootCallId },
               owner: parent.id,
               run: () => {
                 const controller = new AbortController()
