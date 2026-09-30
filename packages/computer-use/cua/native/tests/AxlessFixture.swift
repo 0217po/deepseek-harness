@@ -41,7 +41,7 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     self.window.setContentSize(NSSize(width: 360 + 40 * self.resizeCount, height: 180 + 20 * self.resizeCount))
                     self.persist()
                 case SIGHUP:
-                    self.window.collectionBehavior = .default
+                    self.window.collectionBehavior = []
                     self.window.miniaturize(nil)
                 case SIGALRM: NSApplication.shared.hide(nil)
                 default:
