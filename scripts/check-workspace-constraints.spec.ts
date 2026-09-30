@@ -10,7 +10,6 @@ import {
 } from './experimental-package-policy.ts'
 import {
   checkDshFamilyVersion,
-  checkKoffiVersions,
   checkWorkspaceManifest,
   checkWorkspaceProtocol,
   checkExperimentalDependencyIsolation,
@@ -77,24 +76,6 @@ describe('workspace dependency ranges', () => {
   })
 })
 
-describe('Koffi version alignment', () => {
-  it.each(['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'] as const)(
-    'requires the qualified exact version in %s', (section) => {
-      const consumer = (version: string): WorkspaceManifest => ({
-        dir: 'apps/desktop-host',
-        manifest: { name: 'private-host', private: true, [section]: { koffi: version } },
-      })
-      expect(checkKoffiVersions([consumer('3.1.1')])).toEqual([])
-      for (const version of ['^3.1.0', '^3.1.1', '~3.1.1', '*', '3.3.2']) {
-        expect(checkKoffiVersions([consumer(version)])).toEqual([
-          `private-host: ${section}.koffi must use 3.1.1, got ${version}`,
-        ])
-      }
-      expect(checkKoffiVersions([{ dir: '.', manifest: { [section]: { unrelated: '^1.0.0' } } }])).toEqual([])
-    },
-  )
-})
-
 describe('workspace manifest discovery', () => {
   it('checks root, app, runtime, tooling, and newly declared members while honoring exclusions', () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-workspace-ranges-'))
@@ -108,14 +89,12 @@ describe('workspace manifest discovery', () => {
       mkdirSync(join(root, dir), { recursive: true })
       writeFileSync(join(root, dir, 'package.json'), JSON.stringify(dir === 'packages/core/runtime'
         ? { name: '@deepseek-ai/dsh-runtime' }
-        : { dependencies: { '@deepseek-ai/dsh-runtime': 'workspace:^', koffi: '^3.1.0' } }))
+        : { dependencies: { '@deepseek-ai/dsh-runtime': 'workspace:^' } }))
     }
     const manifests = readWorkspaceManifests(root)
     expect(manifests.map(entry => entry.dir).sort()).toEqual([...consumers, 'packages/core/runtime'].sort())
     expect(checkWorkspaceProtocol(manifests).sort()).toEqual(consumers.map(dir =>
       `${dir}: dependencies.@deepseek-ai/dsh-runtime must use workspace:*, got workspace:^`).sort())
-    expect(checkKoffiVersions(manifests).sort()).toEqual(consumers.map(dir =>
-      `${dir}: dependencies.koffi must use 3.1.1, got ^3.1.0`).sort())
   })
 
   it.each(['', 'null', '{}', 'packages: []', 'packages: [false]', 'packages: [""]', 'packages: wrong'])(

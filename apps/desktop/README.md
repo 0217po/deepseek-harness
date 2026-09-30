@@ -396,10 +396,6 @@ Every package command builds the repository, packs the first-party production cl
 
 macOS packaging writes `Contents/Resources/app-update.yml` while assembling the App and before code signing, including the directory build that feeds the parallel ZIP and DMG lanes. The signing hook verifies the exact feed and updater cache directory. Both lane copies and the promoted App are checked again before the release completion record is written; a missing or mismatched configuration prevents artifact promotion and therefore prevents upload.
 
-Koffi consumers, including the private Desktop Host, pin `3.1.1`; `pnpm run constraints` checks every workspace declaration. Upgrade all consumers together after qualifying source builds without optional prebuilts and the packed production install.
-
-`prepare:dsh` seeds production resolution from the repository lockfile and carries its overrides and patch files into the disposable build project. The [dependency check](scripts/dependency-lock.ts) requires every registry package version, integrity and applied patch to match that baseline before installation; dependency snapshots must resolve completely. First-party packages must use the verified local tarballs. Optional workspace platform packages omitted from those tarballs use their exact workspace version from the registry. Existing locked versions and peer contexts are permitted, so unrelated major versions need not be forced together. Update and qualify repository dependencies before changing the production graph.
-
 An unpacked artifact contains Electron, the materialized dsh production tree, pnpm, and the shell application. Installer size and filesystem size differ; release qualification measures both, plus the profile’s plugin storage and first-launch latency. The runtime trades more application files for eliminating core package installation on the user’s machine.
 
 ## Updates

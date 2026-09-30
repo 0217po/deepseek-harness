@@ -157,3 +157,27 @@ export function verifyDesktopCorePackageSet(
   }
   return packageSet
 }
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+}
+
+/**
+ * Reject a lockfile that resolved any packaged core name through a registry version.
+ * @param lockfile - Generated pnpm lockfile text.
+ * @param packageSet - Verified local core package set.
+ */
+export function verifyDesktopCoreLockfile(
+  lockfile: string,
+  packageSet: DesktopCorePackageSet,
+): void {
+  for (const record of packageSet.packages) {
+    const registryResolution = new RegExp(
+      `^  ['"]?${escapeRegExp(record.name)}@${escapeRegExp(record.version)}(?:\\([^\\r\\n]*\\))?['"]?:`,
+      'mu',
+    )
+    if (registryResolution.test(lockfile)) {
+      throw new Error(`desktop package set: lockfile resolved ${record.name}@${record.version} outside the local package set`)
+    }
+  }
+}

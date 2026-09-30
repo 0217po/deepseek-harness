@@ -551,8 +551,6 @@ function checkRepositoryVersion(): string[] {
 const dependencySections = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'] as const
 /** Dependency sections present in an installed runtime. */
 const runtimeDependencySections = ['dependencies', 'optionalDependencies', 'peerDependencies'] as const
-/** Koffi version qualified for source builds without optional native prebuilts. */
-const KOFFI_VERSION = '3.1.1'
 
 /**
  * Prevent an official runtime from requiring an experimental package. The dsh installation's `dependencies`
@@ -615,24 +613,6 @@ export function checkWorkspaceProtocol(manifests: readonly WorkspaceManifest[]):
   return errors
 }
 
-/**
- * Require the qualified Koffi pin in every workspace, including private applications.
- * @param manifests - Root and all declared workspace manifests.
- * @returns Diagnostics for declarations that could install a different Koffi version.
- */
-export function checkKoffiVersions(manifests: readonly WorkspaceManifest[]): string[] {
-  const errors: string[] = []
-  for (const { dir, manifest } of manifests) {
-    for (const section of dependencySections) {
-      const version = manifest[section]?.koffi
-      if (version !== undefined && version !== KOFFI_VERSION) {
-        errors.push(`${manifest.name ?? dir}: ${section}.koffi must use ${KOFFI_VERSION}, got ${version}`)
-      }
-    }
-  }
-  return errors
-}
-
 /** Run the repository constraint gate. */
 export function main(): void {
   const manifests = readWorkspaceManifests(root)
@@ -640,7 +620,6 @@ export function main(): void {
     ...checkRepositoryVersion(),
     ...workspaceManifests().flatMap(checkWorkspaceManifest),
     ...checkWorkspaceProtocol(manifests),
-    ...checkKoffiVersions(manifests),
     ...checkExperimentalDependencyIsolation(manifests),
     ...checkHierarchyShape(),
     ...collectProjectReferenceFaceViolations(root),

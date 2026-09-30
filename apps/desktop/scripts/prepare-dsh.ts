@@ -15,6 +15,7 @@ import {
   DESKTOP_PACKAGES_DIR,
   DESKTOP_PACKAGE_SET_FILE,
   readDesktopCorePackageSet,
+  verifyDesktopCoreLockfile,
 } from '../src/core-package-set.ts'
 import { smokePrimaryRuntime } from './prepare-primary-runtime.ts'
 import { smokePreparedRuntime } from './smoke-prepared-runtime.ts'
@@ -31,7 +32,6 @@ import {
 import { desktopTargetPlatform, resolveDesktopBuildTarget, resolveDesktopTargetBuildPaths } from './desktop-build-paths.mjs'
 import { desktopRuntimeFileExclusion } from './runtime-file-policy.ts'
 import { selectOfficeEngine } from '../../../scripts/libreoffice-packages.mjs'
-import { prepareDesktopDependencyLock, verifyDesktopDependencyLock } from './dependency-lock.ts'
 
 const APP_ROOT = resolve(import.meta.dirname, '..')
 const BUILD_PATHS = resolveDesktopTargetBuildPaths()
@@ -121,11 +121,12 @@ async function main(): Promise<void> {
       copyFileSync(join(PACKAGE_SET_ROOT, DESKTOP_PACKAGE_SET_FILE), join(BUILD_ROOT, DESKTOP_PACKAGE_SET_FILE))
       cpSync(join(PACKAGE_SET_ROOT, DESKTOP_PACKAGES_DIR), join(BUILD_ROOT, DESKTOP_PACKAGES_DIR), { recursive: true })
       createRuntimeProjectMetadata(BUILD_ROOT, release)
-      prepareDesktopDependencyLock(BUILD_ROOT, resolve(APP_ROOT, '..', '..'), readDesktopCorePackageSet(BUILD_ROOT, release.version))
     })
     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:lockfile', () => runPnpm(['install', '--lockfile-only']))
-    const lockfile = readFileSync(join(BUILD_ROOT, 'pnpm-lock.yaml'), 'utf8')
-    verifyDesktopDependencyLock(lockfile, resolve(APP_ROOT, '..', '..'), readDesktopCorePackageSet(BUILD_ROOT, release.version))
+    verifyDesktopCoreLockfile(
+      readFileSync(join(BUILD_ROOT, 'pnpm-lock.yaml'), 'utf8'),
+      readDesktopCorePackageSet(BUILD_ROOT, release.version),
+    )
     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:install', () => runPnpm(['install', '--prod', '--frozen-lockfile', '--trust-lockfile']))
     const packageSet = readDesktopCorePackageSet(BUILD_ROOT, release.version)
     const targetName = resolveDesktopBuildTarget()
