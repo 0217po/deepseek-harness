@@ -196,6 +196,38 @@
             "properties": {
               "method": {
                 "type": "string",
+                "const": "show"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "appHandle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  }
+                },
+                "required": [
+                  "appHandle"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
                 "const": "listWindows"
               },
               "params": {

@@ -8,7 +8,9 @@ import base64
 import json
 import os
 from pathlib import Path
+import plistlib
 import signal
+import shutil
 import subprocess
 import tempfile
 import time
@@ -34,7 +36,16 @@ def main():
         with tempfile.TemporaryDirectory(prefix='dsh-cua-axless-') as directory:
             root = Path(directory)
             state_path = root / 'state.json'
-            binary = root / 'axless-fixture'
+            def app_binary(name):
+                contents = root / (name + '.app') / 'Contents'
+                (contents / 'MacOS').mkdir(parents=True)
+                (contents / 'Info.plist').write_bytes(plistlib.dumps({
+                    'CFBundleIdentifier': 'org.deepseek-harness.cua.' + root.name + '.' + name,
+                    'CFBundleExecutable': 'fixture', 'CFBundleName': name, 'CFBundlePackageType': 'APPL',
+                }))
+                return contents / 'MacOS/fixture'
+
+            binary = app_binary('Target')
             subprocess.run(['swiftc', str(ROOT / 'tests/AxlessFixture.swift'), '-o', str(binary)], check=True)
             fixture = subprocess.Popen([str(binary), str(state_path)], stdout=subprocess.PIPE,
                                        text=True, start_new_session=True)
@@ -107,7 +118,9 @@ def main():
                 wait_state(lambda state: state['count'] == 4, 'fresh screenshot did not admit resized-window input')
 
                 foreground_path = root / 'foreground.json'
-                foreground = subprocess.Popen([str(binary), str(foreground_path)], stdout=subprocess.PIPE,
+                foreground_binary = app_binary('Foreground')
+                shutil.copy2(binary, foreground_binary)
+                foreground = subprocess.Popen([str(foreground_binary), str(foreground_path)], stdout=subprocess.PIPE,
                                               text=True, start_new_session=True)
                 assert line(foreground).strip() == 'READY'
                 wait_state(lambda state: not state['active'], 'foreground fixture did not take focus')
