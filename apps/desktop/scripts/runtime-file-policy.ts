@@ -34,6 +34,7 @@ export function desktopRuntimeFileExclusion(
     return 'fs-ext build configuration'
   }
   if (name === '@mixmark-io/domino' && (entry === 'test' || entry.startsWith('test/'))) return 'Domino test fixtures'
+  if (name === '@mixmark-io/domino' && (entry === '.yarn' || entry.startsWith('.yarn/'))) return 'Domino development tooling'
   if (name === 'node-pty' && entry.startsWith('prebuilds/')) {
     const platform = packageParts[nameParts + 1]
     if (platform !== undefined && platform !== `${target.platform}-${target.arch}`) return 'node-pty other platform'
