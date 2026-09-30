@@ -26,6 +26,7 @@ it('signs Mach-O files in their final locations and verifies each signature', as
   expect(verifyMacOSRuntimeCode).toHaveBeenCalledWith(join(path, 'addon.node'), identity)
 })
 
+// File symlinks in these macOS fixtures require privileges unavailable to ordinary Windows processes.
 it.skipIf(process.platform === 'win32')('signs a shared Python interpreter once and retains both executable aliases', async () => {
   const path = root()
   const bin = join(path, 'dependencies/python/bin')
@@ -39,6 +40,7 @@ it.skipIf(process.platform === 'win32')('signs a shared Python interpreter once 
   await expect(signMacOSRuntime(path, 'com.example.app', identity, 'arm64')).rejects.toThrow('unsupported filesystem entry')
 })
 
+// The signer must inspect real file symlinks, including dangling and cyclic ones.
 it.skipIf(process.platform === 'win32').each(['unknown', 'absolute', 'escaping', 'dangling', 'chained', 'directory'])('rejects a %s runtime link before signing any file', async (kind) => {
   const path = root()
   const bin = join(path, 'dependencies/python/bin')

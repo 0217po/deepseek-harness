@@ -55,6 +55,7 @@ it('reports missing distribution metadata before trying to execute a stale nativ
   } finally { await rm(root, { recursive: true, force: true }) }
 })
 
+// Native Windows payloads require python.exe rather than POSIX interpreter aliases.
 it.skipIf(process.platform === 'win32')('rejects expanded interpreter aliases in the native payload smoke', async () => {
   const root = await mkdtemp(join(tmpdir(), 'primary-expanded-aliases-'))
   try {

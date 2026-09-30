@@ -67,6 +67,7 @@ it('installs offline, reuses the same release, and leaves environment and user p
   expect(process.env).toEqual(environment)
 })
 
+// Windows installations use python.exe; this upgrade needs the native POSIX alias layout.
 it.skipIf(process.platform === 'win32')('upgrades expanded Python commands to relocatable aliases and reuses the installed payload', async () => {
   const { source, root, manifest, directory } = await fixture()
   await installPrimaryRuntime(source, root)
@@ -89,6 +90,7 @@ it.skipIf(process.platform === 'win32')('upgrades expanded Python commands to re
   }
 })
 
+// These entry-point checks install real POSIX aliases; Windows payloads have no such entries.
 it.skipIf(process.platform === 'win32').each(['copy', 'reuse', 'in-place'] as const)('rejects escaping Python aliases during %s preparation', async (mode) => {
   const { source, root, manifest } = await fixture()
   if (mode === 'reuse') await installPrimaryRuntime(source, root)
@@ -110,10 +112,10 @@ it('copies Windows payloads without creating interpreter aliases', async () => {
   expect((await lstat(workspaceDependencyPaths(root, windows).python)).isFile()).toBe(true)
 })
 
-it.skipIf(process.platform === 'win32')('propagates an unreadable alias without creating a partial payload', async () => {
+it('propagates an unreadable alias without creating a partial payload', async () => {
   const { source, root, manifest } = await fixture()
   vi.mocked(fs.lstat).mockRejectedValueOnce(Object.assign(new Error('alias denied'), { code: 'EACCES' }))
-  await expect(copyPrimaryRuntime(source, root, manifest)).rejects.toThrow('alias denied')
+  await expect(copyPrimaryRuntime(source, root, { ...manifest, platform: 'linux' })).rejects.toThrow('alias denied')
   await expect(readFile(join(root, 'runtime.json'))).rejects.toMatchObject({ code: 'ENOENT' })
 })
 
