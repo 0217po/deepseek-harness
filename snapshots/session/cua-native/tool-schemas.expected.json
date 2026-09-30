@@ -236,6 +236,14 @@
                     "type": "integer",
                     "exclusiveMinimum": 0,
                     "maximum": 4294967295
+                  },
+                  "includeMenus": {
+                    "description": "Expand menu contents; omitted or false shows menu-bar entries only.",
+                    "type": "boolean"
+                  },
+                  "details": {
+                    "description": "Include identifiers, global-point bounds and complete action names.",
+                    "type": "boolean"
                   }
                 },
                 "required": [
