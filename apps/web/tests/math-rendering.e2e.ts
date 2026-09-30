@@ -94,7 +94,7 @@ describe('web e2e: settled Markdown math rendering', () => {
   let tripwire: ReturnType<typeof watchConsole>
 
   beforeAll(async () => {
-    scaffold = await launchWebScaffold({ extraOverlayPath: fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)) })
+    scaffold = await launchWebScaffold({})
     await seedSession(scaffold, mathFixture(), SEED_ID, undefined, { createdAt: WEB_FIXTURE_TIME })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)

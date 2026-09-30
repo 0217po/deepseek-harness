@@ -2,7 +2,7 @@
  * Doc-sync gate for package README Model Experience sections. It validates
  * audited package classifications, model/token/KV-cache fields, package-owned
  * text blocks, generated-catalog links, and final-section order. See the
- * [Model Experience Agent Note](../.agents/notes/implemented/process/2026-07-12-package-model-experience-contract.md).
+ * [Model Experience reference](../docs/cookbook/adding-a-package.md).
  */
 
 import { existsSync, globSync, readFileSync } from 'node:fs'
@@ -100,6 +100,8 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/experimental/webworker-runtime': { kind: 'none', reason: 'Browser-side host runtime and Node-compatibility layer; the plugins it boots own every model-facing registration.' },
   'packages/experimental/webworker-packer': { kind: 'none', reason: 'Build-time image writer; its output reaches a model only through the tree the worker then boots.' },
   'packages/experimental/inspector': { kind: 'none', reason: 'Developer diagnostics transport; it observes runtime activity without changing model requests.' },
+  'packages/experimental/inspector-profile': { kind: 'none', reason: 'The bundle mounts developer inspection plugins without contributing model context.' },
+  'packages/experimental/session-inspector': { kind: 'none', reason: 'The conversation view entries add no model-facing input.' },
   'packages/client/ui-slots': { kind: 'none', reason: 'Browser-side UI plugin layer; registers nothing model-facing.' },
   'packages/client/ui-attachment': { kind: 'none', reason: 'Browser-side UI plugin layer; registers nothing model-facing.' },
   'packages/client/ui-primitives': { kind: 'none', reason: 'Browser-side UI plugin layer; registers nothing model-facing.' },
