@@ -2,7 +2,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs'
 import { cp } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -10,7 +10,7 @@ import { dirname, join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import extractZip from 'extract-zip'
 import { x as extractTar } from 'tar'
-import { parsePrimaryRuntime, workspaceDependencyPaths, type PrimaryRuntimeManifest } from '../../packages/skill/tool-workspace-dependencies/src/index.ts'
+import { copyPrimaryRuntime, parsePrimaryRuntime, workspaceDependencyPaths, type PrimaryRuntimeManifest } from '../../packages/skill/tool-workspace-dependencies/src/index.ts'
 import lock from './lock.json' with { type: 'json' }
 
 /**
@@ -54,7 +54,7 @@ export function primaryRuntimePayloadDigest(
   // Identity preserves key order within the selected target, wheel records and distribution map, plus wheel-entry order.
   // Bump format when extraction or assembly changes payload bytes without changing locked inputs.
   return createHash('sha256').update(JSON.stringify({
-    format: 4, target, pythonVersion, pythonRelease, nodeVersion: pnpmVersion === undefined ? undefined : nodeVersion,
+    format: 5, target, pythonVersion, pythonRelease, nodeVersion: pnpmVersion === undefined ? undefined : nodeVersion,
     artifact: runtimeLock.targets[target], wheels, pythonPackages, pnpm: pnpmVersion,
   })).digest('hex')
 }
@@ -158,7 +158,7 @@ export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOption
     writeFileSync(join(output, 'runtime.json'), `${JSON.stringify(manifest, undefined, 2)}\n`)
     const destination = join(paths.runtime, 'primary-runtime')
     rmSync(destination, { recursive: true, force: true })
-    await cp(output, destination, { recursive: true, dereference: true })
+    await copyPrimaryRuntime(output, destination, manifest)
   } finally {
     rmSync(staging, { recursive: true, force: true })
   }
@@ -179,6 +179,16 @@ export function smokePrimaryRuntime(root: string, environment: NodeJS.ProcessEnv
   if (manifest.platform !== process.platform || manifest.arch !== process.arch) return
   if (Object.keys(manifest.pythonPackages).length === 0) throw new Error('primary runtime: missing Python distribution versions; prepare the payload before running its smoke checks.')
   const entries = workspaceDependencyPaths(root, manifest)
+  if (manifest.platform !== 'win32') {
+    const interpreter = `python${manifest.python.split('.').slice(0, 2).join('.')}`
+    for (const name of ['python', 'python3']) {
+      const path = join(dirname(entries.python), name)
+      if (!lstatSync(path).isSymbolicLink() || readlinkSync(path) !== interpreter) {
+        throw new Error(`primary runtime: Python commands must be relative aliases of ${interpreter}`)
+      }
+    }
+    if (!lstatSync(join(dirname(entries.python), interpreter)).isFile()) throw new Error('primary runtime: versioned Python must be a regular file')
+  }
   const options = { stdio: 'inherit', timeout: 120_000, env: environment } as const
   execFileSync(entries.python, ['-I', '-B', '-c', 'import decimal, xml.parsers.expat, lzma, uuid, numpy, pandas; assert numpy.arange(4).sum() == 6; assert pandas.DataFrame({"n": [1, 2]}).n.sum() == 3'], options)
   execFileSync(entries.python, ['-I', '-B', join(import.meta.dirname, 'smoke.py'), JSON.stringify(manifest.pythonPackages),

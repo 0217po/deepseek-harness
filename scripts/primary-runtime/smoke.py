@@ -21,9 +21,31 @@ from pptx.enum.chart import XL_CHART_TYPE
 from pptx.util import Inches
 
 
+def check_interpreters():
+    """Exercise command aliases, child execution and a pip-enabled virtual environment."""
+    executable = Path(sys.executable)
+    names = [executable.name] if sys.platform == "win32" else ["python", "python3", f"python{sys.version_info.major}.{sys.version_info.minor}"]
+    for name in names:
+        interpreter = executable.with_name(name)
+        subprocess.run([
+            str(interpreter), "-I", "-B", "-c",
+            "import subprocess, sys; from pathlib import Path; "
+            "assert Path(sys.executable) == Path(sys.argv[1]); "
+            "subprocess.run([sys.executable, '-I', '-B', '-c', 'import ssl, sqlite3, ctypes'], check=True, timeout=30)",
+            str(interpreter),
+        ], check=True, timeout=60)
+    with tempfile.TemporaryDirectory(prefix="dsh python venv ") as directory:
+        environment = Path(directory) / "environment"
+        subprocess.run([str(executable.with_name(names[0])), "-I", "-B", "-m", "venv", str(environment)], check=True, timeout=60)
+        python = environment / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+        subprocess.run([str(python), "-I", "-B", "-c", "import sys; assert sys.prefix != sys.base_prefix"], check=True, timeout=30)
+        subprocess.run([str(python), "-I", "-B", "-m", "pip", "check"], check=True, timeout=30)
+
+
 def main():
     """Check installed versions and read back editable Office documents."""
     assert sys.version_info[:3] == tuple(map(int, sys.argv[2].split("."))), sys.version
+    check_interpreters()
     versions = json.loads(sys.argv[1])
     # Only pip belongs to the interpreter baseline; all other distributions must be declared.
     # Each target's native release-host smoke must confirm this baseline.
