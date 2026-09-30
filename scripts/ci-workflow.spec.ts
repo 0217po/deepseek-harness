@@ -62,6 +62,20 @@ describe('CI workflow', () => {
     expect(wine.steps).toContainEqual(expect.objectContaining({ name: 'Shut down wineserver', if: 'always()' }))
   })
 
+  it('runs Windows coverage with the released Realm cleanup fix while retaining Node 24 native checks', () => {
+    const workflow = loadWorkflow('.github/workflows/ci.yml')
+    const coverage = workflowJob(workflow, 'windows-coverage')
+    expect(coverage.name).toBe('windows node 26 / coverage')
+    expect(coverage.steps).toContainEqual(expect.objectContaining({
+      uses: 'actions/setup-node@v6', with: { 'node-version': '26.10.0' },
+    }))
+    for (const name of ['windows-build', 'windows-native-tests']) {
+      expect(workflowJob(workflow, name).steps).toContainEqual(expect.objectContaining({
+        uses: 'actions/setup-node@v6', with: { 'node-version': '${{ env.PRIMARY_NODE_VERSION }}' },
+      }))
+    }
+  })
+
   it('isolates every pnpm action setup destination per runner', () => {
     const files = ['.github/workflows/ci.yml', '.github/workflows/ci-master.yml']
     const setups: Array<{ jobName: string; step: unknown }> = []
@@ -230,7 +244,7 @@ describe('CI workflow', () => {
       expect(install!.run).not.toContain('$cloneFlag')
     }
 
-    expect(windowsCoverage.name).toBe('windows node 24 / coverage')
+    expect(windowsCoverage.name).toBe('windows node 26 / coverage')
     expect(windowsCoverage.env).toMatchObject({ DSH_COVERAGE_PARTITIONS: "${{ vars.DSH_CI_FAILOVER_WINDOWS == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '4' || '' }}" })
     const coverageSteps = windowsCoverage.steps as unknown[]
     const coverageCommands = coverageSteps.filter((step): step is Record<string, unknown> & { run: string } => (

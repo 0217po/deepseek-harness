@@ -10,7 +10,11 @@ Status: implemented
 
 ## 决策
 
-将 `engines.node` 设为 `^22.19.0 || >=24.0.0`，并在 `['22.19', 24, 26]` 上运行 keyless CI。主要的 Node 24 任务负责整套类型检查和单元测试覆盖率任务；三个版本均运行 source-worker、Zstandard、source-launch 和 [jsdom 存储](../../archived/testing/2026-07-30-vitest-jsdom-webstorage-ownership.md) 专项冒烟测试，不重复这套类型检查和覆盖率任务。真实 API 的 e2e 工作流保持在 Node 24 上，因为它验证的是 API 集成而非运行时下限。
+将 `engines.node` 设为 `^22.19.0 || >=24.0.0`，并在 `['22.19', 24, 26]` 上运行 keyless CI。主要的 Linux Node 24 任务负责整套类型检查和单元测试覆盖率任务；三个版本均运行 source-worker、Zstandard、source-launch 和 [jsdom 存储](../../archived/testing/2026-07-30-vitest-jsdom-webstorage-ownership.md) 专项冒烟测试，不重复这套类型检查和覆盖率任务。真实 API 的 e2e 工作流保持在 Node 24 上，因为它验证的是 API 集成而非运行时下限。
+
+<a id="windows-coverage-runtime"></a>
+
+Windows PR 覆盖率使用 Node 26.10.0，其中包含 [cppgc Realm 清理修复](https://github.com/nodejs/node/pull/65778)。Windows 构建和原生进程检查使用 Node 24。将覆盖率切回 Node 24 需要采用包含[待合入回移](https://github.com/nodejs/node/pull/66168)的正式版本；完整测试清单、隔离和覆盖率阈值仍是必需项。
 
 两个 Node 特性决定了源码运行时的门槛：
 
@@ -24,7 +28,7 @@ Status: implemented
 ## 后果
 
 - 宣传的 LTS 分支不再低于 Pi 适配器依赖的下限。
-- CI 通过 Node 22.19 直接验证 Node 22 LTS 下限，将主要覆盖率任务保留在 `node: 24`，并用 Node 26 验证下一个偶数线；三个版本均运行聚焦的兼容性冒烟测试。
+- CI 通过 Node 22.19 直接验证 Node 22 LTS 下限，将主要 Linux 覆盖率任务保留在 `node: 24`，并用 Node 26 验证下一个偶数线；三个版本均运行聚焦的兼容性冒烟测试。
 - 构建模式冒烟测试无需版本条件标志：在 22.19 上类型剥离已是默认行为，因此示例自有的 TypeScript driver 保持使用纯 `node fixture.ts` 路径。
 - 未来若依赖或源码 API 提高运行时下限，必须在同一变更中同步调整 `engines.node`、兼容性矩阵和本 Agent Note。
 
