@@ -115,6 +115,7 @@ final class AXAccess {
     /// Restore a selected or unambiguous window without raising it or requesting application activation.
     func restoreWindow(_ requested: UInt32?, owner: ProcessIdentity) throws -> UInt32? {
         let app = AXUIElementCreateApplication(owner.pid)
+        try clearBooleanAttribute(app, "AXHidden")
         let windows = try children(app, "AXWindows")
         let selected: AXUIElement?
         if let requested {
@@ -125,15 +126,17 @@ final class AXAccess {
             selected = try element(app, "AXFocusedWindow") ?? element(app, "AXMainWindow") ?? (windows.count == 1 ? windows[0] : nil)
         }
         guard let selected else { return nil }
-        if try boolean(selected, "AXMinimized") == true {
-            guard try writable(selected, "AXMinimized") == true else {
-                throw NativeFailure(code: "UNSUPPORTED", message: "Window cannot be restored without activation; read fresh state before deciding whether to activate")
-            }
-            try prepare(selected)
-            let error = AXUIElementSetAttributeValue(selected, "AXMinimized" as CFString, kCFBooleanFalse)
-            guard error == .success else { throw failure(error, "restore minimized window") }
-        }
+        try clearBooleanAttribute(selected, "AXMinimized")
         return try windowID(selected)
+    }
+    private func clearBooleanAttribute(_ element: AXUIElement, _ name: String) throws {
+        guard try boolean(element, name) == true else { return }
+        guard try writable(element, name) == true else {
+            throw NativeFailure(code: "UNSUPPORTED", message: "Cannot restore \(name) without activation; read fresh state before deciding whether to activate")
+        }
+        try prepare(element)
+        let error = AXUIElementSetAttributeValue(element, name as CFString, kCFBooleanFalse)
+        guard error == .success else { throw failure(error, "clear \(name)") }
     }
     func actions(_ element: AXUIElement) throws -> [String] {
         try prepare(element)

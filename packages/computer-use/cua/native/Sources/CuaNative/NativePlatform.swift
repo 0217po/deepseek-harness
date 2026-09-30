@@ -29,13 +29,6 @@ struct ApplicationCatalogSnapshot: Sendable {
     func application(_ pid: Int32) -> ApplicationInfo? { applications.first { $0.pid == pid } }
 }
 @MainActor enum ApplicationCatalog {
-    static func unhide(_ identity: ProcessIdentity) throws {
-        try NativePlatform.verify(identity)
-        guard let app = NSRunningApplication(processIdentifier: identity.pid), !app.isTerminated else {
-            throw NativeFailure(code: "APP_UNAVAILABLE", message: "Application exited before showing its windows")
-        }
-        if app.isHidden && !app.unhide() { throw NativeFailure(code: "NATIVE_ERROR", message: "macOS refused to unhide the application") }
-    }
     static func snapshot() -> ApplicationCatalogSnapshot {
         let apps = NSWorkspace.shared.runningApplications.filter { !$0.isTerminated }.map { app in
             ApplicationInfo(pid: app.processIdentifier, name: app.localizedName, bundleID: app.bundleIdentifier,

@@ -15,7 +15,7 @@ import subprocess
 import tempfile
 import time
 
-from native_test_support import ROOT, NativeHelper, line, stop_group
+from native_test_support import ROOT, NativeHelper, line, run_cleanup, stop
 
 
 def main():
@@ -138,14 +138,12 @@ def main():
                 helper.eof()
                 print('PASS: AXless input, resize guards, fresh observation, movement and background unhide/unminimize')
             finally:
-                stop_group(fixture)
+                stop(fixture)
                 fixture = None
     finally:
-        if foreground is not None:
-            stop_group(foreground)
-        if fixture is not None:
-            stop_group(fixture)
-        helper.stop()
+        run_cleanup(lambda: stop(foreground) if foreground is not None else None,
+                    lambda: stop(fixture) if fixture is not None else None,
+                    helper.stop)
 
 
 if __name__ == '__main__':

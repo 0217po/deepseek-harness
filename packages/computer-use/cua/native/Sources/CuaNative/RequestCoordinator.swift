@@ -86,7 +86,6 @@ import Darwin
                     let image = try await self.capture.capture(target, cancellation: self.cancellation)
                     result = try await self.worker.finishCapture(target, image: image)
                     case .foreground(let plan): result = try await self.performForeground(plan, requestID: request.id)
-                    case .show(let plan): result = try await self.performShow(plan)
                     case .paste(let plan):
                         try await self.clipboard.perform(text: plan.text, format: plan.format, maxBytes: plan.maxBytes,
                             checkCancellation: { try self.cancellation.check() }) { requireClipboard in
@@ -143,21 +142,6 @@ import Darwin
             "targetPid": .number(Double(plan.identity.pid)), "targetWindowId": plan.targetWindowID.map { .number(Double($0)) } ?? .null,
             "before": before.json, "after": after.json, "activationRequested": .bool(activationRequested), "raiseRequested": .bool(raiseRequested),
         ])])
-    }
-    private func performShow(_ plan: ShowPlan) async throws -> JSONValue {
-        try cancellation.check()
-        let beforePID = NativePlatform.frontPID()
-        let beforeWindow = NativePlatform.windows().first { $0.isOnScreen }?.windowID
-        try ApplicationCatalog.unhide(plan.identity)
-        let windowID = try await worker.restoreWindow(plan)
-        let afterPID = NativePlatform.frontPID()
-        let afterWindow = NativePlatform.windows().first { $0.isOnScreen }?.windowID
-        let changed: JSONValue
-        if let beforePID, let afterPID, let beforeWindow, let afterWindow {
-            changed = .bool(beforePID != afterPID || beforeWindow != afterWindow)
-        } else { changed = .null }
-        return .object(["dispatched": .bool(true), "verified": .bool(false),
-                        "windowId": windowID.map { .number(Double($0)) } ?? .null, "foregroundChanged": changed])
     }
     private func transportFailed(_ failure: NativeFailure) {
         if let bytes = "\(failure.code): \(failure.message)\n".data(using: .utf8) { try? FileHandle.standardError.write(contentsOf: bytes) }

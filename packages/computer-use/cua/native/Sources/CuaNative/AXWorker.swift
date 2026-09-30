@@ -24,7 +24,6 @@ struct CaptureTarget: Sendable {
     let process: ProcessIdentity
     let window: WindowInfo
 }
-struct ShowPlan: Sendable { let appHandle: String; let identity: ProcessIdentity; let windowID: UInt32? }
 struct ForegroundPlan: Sendable {
     let appHandle: String
     let identity: ProcessIdentity
@@ -65,7 +64,7 @@ private enum ApplicationTarget {
     case running(ProcessIdentity)
     case pending(InstalledApplication, JSONValue)
 }
-enum DriverOutcome: Sendable { case result(JSONValue), capture(CaptureTarget), foreground(ForegroundPlan), show(ShowPlan), launch(ApplicationLaunch), paste(PastePlan) }
+enum DriverOutcome: Sendable { case result(JSONValue), capture(CaptureTarget), foreground(ForegroundPlan), launch(ApplicationLaunch), paste(PastePlan) }
 
 actor AXWorker {
     nonisolated let executor = NativeSerialExecutor()
@@ -255,7 +254,19 @@ actor AXWorker {
         case "show":
             let windowID = try params.optionalWindowID()
             if let windowID { _ = try NativePlatform.ownedWindow(identity.pid, windowID) }
-            return .show(ShowPlan(appHandle: handle, identity: identity, windowID: windowID))
+            let beforePID = NativePlatform.frontPID()
+            let beforeWindow = NativePlatform.windows().first { $0.isOnScreen }?.windowID
+            let restored = try ax().restoreWindow(windowID, owner: identity)
+            _ = try validateIdentity(handle)
+            try NativePlatform.requireUnlocked(observeSession())
+            let afterPID = NativePlatform.frontPID()
+            let afterWindow = NativePlatform.windows().first { $0.isOnScreen }?.windowID
+            let changed: JSONValue
+            if let beforePID, let afterPID, let beforeWindow, let afterWindow {
+                changed = .bool(beforePID != afterPID || beforeWindow != afterWindow)
+            } else { changed = .null }
+            return .result(.object(["dispatched": .bool(true), "verified": .bool(false),
+                "windowId": restored.map { .number(Double($0)) } ?? .null, "foregroundChanged": changed]))
         case "activate":
             return .foreground(ForegroundPlan(appHandle: handle, identity: identity, snapshotID: nil, index: nil, targetWindowID: nil, role: nil, main: nil, minimized: nil))
         case "getState":
@@ -398,14 +409,6 @@ actor AXWorker {
         let top = NativePlatform.windows().first { $0.isOnScreen }
         return ForegroundObservation(frontPID: NativePlatform.frontPID(), focusedWindowID: try ax().focusedWindowID(plan.identity.pid),
                                      frontWindowID: top?.windowID, frontWindowPID: top?.pid)
-    }
-    func restoreWindow(_ plan: ShowPlan) throws -> UInt32? {
-        try cancellation.check()
-        let identity = try validateIdentity(plan.appHandle)
-        guard identity == plan.identity else { throw NativeFailure(code: "STALE_APP", message: "Application changed before restoring its window") }
-        try NativePlatform.requireUnlocked(observeSession())
-        try NativePlatform.requireAccessibility()
-        return try ax().restoreWindow(plan.windowID, owner: identity)
     }
     static func shouldRaise(_ plan: ForegroundPlan, before: ForegroundObservation) -> Bool {
         guard let id = plan.targetWindowID else { return true }
