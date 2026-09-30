@@ -12,6 +12,7 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var resizeCount = 0
     var moved = false
     var controls: [DispatchSourceSignal] = []
+    var stateObserver: Timer?
 
     init(statePath: String) { self.statePath = statePath }
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -39,7 +40,9 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     self.resizeCount += 1
                     self.window.setContentSize(NSSize(width: 360 + 40 * self.resizeCount, height: 180 + 20 * self.resizeCount))
                     self.persist()
-                case SIGHUP: self.window.miniaturize(nil)
+                case SIGHUP:
+                    self.window.collectionBehavior = .default
+                    self.window.miniaturize(nil)
                 case SIGALRM: NSApplication.shared.hide(nil)
                 default:
                     self.window.setFrameOrigin(NSPoint(x: 180, y: 180))
@@ -51,6 +54,8 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
             controls.append(control)
         }
         persist()
+        // AppKit/Dock visibility can settle after their delegate notifications.
+        stateObserver = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in self?.persist() }
         print("READY")
         fflush(stdout)
     }
