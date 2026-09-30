@@ -124,12 +124,19 @@ def main():
                 shutil.copy2(binary, foreground_binary)
                 pending_foreground = helper.call('getApp', {'selector': str(foreground_binary.parents[2])})
                 foreground = helper.call('launchApp', {'appHandle': pending_foreground['appHandle']})['pid']
+                subprocess.run(['open', '-a', str(foreground_binary.parents[2])], check=True)
                 wait_state(lambda state: foreground_path.exists() and json.loads(foreground_path.read_text()).get('active')
                            and not state['active'], 'foreground fixture did not take focus')
                 for number, key, target in [(signal.SIGALRM, 'hidden', owner),
                                             (signal.SIGHUP, 'minimized', {**owner, 'windowId': window_id})]:
+                    if key == 'minimized':
+                        subprocess.run(['open', '-a', str(binary.parents[2])], check=True)
+                        wait_state(lambda state: state['active'], 'target fixture did not activate for minimization')
                     os.kill(fixture, number)
                     wait_state(lambda state: state[key], 'fixture did not ' + key)
+                    subprocess.run(['open', '-a', str(foreground_binary.parents[2])], check=True)
+                    wait_state(lambda state: json.loads(foreground_path.read_text())['active'] and not state['active'],
+                               'foreground fixture did not regain focus before restoration')
                     restored = helper.call('show', target)
                     actual = wait_state(lambda state: not state[key], 'show did not restore ' + key)
                     assert restored['windowId'] == window_id, restored
