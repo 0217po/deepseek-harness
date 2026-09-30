@@ -109,3 +109,20 @@ private func node(_ role: String = "AXButton") -> AXTextNode {
     #expect(AXTextFormatter.truncation(maxElements: 2000, maxDepth: nil).contains("(maxElements=2000)"))
     #expect(AXTextFormatter.truncation(maxElements: 1, maxDepth: 1).contains("(maxElements=1, maxDepth=1)"))
 }
+
+@Test func repeatedWordsDoNotConflateLabelsValuesAndPlaceholders() {
+    var field = node("AXTextField")
+    field.title = "Example"
+    field.description = "Example"
+    field.value = "Example"
+    field.placeholder = "Example"
+    let line = AXTextFormatter.line(field, level: 0)
+    #expect(line.contains("\"Example\" = \"Example\" placeholder=\"Example\""))
+    #expect(!line.contains("description="))
+    var button = node()
+    button.description = "Delete"
+    #expect(AXTextFormatter.line(button, level: 0) == "- [7] AXButton \"Delete\"")
+    var wrapper = node("AXGroup")
+    wrapper.subrole = "AXHostingView"
+    #expect(wrapper.transparent)
+}

@@ -38,7 +38,7 @@ struct AXTextNode {
     }
 
     var hasMeaning: Bool {
-        [title, value, description, placeholder, help, identifier, url, subrole == "AXUnknown" ? nil : subrole].contains { !($0?.isEmpty ?? true) }
+        [title, value, description, placeholder, help, identifier, url, ["AXUnknown", "AXHostingView"].contains(subrole ?? "") ? nil : subrole].contains { !($0?.isEmpty ?? true) }
             || enabled == false || selected == true || focused == true || expanded != nil
     }
     var transparent: Bool {
@@ -62,7 +62,8 @@ enum AXTextFormatter {
         var line = String(repeating: "  ", count: level) + "- "
         if let index = node.index { line += "[\(index)] " }
         line += node.role
-        if let subrole = node.subrole, !subrole.isEmpty, subrole != "AXUnknown", subrole != node.role { line += " subrole=\(subrole)" }
+        if let subrole = node.subrole, !subrole.isEmpty, subrole != "AXUnknown", subrole != node.role,
+           details || !["AXStandardWindow", "AXHostingView"].contains(subrole) { line += " subrole=\(subrole)" }
         if node.enabled == false { line += " disabled" }
         if node.focused == true { line += " focused" }
         if let expanded = node.expanded { line += " expanded=\(expanded)" }
@@ -75,19 +76,22 @@ enum AXTextFormatter {
             line += " selectionWritable=\(node.selectionWritable.map(String.init) ?? "unknown")"
         }
         var seen: Set<String> = []
-        func field(_ value: String?, prefix: String) {
-            guard let value, !value.isEmpty, seen.insert(value).inserted else { return }
+        func field(_ value: String?, prefix: String, deduplicate: Bool = true) {
+            guard let value, !value.isEmpty else { return }
+            let unique = seen.insert(value).inserted
+            guard !deduplicate || unique else { return }
             line += prefix + String(reflecting: value)
         }
         field(node.title, prefix: " ")
+        if node.title?.isEmpty != false && !details { field(node.description, prefix: " ") }
         // Empty values distinguish an unfilled input from its placeholder.
         if let value = node.value, value.isEmpty, AXTextNode.valueRoles.contains(node.role) { line += " value=\"\"" }
         else if node.value == nil && AXTextNode.valueRoles.contains(node.role) { line += " value=unavailable" }
-        else { field(node.value, prefix: " = ") }
-        field(node.placeholder, prefix: " placeholder=")
+        else { field(node.value, prefix: " = ", deduplicate: false) }
+        field(node.placeholder, prefix: " placeholder=", deduplicate: false)
         field(node.description, prefix: " description=")
         field(node.help, prefix: " help=")
-        field(node.url, prefix: " url=")
+        field(node.url, prefix: " url=", deduplicate: false)
         if details || seen.isEmpty { field(node.identifier, prefix: " id=") }
         if node.invalidSelection { line += " selection=unavailable" }
         else if let range = node.selectedRange { line += " selection=[\(range.location),\(range.length)]" }
