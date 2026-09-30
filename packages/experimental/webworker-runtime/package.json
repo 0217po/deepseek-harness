@@ -64,7 +64,7 @@
     "@deepseek-ai/node-addon-system": "workspace:~",
     "@types/picomatch": "^3.0.2",
     "@types/readable-stream": "^4.0.24",
-    "chokidar": "^5.0.0"
+    "chokidar": "5.0.0"
   },
   "files": [
     "lib/index.js",

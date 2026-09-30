@@ -491,7 +491,7 @@ function clientConfig(id: string, entry: string, clientBanner?: (fileName: strin
     deps: {
       neverBundle: isRequested,
       // Anything NOT requested from the loader module table must inline
-      // (wire/type layers, zod, clsx — every non-shared dep). A require() the
+      // (wire/type layers, clsx — every non-shared dep). A require() the
       // table cannot answer is a guaranteed runtime throw, so the rule is the
       // package's own request list: requested specifiers stay imports,
       // everything else is bundled.

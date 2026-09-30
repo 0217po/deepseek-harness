@@ -1,7 +1,7 @@
 /** Explicit OTLP JSON transport for feedback-authorized Session logs. */
 import { createOtlpHttpExportDelegate, getSharedConfigurationFromEnvironment, httpAgentFactoryFromOptions } from '@opentelemetry/otlp-exporter-base/node-http'
 import { getSharedConfigurationDefaults, mergeOtlpSharedConfigurationWithDefaults, OTLPExporterBase, type OTLPExporterNodeConfigBase } from '@opentelemetry/otlp-exporter-base'
-import { JsonLogsSerializer } from '@opentelemetry/otlp-transformer'
+import { JsonLogsSerializer, LogsExporterMetricsHelper } from '@opentelemetry/otlp-transformer'
 import type { LogRecordExporter } from '@opentelemetry/sdk-logs'
 
 /**
@@ -10,7 +10,9 @@ import type { LogRecordExporter } from '@opentelemetry/sdk-logs'
  * @returns the exporter owned by one independent log pipeline.
  */
 export function createLogExporter(options: OTLPExporterNodeConfigBase & { url: string }): LogRecordExporter {
-  return new OTLPExporterBase(createOtlpHttpExportDelegate(logTransportOptions(options), JsonLogsSerializer))
+  return new OTLPExporterBase(createOtlpHttpExportDelegate(
+    logTransportOptions(options), JsonLogsSerializer, 'otlp_http_log_exporter', LogsExporterMetricsHelper, undefined,
+  ))
 }
 
 /**

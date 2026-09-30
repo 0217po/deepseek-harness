@@ -36,6 +36,8 @@ Headers are explicit. The service does not add a channel header or inherit ambie
 
 `src/index.ts` registers the service; `event-log.ts` owns ordinary SDK batching; `session-log.ts` owns byte/count scheduling; `transport.ts` supplies the Session SDK JSON HTTP delegate; `event-transport.ts` uses Got for cancellable ordinary-event HTTP requests and retry waits with SDK serialization and export accounting. No global OTel provider is installed. The Session processor measures each record once, groups conservative sizes, and waits for the SDK concurrency queue to clear after every callback before sending another request.
 
+OpenTelemetry SDK dependencies use exact versions from one coordinated release across this service and its two adapters. Exporter self-metrics use the SDK's no-op meter; channels create no metrics pipeline.
+
 No runtime invariant companion is published: channel creation registers no independent domain state, and collector delivery cannot be inferred from local queues. Composition tests exercise independent channels and service removal; adapter tests cover dependent-fiber cleanup and feedback authorization.
 
 <a id="further-exploration"></a>
