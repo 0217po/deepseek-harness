@@ -26,7 +26,8 @@ class Account extends DeepSeekAccount {
   override async rejectToken() {}
   override async resolveToken() { return undefined }
   override async getPlatformSession() { this.reading.resolve(undefined); return this.read() }
-  override async *watch(signal: AbortSignal) {
+  override async *watch(signal: AbortSignal, includeIdentityChanges = false) {
+    expect(includeIdentityChanges).toBe(true)
     const abort = () => { this.ended.resolve(undefined) }
     signal.addEventListener('abort', abort, { once: true })
     try {

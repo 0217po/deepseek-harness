@@ -29,6 +29,8 @@ export interface AccountSnapshot {
   loginFailed?: boolean
   /** Mounted onboarding owns the dialog while active. */
   onboarding?: boolean
+  /** Desktop introduction still covers the workspace, including loading and exit animation. */
+  desktopOnboardingVisible?: boolean
 }
 
 /** Host operations injected into the Cordis-free account component. */

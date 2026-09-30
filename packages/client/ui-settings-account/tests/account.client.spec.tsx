@@ -709,3 +709,21 @@ it.each([en, zh])('shows live model sign-in guidance without replaying it after 
   render(element)
   expect(screen.queryByRole('alert')).toBeNull()
 })
+
+it.each(['desktopOnboardingVisible', 'onboarding'] as const)('defers bonus display and acknowledgement until %s ends', async (field) => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  const operations = operationsOf({ status: 'credential-stored', attempt: null })
+  const notice = { orderId: 'order-onboarding' as BonusNotice['orderId'], message: 'Awarded 5.00', expiresAt: '2099-01-01T00:00:00Z' }
+  let snapshot: AccountSnapshot = { ...operations.hooks.account.getSnapshot(), notice, [field]: true }
+  const view = render(await accountMenu(operations, () => snapshot, false))
+  expect(screen.queryByText(notice.message)).toBeNull()
+  expect(operations.bonusNoticeShown).not.toHaveBeenCalled()
+  view.unmount()
+  expect(operations.bonusNoticeShown).not.toHaveBeenCalled()
+  const reopened = render(await accountMenu(operations, () => snapshot, false))
+  expect(screen.queryByText(notice.message)).toBeNull()
+  snapshot = { ...snapshot, [field]: false }
+  reopened.rerender(await accountMenu(operations, () => snapshot, false))
+  await vi.waitFor(() => { expect(operations.bonusNoticeShown).toHaveBeenCalledExactlyOnceWith(notice.orderId) })
+  expect(screen.getByText(notice.message)).toBeTruthy()
+})
