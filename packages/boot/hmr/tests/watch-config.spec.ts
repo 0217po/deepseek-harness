@@ -100,14 +100,17 @@ describe('HMR exact config paths', () => {
     }
     const observed: string[] = []
     await watchConfig(ctx, filename, {}, () => { observed.push(readFileSync(filename, 'utf8')) })
-    expect(watcher.getWatched()[dir]).not.toContain('package.json.lock')
-    expect(watcher.getWatched()[dir]).not.toContain('unrelated')
+    const watchedEntries = () => Object.values(watcher.getWatched()).flat()
+    expect(watchedEntries()).not.toContain('package.json.lock')
+    expect(watchedEntries()).not.toContain('unrelated')
     ensureNativeWatchLive(dir)
     await writeFileAtomic(filename, 'created', { mode: 0o600 })
     await vi.waitFor(() => { expect(observed).toContain('created') }, { timeout: 8_000 })
     await writeFileAtomic(filename, 'replaced', { mode: 0o600 })
     await vi.waitFor(() => { expect(observed).toContain('replaced') }, { timeout: 8_000 })
-    expect(watcher.getWatched()[dir]).not.toContain('package.json.lock')
+    expect(watchedEntries()).toContain('package.json')
+    expect(watchedEntries()).not.toContain('package.json.lock')
+    expect(watchedEntries()).not.toContain('unrelated')
   })
 
   it.each(['relative', 'absolute'])('observes %s module roots through a filesystem alias', { timeout: 30_000 }, async (rootKind) => {
