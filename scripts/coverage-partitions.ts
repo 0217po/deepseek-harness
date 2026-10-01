@@ -1,6 +1,7 @@
 /**
- * Run coverage partitions with complete test-file inventories before merging their reports.
- * Failed runs retain the inventory, partition configs, and test reports in coverage/.partitioned.
+ * Coordinate single-worker Vitest coverage partitions and one merged report.
+ * Separate processes preserve worker isolation; only the complete merged
+ * inventory can enforce per-file coverage thresholds.
  */
 import { spawn } from 'node:child_process'
 import { globSync, readFileSync, writeFileSync } from 'node:fs'
@@ -481,7 +482,8 @@ export class CoveragePartitionCoordinator {
   }
 
   /**
-   * Run every partition before one merged threshold check.
+   * Run every partition and verify its test-file inventory before one merged threshold check.
+   * Failed runs retain inventories, partition configs, and test reports in coverage/.partitioned.
    * @returns zero only when every partition and the merge command succeed.
    */
   public async run(): Promise<number> {
