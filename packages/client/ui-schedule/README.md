@@ -67,7 +67,7 @@ A restored task tab carries no navigation parameters, because the Sidebar persis
 
 Subscriptions exist only while the framework observes a source. The final unsubscribe releases event listeners and invalidates pending responses. Components receive framework-bound `useCatalog` hooks and explicit action callbacks. The mounted Records view reads `schedule.history` with the selected task's original Session binding; catalog and list responses omit full history. Components own disposable search, filtering, selection, confirmation, and history-page state. Reminder records remain Host-owned and do not come from historical Session projections or browser-local demo data.
 
-Task menus use the [standard menu geometry](../../../docs/ui-radius.md#nested-hover), including keyboard-highlighted rows.
+Task menus use the [standard menu geometry](../../../docs/ui-radius.md#nested-hover), including keyboard-highlighted rows. Created-task cards follow the [file-card family](../../../docs/ui-radius.md#radius-scale) for their radius and icon-tile material.
 
 </details>
 

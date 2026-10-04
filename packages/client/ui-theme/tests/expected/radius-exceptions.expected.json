@@ -26,7 +26,6 @@
     ".deleteButton: border-radius: 6px"
   ],
   "ui-schedule/src/client/ScheduleCreateCard.module.css": [
-    ".card: border-radius: 18px",
     ".leading: border-radius: 10px"
   ],
   "ui-schedule/src/client/TaskManagerPage.module.css": [
