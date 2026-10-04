@@ -45,6 +45,7 @@
 .card {
   --dsh-composer-primary-size: 34px;
   --dsh-composer-control-inset: 8px;
+  --dsh-composer-row-shift: 2px;
   box-sizing: border-box;
   position: relative; /* overlay anchor positioning context */
   display: flex;
@@ -61,6 +62,7 @@
   border: 0;
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
   border-radius: calc(var(--dsh-composer-primary-size) / 2 + var(--dsh-composer-control-inset));
+  /* The outer arc must stay concentric with the circular primary button. */
   corner-shape: round;
   background: var(--dsw-specific-input-major);
   box-shadow: var(--dsw-elevation-soft);
@@ -258,10 +260,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  /* 2px moved from the bottom pad to the top: the whole control row sits 2px
-     lower in the card (it read too high against the textarea) while the
-     controls' own centering stays untouched. */
-  padding: 2px var(--dsh-composer-control-inset) calc(var(--dsh-composer-control-inset) - 2px);
+  /* Smaller controls sit below the primary button's vertical center. */
+  padding: var(--dsh-composer-row-shift) var(--dsh-composer-control-inset)
+    calc(var(--dsh-composer-control-inset) - var(--dsh-composer-row-shift));
   min-width: 0;
   /* Size container so the chips inside can collapse to icon-only when the
      card runs out of row width (PermissionSelect @container rule). Anonymous
@@ -388,10 +389,8 @@
   color: #fff;
   cursor: pointer;
   transition: background-color 100ms ease;
-  /* Opts out of the row's 2px downward shift (.row top pad): the send circle
-     keeps its original seat while the smaller chips sit lower. Transform, not
-     margin, so flex centering math is untouched. */
-  transform: translateY(-2px);
+  /* Cancel the row shift to preserve equal right and bottom insets. */
+  transform: translateY(calc(-1 * var(--dsh-composer-row-shift)));
 }
 
 .primary:hover:not(:disabled) {

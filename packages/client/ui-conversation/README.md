@@ -56,7 +56,7 @@ The shared image slot props keep display choices separate from durable reference
 
 The composer measures its expanded control groups after size, content, visibility, or font-loading changes. If they cannot share a line, the row sets `--dsh-composer-model-text-display: none` and `--dsh-composer-model-icon-display: block` for the model seat; their defaults are `block` and `none`. Wrapping remains available if even the icon cannot fit.
 
-The composer card uses circular corners with a radius equal to half the primary button diameter plus its equal right and bottom inset. The workspace-picker outline inherits the same radius and curve.
+The composer card and workspace-picker outline follow the [concentric-inset rule](../../../docs/ui-radius.md#nested-hover).
 
 The context-occupancy button shows a ring and percentage below the input card, after the Session statistics. Clicking it opens the token breakdown in a panel kept inside the viewport, including when no statistics are shown; the button stays hidden until context usage and capacity are available.
 
