@@ -1,8 +1,8 @@
 /* Default smooth corner curvature. Inside the support guard, corners use
  * superellipse(1.5) — between a circular arc (round = superellipse(1)) and a
- * squircle (superellipse(2)) — instead of the
- * default arc; engines without corner-shape keep circular corners because the
- * token and the rule exist only inside the guard.
+ * squircle (superellipse(2)) — instead of the default arc. Engines without
+ * corner-shape keep circular corners because the token and the rule exist
+ * only inside the guard.
  *
  * corner-shape does not inherit, so the universal selector applies the token
  * to elements and their ::before/::after; other pseudo-elements (for example
