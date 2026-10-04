@@ -44,6 +44,7 @@
 
 .card {
   --dsh-composer-primary-size: 34px;
+  --dsh-composer-add-size: 28px;
   --dsh-composer-control-inset: 8px;
   --dsh-composer-row-shift: 2px;
   box-sizing: border-box;
@@ -62,7 +63,7 @@
   border: 0;
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
   border-radius: calc(var(--dsh-composer-primary-size) / 2 + var(--dsh-composer-control-inset));
-  /* The outer arc must stay concentric with the circular primary button. */
+  /* The lower arcs share centers with the circular toolbar buttons. */
   corner-shape: round;
   background: var(--dsw-specific-input-major);
   box-shadow: var(--dsw-elevation-soft);
@@ -320,14 +321,17 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: var(--dsh-composer-add-size);
+  height: var(--dsh-composer-add-size);
+  /* The smaller circle needs the radius difference as extra left inset. */
+  margin-left: calc((var(--dsh-composer-primary-size) - var(--dsh-composer-add-size)) / 2);
   border: none;
   border-radius: 999px;
   corner-shape: round;
   background: var(--dsw-specific-selector);
   color: var(--dsw-alias-label-primary);
   cursor: pointer;
+  transform: translateY(calc(-1 * var(--dsh-composer-row-shift)));
 }
 
 .add:hover:not(:disabled) {

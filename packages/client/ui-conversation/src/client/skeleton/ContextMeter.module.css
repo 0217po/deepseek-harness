@@ -13,7 +13,8 @@
   flex: none;
   padding: 1px 8px;
   border: none;
-  border-radius: var(--dsw-radius-sm);
+  border-radius: 999px;
+  corner-shape: round;
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   font-family: inherit;

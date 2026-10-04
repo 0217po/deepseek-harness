@@ -40,7 +40,7 @@ Prefer an existing shared size variant when a proposed control falls between the
 
 Concrete defaults: `Button` uses H28/R8 for `sm` and H36/R12 for `md`, including outline variants. Standard H32 inputs and H36 selectors use R12. The Workspace files and New terminal guide entries both use R20, including title-only and described variants. Reserve R28 for their enclosing panel or dialog, not those entries.
 
-Code blocks, diffs, and file previews share R16: changed-file entry cards, delivered-file cards, generic file attachment cards, and hover preview panels. The 40px file-icon tiles inside changed-file and delivery cards use R10 on all four corners as a component-specific exception. Their hover fills keep the same contour.
+Code blocks, diffs, and file previews share R16: changed-file entry cards, delivered-file cards, submitted-plan cards, generic file attachment cards, and hover preview panels. The 40px file-icon tiles inside changed-file, delivery, and submitted-plan cards use R10 on all four corners as a component-specific exception. Their hover fills keep the same contour.
 
 <a id="shapes"></a>
 ## Reuse tokens and preserve deliberate shapes
@@ -51,7 +51,7 @@ Consume the named tokens instead of introducing local values such as 10px, 14px,
 
 Ordinary rounded surfaces use the theme's `superellipse(1.5)` curve where supported; the composer follows the circular [concentric-inset rule](#nested-hover). `corner-shape` is not inherited: the theme applies it to elements and their `::before`/`::after`. Unsupported engines retain ordinary circular corners. Do not introduce component-specific smoothing that makes a fill and its outline curve differently.
 
-Preserve intentional circles and capsules: avatars and status dots use `50%`; explicit pills and full-round tracks may use `999px`. Pair every such full-round declaration with `corner-shape: round` in the same rule. Do not turn every button into a capsule just because its height is small. Tiny drawing details, such as glyph marks or miniature tracks, may retain their established local geometry; they do not justify arbitrary radii on surrounding controls.
+Preserve intentional circles and capsules: avatars and status dots use `50%`; explicit pills and full-round tracks may use `999px`. Pair every such full-round declaration with `corner-shape: round` in the same rule. Token/cache statistics and the context-occupancy trigger belong to one capsule family, including their hover, expanded, and focus states. Do not turn every button into a capsule just because its height is small. Tiny drawing details, such as glyph marks or miniature tracks, may retain their established local geometry; they do not justify arbitrary radii on surrounding controls.
 
 Both the avatar container and its `img` must remain circular; an image that inherits only `border-radius` still needs an explicit `corner-shape: round` or must inherit the curve from its circular container. Keep equal width and height on both. See [Account settings](../packages/client/ui-settings-account/README.md#use-this-package) for account avatar sizes.
 
@@ -64,13 +64,15 @@ Distinguish these three arrangements before changing a child radius:
 
 | Arrangement | Rule | Example |
 |---|---|---|
-| Concentric inset | Inner R = max(0, outer R − inset); use the same curve | Outer R16, inset 4, inner R12 |
+| Circular concentric inset | Inner R = max(0, outer R − inset); both arcs share a center and use `round` | Outer R16, inset 4, inner R12 |
 | Fill flush against an enclosing edge | The enclosure owns the visible corner; clip the fill or inherit the matching corner | A split-button card with two independent hover regions |
 | Separate card or form group inside another surface | Choose the child's semantic tier; do not subtract all parent padding mechanically | R16 editor within an R20 settings card |
 
-The composer uses circular arcs at all four corners, with outer R = primary-button diameter / 2 + its equal right and bottom inset. A 34px button and 8px inset give R25. The lower-right arc and button share a center, keeping the horizontal, vertical, and diagonal gaps equal. The workspace-picker outline inherits the card's radius and curve.
+The composer uses circular arcs at all four corners, with outer R = primary-button diameter / 2 + its equal right and bottom inset. A 34px button and 8px inset give R25. With the toolbar on one line, the lower-right arc and primary button share a center; the 28px attachment button shares the lower-left center with an 11px left and bottom inset. Each pair keeps its horizontal, vertical, and diagonal gaps equal. The workspace-picker outline inherits the card's radius and curve.
 
-Standard menus use outer R16, 4px padding, and R12 items. Compact menus use outer R12, 4px padding, and R8 items. Shared `SegmentedControl` uses outer R12, 4px inset, and R8 segments/indicator; `SegmentedTabs` uses outer R16, 4px inset, and R12 segments/indicator. Keep indicator offsets, width calculations, submenu alignment, and pointer bridges consistent when changing padding.
+Standard menus use outer R16, 4px padding, and R12 items, including command selection, task menus, and the exposed highlights in subagent and background-job menus. Tree disclosure gutters retain their indentation; controls inside a filled job row keep their own compact geometry. Compact menus use outer R12, 4px padding, and R8 items. Shared `SegmentedControl` uses outer R12, 4px inset, and R8 segments/indicator; `SegmentedTabs` uses outer R16, 4px inset, and R12 segments/indicator. Keep indicator offsets, width calculations, submenu alignment, and pointer bridges consistent when changing padding.
+
+The radius subtraction is also the nominal sizing rule for nested superellipses. Equal exponents do not make them exact offset curves, so their diagonal gap may differ from the side inset. Keep the shared superellipse menu and segmented-control treatments; use circular arcs when strict equal radial spacing is required.
 
 A single clickable surface paints hover on itself. A flush pseudo-element or overlay uses the same radius and curve as the visible enclosure. Avoid a separately rounded fill that leaves a crescent between the background and the border.
 
