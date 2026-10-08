@@ -1,4 +1,5 @@
 /** Node PTC execution with configurable per-call processes or retained in-memory REPL state. */
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { stripTypeScriptTypes } from 'node:module'
 import { isAbsolute } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -121,6 +122,7 @@ export class NodePtcRuntime extends PtcRuntime {
     bindings: Map<string, PtcBindingNamespace>,
     controller: AbortController,
   ): Promise<PtcRunResult> {
+    const replyBinding = AsyncLocalStorage.bind(replyToBinding)
     const output = new OutputLedger(this.config.maxOutputBytes)
     const logs: string[] = []
     const sandbox: PtcRunSandbox = { mode: policy.mode, denied: false }
@@ -303,7 +305,7 @@ export class NodePtcRuntime extends PtcRuntime {
             if (++pending > this.config.maxPendingCalls || (pendingBytes += bytes) > this.config.maxMessageBytes) { protocolFailure('pending binding calls exceed configured limits'); return }
             const id = raw.id
             void (async () => {
-              const reply = await replyToBinding(id, fn, args).finally(() => {
+              const reply = await replyBinding(id, fn, args).finally(() => {
                 pending -= 1
                 pendingBytes -= bytes
               })
