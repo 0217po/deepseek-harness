@@ -332,14 +332,16 @@ export class FaceModelEmitter {
       lines.push(`      source: ${quote(parameter.source)},`)
       if (parameter.lookup !== undefined) lines.push(`      lookup: ${quote(parameter.lookup)},`)
       if (parameter.boundary.acceptsUndefined) lines.push('      acceptsUndefined: true,')
-      lines.push(`      codec: ${indent(strictCodec(
-        parameter.boundary,
-        schemas.boundary(parameterBoundaryKey(invocation, index)),
-        undefined,
-        toolProjection(() => remoteJsonSchema(
-          this.renderer, parameter.boundary.codecType, invocation.rejectUnknownFields === true, parameter.boundary.acceptsUndefined,
-        )),
-      ), 6).trimStart()},`)
+      for (const strict of [false, true]) {
+        lines.push(`      ${strict ? 'strictCodec' : 'codec'}: ${indent(strictCodec(
+          parameter.boundary,
+          schemas.boundary(parameterBoundaryKey(invocation, index, strict)),
+          undefined,
+          toolProjection(() => remoteJsonSchema(
+            this.renderer, parameter.boundary.codecType, strict, parameter.boundary.acceptsUndefined,
+          )),
+        ), 6).trimStart()},`)
+      }
       lines.push('    },')
     })
     lines.push('  ],')
@@ -576,9 +578,10 @@ function toolProjection(project: () => Record<string, unknown>): string {
 function invocationSchemas(
   renderer: TypeGraphRenderer, schemas: readonly SchemaModel[], roots: readonly BoundarySchemaRoot[],
 ): SchemaArtifact {
-  const ordinary = new SchemaEmitter(renderer, schemas, roots.filter(root => !root.closedObjects)).emit()
+  const identifiers = new Set<string>()
+  const ordinary = new SchemaEmitter(renderer, schemas, roots.filter(root => !root.closedObjects), {}, identifiers).emit()
   const closedRoots = roots.filter(root => root.closedObjects)
-  const closed = new SchemaEmitter(renderer, [], closedRoots, { closedObjects: true }).emit()
+  const closed = new SchemaEmitter(renderer, [], closedRoots, { closedObjects: true }, identifiers).emit()
   const keys = new Set(closedRoots.map(root => root.key))
   return { definitions: [...ordinary.definitions, ...closed.definitions], exports: ordinary.exports,
     boundary: key => keys.has(key) ? closed.boundary(key) : ordinary.boundary(key),
@@ -708,6 +711,7 @@ class SchemaEmitter {
     private readonly schemas: readonly SchemaModel[],
     private readonly boundaries: readonly BoundarySchemaRoot[],
     private readonly options: { readonly closedObjects?: boolean } = {},
+    identifiers = new Set<string>(),
   ) {
     const declarations = new Map<SymbolId, TypeDeclarationModel>()
     for (const schema of schemas) {
@@ -721,7 +725,6 @@ class SchemaEmitter {
       }
     }
     this.declarations = renderer.graph.declarations.filter(declaration => declarations.has(declaration.id))
-    const identifiers = new Set<string>()
     for (const declaration of this.declarations) {
       const base = `${options.closedObjects ? 'closed$' : ''}${safeIdentifier(declaration.name)}$schema`
       let name = base
@@ -936,6 +939,7 @@ class SchemaEmitter {
   ): string {
     const properties: string[] = []
     const indices: string[] = []
+    let stringIndexValue: string | undefined
     let symbolMembers = 0
     for (const member of members) {
       if (member.static || member.visibility !== 'public') continue
@@ -951,10 +955,10 @@ class SchemaEmitter {
         if (member.signature.parameters.length !== 1 || parameter === undefined) {
           this.fail(subject, 'index signature must have exactly one key parameter')
         }
-        indices.push(this.readonly(
-          `z.record(${this.typeSchema(parameter.type, substitutions)}, ${this.typeSchema(member.signature.returns, substitutions)})`,
-          member.readonly,
-        ))
+        const key = this.typeSchema(parameter.type, substitutions)
+        const value = this.typeSchema(member.signature.returns, substitutions)
+        if (key === 'z.string()') stringIndexValue = value
+        indices.push(this.readonly(`z.record(${key}, ${value})`, member.readonly))
         continue
       }
       if (member.kind !== 'property') this.fail(subject, `${member.kind} member ${member.name} is not data-schema projectable`)
@@ -974,6 +978,8 @@ class SchemaEmitter {
     const index = indices[0]
     if (index === undefined) return object
     if (properties.length === 0) return index
+    // Declared properties can narrow index values; only additional keys use the index schema.
+    if (this.options.closedObjects && stringIndexValue !== undefined) return `${object}.catchall(${stringIndexValue})`
     return `z.intersection(${object}, ${index})`
   }
 
@@ -1052,9 +1058,8 @@ function invocationBoundaryRoots(invocations: readonly InvocationModel[]): Bound
       result.push({ key: contextBoundaryKey(invocation), type: invocation.invocation.boundary.codecType })
     }
     invocation.parameters.forEach((parameter, index) => {
-      result.push({ key: parameterBoundaryKey(invocation, index), type: parameter.boundary.codecType,
-        ...(invocation.rejectUnknownFields ? { closedObjects: true as const } : {}),
-      })
+      result.push({ key: parameterBoundaryKey(invocation, index), type: parameter.boundary.codecType })
+      result.push({ key: parameterBoundaryKey(invocation, index, true), type: parameter.boundary.codecType, closedObjects: true })
     })
     if (invocation.uplink !== undefined) {
       result.push({ key: uplinkBoundaryKey(invocation), type: invocation.uplink.boundary.codecType })
@@ -1072,8 +1077,8 @@ function uplinkBoundaryKey(invocation: InvocationModel): string {
   return `${invocation.id}:uplink`
 }
 
-function parameterBoundaryKey(invocation: InvocationModel, index: number): string {
-  return `${invocation.id}:parameter:${String(index)}`
+function parameterBoundaryKey(invocation: InvocationModel, index: number, strict = false): string {
+  return `${invocation.id}:parameter:${String(index)}${strict ? ':strict' : ''}`
 }
 
 function resultBoundaryKey(invocation: InvocationModel): string {

@@ -81,11 +81,15 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     readonly sourceLocation?: { readonly file: string; readonly line: number; readonly column: number }
   }
 
+  export interface TypertRemoteInputOptions {
+    readonly strict?: boolean
+  }
+
   export type TypertRemoteMethod<Input extends object, Output, Mode extends 'unary' | 'stream' = 'unary', Uplink = never, DecodedOutput = Output> =
     Omit<InvocationDescriptor, 'mode' | 'invocation' | 'result'>
     & (Mode extends 'stream' ? { readonly mode: 'stream' } : { readonly mode?: never }) & {
       readonly invocation: { readonly kind: 'direct' }
-      readonly input: TypertRemoteValue<Input>
+      input(options?: TypertRemoteInputOptions): TypertRemoteValue<Input>
       readonly result: Extract<TypertCodec<Output>, { readonly mode: 'strict' }>
       invoke(remote: TypertClientRemote, input: Input, signal?: AbortSignal): Mode extends 'stream'
         ? RemoteStreamHandle<Output, Uplink> : Promise<RemoteResult<DecodedOutput>>
@@ -135,7 +139,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Result>,
   ): void
 
-  export function Remote(option: string | { readonly mode?: 'stream'; readonly name?: string; readonly rejectUnknownFields?: true }):
+  export function Remote(option: string | { readonly mode?: 'stream'; readonly name?: string }):
   <This extends object, Args extends unknown[], Result>(
     method: (this: This, ...args: Args) => Result,
     context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Result>,

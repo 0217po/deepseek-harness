@@ -133,8 +133,6 @@ export interface InvocationModel extends DocumentationModel {
   readonly method: string
   readonly implementation?: string
   readonly mode?: 'stream'
-  /** Reject unknown fields in declared request objects, independently of consumer selection. */
-  readonly rejectUnknownFields?: true
   readonly invocation:
     | { readonly kind: 'direct' }
     | {

@@ -59,7 +59,7 @@ That exception is not just a `files` entry. The root `tsconfig.base.json` maps `
 
 The package-local `clientBundle(..., { hostPhase: true })` makes Host tsdown bundle the Host entry and the later Client tsdown bundle only the browser entry. Ordinary Client plugins remain single Client projects and produce both their Node loader entry and browser bundle during Client tsdown; split only when the two source sets require different compiler faces.
 
-The [Session consumer artifact test](tests/session-client.e2e.ts) independently compiles a test-local Registry/CLI/MCP adaptation against ordinary declarations, then runs plain Node with real SessionController HTTP/WebSocket calls. It covers current `session/page` and `session/follow`, offline tool selection, input rejection, current-session injection, cancellation, and disposal. Its manual Context composition is not a supported application entry or a full downstream Loader/profile integration; unavailable attachment preparation rejects explicitly.
+The [Session consumer artifact test](tests/session-client.e2e.ts) independently compiles a test-local Registry/CLI/MCP adaptation against ordinary declarations, then runs plain Node with real SessionController HTTP/WebSocket calls. Its CLI/MCP selection and intake both use `method.input({ strict: true })`, pairing JSON Schema with the same view's parser without tightening Host dispatch. It covers current `session/page` and `session/follow`, offline tool selection, input rejection, current-session injection, cancellation, and disposal. Its manual Context composition is not a supported application entry or a full downstream Loader/profile integration; unavailable attachment preparation rejects explicitly.
 
 <a id="model-experience"></a>
 ## Model Experience

@@ -243,6 +243,7 @@ function requireInvocation(pkgName: string, value: unknown): void {
     }
     parameters.set(wire, parameter)
     requireStrictCodec(pkgName, parameter.codec, `invocation "${id}" parameter codec`)
+    if (parameter.strictCodec !== undefined) requireStrictCodec(pkgName, parameter.strictCodec, `invocation "${id}" strict input codec`)
   }
   if (invocation.cancellation !== undefined) {
     const cancellation = requireObject(pkgName, invocation.cancellation, `invocation "${id}" cancellation`)
@@ -272,8 +273,9 @@ function requireInvocation(pkgName: string, value: unknown): void {
     if (receiver.kind !== 'direct') {
       throw new Error(`typert-loader: ${pkgName} invocation "${id}" input/invoke require a direct receiver`)
     }
-    const input = requireObject(pkgName, invocation.input, `invocation "${id}" input`)
-    requireSchemaProjection(pkgName, input, `invocation "${id}" input`)
+    if (typeof invocation.input !== 'function') {
+      throw new Error(`typert-loader: ${pkgName} invocation "${id}" has no input() selector`)
+    }
     if (typeof invocation.invoke !== 'function') {
       throw new Error(`typert-loader: ${pkgName} invocation "${id}" has no invoke() function`)
     }

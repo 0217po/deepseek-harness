@@ -6,6 +6,7 @@ import type {
   TypertClientRemote,
   TypertRemoteCodecSpec,
   TypertRemoteInfo,
+  TypertRemoteInputOptions,
   TypertRemoteMethod,
   TypertRemoteParameterSpec,
   TypertRemoteSpec,
@@ -54,8 +55,12 @@ class RemoteInfo implements TypertRemoteInfo {
         result: definition.result.description === undefined ? definition.result : new ResultValue(definition.result),
       }
       if (definition.invocation.kind === 'direct') {
+        const inputs: [NamedInput?, NamedInput?] = []
         const direct = Object.assign(descriptor, {
-          input: new NamedInput(parameters),
+          input(options?: TypertRemoteInputOptions) {
+            const strict = options?.strict === true
+            return inputs[strict ? 1 : 0] ??= new NamedInput(parameters, strict)
+          },
           invoke(remote: TypertClientRemote, input: object, signal?: AbortSignal) {
             const named = input as Readonly<Record<string, unknown>>
             const values = parameters.map(parameter => named[parameter.wire])
@@ -82,7 +87,8 @@ class RemoteInfo implements TypertRemoteInfo {
  */
 export function isTypertRemoteMethod(descriptor: InvocationDescriptor): descriptor is Method {
   return descriptor.invocation.kind === 'direct' && descriptor.result.mode === 'strict'
-    && 'input' in descriptor && 'invoke' in descriptor && typeof descriptor.invoke === 'function'
+    && 'input' in descriptor && typeof descriptor.input === 'function'
+    && 'invoke' in descriptor && typeof descriptor.invoke === 'function'
 }
 
 function optional(parameter: Parameter): boolean {
@@ -93,10 +99,14 @@ class NamedInput implements TypertRemoteValue<object> {
   private schema?: z.ZodType<object>
   private projection?: Pick<TypertRemoteValue, 'jsonSchema' | 'jsonSchemaError'>
 
-  constructor(private readonly parameters: readonly Parameter[]) {}
+  constructor(private readonly parameters: readonly Parameter[], private readonly strict: boolean) {}
+
+  private codec(parameter: Parameter): TypertRemoteCodecSpec {
+    return this.strict ? parameter.strictCodec : parameter.codec
+  }
 
   readonly create = (): z.ZodType<object> => this.schema ??= z.strictObject(Object.fromEntries(this.parameters.map((parameter) => {
-    const value = parameter.codec.create()
+    const value = this.codec(parameter).create()
     return [parameter.wire, optional(parameter) ? value.optional() : value.nonoptional()]
   })))
 
@@ -105,15 +115,15 @@ class NamedInput implements TypertRemoteValue<object> {
 
   private project(): NonNullable<NamedInput['projection']> {
     if (this.projection !== undefined) return this.projection
-    const unavailable = this.parameters.find(parameter => parameter.codec.jsonSchema === undefined)
+    const unavailable = this.parameters.find(parameter => this.codec(parameter).jsonSchema === undefined)
     if (unavailable !== undefined) {
-      return this.projection = { jsonSchemaError: unavailable.codec.jsonSchemaError ?? `No JSON Schema for parameter ${unavailable.wire}` }
+      return this.projection = { jsonSchemaError: this.codec(unavailable).jsonSchemaError ?? `No JSON Schema for parameter ${unavailable.wire}` }
     }
     return this.projection = {
       jsonSchema: {
         type: 'object',
         properties: Object.fromEntries(this.parameters.map(parameter => [parameter.wire, {
-          ...parameter.codec.jsonSchema,
+          ...this.codec(parameter).jsonSchema,
           ...(parameter.description === undefined ? {} : { description: parameter.description }),
         }])),
         required: this.parameters.filter(parameter => !optional(parameter)).map(parameter => parameter.wire),

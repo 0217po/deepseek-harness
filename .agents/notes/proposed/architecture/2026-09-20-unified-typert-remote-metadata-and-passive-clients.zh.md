@@ -6,9 +6,9 @@ Status: proposed
 
 ## Problem
 
-CLI 帮助、参数解析和 MCP 工具发现需要在连接受控 Host 前取得本地方法说明、具名输入解析器、工具 JSON Schema 和结果元数据。Browser、Node 与独立消费方还需要类型化调用，而严格 Host 必须执行相同的生成约束。这些需求不意味着运行时 TypeScript 分析、Host Service 激活，或每个消费方另行维护业务 schema。
+CLI 帮助、参数解析和 MCP 工具发现需要在连接受控 Host 前取得本地方法说明、具名输入解析器、工具 JSON Schema 和结果元数据。Browser、Node 与独立消费方还需要类型化调用。工具消费方需要更严格的输入对象校验，但不能改变普通 Host 分发。这些需求不意味着运行时 TypeScript 分析、Host Service 激活，或每个消费方另行维护业务 schema。
 
-#4644 原有的[源码定义决策](../../implemented/architecture/2026-09-20-committed-remote-definitions-and-passive-clients.zh.md)通过 `emitSourceDef`、提交的生成文件和 `./remote-source` 交付这些信息。Host 绑定携带定义；源码生成另有清单、新鲜度、发布和排除规则。本 note 只替代该交付机制。原 note 保持不变，因为其中的被动客户端与载体所有权决策仍然适用。
+#4644 原有的[源码定义决策](../../implemented/architecture/2026-09-20-committed-remote-definitions-and-passive-clients.zh.md)通过 `emitSourceDef`、提交的生成文件和 `./remote-source` 交付这些信息。Host 绑定携带定义；源码生成另有清单、新鲜度、发布和排除规则。本 note 替代该交付机制，并将输入严格性改为由消费方选择。原 note 保持不变，因为其中的被动客户端与载体所有权决策仍然适用。
 
 两种交付路径均来自同一个[编译器无关模型](../../implemented/architecture/2026-07-27-compiler-independent-typert-model.zh.md)。独立的 Host 与 Client Program 要求生成跨编译面声明，而非提交生成源码。需要精确 schema 时，显式预构建是可接受的；普通 ESM 产物无需运行中的 Host 即可提供离线元数据。[定向调用决策](../../implemented/architecture/2026-08-02-typert-remote-method-calls.zh.md)仍负责接收者查找、Gateway 分发和贡献生命周期。
 
@@ -22,15 +22,17 @@ CLI 帮助、参数解析和 MCP 工具发现需要在连接受控 Host 前取�
 
 [Registry](../../../../packages/typert/registry/src/service.ts) 实例属于各自的 Cordis Context 和进程。Host 与 Client 入口共享实现，而非状态。既有本地/Remote `get()` 与 `list()` 保留已注册的描述符对象；注册保留原子重复检查、通知、tombstone 和 fiber 管理的释放。不新增 Registry API、存储、订阅、元数据 RPC 或跨进程同步。独立 Program 和进程不共享对象身份。
 
-[发射器](../../../../packages/typert/generator/src/emitter.ts)为每个端点写入一份静态 `TypertRemoteMethodSpec`，并调用已发布纯入口 `@deepseek-ai/dsh-typert-protocol/remote-info` 提供的 `createTypertRemoteInfo({ package, methods })`。端点键提供 `namespace` 和 `method`，`id` 由包名与端点键组合。每份 spec 保留 service、接收者、有序参数、唯一的 `result` codec，以及可选的流模式、scope、uplink、取消、文档和源码位置字段。参数 `wire` 默认使用 `name`；参数文档保留在 `parameters[].description`。不存在嵌套 `metadata`、独立 `output` 或 `parameterDescriptions`，也不导出顶层 `REMOTE_METHODS`。
+[发射器](../../../../packages/typert/generator/src/emitter.ts)为每个端点写入一份静态 `TypertRemoteMethodSpec`，并调用已发布纯入口 `@deepseek-ai/dsh-typert-protocol/remote-info` 提供的 `createTypertRemoteInfo({ package, methods })`。端点键提供 `namespace` 和 `method`，`id` 由包名与端点键组合。每份 spec 保留 service、接收者、有序参数、唯一的 `result` codec，以及可选的流模式、scope、uplink、取消、文档和源码位置字段。每个参数都有从同一 checker 解析后类型模型派生的 `codec` 和 `strictCodec`，分析器与模型不携带逐方法策略。参数 `wire` 默认使用 `name`；参数文档保留在 `parameters[].description`。不存在嵌套 `metadata`、独立 `output` 或 `parameterDescriptions`，也不导出顶层 `REMOTE_METHODS`。
 
 [factory](../../../../packages/typert/protocol/src/remote-info.ts)返回真正的类实例，而非类构造函数或立即求值的对象字面量。构造时只保留 spec。首次读取 `descriptors` 或 `methods` 时（包括挂载或查询时）才构建并缓存一个共享索引。每个 `methods[endpoint]` 就是同一个直接方法描述符对象；仅使用 Context 接收者的方法保留在描述符和作用域声明中。带作用域投影的直接方法保留 scope 字段，但其通用具名调用器要求无作用域 Remote。
 
-直接方法从有序参数 codec 派生具名 `input`，并使用 `result` 表示成功一元值或流条目，包括二进制 `encode`/`decode`。具名 Zod schema 在首次 `input.create()` 时构建并缓存；其 JSON Schema 投影只在读取时组装并缓存。生成的独立 Zod factory 同样惰性求值且只缓存成功结果。原始 spec 内部要求 Zod factory，而面向消费方的 `TypertSchema<T>` 只承诺 `parse(value: unknown): T`。JSON Schema 仍是可选的生成器投影，而非运行时 `z.toJSONSchema()` 转换。导入和元数据/schema 读取绝不发起网络调用；协议根入口也重新导出 factory，但会导入 Cordis。
+直接方法的 `input(options?: TypertRemoteInputOptions)` 返回缓存的 `TypertRemoteValue<Input>`；唯一选项是 `strict?: boolean`。`method.input()` 与 `{ strict: false }` 使用普通 codec：已声明对象接受并剥离未知字段。`{ strict: true }` 递归拒绝未声明字段。两种具名参数封装都拒绝额外参数；显式 JSON 与字典键保持开放，有约束的字典值仍然校验。消费方选择一个视图，通过 `input.create().parse(raw)` 与 `input.jsonSchema` 取得匹配的解析和投影。Host 分发与唯一的 `result` codec 保留普通行为，包括二进制 `encode`/`decode`。
 
-Registry 查询返回基础描述符。纯叶入口或协议根入口的 `isTypertRemoteMethod(descriptor)` 以 `object`/`unknown` 类型收窄直接调用能力；精确端点类型来自 `TYPERT_REMOTE.methods`，而非动态查询。一元 `mode` 省略；流式 `mode` 为 `'stream'`。`invoke(remote, input, signal?)` 在调用时解析已挂载的命名空间方法，保留其 `this`、可选位置参数空位和 signal。它不使用 async 包装，直接转发同一个完整 `Promise<RemoteResult<T>>` 或 `RemoteStreamHandle<Output, Uplink>`；流迭代、`send`、`end` 和 `dispose` 均保留。
+每种输入策略的视图、具名解析器及 JSON Schema 投影都独立惰性求值并缓存。生成的独立 Zod factory 同样惰性求值且只缓存成功结果。原始 spec 内部要求 Zod factory，而面向消费方的 `TypertSchema<T>` 只承诺 `parse(value: unknown): T`。JSON Schema 仍是可选的生成器投影，而非运行时 `z.toJSONSchema()` 转换。纯叶入口运行时仅依赖 Zod，不依赖 Host 源码或传输。导入和元数据/schema 读取绝不发起网络调用；协议根入口也重新导出 factory，但会导入 Cordis。
 
-文档和 JSON Schema 可选。不支持的投影记录 `jsonSchemaError`，同时保留解析器及独立文档；只捕获专用投影错误。显式选择工具的消费方要求工具说明和受支持的输入 JSON Schema。即使缺少可选输出 JSON Schema，输出解析仍然必需。原生 `dsh-tools` 注册额外要求 `output.schema`：仅有解析器并不满足要求。这些消费方要求不得阻止本来有效的 Remote 方法生成。
+Registry 查询返回基础描述符。纯叶入口或协议根入口的 `isTypertRemoteMethod(descriptor)` 以 `object`/`unknown` 类型收窄直接调用能力；精确端点类型来自 `TYPERT_REMOTE.methods`，而非动态查询。一元 `mode` 省略；流式 `mode` 为 `'stream'`。`invoke(remote, input, signal?)` 在调用时解析已挂载的命名空间方法，保留其 `this`、可选位置参数空位和 signal。它不使用 async 包装，直接转发同一个完整 `Promise<RemoteResult<DecodedOutput>>` 或 `RemoteStreamHandle<Output, Uplink>`；流迭代、`send`、`end` 和 `dispose` 均保留。`TypertRemoteMethod` 的第五个泛型参数独立于结果解析器的原始输出，保留载体解码后的一元字节类型。
+
+文档和 JSON Schema 可选。每个不受支持的输入变体或结果投影记录各自的 `jsonSchemaError`，同时保留解析器及独立文档；只捕获专用投影错误。显式选择工具的消费方要求工具说明和受支持的输入 JSON Schema。即使缺少可选输出 JSON Schema，输出解析仍然必需。原生 `dsh-tools` 注册额外要求 `output.schema`：仅有解析器并不满足要求。这些消费方要求不得阻止本来有效的 Remote 方法生成。
 
 ## Proposal
 
@@ -40,9 +42,9 @@ Registry 查询返回基础描述符。纯叶入口或协议根入口的 `isType
 
 框架消费方将普通元数据加载到自己的 Registry。独立消费方可以直接导入 `./remote`，无需 Cordis、Host Service 激活或连接。两者读取同一份生成业务定义。保留独立的 Host/Client Program，并分析每个编译面的所有贡献方，使局部生成保留外部声明合并。注册不会将每个反射方法都暴露为可调用 endpoint 或工具。
 
-严格源码启动显式预构建，并通过 Loader 加载普通 `./typert`。有限的无 descriptor fallback 仍支持基本参数、signal、取消、流式调用、JSON 转换和一元字节附件，但无法恢复被擦除的字段、约束或工具文档。一旦观察到严格的本地 descriptor，撤销后必须拒绝调用，而不是降级到 fallback。`rejectUnknownFields` 是独立的、仅生成期使用的请求 codec 策略，不是运行时 marker 或工具选择标志。
+严格源码启动显式预构建，并通过 Loader 加载普通 `./typert`。有限的无 descriptor fallback 仍支持基本参数、signal、取消、流式调用、JSON 转换和一元字节附件，但无法恢复被擦除的字段、约束或工具文档。一旦观察到严格的本地 descriptor，撤销后必须拒绝调用，而不是降级到 fallback。`@Remote` 只接受 `name` 和 `mode`；消费方选择输入策略，无需另加开发者注解。
 
-Host 元数据就绪仍由组合负责。要求严格校验的 Host 必须等待本地注册完成后再接受调用；`hasSeen()` 不会保护首次注册之前的端点。返回惰性 info 实例既不完成异步 Loader 发现，也不建立就绪保证。Loader 校验同样不得仅为注册贡献就强制计算派生输入投影。
+Host 元数据就绪仍由组合负责。要求严格校验的 Host 必须等待本地注册完成后再接受调用；`hasSeen()` 不会保护首次注册之前的端点。返回惰性 info 实例既不完成异步 Loader 发现，也不建立就绪保证。Loader 校验静态 codec spec 及可调用的 `input`/`invoke`，注册贡献时不调用选择器、解析器 factory 或投影。
 
 Connection 拥有认证 HTTP 和物理 WebSocket；Gateway 拥有帧和分发。`forwardedEvents: true` 显式选择 Host 事件转发和交互 waterfall（瀑布式事件）。否则 `$on()` 和由事件监督的 `$stream()` 立即失败，而生成的流式方法仍然可用。导入、注册、列举工具或调用方法不会取得交互回答所有权。Node 钩子由实例拥有，释放必须等待完成。
 
@@ -53,12 +55,12 @@ Connection 拥有认证 HTTP 和物理 WebSocket；Gateway 拥有帧和分发。
 | 消费方 | 元数据适配 | 保留的执行方式 |
 |---|---|---|
 | Browser / Node Remote 调用方 | 导入普通 `./remote`；在实际调用 Context 中挂载一次。 | 生成 namespace、Gateway、认证 Connection 和目标 controller。 |
-| 离线 CLI 帮助 / 解析 | 在 CLI profile 的元数据 Context 中，于目标发现之前注册。 | 帮助不连接；调用时由独立的实际调用 Context 挂载。 |
-| MCP 发现 / 调用 | 读取选中的 Registry 条目；保留消费方自有工具说明和 envelope。 | `tools/list` 离线；`tools/call` 使用相同 Session client。外部 MCP 客户端收到协议 JSON，而不是 Registry 模块。 |
+| 离线 CLI 帮助 / 解析 | 在 CLI profile 的元数据 Context 中，于目标发现之前注册；选择 `input({ strict: true })`。 | 帮助不连接；调用时由独立的实际调用 Context 挂载。 |
+| MCP 发现 / 调用 | 读取选中的 Registry 条目并选择 `input({ strict: true })`；保留消费方自有工具说明和 envelope。 | `tools/list` 离线；`tools/call` 使用相同 Session client。外部 MCP 客户端收到协议 JSON，而不是 Registry 模块。 |
 | 原生工具 | 读取 Host 本地方法信息；要求工具注册的 `output.schema`。 | 在工具边界解析，然后直接调用同进程 controller。 |
 | 独立适配器 | 直接读取类型化 `TYPERT_REMOTE.methods`。 | 仅调用时使用其选择的 Remote 运行时。 |
 
-当前 Session 选择和附件准备仍由消费方拥有；用生成解析器验证补全后的业务参数。下游 `follow` 适配器的 `activate: false` 策略只适用于具有该 API 的版本；当前分支的 `follow` 没有此选项。中止观察不等于取消已接受的 Session 工作。原生直接分发也不会移除无关的业务依赖，例如下游 controller 通过 Gateway 访问待处理交互。
+当前 Session 选择和附件准备仍由消费方拥有；CLI/MCP 输入接收使用选择时的同一严格输入视图验证补全后的业务参数。下游 `follow` 适配器的 `activate: false` 策略只适用于具有该 API 的版本；当前分支的 `follow` 没有此选项。中止观察不等于取消已接受的 Session 工作。原生直接分发也不会移除无关的业务依赖，例如下游 controller 通过 Gateway 访问待处理交互。
 
 ### 新旧接入示例
 
@@ -77,7 +79,7 @@ page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage> {
 
 // Ordinary delivery; no generated-source import or constructor definitions.
 // Constructor: super(ctx, 'sessionController', { namespace: 'session' })
-@Remote({ name: 'page', rejectUnknownFields: true })
+@Remote({ name: 'page' })
 page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage> {
   return this.history.page(request, signal)
 }
@@ -116,13 +118,14 @@ if (page === undefined || !isTypertRemoteMethod(page)) {
 }
 ```
 
-注册属于该插件的 fiber。帮助使用 `description` 和 `input`；类型化 facade 可以保留对普通生成声明的 type-only 导入。显式工具选择不修改已注册元数据。
+注册属于该插件的 fiber。帮助使用 `description` 和 `input({ strict: true })`；类型化 facade 可以保留对普通生成声明的 type-only 导入。显式工具选择不修改已注册元数据。
 
 **CLI 输入与分发。** 本地 `current` 解析和附件准备之后，两种元数据访问方式使用同样的调用步骤：
 
 ```ts ignore-check
 if (page.mode === 'stream') throw new Error('session/page must be unary')
-const arguments_ = page.input.create().parse(raw)
+const input = page.input({ strict: true })
+const arguments_ = input.create().parse(raw)
 const result = await page.invoke(remote, arguments_, signal)
 if (!result.ok) throw result.error
 const output = page.result.create().parse(result.value)
@@ -131,19 +134,20 @@ const output = page.result.create().parse(result.value)
 **MCP 发现与调用。** 选择时验证工具特有要求；生成过程本身不要求它们。
 
 ```ts ignore-check
+const input = page.input({ strict: true })
 if (!page.description) throw new Error('session/page has no tool description')
-if (page.input.jsonSchema === undefined) throw new Error('session/page has no supported tool input schema')
+if (input.jsonSchema === undefined) throw new Error('session/page has no supported tool input schema')
 const tool = {
   name: 'remote_session_page',
   description: page.description,
-  inputSchema: page.input.jsonSchema,
+  inputSchema: input.jsonSchema,
   ...(page.result.jsonSchema === undefined ? {} : { outputSchema: page.result.jsonSchema }),
 }
 ```
 
-这个简化对象只展示元数据依赖。真实 MCP 适配器保留 `{ arguments, current, content }` 输入及 `{ ok, value }` / 失败输出 envelope。列举无需连接；调用执行输入接收、本地准备、生成解析、调用及输出解析。可选输出投影不会移除输出验证。
+这个简化对象只展示元数据依赖。真实 MCP 适配器保留 `{ arguments, current, content }` 输入及 `{ ok, value }` / 失败输出 envelope。列举无需连接；调用执行输入接收、本地准备、通过 `input.create()` 解析、调用及输出解析。可选输出投影不会移除输出验证。
 
-**原生工具。** 查询 `ctx.typert.local.get('session/page')`，并用 `isTypertRemoteMethod` 收窄，而非读取源码方法表。原生注册要求受支持的输入与结果投影，包括必需的 `output.schema`；MCP 的可选输出投影在这里并不足够。facade 取得类型化请求后，两种设计执行同样的本地调用：
+**原生工具。** 查询 `ctx.typert.local.get('session/page')`，并用 `isTypertRemoteMethod` 收窄，而非读取源码方法表。原生工具可以选择 `method.input({ strict: true })`，取得匹配的解析与输入投影。原生注册仍要求受支持的输入与结果投影，包括 core Tool 必需的 `output.schema`；MCP 的可选输出投影在这里并不足够。facade 取得类型化请求后，两种设计执行同样的本地调用：
 
 ```ts ignore-check
 const value = await ctx.sessionController.page(request, signal)
@@ -154,7 +158,7 @@ const value = await ctx.sessionController.page(request, signal)
 ```ts ignore-check
 import { TYPERT_REMOTE } from '@deepseek-ai/dsh-api-session-controller/remote'
 const page = TYPERT_REMOTE.methods['session/page']
-const arguments_ = page.input.create().parse(raw)
+const arguments_ = page.input().create().parse(raw)
 const result = await page.invoke(remote, arguments_, signal)
 ```
 
@@ -167,7 +171,7 @@ pnpm dsh --profile <profile-name> <profile-arguments>
 
 ### 当前分支上的有限复现
 
-测试专用 [Session client](../../../../packages/api/remotes/tests/fixtures/session-client/client.ts) 和 [MCP 适配器](../../../../packages/api/remotes/tests/fixtures/session-client/mcp.ts)为当前 `session/page` 与 `session/follow` 提取下游访问方式。它们使用 Registry 元数据、当前 Session 注入、显式拒绝不支持的 content、通用解析器和普通调用。不添加未来 controller 操作、公开 package/bin、另一套应用启动器或完整下游应用。
+测试专用 [Session client](../../../../packages/api/remotes/tests/fixtures/session-client/client.ts) 和 [MCP 适配器](../../../../packages/api/remotes/tests/fixtures/session-client/mcp.ts)为当前 `session/page` 与 `session/follow` 提取下游访问方式。它们使用 Registry 元数据，以 `input({ strict: true })` 同时用于选择与输入接收，并保留当前 Session 注入、显式拒绝不支持的 content 和普通调用。不添加未来 controller 操作、公开 package/bin、另一套应用启动器或完整下游应用。
 
 [产物测试](../../../../packages/api/remotes/tests/session-client.e2e.ts)仅将本地消费方 fixture 对普通声明编译，再使用普通 Node 运行。[运行时 fixture](../../../../packages/api/remotes/tests/fixtures/session-client/run.mjs)将真实 SessionController、活 Session/query 服务、Gateway 和 Connection 通过 HTTP/WebSocket 组合。这是手动组装的有限集成，不是 Loader/profile 组合或完整 CLI/MCP 协议服务器。独立的 Loader 测试使用手写产物 fixture；严格源码 Gateway 测试使用手写普通 contribution。两者都不被表述为生成的完整应用验证。
 
@@ -183,7 +187,8 @@ pnpm dsh --profile <profile-name> <profile-arguments>
 ## Acceptance criteria
 
 - 普通产物为每个端点生成一份静态方法 spec，并返回惰性类实例；直接方法索引引用描述符对象，保留完整流式/二进制类型、独立编译面及完整编译面的声明合并。
-- 描述符索引、具名输入 schema 和派生投影仅在请求时物化并缓存结果；Loader 校验不强制计算派生输入投影。
+- 描述符索引与每种输入策略的视图、解析器和投影都独立惰性求值并缓存；Loader 校验静态 spec 及可调用辅助能力，不调用选择器、解析器或投影。
+- 每个输入参数从同一模型生成普通与严格 codec；消费方无需方法注解即可选择策略。两种封装都拒绝额外具名参数；严格输入递归关闭已声明对象，但不关闭 JSON 或字典键，也不改变 Host 分发和结果。
 - Registry 身份、原子注册、撤销和释放保持不变；元数据检视和方法调用保持被动。
 - 缺少文档或不支持可选投影不阻止生成；选中的工具拒绝缺少必需信息的条目，并仍然解析输出。
 - 严格源码/产物调用与有限 fallback 分别测试；撤销严格 descriptor 绝不启用 fallback。

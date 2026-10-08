@@ -99,6 +99,7 @@ function invocationTypertSource(pkgName: string, factoryUrl: string): string {
     '      parameters: [{',
     "        name: 'request', source: 'json', description: 'Goal title.',",
     `        codec: { mode: 'strict', typeSymbol: '${pkgName}/types#Request', create: Text, jsonSchema: { type: 'string' } },`,
+    `        strictCodec: { mode: 'strict', typeSymbol: '${pkgName}/types#Request', create: Text, jsonSchema: { type: 'string' } },`,
     '      }],',
     "      cancellation: { parameter: 'signal' },",
     '      result: {',
@@ -198,8 +199,8 @@ describe('typert loader', () => {
     expect(descriptor).not.toHaveProperty('metadata')
     expect(descriptor.description).toBe('Create a goal.')
     expect(descriptor.parameters[0]?.description).toBe('Goal title.')
-    expect(descriptor.input.create().parse({ request: 'ready' })).toEqual({ request: 'ready' })
-    expect(() => descriptor.input.create().parse({ request: 1 })).toThrow()
+    expect(descriptor.input().create().parse({ request: 'ready' })).toEqual({ request: 'ready' })
+    expect(() => descriptor.input().create().parse({ request: 1 })).toThrow()
     expect(descriptor.result.create().parse('created')).toBe('created')
     expect(descriptor.result.jsonSchema).toEqual({ type: 'string', description: 'Created goal.' })
     expect(descriptor.parameters[0]?.codec.mode).toBe('strict')
@@ -566,17 +567,17 @@ describe('validateTypertManifest', () => {
   })
 
   it('validates flat method capabilities and eager projections without requiring tool schemas', () => {
+    const input = vi.fn(() => ({ create: () => z.object({ request: z.string() }) }))
     const method = {
-      ...strictInvocation(), invoke: () => undefined,
-      input: { create: () => z.object({ request: z.string() }) },
+      ...strictInvocation(), invoke: () => undefined, input,
       result: { ...strictCodec('pkg#Result'), jsonSchemaError: 'Not projectable.' },
     }
     const manifest = { ...completeManifest(zodish), invocations: [method] }
     expect(validateTypertManifest('pkg', manifest)).toBe(manifest)
+    expect(input).not.toHaveBeenCalled()
     const withDocs = {
       ...method, description: '',
-      parameters: method.parameters.map(parameter => ({ ...parameter, description: 'Goal title.' })),
-      input: { ...method.input, description: '', jsonSchema: { type: 'object' } },
+      parameters: method.parameters.map(parameter => ({ ...parameter, description: 'Goal title.', strictCodec: parameter.codec })),
       result: { ...method.result, description: '' },
     }
     expect(validateTypertManifest('pkg', { ...manifest, invocations: [withDocs] }).invocations[0]).toBe(withDocs)
@@ -587,8 +588,13 @@ describe('validateTypertManifest', () => {
       { ...method, invoke: false }, { ...method, description: 1 },
       { ...method, parameters: method.parameters.map(parameter => ({ ...parameter, description: false })) },
       { ...method, input: null }, { ...method, input: { create: false } },
-      { ...method, input: { ...method.input, jsonSchema: [] } },
-      { ...method, input: { ...method.input, jsonSchemaError: false } },
+      { ...method, parameters: method.parameters.map(parameter => ({ ...parameter, strictCodec: { ...parameter.codec, create: false } })) },
+      { ...method, parameters: method.parameters.map(parameter => ({
+        ...parameter, strictCodec: { ...parameter.codec, jsonSchema: [] },
+      })) },
+      { ...method, parameters: method.parameters.map(parameter => ({
+        ...parameter, strictCodec: { ...parameter.codec, jsonSchemaError: false },
+      })) },
       { ...method, result: { ...method.result, jsonSchemaError: false } },
       { ...method, result: { ...method.result, description: 1 } },
       { ...method, invocation: { kind: 'context', context: 'agent', wire: 'agentId', codec: strictCodec('pkg#Agent') } },

@@ -10,6 +10,11 @@ declare const output: PageOutput
 const unary: Promise<RemoteResult<PageOutput>> = TYPERT_REMOTE.methods['session/page'].invoke(remote, input)
 const more: boolean = output.hasMore
 const records: readonly object[] = output.records
+const strictInput: PageArguments = TYPERT_REMOTE.methods['session/page'].input({ strict: true }).create().parse({})
+const normalInput: PageArguments = TYPERT_REMOTE.methods['session/page'].input().create().parse({})
+// @ts-expect-error Schema strictness is a consumer boolean, not an arbitrary policy string.
+TYPERT_REMOTE.methods['session/page'].input({ strict: 'yes' })
+void [strictInput, normalInput]
 // @ts-expect-error Page arguments retain the generated request fields.
 void TYPERT_REMOTE.methods['session/page'].invoke(remote, { request: { throughSeq: 'bad' } })
 // @ts-expect-error Page output has no cursor; the follow snapshot supplies it.

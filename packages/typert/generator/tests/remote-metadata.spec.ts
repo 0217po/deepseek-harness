@@ -31,7 +31,7 @@ interface RuntimeDescriptor {
 }
 
 interface RuntimeMethod extends RuntimeDescriptor {
-  readonly input: RuntimeValue
+  input(options?: { readonly strict?: boolean }): RuntimeValue
   invoke(remote: object, input: object, signal?: AbortSignal): unknown
 }
 
@@ -61,7 +61,7 @@ function fixture(): string {
    * @param signal - request lifetime.
    * @returns the created reference.
    */
-  @Remote({ rejectUnknownFields: true })
+  @Remote
 `))
   editFile(root, 'packages/remote/src/types.ts', source => source.replace(
     '  readonly title: string', '  /** Human-readable goal name. */\n  readonly title: string',
@@ -89,7 +89,7 @@ function assertConsumerTypechecks(root: string, dts: string, source: string): vo
 }
 
 describe('Remote method metadata', { timeout: 60_000 }, () => {
-  it('keeps selected and full-face artifacts identical when another package augments the result', async () => {
+  it('keeps selected and full-face artifacts identical when another package augments inputs and results', async () => {
     const root = fixture()
     const extension = join(root, 'packages/extension')
     mkdirSync(join(extension, 'src'), { recursive: true })
@@ -109,6 +109,7 @@ describe('Remote method metadata', { timeout: 60_000 }, () => {
 /** @typert schema */
 export interface ExtensionMarker { readonly enabled: boolean }
 declare module '@fixture/remote/types' {
+  interface CreateGoalRequest { readonly extension?: { readonly label: string } }
   interface CreateGoalResult { readonly extension?: string }
 }
 `)
@@ -122,7 +123,19 @@ declare module '@fixture/remote/types' {
     expect(selected.map(artifact => artifact.package)).toEqual(['@fixture/remote'])
     expect(selected[0]).toEqual(complete.find(artifact => artifact.package === '@fixture/remote'))
     const generated = await executable(selected[0]!.remote!.js)
-    const output = generated.TYPERT_REMOTE.methods['goals/create']!.result.create()
+    const method = generated.TYPERT_REMOTE.methods['goals/create']!
+    const input = { agentId: 'agent', request: { title: 'ship', extension: { label: 'installed' } } }
+    for (const strict of [false, true]) {
+      const view = method.input({ strict })
+      expect(view.create().parse(input)).toEqual(input)
+      expect(view.jsonSchema).toMatchObject({ properties: { request: {
+        properties: { extension: { additionalProperties: !strict } },
+      } } })
+    }
+    const extra = { ...input, request: { ...input.request, extension: { label: 'installed', extra: true } } }
+    expect(method.input().create().parse(extra)).toEqual(input)
+    expect(() => method.input({ strict: true }).create().parse(extra)).toThrow()
+    const output = method.result.create()
     expect(output.parse({ ref: 'created', extension: 'installed' })).toEqual({ ref: 'created', extension: 'installed' })
     expect(() => output.parse({ ref: 'created', extension: 1 })).toThrow()
   })
@@ -154,27 +167,32 @@ declare module '@fixture/remote/types' {
         { name: 'agent', wire: 'agentId', description: 'owning Agent.' },
         { name: 'request', wire: 'request', description: 'goal fields.' },
       ])
-      expect(current.input.jsonSchema).toEqual(method.input.jsonSchema)
-      expect(current.input.jsonSchema).toMatchObject({ properties: {
-        request: { description: 'goal fields.', additionalProperties: false, properties: { title: { description: 'Human-readable goal name.' } } },
-      } })
+      for (const strict of [false, true]) {
+        const input = current.input({ strict })
+        expect(input.jsonSchema).toEqual(method.input({ strict }).jsonSchema)
+        expect(input.jsonSchema).toMatchObject({ properties: {
+          request: { description: 'goal fields.', additionalProperties: !strict, properties: { title: { description: 'Human-readable goal name.' } } },
+        } })
+        expect(input.jsonSchemaError).toBeUndefined()
+        assertSupportedJsonSchema(input.jsonSchema)
+        expect(input.create().parse({ agentId: 'agent', request: { title: 'ship' } })).toEqual({ agentId: 'agent', request: { title: 'ship' } })
+        for (const invalid of [
+          { request: { title: 'ship' } },
+          { agentId: 'agent' },
+          { agentId: 'agent', request: { title: 'ship' }, extra: true },
+        ]) expect(() => input.create().parse(invalid)).toThrow()
+      }
+      expect(current.input().create().parse({ agentId: 'agent', request: { title: 'ship', extra: true } }))
+        .toEqual({ agentId: 'agent', request: { title: 'ship' } })
+      expect(() => current.input({ strict: true }).create().parse({ agentId: 'agent', request: { title: 'ship', extra: true } })).toThrow()
+      expect(current.parameters[1]!.codec.create().parse({ title: 'ship', extra: true })).toEqual({ title: 'ship' })
       expect(current.result.description).toBe('the created reference.')
       expect(current.result.jsonSchema).toEqual(method.result.jsonSchema)
       expect(current.result.jsonSchema?.description).toBe('the created reference.')
-      expect(current.input.jsonSchemaError).toBeUndefined()
       expect(current.result.jsonSchemaError).toBeUndefined()
-      assertSupportedJsonSchema(current.input.jsonSchema)
       assertSupportedJsonSchema(current.result.jsonSchema)
       expect(current.result.create().parse({ ref: 'created' })).toEqual({ ref: 'created' })
       expect(() => current.result.create().parse({ ref: 1 })).toThrow()
-      expect(current.input.create().parse({ agentId: 'agent', request: { title: 'ship' } })).toEqual({ agentId: 'agent', request: { title: 'ship' } })
-      for (const input of [
-        { request: { title: 'ship' } },
-        { agentId: 'agent', request: { title: 'ship', extra: true } },
-        { agentId: 'agent' },
-        { agentId: 'agent', request: { title: 'ship' }, extra: true },
-      ]) expect(() => current.input.create().parse(input)).toThrow()
-      expect(() => current.parameters[1]!.codec.create().parse({ title: 'ship', extra: true })).toThrow()
       const create = vi.fn(async () => ({ ok: true, value: { ref: 'created' } }))
       const signal = new AbortController().signal
       await expect(current.invoke({ goals: { create } }, { agentId: 'agent', request: { title: 'ship' } }, signal))
@@ -203,34 +221,117 @@ declare module '@fixture/remote/types' {
     expect(artifact.remote.js.match(/'goals\/create':/g)).toHaveLength(1)
     expect(artifact.remote.js).not.toMatch(/\b(?:id|namespace|method|input|invoke|metadata|output):/)
     expect(artifact.remote.js).not.toContain("wire: 'request'")
-    for (const source of [artifact.js, artifact.remote.js]) {
-      const imports = ts.createSourceFile('artifact.js', source, ts.ScriptTarget.ESNext, true, ts.ScriptKind.JS)
-        .statements.filter(ts.isImportDeclaration).map((statement) => {
-          if (!ts.isStringLiteral(statement.moduleSpecifier)) throw new Error('nonliteral import')
-          return statement.moduleSpecifier.text
-        })
+    for (const [index, source] of [artifact.js, artifact.remote.js].entries()) {
+      const tree = ts.createSourceFile('artifact.js', source, ts.ScriptTarget.ESNext, true, ts.ScriptKind.JS)
+      const imports = tree.statements.filter(ts.isImportDeclaration).map((statement) => {
+        if (!ts.isStringLiteral(statement.moduleSpecifier)) throw new Error('nonliteral import')
+        return statement.moduleSpecifier.text
+      })
       expect(imports.sort()).toEqual(['@deepseek-ai/dsh-typert-protocol/remote-info', 'zod'])
+      const parameterSpecs: ts.ObjectLiteralExpression[] = []
+      const collectParameters = (node: ts.Node): void => {
+        if (ts.isPropertyAssignment(node) && node.name.getText(tree) === 'parameters') {
+          if (!ts.isArrayLiteralExpression(node.initializer)) throw new Error('nonliteral parameters')
+          for (const parameter of node.initializer.elements) {
+            if (!ts.isObjectLiteralExpression(parameter)) throw new Error('nonliteral parameter')
+            parameterSpecs.push(parameter)
+          }
+        }
+        ts.forEachChild(node, collectParameters)
+      }
+      collectParameters(tree)
+      expect(parameterSpecs).toHaveLength(4)
+      for (const parameter of parameterSpecs) {
+        const codecs = parameter.properties.filter(ts.isPropertyAssignment)
+          .filter(property => ['codec', 'strictCodec'].includes(property.name.getText(tree)))
+        expect(codecs.map(property => property.name.getText(tree))).toEqual(['codec', 'strictCodec'])
+        for (const codec of codecs) expect(ts.isObjectLiteralExpression(codec.initializer)).toBe(true)
+      }
       const states = [...source.matchAll(/^let ([\w$]+\$value)$/gm)].map(match => match[1]!)
       expect(states.length).toBeGreaterThan(0)
-      const generated = await executableRemoteModule<{ readSchemaStates(): readonly unknown[] }>(
-        `${source}\nexport const readSchemaStates = () => [${states.join(', ')}]\n`,
-      )
+      const generated = await executableRemoteModule<Generated & {
+        readonly TYPERT?: { readonly invocations: readonly RuntimeDescriptor[] }
+        readSchemaStates(): readonly unknown[]
+      }>(`${source}\nexport const readSchemaStates = () => [${states.join(', ')}]\n`)
       expect(generated.readSchemaStates()).toEqual(states.map(() => undefined))
+      const method = index === 0
+        ? generated.TYPERT!.invocations.find(descriptor => descriptor.id.endsWith('/create')) as RuntimeMethod
+        : generated.TYPERT_REMOTE.methods['goals/create']!
+      const first = method.input({ strict: index === 0 })
+      const second = method.input({ strict: index !== 0 })
+      expect(generated.readSchemaStates()).toEqual(states.map(() => undefined))
+      first.create()
+      const firstStates = generated.readSchemaStates()
+      expect(firstStates.some(state => state !== undefined)).toBe(true)
+      second.create()
+      expect(generated.readSchemaStates().some((state, position) => state !== undefined && firstStates[position] === undefined)).toBe(true)
+      expect(first.create()).toBe(first.create())
+      expect(second.create()).toBe(second.create())
     }
   })
 
-  it('keeps request objects open unless rejectUnknownFields is enabled', async () => {
+  it('generates normal and strict input views from plain Remote methods without changing result codecs', async () => {
     const root = fixture()
-    editFile(root, 'packages/remote/src/index.ts', source => source.replace('@Remote({ rejectUnknownFields: true })', '@Remote'))
+    editFile(root, 'packages/remote/src/types.ts', source => source.replace('readonly title: string', `readonly title: string
+  readonly metadata: { readonly label: string }
+  readonly items?: readonly { readonly label: string }[]`))
+    editFile(root, 'packages/remote/src/index.ts', source => source.replace('  constructor() {', `  @Remote
+  echo(request: CreateGoalRequest): CreateGoalRequest { return request }
+
+  constructor() {`))
     const [artifact] = new WorkspaceTypertGenerator(root).generate()
     const generated = await executable(artifact!.remote!.js)
     const method = generated.TYPERT_REMOTE.methods['goals/create']!
-    expect(method.input.jsonSchema).toMatchObject({ additionalProperties: false, properties: { request: { additionalProperties: true } } })
-    const extra = { agentId: 'agent', request: { title: 'ship', extra: true } }
-    expect(validateJsonSchemaValue(method.input.jsonSchema!, extra)).toEqual([])
-    expect(method.input.create().parse(extra)).toEqual({ agentId: 'agent', request: { title: 'ship' } })
-    expect(generated.TYPERT_REMOTE.descriptors[0]!.parameters[1]!.codec.create().parse(extra.request)).toEqual({ title: 'ship' })
-    expect(() => method.input.create().parse({ ...extra, unexpected: true })).toThrow()
+    const normal = method.input()
+    const strict = method.input({ strict: true })
+    expect(method.input()).toBe(normal)
+    expect(method.input({})).toBe(normal)
+    expect(method.input({ strict: false })).toBe(normal)
+    expect(method.input({ strict: true })).toBe(strict)
+    expect(strict).not.toBe(normal)
+    expect(normal.create()).toBe(normal.create())
+    expect(strict.create()).toBe(strict.create())
+    expect(strict.create()).not.toBe(normal.create())
+    expect(normal.jsonSchema).toBe(normal.jsonSchema)
+    expect(strict.jsonSchema).toBe(strict.jsonSchema)
+    expect(strict.jsonSchema).not.toBe(normal.jsonSchema)
+    for (const [view, additionalProperties] of [[normal, true], [strict, false]] as const) {
+      assertSupportedJsonSchema(view.jsonSchema)
+      expect(view.jsonSchema).toMatchObject({ additionalProperties: false, properties: { request: {
+        additionalProperties,
+        properties: {
+          metadata: { additionalProperties },
+          items: { items: { additionalProperties } },
+        },
+      } } })
+    }
+    const input = { agentId: 'agent', request: { title: 'ship', metadata: { label: 'app payload' }, items: [{ label: 'first' }] } }
+    expect(strict.create().parse(input)).toEqual(input)
+    for (const request of [
+      { ...input.request, extra: true },
+      { ...input.request, metadata: { ...input.request.metadata, extra: true } },
+      { ...input.request, items: [{ label: 'first', extra: true }] },
+    ]) {
+      const extra = { ...input, request }
+      expect(validateJsonSchemaValue(normal.jsonSchema!, extra)).toEqual([])
+      expect(normal.create().parse(extra)).toEqual(input)
+      expect(validateJsonSchemaValue(strict.jsonSchema!, extra)).not.toEqual([])
+      expect(() => strict.create().parse(extra)).toThrow()
+      expect(method.parameters[1]!.codec.create().parse(request)).toEqual(input.request)
+    }
+    for (const view of [normal, strict]) {
+      expect(() => view.create().parse({ ...input, unexpected: true })).toThrow()
+      expect(validateJsonSchemaValue(view.jsonSchema!, { ...input, unexpected: true })).not.toEqual([])
+    }
+    const echo = generated.TYPERT_REMOTE.methods['goals/echo']!
+    const extraRequest = { ...input.request, metadata: { label: 'app payload', extra: true } }
+    expect(echo.input().create().parse({ request: extraRequest })).toEqual({ request: input.request })
+    expect(() => echo.input({ strict: true }).create().parse({ request: extraRequest })).toThrow()
+    expect(echo.result.create().parse(extraRequest)).toEqual(input.request)
+    expect(echo.result.jsonSchema).toMatchObject({ additionalProperties: true, properties: { metadata: { additionalProperties: true } } })
+    const create = vi.fn(async () => ({ ok: true, value: { ref: 'created' } }))
+    await method.invoke({ goals: { create } }, input)
+    expect(create).toHaveBeenCalledWith('agent', input.request, undefined)
   })
 
   it('generates undocumented methods with parsers and optional source documentation', async () => {
@@ -240,9 +341,11 @@ declare module '@fixture/remote/types' {
     expect(method.description).toBeUndefined()
     expect(method.parameters.map(parameter => parameter.description)).toEqual([undefined, undefined])
     expect(method.result.description).toBeUndefined()
-    expect(method.input.jsonSchemaError).toBeUndefined()
+    for (const view of [method.input(), method.input({ strict: true })]) {
+      expect(view.jsonSchemaError).toBeUndefined()
+      expect(view.create().parse({ agentId: 'agent', request: { title: 'ship' } })).toEqual({ agentId: 'agent', request: { title: 'ship' } })
+    }
     expect(method.result.jsonSchemaError).toBeUndefined()
-    expect(method.input.create().parse({ agentId: 'agent', request: { title: 'ship' } })).toEqual({ agentId: 'agent', request: { title: 'ship' } })
     expect(method.result.create().parse({ ref: 'created' })).toEqual({ ref: 'created' })
   })
 
@@ -257,7 +360,7 @@ declare module '@fixture/remote/types' {
   constructor() {`)}`)
     const [artifact] = new WorkspaceTypertGenerator(root).generate()
     assertConsumerTypechecks(root, artifact!.remote!.dts, `import { TYPERT_REMOTE } from '@fixture/remote/remote'
-import type { InvocationDescriptor, TypertClientRemote, TypertRemoteInfo, TypertRemoteMethod, RemoteResult, RemoteStreamHandle, TypertRemoteScopeMap } from '@deepseek-ai/dsh-typert-protocol'
+import type { InvocationDescriptor, TypertClientRemote, TypertRemoteInfo, TypertRemoteInputOptions, TypertRemoteMethod, TypertRemoteValue, RemoteResult, RemoteStreamHandle, TypertRemoteScopeMap } from '@deepseek-ai/dsh-typert-protocol'
 import type { CreateGoalRequest, CreateGoalResult } from '@fixture/remote/types'
 declare const remote: TypertClientRemote
 const info: TypertRemoteInfo = TYPERT_REMOTE
@@ -274,7 +377,19 @@ const typeSymbol: string = method.result.typeSymbol
 const keys: Record<keyof typeof TYPERT_REMOTE.methods, true> = {
   'goals/create': true, 'goals/watch': true, 'goals/bytes': true, 'goals/attach': true,
 }
-const parsed: { readonly agentId: string; readonly request: CreateGoalRequest } = method.input.create().parse({})
+const parsed: { readonly agentId: string; readonly request: CreateGoalRequest } = method.input().create().parse({})
+const options: TypertRemoteInputOptions = { strict: true }
+const strictInput: TypertRemoteValue<typeof parsed> = method.input(options)
+const strictParsed: typeof parsed = strictInput.create().parse({})
+const normalInput: TypertRemoteValue<typeof parsed> = method.input({ strict: false })
+// @ts-expect-error Input options are readonly.
+options.strict = false
+// @ts-expect-error Strict selection accepts a boolean, not a string.
+method.input({ strict: 'true' })
+// @ts-expect-error Input parsing requires selecting a view.
+method.input.create()
+// @ts-expect-error Strict input parsers retain the request type.
+const wrongInput: { readonly request: string } = strictInput.create().parse({})
 const output: CreateGoalResult = method.result.create().parse({})
 const value: Promise<RemoteResult<CreateGoalResult>> = method.invoke(remote, parsed, new AbortController().signal)
 // @ts-expect-error Invocation results retain the owner's result fields.
@@ -282,8 +397,8 @@ const wrongResult: Promise<RemoteResult<string>> = method.invoke(remote, parsed)
 // @ts-expect-error Output parsers retain the owner's result fields.
 const wrongOutput: string = method.result.create().parse({})
 const description: string | undefined = method.description
-const schema: Readonly<Record<string, unknown>> | undefined = method.input.jsonSchema
-const projectionError: string | undefined = method.input.jsonSchemaError
+const schema: Readonly<Record<string, unknown>> | undefined = method.input().jsonSchema
+const projectionError: string | undefined = method.input().jsonSchemaError
 const parameterDescription: string | undefined = method.parameters[0]?.description
 const resultDescription: string | undefined = method.result.description
 // @ts-expect-error The request retains the owner's title type.
@@ -337,7 +452,7 @@ async function bytes() {
   void base64
 }
 void [info, typedMethod, descriptor, descriptors, unaryMode, streamMode, direct, id, codecMode, typeSymbol, keys]
-void [output, value, wrongResult, wrongOutput, description, schema, projectionError, parameterDescription, resultDescription, typedStream, typedWatch, bytes]
+void [strictParsed, normalInput, wrongInput, output, value, wrongResult, wrongOutput, description, schema, projectionError, parameterDescription, resultDescription, typedStream, typedWatch, bytes]
 `)
   })
 
@@ -349,14 +464,36 @@ void [output, value, wrongResult, wrongOutput, description, schema, projectionEr
     const method = generated.TYPERT_REMOTE.methods['goals/create']!
     expect(method.description).toBe('Create a named goal.')
     expect(method.parameters.find(parameter => parameter.wire === 'request')?.description).toBe('goal fields.')
-    expect(method.input.jsonSchema).toBeUndefined()
-    expect(method.input.jsonSchemaError).toContain('selected union branches overlap')
-    for (const title of [{ first: 'a' }, { second: 'b' }]) {
-      const input = { agentId: 'agent', request: { title } }
-      expect(method.input.create().parse(input)).toEqual(input)
-      expect(generated.TYPERT_REMOTE.descriptors[0]!.parameters[1]!.codec.create().parse(input.request)).toEqual(input.request)
+    for (const view of [method.input(), method.input({ strict: true })]) {
+      expect(view.jsonSchema).toBeUndefined()
+      expect(view.jsonSchemaError).toContain('selected union branches overlap')
+      for (const title of [{ first: 'a' }, { second: 'b' }]) {
+        const input = { agentId: 'agent', request: { title } }
+        expect(view.create().parse(input)).toEqual(input)
+        expect(method.parameters[1]!.codec.create().parse(input.request)).toEqual(input.request)
+      }
+      expect(() => view.create().parse({ agentId: 'agent', request: { title: {} } })).toThrow()
     }
-    expect(() => method.input.create().parse({ agentId: 'agent', request: { title: {} } })).toThrow()
+  })
+
+  it('keeps recursive input parsers independent when JSON Schema cannot represent them', async () => {
+    const root = fixture()
+    editFile(root, 'packages/remote/src/types.ts', source => source.replace('readonly title: string',
+      'readonly title: string\n  readonly next?: CreateGoalRequest'))
+    const [artifact] = new WorkspaceTypertGenerator(root).generate()
+    const generated = await executable(artifact!.remote!.js)
+    const method = generated.TYPERT_REMOTE.methods['goals/create']!
+    const input = { agentId: 'agent', request: { title: 'first', next: { title: 'second' } } }
+    for (const view of [method.input(), method.input({ strict: true })]) {
+      expect(view.jsonSchema).toBeUndefined()
+      expect(view.jsonSchemaError).toContain('recursive selected type')
+      expect(view.create().parse(input)).toEqual(input)
+      expect(() => view.create().parse({ agentId: 'agent', request: { title: 'first', next: { title: 2 } } })).toThrow()
+    }
+    const extra = { agentId: 'agent', request: { title: 'first', next: { title: 'second', extra: true } } }
+    expect(method.input().create().parse(extra)).toEqual(input)
+    expect(() => method.input({ strict: true }).create().parse(extra)).toThrow()
+    expect(method.parameters[1]!.codec.create().parse(extra.request)).toEqual(input.request)
   })
 
   it('supports optional named arguments and parameterless methods', async () => {
@@ -371,19 +508,24 @@ void [output, value, wrongResult, wrongOutput, description, schema, projectionEr
     const [artifact] = new WorkspaceTypertGenerator(root).generate()
     const generated = await executable(artifact!.remote!.js)
     const ready = generated.TYPERT_REMOTE.methods['goals/ready']!
-    expect(ready.input.jsonSchema).toEqual({ type: 'object', properties: {}, required: [], additionalProperties: false })
-    expect(ready.input.create().parse({})).toEqual({})
-    expect(() => ready.input.create().parse({ extra: true })).toThrow()
+    for (const view of [ready.input(), ready.input({ strict: true })]) {
+      expect(view.jsonSchema).toEqual({ type: 'object', properties: {}, required: [], additionalProperties: false })
+      expect(view.create().parse({})).toEqual({})
+      expect(() => view.create().parse({ extra: true })).toThrow()
+    }
     const callReady = vi.fn(async () => ({ ok: true, value: true }))
     await expect(ready.invoke({ goals: { ready: callReady } }, {})).resolves.toEqual({ ok: true, value: true })
     expect(callReady).toHaveBeenCalledWith()
     const labelled = generated.TYPERT_REMOTE.methods['goals/labelled']!
-    expect(labelled.input.jsonSchema).toMatchObject({ required: ['id'], properties: { label: { type: 'string' } } })
-    for (const input of [{ id: 'goal' }, { id: 'goal', label: 'ship' }]) {
-      expect(validateJsonSchemaValue(labelled.input.jsonSchema!, input)).toEqual([])
-      expect(labelled.input.create().parse(input)).toEqual(input)
+    for (const view of [labelled.input(), labelled.input({ strict: true })]) {
+      expect(view.jsonSchema).toMatchObject({ required: ['id'], properties: { label: { type: 'string' } } })
+      for (const input of [{ id: 'goal' }, { id: 'goal', label: 'ship' }]) {
+        expect(validateJsonSchemaValue(view.jsonSchema!, input)).toEqual([])
+        expect(view.create().parse(input)).toEqual(input)
+      }
+      expect(() => view.create().parse({ label: 'ship' })).toThrow()
+      expect(() => view.create().parse({ id: 'goal', label: 1 })).toThrow()
     }
-    expect(() => labelled.input.create().parse({ id: 'goal', label: 1 })).toThrow()
     const callLabelled = vi.fn(async () => ({ ok: true, value: 'goal' }))
     await labelled.invoke({ goals: { labelled: callLabelled } }, { id: 'goal' })
     expect(callLabelled).toHaveBeenCalledWith('goal', undefined)
@@ -406,16 +548,19 @@ void ready
     const [artifact] = new WorkspaceTypertGenerator(root).generate()
     const generated = await executable(artifact!.remote!.js)
     const method = generated.TYPERT_REMOTE.methods['goals/create']!
-    const schema = method.input.jsonSchema
+    const strict = method.input({ strict: true })
+    const schema = strict.jsonSchema
     assertSupportedJsonSchema(schema)
     for (const title of [{ kind: 'text', text: 'ship' }, { kind: 'count', count: 2 }]) {
       const input = { agentId: 'agent', request: { title } }
       expect(validateJsonSchemaValue(schema, input)).toEqual([])
-      expect(method.input.create().parse(input)).toEqual(input)
+      expect(strict.create().parse(input)).toEqual(input)
     }
     const extra = { agentId: 'agent', request: { title: { kind: 'text', text: 'ship', count: 2 } } }
     expect(validateJsonSchemaValue(schema, extra)).not.toEqual([])
-    expect(() => method.input.create().parse(extra)).toThrow()
+    expect(() => strict.create().parse(extra)).toThrow()
+    expect(validateJsonSchemaValue(method.input().jsonSchema!, extra)).toEqual([])
+    expect(method.input().create().parse(extra)).toEqual({ agentId: 'agent', request: { title: { kind: 'text', text: 'ship' } } })
   })
 
   it('returns the ordinary stream handle without wrapping its uplink or disposal', async () => {
@@ -457,13 +602,101 @@ void ready
     const [artifact] = new WorkspaceTypertGenerator(root).generate()
     const generated = await executable(artifact!.remote!.js)
     const method = generated.TYPERT_REMOTE.methods['goals/create']!
-    const schema = method.input.jsonSchema
-    assertSupportedJsonSchema(schema)
-    expect(JSON.stringify(schema)).not.toContain('$ref')
-    const input = { agentId: 'agent', request: { title: 'ship', payload: [null, { nested: [true, 3] }], labels: { tag: ['a', 'b'] } } }
-    expect(validateJsonSchemaValue(schema, input)).toEqual([])
-    expect(method.input.create().parse(input)).toEqual(input)
-    expect(() => method.input.create().parse({ agentId: 'agent', request: { title: 'ship', payload: undefined } })).toThrow()
+    const input = { agentId: 'agent', request: { title: 'ship', payload: [null, { nested: [true, 3] }], labels: { tag: ['a', 'b'], extra: { nested: true } } } }
+    for (const strict of [false, true]) {
+      const view = method.input({ strict })
+      const schema = view.jsonSchema
+      assertSupportedJsonSchema(schema)
+      expect(JSON.stringify(schema)).not.toContain('$ref')
+      expect(schema).toMatchObject({ properties: { request: {
+        additionalProperties: !strict,
+        properties: { payload: {}, labels: { type: 'object', additionalProperties: true } },
+      } } })
+      expect(validateJsonSchemaValue(schema, input)).toEqual([])
+      expect(view.create().parse(input)).toEqual(input)
+      expect(() => view.create().parse({ agentId: 'agent', request: { title: 'ship', payload: undefined } })).toThrow()
+    }
+  })
+
+  it('keeps typed dictionary keys open when input JSON Schema is unsupported', async () => {
+    const root = fixture()
+    editFile(root, 'packages/remote/src/types.ts', source => source.replace('readonly title: string',
+      'readonly title: string\n  readonly labels: Record<string, string>'))
+    const [artifact] = new WorkspaceTypertGenerator(root).generate()
+    const generated = await executable(artifact!.remote!.js)
+    const method = generated.TYPERT_REMOTE.methods['goals/create']!
+    const input = { agentId: 'agent', request: { title: 'ship', labels: { first: 'a', extra: 'b' } } }
+    for (const view of [method.input(), method.input({ strict: true })]) {
+      expect(view.jsonSchema).toBeUndefined()
+      expect(view.jsonSchemaError).toContain('selected dictionaries require string keys and unconstrained JSON values')
+      expect(view.create().parse(input)).toEqual(input)
+      expect(() => view.create().parse({ ...input, request: { title: 'ship', labels: { first: 1 } } })).toThrow()
+    }
+    const extra = { ...input, request: { ...input.request, extra: true } }
+    expect(method.input().create().parse(extra)).toEqual(input)
+    expect(() => method.input({ strict: true }).create().parse(extra)).toThrow()
+  })
+
+  it('retains tuple input parsers under both policies without requiring a tool projection', async () => {
+    const root = fixture()
+    editFile(root, 'packages/remote/src/types.ts', source => source.replace('readonly title: string',
+      'readonly title: readonly [{ readonly first: string }, { readonly second: string }]'))
+    const [artifact] = new WorkspaceTypertGenerator(root).generate()
+    const generated = await executable(artifact!.remote!.js)
+    const method = generated.TYPERT_REMOTE.methods['goals/create']!
+    const input = { agentId: 'agent', request: { title: [{ first: 'one' }, { second: 'two' }] } }
+    for (const strict of [false, true]) {
+      const view = method.input({ strict })
+      expect(view.create().parse(input)).toEqual(input)
+      expect(view.jsonSchema).toBeUndefined()
+      expect(view.jsonSchemaError).toContain('tuple')
+    }
+    const extra = { agentId: 'agent', request: { title: [{ first: 'one', extra: true }, { second: 'two' }] } }
+    expect(method.input().create().parse(extra)).toEqual(input)
+    expect(() => method.input({ strict: true }).create().parse(extra)).toThrow()
+  })
+
+  it('keeps declared dictionary properties more specific than the index value', async () => {
+    const root = fixture()
+    editFile(root, 'packages/remote/src/types.ts', source => source.replace('readonly title: string',
+      'readonly title: string\n  readonly payload: { readonly fixed: { readonly a: string; readonly b: string }; readonly [key: string]: { readonly a: string } }'))
+    const [artifact] = new WorkspaceTypertGenerator(root).generate()
+    const generated = await executable(artifact!.remote!.js)
+    const method = generated.TYPERT_REMOTE.methods['goals/create']!
+    const input = { agentId: 'agent', request: { title: 'ship', payload: { fixed: { a: 'a', b: 'b' }, extra: { a: 'extra' } } } }
+    for (const strict of [false, true]) {
+      const view = method.input({ strict })
+      expect(view.create().parse(input)).toEqual(input)
+      expect(view.jsonSchema).toBeUndefined()
+      expect(view.jsonSchemaError).toContain('selected dictionaries')
+    }
+    const withExtraValue = { ...input, request: { ...input.request, payload: { ...input.request.payload, extra: { a: 'extra', b: 'not declared' } } } }
+    expect(method.input().create().parse(withExtraValue)).toEqual(input)
+    expect(() => method.input({ strict: true }).create().parse(withExtraValue)).toThrow()
+  })
+
+  it('keeps normal and closed recursive helper identifiers distinct', async () => {
+    const root = fixture()
+    editFile(root, 'packages/remote/src/types.ts', source => `${source}\nexport interface Branch { readonly value: string; readonly next?: Branch }\nexport interface closed$Branch { readonly value: string; readonly next?: closed$Branch }\n`)
+    editFile(root, 'packages/remote/src/index.ts', source => `import type { Branch, closed$Branch } from './types.ts'\n${source.replace('  constructor() {', `  @Remote
+  recursive(request: Branch): closed$Branch { return request }
+
+  constructor() {`)}`)
+    const [artifact] = new WorkspaceTypertGenerator(root).generate()
+    const input = { request: { value: 'first', next: { value: 'second' } } }
+    for (const source of [artifact!.js, artifact!.remote!.js]) {
+      await executableRemoteModule(source)
+      const variables = ts.createSourceFile('artifact.js', source, ts.ScriptTarget.ESNext, true, ts.ScriptKind.JS).statements
+        .filter(ts.isVariableStatement)
+        .flatMap(statement => statement.declarationList.declarations.map(declaration => declaration.name.getText()))
+      expect(new Set(variables).size).toBe(variables.length)
+    }
+    const generated = await executable(artifact!.remote!.js)
+    const method = generated.TYPERT_REMOTE.methods['goals/recursive']!
+    expect(method.input().create().parse(input)).toEqual(input)
+    expect(method.input({ strict: true }).create().parse(input)).toEqual(input)
+    expect(() => method.input({ strict: true }).create().parse({ request: { value: 'first', next: { value: 'second', extra: true } } })).toThrow()
+    expect(method.result.create().parse(input.request)).toEqual(input.request)
   })
 
   it('projects real nominal primitive brands without treating the marker as an object', async () => {
@@ -491,9 +724,11 @@ export type AgentId = Branded<'AgentId'>
     const [artifact] = new WorkspaceTypertGenerator(root).generate()
     const generated = await executable(artifact!.remote!.js)
     const method = generated.TYPERT_REMOTE.methods['goals/create']!
-    expect(method.input.jsonSchema).toMatchObject({ properties: { agentId: { type: 'string' } } })
-    expect(method.input.create().parse({ agentId: 'agent', request: { title: 'ship' } }))
-      .toEqual({ agentId: 'agent', request: { title: 'ship' } })
+    for (const view of [method.input(), method.input({ strict: true })]) {
+      expect(view.jsonSchema).toMatchObject({ properties: { agentId: { type: 'string' } } })
+      expect(view.create().parse({ agentId: 'agent', request: { title: 'ship' } }))
+        .toEqual({ agentId: 'agent', request: { title: 'ship' } })
+    }
     expect(artifact!.remote!.dts).toContain("readonly 'agentId': AgentId")
   })
 
@@ -508,13 +743,16 @@ export type AgentId = Branded<'AgentId'>
     const generated = await executable(artifact!.remote!.js)
     const method = generated.TYPERT_REMOTE.methods['goals/create']!
     const input = { agentId: 'agent', request: { title: 'ship', nested: { alpha: 'a', beta: 2 }, priority: 3 } }
-    const schema = method.input.jsonSchema
+    const strict = method.input({ strict: true })
+    const schema = strict.jsonSchema
     assertSupportedJsonSchema(schema)
     expect(validateJsonSchemaValue(schema, input)).toEqual([])
-    expect(method.input.create().parse(input)).toEqual(input)
+    expect(strict.create().parse(input)).toEqual(input)
     const extra = { ...input, request: { ...input.request, nested: { ...input.request.nested, extra: true } } }
     expect(validateJsonSchemaValue(schema, extra)).not.toEqual([])
-    expect(() => method.input.create().parse(extra)).toThrow()
+    expect(() => strict.create().parse(extra)).toThrow()
+    expect(validateJsonSchemaValue(method.input().jsonSchema!, extra)).toEqual([])
+    expect(method.input().create().parse(extra)).toEqual(input)
   })
 
   it('retains output codecs and source docs when optional JSON Schema projection is unsupported', async () => {

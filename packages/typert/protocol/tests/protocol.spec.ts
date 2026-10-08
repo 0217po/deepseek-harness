@@ -309,11 +309,11 @@ describe('typert-protocol Remote declarations', () => {
     expect(() => Remote({ mode: 'stream', extra: true } as unknown as { mode: 'stream' })).toThrow('Remote options require')
     const bogusMode: string = 'duplex'
     expect(() => Remote({ mode: bogusMode } as { mode: 'stream' }))
-      .toThrow('Remote options require name, mode: "stream", or rejectUnknownFields: true')
+      .toThrow('Remote options require name or mode: "stream"')
     expect(() => Remote({ rejectUnknownFields: false } as never)).toThrow('Remote options require')
     expect(() => Remote({ strict: true } as never)).toThrow('Remote options require')
     expect(() => Remote({ committed: true } as never)).toThrow('Remote options require')
-    expect(() => Remote({ rejectUnknownFields: true })).not.toThrow()
+    expect(() => Remote({ rejectUnknownFields: true } as never)).toThrow('Remote options require')
     expect(() => Remote({})).toThrow('Remote options require')
     expect(() => RemoteScope('' as 'metaFixture')).toThrow('Scope key')
     expect(() => RemoteScope('metaFixture', 'bad/name')).toThrow('export name')
@@ -328,12 +328,12 @@ describe('typert-protocol Remote declarations', () => {
     }
   })
 
-  it('keeps codec generation options out of renamed stream markers', async () => {
+  it('retains transport identity and mode for renamed streams', async () => {
     const ctx = new Context()
     class ItemsService extends TypertRemoteService {
       constructor(owner: Context) { super(owner, 'itemsFixture') }
 
-      @Remote({ name: 'items', mode: 'stream', rejectUnknownFields: true })
+      @Remote({ name: 'items', mode: 'stream' })
       async *read(): AsyncIterable<string> { yield 'first' }
     }
     try {

@@ -12,7 +12,7 @@ const text: TypertRemoteCodecSpec = {
 function definition(overrides: Partial<TypertRemoteMethodSpec> = {}): TypertRemoteMethodSpec {
   return {
     service: 'goals', invocation: { kind: 'direct' }, description: 'Create a goal.',
-    parameters: [{ name: 'request', source: 'json', description: 'Goal name.', codec: text }],
+    parameters: [{ name: 'request', source: 'json', description: 'Goal name.', codec: text, strictCodec: text }],
     result: text,
     ...overrides,
   }
@@ -28,7 +28,7 @@ describe('lazy Remote info', () => {
     const output = { ...text, description: 'Created name.', get jsonSchema() { outputProjectionReads++; return { type: 'string' } } }
     const spec = {
       package: '@fixture/goals',
-      get methods() { inventoryReads++; return { 'goals/create': definition({ parameters: [{ name: 'request', source: 'json', codec: input }], result: output }) } },
+      get methods() { inventoryReads++; return { 'goals/create': definition({ parameters: [{ name: 'request', source: 'json', codec: input, strictCodec: input }], result: output }) } },
     }
     const info = createTypertRemoteInfo(spec)
     expect(Object.getPrototypeOf(info)).not.toBe(Object.prototype)
@@ -49,16 +49,16 @@ describe('lazy Remote info', () => {
     expect(method.mode).toBeUndefined()
     expect(isTypertRemoteMethod(method)).toBe(true)
 
-    const parser = method.input.create()
-    expect(method.input.create()).toBe(parser)
+    const parser = method.input().create()
+    expect(method.input().create()).toBe(parser)
     expect(create).toHaveBeenCalledTimes(1)
     expect(parser.parse({ request: 'ship' })).toEqual({ request: 'ship' })
     expect(inputProjectionReads + outputProjectionReads).toBe(0)
-    const projection = method.input.jsonSchema
+    const projection = method.input().jsonSchema
     expect(projection).toEqual({ type: 'object', properties: { request: { type: 'string' } }, required: ['request'], additionalProperties: false })
-    expect(method.input.jsonSchema).toBe(projection)
+    expect(method.input().jsonSchema).toBe(projection)
     const reads = inputProjectionReads
-    expect(method.input.jsonSchemaError).toBeUndefined()
+    expect(method.input().jsonSchemaError).toBeUndefined()
     expect(inputProjectionReads).toBe(reads)
     expect(outputProjectionReads).toBe(0)
     expect(method.result.create).toBe(output.create)
@@ -68,26 +68,58 @@ describe('lazy Remote info', () => {
     expect(outputProjectionReads).toBe(1)
   })
 
+  it('selects and caches independent parser/projection views without changing dispatch codecs', () => {
+    const create = vi.fn(() => z.object({ title: z.string() }))
+    const createStrict = vi.fn(() => z.strictObject({ title: z.string() }))
+    const codec = { ...text, create, jsonSchema: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'], additionalProperties: true } }
+    const strictCodec = { ...codec, create: createStrict, jsonSchema: { ...codec.jsonSchema, additionalProperties: false } }
+    const info = createTypertRemoteInfo({ package: '@fixture/goals', methods: {
+      'goals/create': definition({ parameters: [{ name: 'request', source: 'json', codec, strictCodec }] }),
+    } })
+    const method = info.methods['goals/create']!
+    const normal = method.input()
+    const strict = method.input({ strict: true })
+    expect(method.input({ strict: false })).toBe(normal)
+    expect(method.input({})).toBe(normal)
+    expect(method.input({ strict: true })).toBe(strict)
+    expect(strict).not.toBe(normal)
+    expect(create).not.toHaveBeenCalled()
+    expect(createStrict).not.toHaveBeenCalled()
+    expect(normal.jsonSchema).toMatchObject({ properties: { request: { additionalProperties: true } } })
+    expect(strict.jsonSchema).toMatchObject({ properties: { request: { additionalProperties: false } } })
+    expect(create).not.toHaveBeenCalled()
+    expect(createStrict).not.toHaveBeenCalled()
+    const extra = { request: { title: 'ship', ignored: true } }
+    expect(normal.create().parse(extra)).toEqual({ request: { title: 'ship' } })
+    expect(create).toHaveBeenCalledTimes(1)
+    expect(createStrict).not.toHaveBeenCalled()
+    expect(() => strict.create().parse(extra)).toThrow()
+    expect(strict.create().parse({ request: { title: 'ship' } })).toEqual({ request: { title: 'ship' } })
+    expect(createStrict).toHaveBeenCalledTimes(1)
+    expect(method.parameters[0]?.codec).toBe(codec)
+    expect(normal.create().parse(extra)).toEqual({ request: { title: 'ship' } })
+  })
+
   it('preserves named omissions, lookup aliases, strict outer fields, and positional holes', () => {
     const info = createTypertRemoteInfo({ package: '@fixture/goals', methods: {
       'goals/create': definition({
         parameters: [
-          { name: 'agent', wire: 'agentId', source: 'lookup', lookup: 'agent', acceptsUndefined: true, description: 'Owning Agent.', codec: text },
-          { name: 'label', source: 'json', acceptsUndefined: true, codec: text },
+          { name: 'agent', wire: 'agentId', source: 'lookup', lookup: 'agent', acceptsUndefined: true, description: 'Owning Agent.', codec: text, strictCodec: text },
+          { name: 'label', source: 'json', acceptsUndefined: true, codec: text, strictCodec: text },
         ],
         cancellation: { parameter: 'signal' },
         scope: { context: 'agent', wire: 'agentId' },
       }),
     } })
     const method = info.methods['goals/create']!
-    const parser = method.input.create()
+    const parser = method.input().create()
     expect(parser.parse({ agentId: 'agent' })).toEqual({ agentId: 'agent' })
     expect(parser.parse({ agentId: 'agent', label: undefined })).toEqual({ agentId: 'agent', label: undefined })
     for (const invalid of [null, [], {}, { agentId: undefined }, { agentId: 'agent', label: null }, { agentId: 'agent', extra: true }]) {
       expect(() => parser.parse(invalid)).toThrow()
     }
-    expect(method.input.jsonSchema?.required).toEqual(['agentId'])
-    expect(method.input.jsonSchema).toMatchObject({ properties: { agentId: { description: 'Owning Agent.' } } })
+    expect(method.input().jsonSchema?.required).toEqual(['agentId'])
+    expect(method.input().jsonSchema).toMatchObject({ properties: { agentId: { description: 'Owning Agent.' } } })
     const signal = new AbortController().signal
     const promise = Promise.resolve({ ok: true as const, value: 'created' })
     const create = vi.fn(function (this: object, ...args: unknown[]) {
@@ -105,14 +137,14 @@ describe('lazy Remote info', () => {
   it('requires declared fields even when their parser accepts undefined and permits empty methods', () => {
     const unknown = { ...text, create: () => z.unknown(), jsonSchema: {} }
     const info = createTypertRemoteInfo({ package: '@fixture/goals', methods: {
-      'goals/required': definition({ parameters: [{ name: 'value', source: 'json', codec: unknown }] }),
+      'goals/required': definition({ parameters: [{ name: 'value', source: 'json', codec: unknown, strictCodec: unknown }] }),
       'goals/empty': definition({ parameters: [] }),
     } })
-    expect(() => info.methods['goals/required']!.input.create().parse({})).toThrow()
+    expect(() => info.methods['goals/required']!.input().create().parse({})).toThrow()
     const empty = info.methods['goals/empty']!
-    expect(empty.input.create().parse({})).toEqual({})
-    expect(() => empty.input.create().parse({ extra: true })).toThrow()
-    expect(empty.input.jsonSchema?.required).toEqual([])
+    expect(empty.input().create().parse({})).toEqual({})
+    expect(() => empty.input().create().parse({ extra: true })).toThrow()
+    expect(empty.input().jsonSchema?.required).toEqual([])
     const call = vi.fn(() => Promise.resolve({ ok: true as const, value: 'empty' }))
     const remote: object = { goals: { empty: call } }
     void empty.invoke(remote as TypertClientRemote, {}, new AbortController().signal)
@@ -127,7 +159,9 @@ describe('lazy Remote info', () => {
     expect(isTypertRemoteMethod(base)).toBe(false)
     const strict = { ...base, result: text }
     expect(isTypertRemoteMethod(strict)).toBe(false)
-    const inputOnly = { ...strict, input: { create: () => z.strictObject({}) } }
+    const legacy = { ...strict, input: { create: () => z.strictObject({}) } }
+    expect(isTypertRemoteMethod(legacy)).toBe(false)
+    const inputOnly = { ...strict, input: () => ({ create: () => z.strictObject({}) }) }
     expect(isTypertRemoteMethod(inputOnly)).toBe(false)
     const notCallable = { ...inputOnly, invoke: undefined }
     expect(isTypertRemoteMethod(notCallable)).toBe(false)
@@ -165,13 +199,13 @@ describe('lazy Remote info', () => {
     const encode = vi.fn((value: unknown) => value)
     const info = createTypertRemoteInfo({ package: '@fixture/goals', methods: {
       'goals/create': definition({
-        parameters: [{ name: 'request', source: 'json', description: 'Still documented.', codec: unsupported }],
+        parameters: [{ name: 'request', source: 'json', description: 'Still documented.', codec: unsupported, strictCodec: unsupported }],
         result: { ...unsupported, description: 'Still a result.', decode, encode },
       }),
     } })
     const method = info.methods['goals/create']!
-    expect(method.input.jsonSchema).toBeUndefined()
-    expect(method.input.jsonSchemaError).toBe('Unsupported tool type.')
+    expect(method.input().jsonSchema).toBeUndefined()
+    expect(method.input().jsonSchemaError).toBe('Unsupported tool type.')
     expect(method.result.jsonSchema).toBeUndefined()
     expect(method.result.jsonSchemaError).toBe('Unsupported tool type.')
     expect(method.result.description).toBe('Still a result.')
@@ -179,12 +213,12 @@ describe('lazy Remote info', () => {
     expect(method.result.decode).toBe(decode)
     expect(method.result.encode).toBe(encode)
     expect(create).not.toHaveBeenCalled()
-    expect(() => method.input.create()).toThrow('invalid schema factory')
-    expect(() => method.input.create()).toThrow('invalid schema factory')
+    expect(() => method.input().create()).toThrow('invalid schema factory')
+    expect(() => method.input().create()).toThrow('invalid schema factory')
     const unprojected = createTypertRemoteInfo({ package: '@fixture/goals', methods: {
-      'goals/create': definition({ parameters: [{ name: 'request', source: 'json', codec: { ...text, jsonSchema: undefined } }] }),
+      'goals/create': definition({ parameters: [{ name: 'request', source: 'json', codec: { ...text, jsonSchema: undefined }, strictCodec: text }] }),
     } }).methods['goals/create']!
-    expect(unprojected.input.jsonSchemaError).toContain('request')
-    expect(unprojected.input.create().parse({ request: 'valid' })).toEqual({ request: 'valid' })
+    expect(unprojected.input().jsonSchemaError).toContain('request')
+    expect(unprojected.input().create().parse({ request: 'valid' })).toEqual({ request: 'valid' })
   })
 })

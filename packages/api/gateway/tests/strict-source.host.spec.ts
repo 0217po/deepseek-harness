@@ -28,7 +28,7 @@ class ItemsService extends Service {
     super(ctx, 'items')
     this.typertRemote = bindTypertRemote(this, 'items')
   }
-  @Remote({ rejectUnknownFields: true })
+  @Remote
   read(request: { title: string }): string {
     this.calls++
     return request.title

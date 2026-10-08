@@ -68,7 +68,7 @@ The plugin is an incremental scanner mirroring the client-modules node half: eve
 
 ### Manifest validation
 
-`validateTypertManifest()` checks artifacts before they enter the typed registry. A manifest must name its exporting package, carry face `host`, hold schema factories, and contain well-formed reflection records; invocation descriptors require strict codecs with factories. Generated direct-method `input` and `invoke` capabilities are validated on the descriptor itself, while `result` remains its sole output codec. Documentation and JSON Schema are optional. Validation inspects eager projection data without invoking lazy projection getters or constructing schemas; consumers request the derived projections they need. Every failure names the package and the defect.
+`validateTypertManifest()` checks artifacts before they enter the typed registry. A manifest must name its exporting package, carry face `host`, hold schema factories, and contain well-formed reflection records; invocation descriptors require strict codecs with factories. Validation checks parameter `codec` and any supplied `strictCodec` specs and requires generated direct-method `input` and `invoke` to be callable; `result` remains the sole output codec. Documentation and JSON Schema are optional. Registration never calls the input selector, parser factories, or projection getters; validation inspects only supplied static projection data. Every failure names the package and the defect.
 
 ### Caching and ownership
 

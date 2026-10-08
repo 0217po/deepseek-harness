@@ -458,14 +458,24 @@ export interface TypertRemoteValue<Value = unknown> {
   readonly jsonSchemaError?: string | undefined
 }
 
+/** Consumer-owned input validation; never changes Host dispatch or the business method declaration. */
+export interface TypertRemoteInputOptions {
+  /** Reject undeclared fields in input objects; explicit dictionaries and JSON values remain open. */
+  readonly strict?: boolean
+}
+
 /** A direct descriptor; DecodedOutput differs from its parser output only for carrier-reconstructed unary bytes. */
 export type TypertRemoteMethod<Input extends object, Output, Mode extends 'unary' | 'stream' = 'unary', Uplink = never, DecodedOutput = Output> =
   Omit<InvocationDescriptor, 'mode' | 'invocation' | 'result'>
   & (Mode extends 'stream' ? { readonly mode: 'stream' } : { readonly mode?: never }) & {
     /** Named invocation selects a direct Service method, not a Context receiver. */
     readonly invocation: { readonly kind: 'direct' }
-    /** Named wire arguments derived from the ordered parameters and their codecs. */
-    readonly input: TypertRemoteValue<Input>
+    /**
+     * Select matching named-input parsing and tool-schema projection without changing dispatch.
+     * @param options - consumer-owned strictness; omission preserves ordinary Remote object handling.
+     * @returns the cached view for this policy; its parser and projection remain lazy.
+     */
+    input(options?: TypertRemoteInputOptions): TypertRemoteValue<Input>
     /** The descriptor's result or stream-item parser; parsing alone does not normalize native byte backing. */
     readonly result: Extract<TypertCodec<Output>, { readonly mode: 'strict' }>
     /**
@@ -499,8 +509,10 @@ export interface TypertRemoteCodecSpec extends Omit<Extract<TypertCodec, { reado
 export interface TypertRemoteParameterSpec extends Omit<InvocationParameterDescriptor, 'wire' | 'codec'> {
   /** Explicit wire alias, notably for a Host lookup identity. */
   readonly wire?: string
-  /** The only generated parser and projection definition for this parameter. */
+  /** Ordinary Remote parser and projection for this parameter. */
   readonly codec: TypertRemoteCodecSpec
+  /** Consumer-selected counterpart rejecting undeclared fields in explicit input objects. */
+  readonly strictCodec: TypertRemoteCodecSpec
 }
 
 /** Static method facts; endpoint identity and named-call helpers are derived by the runtime factory. */

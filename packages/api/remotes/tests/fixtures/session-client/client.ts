@@ -47,14 +47,15 @@ export function sessionOperations(registry: TypertRemoteRegistry) {
     if (!descriptor.description || !descriptor.parameters.find(parameter => parameter.wire === 'request')?.description) {
       throw new Error(`Selected tool ${endpoint} requires method and request documentation`)
     }
-    if (descriptor.input.jsonSchema === undefined) {
-      throw new Error(`Selected tool ${endpoint} requires an input JSON Schema: ${descriptor.input.jsonSchemaError ?? 'unavailable'}`)
+    const input = descriptor.input({ strict: true })
+    if (input.jsonSchema === undefined) {
+      throw new Error(`Selected tool ${endpoint} requires an input JSON Schema: ${input.jsonSchemaError ?? 'unavailable'}`)
     }
     return descriptor
   }
 
   function inputSchema(endpoint: Endpoint): Readonly<Record<string, unknown>> {
-    const schema = method(endpoint).input.jsonSchema
+    const schema = method(endpoint).input({ strict: true }).jsonSchema
     const branches = [false, true].map((current) => {
       const argumentsSchema = structuredClone(object(schema))
       if (current) {
@@ -88,7 +89,7 @@ export function sessionOperations(registry: TypertRemoteRegistry) {
       if (!callerSessionId) throw new Error('current requires caller Session identity')
       args.request = { ...object(args.request), address: { kind: 'session', sessionId: callerSessionId } }
     }
-    return method(endpoint).input.create().parse(args)
+    return method(endpoint).input({ strict: true }).create().parse(args)
   }
 
   return { method, inputSchema, prepare, list: () => selectedEndpoints.map(endpoint => ({ endpoint, method: method(endpoint) })) }

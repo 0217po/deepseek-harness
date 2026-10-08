@@ -678,7 +678,6 @@ interface DirectRemoteMarker {
   readonly kind: 'direct'
   readonly exportName?: string
   readonly mode?: 'stream'
-  readonly rejectUnknownFields?: true
 }
 
 class FaceAnalyzer {
@@ -1282,7 +1281,6 @@ class FaceAnalyzer {
       }
     return {
       ...documentation,
-      ...(invocation.kind === 'direct' && invocation.rejectUnknownFields ? { rejectUnknownFields: true as const } : {}),
       id: `${registration.name}#${binding.namespace}/${exportedMethod}`,
       service: binding.service,
       namespace: binding.namespace,
@@ -1419,20 +1417,18 @@ class FaceAnalyzer {
           marker = { kind: 'direct', exportName }
         } else {
           if (!ts.isObjectLiteralExpression(argument) || argument.properties.length === 0) {
-            this.fail(argument, 'Remote() options require name, mode: "stream", or rejectUnknownFields: true')
+            this.fail(argument, 'Remote() options require name or mode: "stream"')
           }
           marker = { kind: 'direct' }
           for (const property of argument.properties) {
             if (!ts.isPropertyAssignment(property)) this.fail(property, 'Remote() options must use named values')
             const name = memberName(property.name)
-            if (name === 'rejectUnknownFields' && property.initializer.kind === ts.SyntaxKind.TrueKeyword) {
-              marker = { ...marker, rejectUnknownFields: true }
-            } else if (name === 'mode' && stringLiteralValue(property.initializer) === 'stream') marker = { ...marker, mode: 'stream' }
+            if (name === 'mode' && stringLiteralValue(property.initializer) === 'stream') marker = { ...marker, mode: 'stream' }
             else if (name === 'name') {
               const value = stringLiteralValue(property.initializer)
               if (value === undefined || !isRemoteSegment(value)) this.fail(property, 'Remote() name must be an endpoint segment')
               marker = { ...marker, exportName: value }
-            } else this.fail(property, 'Remote() options require name, mode: "stream", or rejectUnknownFields: true')
+            } else this.fail(property, 'Remote() options require name or mode: "stream"')
           }
         }
       } else if (ts.isCallExpression(expression)

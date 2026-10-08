@@ -68,7 +68,7 @@ kind: "package-reference"
 
 ### Manifest 校验
 
-`validateTypertManifest()` 在产物进入类型化注册表前执行检查。manifest 必须指名导出它的包、携带 `host` face、持有 schema factory，并包含格式正确的反射记录；调用描述符要求带 factory 的严格 codec。生成直接方法的 `input` 和 `invoke` 能力直接在描述符上验证，而 `result` 仍是唯一输出 codec。文档和 JSON Schema 可选。校验读取已提供的投影数据，不会调用惰性投影 getter 或构建 schema；消费方按需请求派生投影。每次失败都会指名包与缺陷。
+`validateTypertManifest()` 在产物进入类型化注册表前执行检查。manifest 必须指名导出它的包、携带 `host` face、持有 schema factory，并包含格式正确的反射记录；调用描述符要求带 factory 的严格 codec。校验检查参数 `codec` 及提供的 `strictCodec` spec，并要求生成直接方法的 `input` 和 `invoke` 可调用；`result` 仍是唯一输出 codec。文档和 JSON Schema 可选。注册绝不调用输入选择器、解析器 factory 或投影 getter；校验只检查已提供的静态投影数据。每次失败都会指名包与缺陷。
 
 ### 缓存与归属
 

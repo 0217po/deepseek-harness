@@ -540,7 +540,7 @@ export type {`,
       name: 'an unknown Remote mode',
       mode: 'duplex',
       method: 'async *attach(agent: Agent, signal: AbortSignal): AsyncIterable<CreateGoalResult>',
-      message: 'Remote\\(\\) options require name, mode: "stream", or rejectUnknownFields: true',
+      message: 'Remote\\(\\) options require name or mode: "stream"',
     },
   ])('rejects $name', ({ mode, method, message }) => {
     const root = copyFixture()
@@ -553,11 +553,11 @@ export type {`,
     expect(() => analyzeRemote(root, false)).toThrow(new RegExp(message))
   })
 
-  it.each(['committed', 'emitSourceDef'])('rejects the removed %s option', (option) => {
+  it.each(['committed', 'emitSourceDef', 'rejectUnknownFields'])('rejects the removed %s option', (option) => {
     const root = copyFixture()
     editFile(root, 'packages/remote/src/index.ts', source => source.replace('  @Remote\n', `  @Remote({ ${option}: true })\n`))
     expect(() => analyzeRemote(root, false))
-      .toThrow('Remote() options require name, mode: "stream", or rejectUnknownFields: true')
+      .toThrow('Remote() options require name or mode: "stream"')
   })
 
   it('evaluates declaration-merged mapped and conditional boundaries for codecs without widening consumer types', async () => {

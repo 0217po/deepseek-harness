@@ -67,6 +67,7 @@ export type {
   TypertRemoteScopeNamespace,
   TypertRemoteContribution,
   TypertRemoteInfo,
+  TypertRemoteInputOptions,
   TypertRemoteMethod,
   TypertRemoteValue,
   TypertRemoteCodecSpec,
@@ -114,14 +115,12 @@ export interface RemoteMethodMarker {
   readonly invocation: RemoteInvocationMarker
 }
 
-/** Explicit endpoint, stream, and generated request-validation choices for one Remote method. */
+/** Explicit endpoint and stream choices for one Remote method. */
 export interface RemoteMethodOptions {
   /** Exported endpoint method; omission retains the implementation member name. */
   readonly name?: string
   /** `stream`: deliver each Iterable item over the shared logical-stream carrier. */
   readonly mode?: 'stream'
-  /** Reject unknown fields in generated request-object codecs; source Hosts load the ordinary Typert artifact to enforce this. */
-  readonly rejectUnknownFields?: true
 }
 
 type RemoteMethodDecorator = <This extends object, Args extends unknown[], Result>(
@@ -244,14 +243,13 @@ export function Remote<This extends object, Args extends unknown[], Result>(
   addMarkerInitializer(context, { kind: 'direct' })
 }
 
-const REMOTE_OPTION_KEYS = new Set(['name', 'mode', 'rejectUnknownFields'])
+const REMOTE_OPTION_KEYS = new Set(['name', 'mode'])
 
 function validateRemoteOptions(options: RemoteMethodOptions): void {
   const keys = Reflect.ownKeys(options)
   if (keys.length === 0 || keys.some(key => typeof key !== 'string' || !REMOTE_OPTION_KEYS.has(key))
-    || (Object.hasOwn(options, 'mode') && options.mode !== 'stream')
-    || (Object.hasOwn(options, 'rejectUnknownFields') && options.rejectUnknownFields !== true)) {
-    throw new TypeError('typert-protocol: Remote options require name, mode: "stream", or rejectUnknownFields: true')
+    || (Object.hasOwn(options, 'mode') && options.mode !== 'stream')) {
+    throw new TypeError('typert-protocol: Remote options require name or mode: "stream"')
   }
   if (options.name !== undefined) validateName('Remote export name', options.name)
 }

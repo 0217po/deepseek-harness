@@ -59,7 +59,7 @@ Host entry 为每条 Client 流独立注册一组 allowlist listener 和一个�
 
 包内 `clientBundle(..., { hostPhase: true })` 让 Host tsdown 打包 Host 入口，让后续 Client tsdown 只打包 browser 入口。普通 Client 插件仍使用单一 Client project，并在 Client tsdown 阶段一起生成 Node loader 入口和 browser bundle；只有两组源码需要不同 compiler face 时才拆分。
 
-[Session 消费方产物测试](tests/session-client.e2e.ts)将测试专用 Registry/CLI/MCP 适配对普通声明独立编译，再使用普通 Node 发起真实 SessionController HTTP/WebSocket 调用。它覆盖当前 `session/page` 和 `session/follow`、离线工具选择、输入拒绝、当前 Session 注入、取消及释放。其手动 Context 组合不是受支持的应用入口，也不是完整下游 Loader/profile 集成；不可用的附件准备会显式拒绝。
+[Session 消费方产物测试](tests/session-client.e2e.ts)将测试专用 Registry/CLI/MCP 适配对普通声明独立编译，再使用普通 Node 发起真实 SessionController HTTP/WebSocket 调用。其 CLI/MCP 选择与输入接收均使用 `method.input({ strict: true })`，将 JSON Schema 与同一视图的解析器配套使用，而不收紧 Host 分发。它覆盖当前 `session/page` 和 `session/follow`、离线工具选择、输入拒绝、当前 Session 注入、取消及释放。其手动 Context 组合不是受支持的应用入口，也不是完整下游 Loader/profile 集成；不可用的附件准备会显式拒绝。
 
 <a id="model-experience"></a>
 ## 模型体验

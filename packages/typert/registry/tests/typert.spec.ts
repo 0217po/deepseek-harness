@@ -106,7 +106,7 @@ describe('TypertRegistry', () => {
     const info = createTypertRemoteInfo({ package: '@fixture/remote', methods: {
       'goals/create': {
         service: 'goals', invocation: { kind: 'direct' }, description: 'Create a goal.',
-        parameters: [{ name: 'request', source: 'json', codec }], result: codec,
+        parameters: [{ name: 'request', source: 'json', codec, strictCodec: codec }], result: codec,
       },
     } })
     const descriptor = info.methods['goals/create']!
@@ -125,7 +125,7 @@ describe('TypertRegistry', () => {
         expect(method).toBe(descriptor)
         expect(registry.list()[0]).toBe(descriptor)
         if (method === undefined || !isTypertRemoteMethod(method)) throw new Error('Generated method is missing')
-        expect(method.input.create().parse({ request: 'goal' })).toEqual({ request: 'goal' })
+        expect(method.input().create().parse({ request: 'goal' })).toEqual({ request: 'goal' })
         expect(method.result).toBe(codec)
       }
       await owner.dispose()

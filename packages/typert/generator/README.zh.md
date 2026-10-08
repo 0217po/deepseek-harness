@@ -46,15 +46,15 @@ files:
 <a id="ordinary-remote-metadata"></a>
 ### 普通 Remote 元数据
 
-发射器为每个端点写入一份静态 `TypertRemoteMethodSpec`，并调用纯 `createTypertRemoteInfo` factory。普通消费方 `./remote` 产物保留默认导出和 `TYPERT_REMOTE`，其类型为 `TypertRemoteInfo`，`TYPERT_REMOTE.methods` 中的条目具有精确的 `TypertRemoteMethod<Input, Output, Mode, Uplink>` 类型。每个条目就是 `TYPERT_REMOTE.descriptors` 中同一个直接方法描述符对象；仅使用 Context 接收器的方法保留在描述符和作用域声明中。不存在独立的 `REMOTE_METHODS` 导出、嵌套 `metadata` 或第二份 `output` codec。[协议](<../protocol/README.zh.md>)负责 factory 和方法 API。
+发射器为每个端点写入一份静态 `TypertRemoteMethodSpec`，并调用纯 `createTypertRemoteInfo` factory。普通消费方 `./remote` 产物保留默认导出和 `TYPERT_REMOTE`，其类型为 `TypertRemoteInfo`，`TYPERT_REMOTE.methods` 中的条目具有精确的 `TypertRemoteMethod<Input, Output, Mode, Uplink, DecodedOutput>` 类型。每个条目就是 `TYPERT_REMOTE.descriptors` 中同一个直接方法描述符对象；仅使用 Context 接收器的方法保留在描述符和作用域声明中。不存在独立的 `REMOTE_METHODS` 导出、嵌套 `metadata` 或第二份 `output` codec。[协议](<../protocol/README.zh.md>)负责 factory 和方法 API。
 
-factory 返回类实例，并保留 spec，直到 `descriptors` 或 `methods` getter 构建两者共享的索引。具名输入 schema 和投影按需缓存，生成的独立 Zod factory 同样在首次使用时物化并缓存。普通 Host `./typert` 创建私有 info 实例，由 `TYPERT.invocations` getter 暴露其描述符。Host 与消费方产物共享定义，不承诺跨 Program 或进程的对象身份。
+factory 返回类实例，并保留 spec，直到 `descriptors` 或 `methods` getter 构建两者共享的索引。消费方选择的每种输入策略视图、解析器和投影都独立惰性求值并缓存，生成的独立 Zod factory 同样在首次使用时物化并缓存。普通 Host `./typert` 创建私有 info 实例，由 `TYPERT.invocations` getter 暴露其描述符。Host 与消费方产物共享定义，不承诺跨 Program 或进程的对象身份。
 
 生成的声明对拥有者类型和 schema 类型使用仅类型导入。导入元数据既不会激活 Host Service，也不会打开网络连接。框架内消费方查询现有[注册表](<../registry/README.zh.md>)；独立消费方可以直接导入 `./remote`。要求严格校验的源码组合预先构建普通产物，并通过 [loader](<../loader/README.zh.md>) 注册 `./typert`；无描述符的源码发现无法恢复已擦除的类型约束、文档或 schema。
 
-缺少 JSDoc 或不支持工具 JSON Schema，不会阻止其他方面有效的普通生成及其严格 codec。元数据独立于投影保留解析器与可用文档：不支持的输入或输出投影省略 `jsonSchema`，并记录 `jsonSchemaError`。工具消费方显式选择方法，并要求其所需文档和受支持的输入 schema；输出解析器是必需的，但输出 JSON Schema 是可选的，除非该消费方要求提供。仅有元数据不会让每个 Remote 方法自动成为工具。
+缺少 JSDoc 或不支持工具 JSON Schema，不会阻止其他方面有效的普通生成及其严格 codec。元数据独立于投影保留解析器与可用文档：每个不受支持的输入变体或输出投影都省略 `jsonSchema`，并记录各自的 `jsonSchemaError`。工具消费方显式选择方法，并要求其所需文档和受支持的输入 schema；输出解析器是必需的，但输出 JSON Schema 是可选的，除非该消费方要求提供。仅有元数据不会让每个 Remote 方法自动成为工具。
 
-`@Remote({ rejectUnknownFields: true })` 独立地在生成的 codec 与受支持的输入 JSON Schema 中关闭已声明请求对象，除非声明显式包含索引签名。其他方法与结果对象保留现有策略；每个元数据输入解析器与受支持的输入 JSON Schema 都关闭顶层命名参数对象。工具投影支持标量、对象、数组和互斥联合类型；规范的 `JsonValue` 与字符串键 JSON 字典无需递归引用。TypeScript 未表达的数值范围与其他语义规则仍由操作拥有者负责。
+每个生成参数 spec 都包含从同一个 checker 解析后类型模型派生的 `codec` 和 `strictCodec`；分析器与模型不携带逐方法输入策略。`method.input()` 与 `{ strict: false }` 选择 Host 分发使用的普通 codec，其已声明对象接受并剥离未知字段。`method.input({ strict: true })` 为解析和受支持的 JSON Schema 选择递归关闭的已声明对象。两种具名参数封装都拒绝额外参数；显式 JSON 与字典键保持开放，有约束的字典值仍然校验。`result` 保留唯一的普通 codec。工具投影支持标量、对象、数组和互斥联合类型；规范的 `JsonValue` 与字符串键 JSON 字典无需递归引用。TypeScript 未表达的数值范围与其他语义规则仍由操作拥有者负责。
 
 `WorkspaceTypertGenerator` 先分析每个选中 face 的所有贡献方，再筛选要生成产物的包，因此包子集保留与完整构建相同的声明合并结果和输出字节。
 

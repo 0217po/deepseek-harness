@@ -24,12 +24,12 @@ interface Schema extends Record<string, unknown> {
  * Project one resolved Remote type without weakening unsupported constraints.
  * @param renderer - complete analyzed type graph.
  * @param type - resolved wire type.
- * @param rejectUnknownFields - close declared request objects with `additionalProperties: false`.
+ * @param closedObjects - close declared request objects with `additionalProperties: false`.
  * @param optional - omit a top-level undefined alternative supplied by an optional argument.
  * @returns an acyclic schema in the command/tool subset.
  */
 export function remoteJsonSchema(
-  renderer: TypeGraphRenderer, type: TypeNodeId, rejectUnknownFields = false, optional = false,
+  renderer: TypeGraphRenderer, type: TypeNodeId, closedObjects = false, optional = false,
 ): Record<string, unknown> {
   const active = new Set<TypeNodeId>()
   const fail = (subject: string): never => { throw new RemoteJsonSchemaError(`typert Remote JSON Schema: ${subject}`) }
@@ -96,7 +96,7 @@ export function remoteJsonSchema(
       properties[name] = member.description === undefined ? schema : { ...schema, description: member.description }
       if (!member.optional) required.push(name)
     }
-    return { type: 'object', properties, required, additionalProperties: indexed || !rejectUnknownFields }
+    return { type: 'object', properties, required, additionalProperties: indexed || !closedObjects }
   }
   const union = (input: Schema[]): Schema => {
     if (input.some(branch => Object.keys(branch).length === 0)) return {}
