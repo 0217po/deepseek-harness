@@ -61,6 +61,22 @@ async function setup(execute?: (bindings: HostBindings, spec: PtcRunSpec) => Pro
 }
 
 describe('workflow host callback validation', () => {
+  it('settles a failed directory lookup when the runtime cannot confine execution', async () => {
+    const { ctx, runtime, start } = await setup()
+    runtime.policyMode = undefined
+    const ensureDirectory = vi.spyOn(ctx.workingDirectory, 'ensure').mockRejectedValue(new Error('selected directory is unavailable'))
+    const execute = vi.spyOn(runtime, 'run')
+    const run = start()
+    try {
+      expect(await run.result).toMatchObject({ stopReason: 'error', error: expect.stringContaining('selected directory is unavailable') })
+      expect(execute).not.toHaveBeenCalled()
+    } finally {
+      await run.dispose()
+      ensureDirectory.mockRestore()
+      execute.mockRestore()
+    }
+  })
+
   it('retains its selected directory for the process and later children when the parent moves', async () => {
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
