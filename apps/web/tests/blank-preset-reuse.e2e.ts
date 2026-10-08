@@ -88,7 +88,7 @@ describe('web e2e: blank Session reuse under the requested preset', () => {
     }
   }
 
-  it('reuses a blank recorded under an undeclared preset for New Session under the default', async () => {
+  it('reuses a blank recorded under an undeclared preset under the default when startup connects its Workspace', async () => {
     const stale = SessionId('blank-undeclared')
     await storeBlank(stale, 'undeclared', UNDECLARED)
 
@@ -98,9 +98,6 @@ describe('web e2e: blank Session reuse under the requested preset', () => {
       mounted: 'standard', projected: 'standard', plan: { active: true },
     })
     expect(await storedSelections(stale)).toEqual([{ agentPreset: 'standard' }])
-
-    await page.getByRole('button', { name: 'New session', exact: true }).first().click()
-    await expect.poll(() => selected(page)).toBe(stale)
     expect(scaffold.ctx.workspaceRegistry.list().find(item => item.sessionIds.includes(stale))?.sessionIds).toEqual([stale])
     expect(await page.getByRole('alert').count()).toBe(0)
   })

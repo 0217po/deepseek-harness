@@ -79,7 +79,8 @@ describe('generateConfigSchema', () => {
     ]
     const original = structuredClone(layers)
     const installAnchor = join(dir, 'installation.json')
-    const resolve = vi.spyOn(profileOperations, 'createRuntimeResolution').mockResolvedValue(resolution)
+    const resolve = vi.spyOn(profileOperations, 'createRuntimeResolution')
+      .mockResolvedValue(new profileOperations.ProfileRuntimeResolution({ installAnchor: '', home: '', profileDir: undefined }, resolution))
     const result = await generateConfigSchema(profile, layers, installAnchor)
     expect(resolve).toHaveBeenCalledExactlyOnceWith({ installAnchor, profile })
     expect(result['x-cordis'].entries.map(entry => [entry.path, entry.name])).toEqual([
@@ -499,6 +500,10 @@ describe('collectConfigSchemas', () => {
     expect(validates(result, [{ name: 'server', config: { port: 'wrong' } }])).toBe(false)
     expect(validates(result, [{ name: 'new-plugin', config: { arbitrary: true } }])).toBe(true)
     expect(validates(result, [{ id: 'server', disabled: true }], 'patchList')).toBe(true)
+    expect(validates(result, [{ preset: 'preset-standard', id: 'server', config: 'child-owned' }], 'patchList')).toBe(true)
+    expect(validates(result, [{ preset: '', insert: [] }], 'patchList')).toBe(false)
+    expect(validates(result, [{ preset: '  ', insert: [] }], 'patchList')).toBe(false)
+    expect(validates(result, [{ preset: { __jsExpr: 'ctx.preset' }, insert: [] }], 'patchList')).toBe(false)
     expect(validates(result, [{ id: 'server', config: { port: 'wrong' } }], 'patchList')).toBe(false)
     expect(validates(result, [{ id: 'server', config: {} }], 'patchList')).toBe(false)
     expect(validates(result, [{ id: 'server', name: 'not-server', config: 'ignored' }], 'patchList')).toBe(true)

@@ -152,14 +152,48 @@ describe.skipIf(mode === 'record')('web e2e: workspace shortcuts', () => {
     await details.waitFor()
     await page.mouse.move(700, 100)
 
+    const previousSessionIds = [...workspace.sessionIds]
     await bind('New Session')
+    const newSessionCreated = page.waitForResponse('**/api/session/create')
     await page.keyboard.press('Meta+Shift+Comma')
+    const newSessionResponse = await newSessionCreated
+    const newSessionBody = await newSessionResponse.json() as { result: { ok: boolean; value: { sessionId: string } } }
+    expect(newSessionBody.result.ok).toBe(true)
+    const newSessionId = newSessionBody.result.value.sessionId
+    expect(previousSessionIds).not.toContain(newSessionId)
+    await page.locator(`[data-conversation-session="${newSessionId}"]`).waitFor()
     await expect.poll(() => page.getByRole('treeitem', { selected: true }).textContent()).toContain('New Session')
-    expect(workspace.sessionIds.length).toBe(1)
+    await expect.poll(() => workspace.sessionIds).toHaveLength(previousSessionIds.length + 1)
+    expect(workspace.sessionIds).toEqual(expect.arrayContaining([...previousSessionIds, newSessionId]))
 
     await bind('Open locally')
     await page.keyboard.press('Meta+Shift+Comma')
     await expect.poll(() => launched).toEqual([{ app: 'vscode', path: workspace.path }])
+
+    await page.keyboard.press('Meta+Alt+P')
+    const files = page.locator('[data-files-state="tree"]')
+    await files.locator('[data-files-row="empty"]').waitFor()
+    const opener = files.locator('[data-open-target="directory"]')
+    await opener.getByRole('button', { name: 'Open in VS Code', exact: true }).click()
+    await expect.poll(() => launched).toEqual([
+      { app: 'vscode', path: workspace.path }, { app: 'vscode', path: workspace.path },
+    ])
+    await opener.getByRole('button', { name: 'More ways to open', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Finder', exact: true }).click()
+    await expect.poll(() => launched.at(-1)).toEqual({ app: 'finder', path: workspace.path })
+    await opener.getByRole('button', { name: 'Open in Finder', exact: true }).waitFor()
+    await page.keyboard.press('Meta+Shift+Comma')
+    await expect.poll(() => launched).toEqual([
+      { app: 'vscode', path: workspace.path }, { app: 'vscode', path: workspace.path },
+      { app: 'finder', path: workspace.path }, { app: 'finder', path: workspace.path },
+    ])
+    await expect.poll(() => opener.getAttribute('data-state')).toBe('idle')
+    await compareOrRefreshGolden(join(root, 'files-open.expected.md'),
+      await captureStableAria(page, '[data-files-state="tree"]', scaffold.workspaceCwd), mode)
+    await opener.getByRole('button', { name: 'More ways to open', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Finder (default)', exact: true }).waitFor()
+    await page.keyboard.press('Escape')
+    await page.getByRole('menu').waitFor({ state: 'hidden' })
     expect(console.pageErrors).toEqual([])
   })
 })

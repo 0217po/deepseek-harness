@@ -18,10 +18,12 @@
   - text: 字号大小 仅影响会话内容的字号 14
   - button "增大字号"
   - button "减小字号"
-  - text: px 工作步骤展示 选择希望看到多少工具调用细节
+  - text: px
+  - button "更多字体设置"
+  - text: 工作步骤展示 选择希望看到多少工具调用细节
   - button "标准"
-  - text: 代码工作工具 开启后显示轨迹、本轮代码差异，新对话中的 Agent 预设切换
-  - switch "代码工作工具" [checked]
+  - text: 显示代码工作视图 开启后，显示轨迹、本轮代码差异，可选择完整的 Agent 预设切换
+  - switch "显示代码工作视图" [checked]
   - text: 快捷键
   - paragraph: 查看和编辑当前可用的快捷键和输入操作
   - button "编辑快捷键"

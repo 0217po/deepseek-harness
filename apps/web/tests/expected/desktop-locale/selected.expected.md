@@ -18,10 +18,12 @@
   - text: Font size Only affects conversation content 14
   - button "Increase font size"
   - button "Decrease font size"
-  - text: px Work details Choose how much detail to show for tool calls
+  - text: px
+  - button "More font settings"
+  - text: Work details Choose how much detail to show for tool calls
   - button "Standard"
-  - text: Coding Tools Shows trajectory, code diffs, and Agent preset switching in new chats
-  - switch "Coding Tools" [checked]
+  - text: Show coding view Shows trajectory, code diffs, and all Agent presets
+  - switch "Show coding view" [checked]
   - text: Keyboard shortcuts
   - paragraph: View and edit available shortcuts and input actions
   - button "Edit shortcuts"

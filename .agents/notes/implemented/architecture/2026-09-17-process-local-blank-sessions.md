@@ -14,7 +14,7 @@ The Session catalog includes persisted blanks. Startup restoration selects the s
 
 The Agent retains the acquired handle throughout its lifetime. Checking ownership and releasing a probe lock would leave a race before resume. No PID or process identity enters persisted data or the Remote schema.
 
-This decision extends the blank-reuse policy in the [Client Session scope decision](2026-07-25-web-client-session-scope-and-provide-channel.md); its real-Session slash support and Provider adoption rationale remain active.
+This decision extends the blank-reuse policy in the [Client Session scope reference](2026-09-15-client-session-references.md); its real-Session slash support and Provider adoption rationale remain active.
 
 ## Alternatives considered
 
@@ -28,7 +28,7 @@ This decision extends the blank-reuse policy in the [Client Session scope decisi
 
 ## Consequences
 
-A Host can reuse its own live blank or reclaim an unowned persisted blank with its slash state. Separate Hosts create distinct blanks while existing writers remain held. A held selected blank causes fresh creation even when another blank is free; navigation does not search for another candidate. No cleanup is added. Opening the same established conversation from two Hosts can still encounter writer contention. Unknown projection hints remain visible without cold body scans; automatic reuse requires known blank metadata. A non-contention acquisition failure aborts New Session; an explicit New Session reports it as a notice and startup restoration only to the console, and a hidden blank that fails this way has no recovery action in this flow.
+A Host can reuse its own live blank or reclaim an unowned persisted blank with its slash state. Separate Hosts create distinct blanks while existing writers remain held. A held selected blank causes fresh creation even when another blank is free; navigation does not search for another candidate. No cleanup is added. Opening the same established conversation from two Hosts can still encounter writer contention. Unknown projection hints remain visible without cold body scans; automatic reuse requires known blank metadata. A non-contention acquisition failure aborts the navigation; a hero Workspace pick or explicit draft preparation reports it as a notice and startup restoration only to the console, and a hidden blank that fails this way has no recovery action in this flow.
 
 ## Verification
 

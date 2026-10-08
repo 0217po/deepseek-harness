@@ -5,6 +5,7 @@ import type { ClientRemote, DirectoryListing, RemoteFailure } from '@deepseek-ai
 import type {
   ISessions,
   SessionCreateError,
+  SessionBinding,
   SessionReference,
   SessionSummary,
   SessionTarget,
@@ -19,6 +20,7 @@ import type {
 } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+import type { DraftInitializationOptions } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { RowToast } from './contract/slots.ts'
 import { pinOrderAccounts, pinOrderSource } from './pin-order.ts'
 import type { WorkspaceViewStoreActions } from './stores.ts'
@@ -28,11 +30,14 @@ interface MainSelection {
   readonly subagentAddress?: SubagentAddress
 }
 
-/** Choices a New Session flow passes to the Session it creates. */
+/** Choices for the Session a Workspace connection creates or reuses. */
 export interface NewSessionOptions {
   /** Agent preset the Session runs; the Host default when omitted. */
   readonly agentPreset?: string
 }
+
+/** Content preparation for the resolved target Session, and the preset it runs when it is a reused blank. */
+export interface StartSessionOptions extends DraftInitializationOptions, NewSessionOptions {}
 
 /** Workspace archive and directory operations consumed by Client UI domains. */
 export interface UiWorkspace {
@@ -73,12 +78,13 @@ export interface UiWorkspace {
    */
   connectWorkspace(workspaceId: WorkspaceId, options?: NewSessionOptions): Promise<SessionId>
   /**
-   * Start a New Session flow and navigate to its Session; a creation the Host
+   * Create a fresh Session, or reuse a blank when preparing an explicit draft. A creation the Host
    * refuses is shown through the Workspace notice and leaves the selection as it was.
    * @param workspaceId - explicit target; absent inherits the current or most recent Workspace.
-   * @param options - choices for the Session the flow creates or reuses.
+   * @param options - initial content and the reused blank's preset; existing text or attachments
+   * are preserved unless clearPreviousDraft is true.
    */
-  startSession(workspaceId?: WorkspaceId, options?: NewSessionOptions): void
+  startSession(workspaceId?: WorkspaceId, options?: StartSessionOptions): void
   /**
    * Archive a Session and clear it when it is the current selection.
    * @param sessionId - Session to archive.
@@ -180,12 +186,17 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     }, 'ui-workspace: Workspace navigation policy')
   }
 
-  async connectWorkspace(workspaceId: WorkspaceId, options: NewSessionOptions = {}): Promise<SessionId> {
+  connectWorkspace(workspaceId: WorkspaceId, options: NewSessionOptions = {}): Promise<SessionId> {
+    return this.connectBlank(workspaceId, true, options)
+  }
+
+  private async connectBlank(workspaceId: WorkspaceId, reuse: boolean, options: NewSessionOptions): Promise<SessionId> {
     const workspace = this.workspaces.list.getSnapshot().items
       .find(item => item.workspaceId === workspaceId)
     if (workspace === undefined) {
       throw new Error(`uiWorkspace.connectWorkspace: unknown workspace ${workspaceId}`)
     }
+    if (!reuse) return this.sessions.create({ workspaceId })
     const key = JSON.stringify([workspaceId, options.agentPreset ?? null])
     const inflight = this.connecting.get(key)
     if (inflight !== undefined) return inflight
@@ -252,15 +263,24 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     this.replaceMain(target, this.lifetime.signal, 'reveal')
   }
 
-  async openWorkspace(
+  openWorkspace(
     workspaceId: WorkspaceId,
     beforeOpen?: (sessionId: SessionId) => void,
-    options?: NewSessionOptions,
+    options: NewSessionOptions = {},
+  ): Promise<void> {
+    return this.openWorkspaceSession(workspaceId, beforeOpen, true, options)
+  }
+
+  private async openWorkspaceSession(
+    workspaceId: WorkspaceId,
+    beforeOpen: ((sessionId: SessionId) => void) | undefined,
+    reuse: boolean,
+    options: NewSessionOptions,
   ): Promise<void> {
     const navigation = AbortSignal.any([this.ctx.layout.beginNavigation(), this.lifetime.signal])
     let sessionId: SessionId
     try {
-      sessionId = await this.connectWorkspace(workspaceId, options)
+      sessionId = await this.connectBlank(workspaceId, reuse, options)
     } catch (error: unknown) {
       // Reported here, not in connectWorkspace: startup restoration calls that
       // directly and stays console-only.
@@ -275,7 +295,11 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     return this.sessions.fork({ sessionId, increaseTitle: true, ...onCreated === undefined ? {} : { onCreated } })
   }
 
-  startSession(workspaceId?: WorkspaceId, options?: NewSessionOptions): void {
+  startSession(workspaceId?: WorkspaceId, options?: StartSessionOptions): void {
+    const { agentPreset, ...draft } = options ?? {}
+    const draftOptions = options === undefined ? undefined : draft
+    const initializeDraft = draftOptions !== undefined
+      && (draftOptions.prompt !== undefined || draftOptions.clearPreviousDraft === true)
     const workspace = this.workspaces.list.getSnapshot()
     const sessions = this.sessions.list.getSnapshot()
     const current = this.mainReference?.sessionId
@@ -287,12 +311,35 @@ class UiWorkspaceService extends Service implements UiWorkspace {
       : undefined
     const target = workspaceId ?? currentWorkspaceId ?? recent
     if (target === undefined) {
+      if (initializeDraft) {
+        this.notify({ kind: 'createFailed', message: this.ctx.locale.bind('workspace')('draft.workspaceRequired') })
+        return
+      }
       this.clearMain()
       return
     }
-    void this.openWorkspace(target, undefined, options).catch(
+    const opening = draftOptions === undefined
+      ? this.openWorkspaceSession(target, undefined, false, {})
+      : this.openWorkspace(target, initializeDraft ? (id) => {
+        const binding = this.sessions.binding(id)
+        if (binding === undefined) this.draftPreparationFailed()
+        this.prepareDraft(binding, draftOptions)
+      } : undefined, agentPreset === undefined ? {} : { agentPreset })
+    void opening.catch(
       (reason: unknown) => { console.warn('new session failed:', reason) },
     )
+  }
+
+  private prepareDraft(binding: SessionBinding, options: DraftInitializationOptions): void {
+    const conversation = this.ctx.get('conversation')
+    if (conversation === undefined) this.draftPreparationFailed()
+    if (conversation.input.requestDraftInitialization(binding, options) === 'blocked') this.draftPreparationFailed()
+  }
+
+  private draftPreparationFailed(): never {
+    const message = this.ctx.locale.bind('workspace')('draft.initializationFailed')
+    this.notify({ kind: 'createFailed', message })
+    throw new Error(message)
   }
 
   async archiveSession(sessionId: SessionId, options: { readonly stopActivity?: boolean } = {}): Promise<void> {
