@@ -9,7 +9,7 @@
  */
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createElement, type ComponentProps, type FC, type ReactNode } from 'react'
 import { bindSnapshotSelector, SlotTestRuntime, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
@@ -595,6 +595,37 @@ describe('tab switching in ConversationRoot', () => {
     fireEvent.click(screen.getByRole('button', { name: '请求 #2 · 压缩' }))
     expect(screen.getByText('压缩 · 轮次之间')).toBeTruthy()
     expect(view.container.textContent).not.toContain('Turn null')
+  })
+
+  it('reports a streaming Assistant record and a running compaction as pending', async () => {
+    const nodes: LegacyConversationSlice['nodes'] = [
+      { kind: 'user', seq: 1, time: 1_000, content: [], source: null },
+    ]
+    const requests: RequestView[] = [
+      {
+        purpose: 'assistant', startSeq: 2, turn: 1, step: 1,
+        startedAt: 2_000, completedAt: null, status: 'running',
+      },
+      {
+        purpose: 'compaction', startSeq: 3, turn: 1, step: 0,
+        startedAt: 3_000, completedAt: null, status: 'running',
+      },
+    ]
+    const b = await bench(historySnapshot(nodes, {
+      requests,
+      partial: { turn: 1, step: 1, blocks: [{ kind: 'text', text: 'still streaming' }] },
+    }))
+    mount(b)
+    fireEvent.click(screen.getByRole('tab', { name: 'Trajectory' }))
+    const detail = () => screen.getByRole('complementary', { name: '事件详情' })
+
+    fireEvent.click(screen.getByRole('row', { name: /still streaming/ }))
+    expect(within(detail()).getByText('等待中')).toBeTruthy()
+    expect(within(detail()).queryByText('已完成')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '请求 #2 · 压缩' }))
+    expect(within(detail()).getByText('等待中')).toBeTruthy()
+    expect(within(detail()).queryByText('已压缩')).toBeNull()
   })
 
   it('activates only the selected standalone compaction section', async () => {
