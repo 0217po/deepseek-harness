@@ -1,9 +1,8 @@
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { compileFunction, constants } from 'node:vm'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
-import type { PtcBindingFunction, PtcJsonValue, PtcRunRequest, PtcRunResult, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcBindingFunction, PtcRunRequest, PtcRunResult, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
@@ -62,19 +61,17 @@ async function setup(execute?: (bindings: HostBindings, spec: PtcRunSpec) => Pro
 }
 
 describe('workflow host callback validation', () => {
-  it('returns the workflow outcome through a REPL expression without retaining an owner', async () => {
-    const { runtime, start } = await setup(async (bindings, spec) => {
-      expect(spec.stateOwner).toBeUndefined()
-      const evaluate = compileFunction(`return (async () => (${spec.program}))()`, ['workflowHost'], {
-        importModuleDynamically: constants.USE_MAIN_CONTEXT_DEFAULT_LOADER,
-      }) as (host: HostBindings) => Promise<PtcJsonValue>
-      return { logs: [], value: await evaluate(bindings) }
+  it('runs an unconfined provider under full access without forwarding a sandbox policy', async () => {
+    const { ctx, runtime, parent, start } = await setup(async (_bindings, spec) => {
+      expect(spec.sandboxPolicy).toBeUndefined()
+      return completed
     })
-    const format = vi.spyOn(runtime, 'programFormat', 'get').mockReturnValue('repl')
+    runtime.policyMode = undefined
+    await ctx.sandboxPolicy.setMode(parent.session, 'danger-full-access')
     const handle = start()
     try {
       expect(await handle.result).toEqual({ value: null, stopReason: 'completed', agentsStarted: 0 })
-    } finally { await handle.dispose(); format.mockRestore() }
+    } finally { await handle.dispose() }
   })
 
   it('settles a failed directory lookup when the runtime cannot confine execution', async () => {
