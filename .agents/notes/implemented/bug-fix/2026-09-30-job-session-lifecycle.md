@@ -16,7 +16,7 @@ The terminal record distinguishes producer acknowledgement from forced bookkeepi
 
 Facts are captured at the registry commit and published in microtask order before completion waiters resume. This avoids reentering Session append when a Session observer starts a job. Recording errors warn independently: already-started work still has its control id, and a failed journal append cannot prevent cleanup or release of waiters. The Session's ordinary persistence and SDK notification paths own delivery after append.
 
-The live registry and resource ownership decisions remain in the [generic runtime note](../architecture/2026-06-20-generic-long-running-tool-runtime.md) and [seam consolidation note](../architecture/2026-09-03-jobs-seam-consolidation.md). Those notes remain active; this journal adds durable observations without replacing their execution or event-routing responsibilities.
+The [registry contract](../../../../packages/jobs/jobs/README.md) and [seam consolidation note](../architecture/2026-09-03-jobs-seam-consolidation.md) own live execution, resource ownership, and event routing. This journal adds durable observations without replacing those responsibilities.
 
 ## Alternatives considered
 

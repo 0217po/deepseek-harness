@@ -16,7 +16,7 @@ SDK 消费方接收 Session 事件，而 job 注册和结算此前只存在于�
 
 事实在注册表提交时捕获，并在完成等待方恢复前按微任务顺序发布。这避免 Session 观察者启动 job 时重入 Session append。记录错误单独发出警告：已启动的工作仍有可控制的 id，日志追加失败不能阻止清理或释放等待方。追加后的投递由 Session 既有的持久化和 SDK 通知路径负责。
 
-运行期注册表与资源归属决策仍由[通用运行时说明](../architecture/2026-06-20-generic-long-running-tool-runtime.zh.md)和[seam 收敛说明](../architecture/2026-09-03-jobs-seam-consolidation.zh.md)负责。这些记录保持有效；本日志增加持久化观测，不替代其执行或事件路由职责。
+[注册表约定](../../../../packages/jobs/jobs/README.zh.md)和[seam 收敛说明](../architecture/2026-09-03-jobs-seam-consolidation.zh.md)负责运行期执行、资源归属和事件路由。本日志增加持久化观测，不替代这些职责。
 
 ## Alternatives considered
 

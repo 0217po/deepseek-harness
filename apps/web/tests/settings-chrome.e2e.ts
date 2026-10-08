@@ -59,6 +59,11 @@ describe('web e2e: settings modal and General preferences', () => {
 
   it('opens the settings dialog, switches sections, and closes by every path', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-shell'))
+    onTestFinished(async () => {
+      const dialog = page.getByRole('dialog', { name: '设置' })
+      if (await dialog.isVisible()) await page.keyboard.press('Escape')
+      await dialog.waitFor({ state: 'hidden' })
+    })
     const trigger = page.getByRole('button', { name: '设置', exact: true })
     expect(await trigger.getAttribute('aria-haspopup')).toBe('dialog')
     expect(await trigger.getAttribute('aria-expanded')).toBe('false')
@@ -160,8 +165,6 @@ describe('web e2e: settings modal and General preferences', () => {
     const instanceRows = [
       ['tool-subagent', '已启用'],
       ['tool-subagent-fork', '已启用'],
-      ['tool-subagent-codex', '已停用'],
-      ['tool-subagent-claude-code', '已停用'],
     ] as const
     for (const [entryId, status] of instanceRows) {
       const row = dialog.locator(`[data-plugin-scope="preset"] [data-plugin-entry="${entryId}"]`)
@@ -179,6 +182,7 @@ describe('web e2e: settings modal and General preferences', () => {
       expect(await identity.textContent()).toBe(entryId)
       expect(await identity.getAttribute('title')).toBe(entryId)
     }
+    expect(await dialog.locator('[data-plugin-entry="tool-subagent-codex"], [data-plugin-entry="tool-subagent-claude-code"]').count()).toBe(0)
     const instancesSnapshot = await captureStableAria(
       page,
       '[data-plugin-scope="preset"] ul',
@@ -186,10 +190,10 @@ describe('web e2e: settings modal and General preferences', () => {
     )
     await compareOrRefreshGolden(PLUGIN_INSTANCES_EXPECTED, instancesSnapshot, MODE)
     await dialog.getByRole('button', {
-      name: 'tool-subagent, tool-subagent-claude-code, 已停用',
+      name: 'tool-subagent, tool-subagent-fork, 已启用',
       exact: true,
     }).click()
-    expect(await dialog.locator('[data-plugin-entry="tool-subagent-claude-code"] button')
+    expect(await dialog.locator('[data-plugin-entry="tool-subagent-fork"] button')
       .getAttribute('aria-expanded')).toBe('true')
     await pluginSearch.fill('')
     // Close path 1: Escape.

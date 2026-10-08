@@ -134,13 +134,17 @@
         "content": [
           {
             "type": "text",
-            "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`)."
+            "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`)."
           }
         ],
         "source": {
           "kind": "runtime-context",
           "form": "snapshot",
           "sections": [
+            {
+              "name": "working-directory:current",
+              "text": "Current working directory: \"{{cwd}}\"."
+            },
             {
               "name": "sandbox:policy",
               "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
@@ -203,10 +207,10 @@
             "job_kill",
             "job_list",
             "job_output",
-            "run_code",
             "snapshot_double",
             "subagent",
-            "workflow"
+            "workflow",
+            "working_directory"
           ]
         },
         "reason": "initial"
@@ -299,10 +303,10 @@
             "job_kill",
             "job_list",
             "job_output",
-            "run_code",
             "snapshot_double",
             "subagent",
-            "workflow"
+            "workflow",
+            "working_directory"
           ]
         },
         "reason": "series"
@@ -330,9 +334,9 @@
           "content": [
             {
               "type": "tool-call",
-              "id": "advanced-code",
-              "name": "run_code",
-              "arguments": "{\"code\": \"return await tools.snapshot_double({ value: 21 })\", \"description\": \"Call the configured Plugin tool\"}"
+              "id": "advanced-native",
+              "name": "snapshot_double",
+              "arguments": "{\"value\": 21}"
             }
           ],
           "source": {
@@ -374,8 +378,8 @@
             "time0": 0,
             "index": 0,
             "dt": [],
-            "id": "advanced-code",
-            "name": "run_code",
+            "id": "advanced-native",
+            "name": "snapshot_double",
             "args": [
               ""
             ]
@@ -385,9 +389,9 @@
             "time0": 0,
             "index": 0,
             "dt": [],
-            "id": "advanced-code",
+            "id": "advanced-native",
             "args": [
-              "{\"code\": \"return await tools.snapshot_double({ value: 21 })\", \"description\": \"Call the configured Plugin tool\"}"
+              "{\"value\": 21}"
             ]
           },
           {
@@ -398,9 +402,9 @@
               "index": 0,
               "block": {
                 "type": "tool-call",
-                "id": "advanced-code",
-                "name": "run_code",
-                "arguments": "{\"code\": \"return await tools.snapshot_double({ value: 21 })\", \"description\": \"Call the configured Plugin tool\"}"
+                "id": "advanced-native",
+                "name": "snapshot_double",
+                "arguments": "{\"value\": 21}"
               }
             }
           },
@@ -449,27 +453,30 @@
       "data": {
         "turn": 1,
         "step": 1,
-        "callId": "advanced-code",
-        "name": "run_code",
-        "arguments": "{\"code\": \"return await tools.snapshot_double({ value: 21 })\", \"description\": \"Call the configured Plugin tool\"}"
-      }
-    },
-    {
-      "type": "tool/ptc-dispatch-start",
-      "seq": 23,
-      "time": 0,
-      "data": {
-        "rootCallId": "advanced-code",
-        "parentCallId": "advanced-code",
-        "subCallId": "advanced-code:ptc:1",
+        "callId": "advanced-native",
         "name": "snapshot_double",
-        "arguments": {
-          "value": 21
-        }
+        "arguments": "{\"value\": 21}"
       }
     },
     {
       "type": "job/registered",
+      "seq": 23,
+      "time": 0,
+      "data": {
+        "executionId": "{{id:1}}",
+        "jobId": "snapshot-1",
+        "owner": "{{parent}}",
+        "kind": "snapshot",
+        "label": "snapshot_double",
+        "startedAt": 0,
+        "toolCall": {
+          "callId": "advanced-native",
+          "rootCallId": "advanced-native"
+        }
+      }
+    },
+    {
+      "type": "job/settled",
       "seq": 24,
       "time": 0,
       "data": {
@@ -480,25 +487,8 @@
         "label": "snapshot_double",
         "startedAt": 0,
         "toolCall": {
-          "callId": "advanced-code:ptc:1",
-          "rootCallId": "advanced-code"
-        }
-      }
-    },
-    {
-      "type": "job/settled",
-      "seq": 25,
-      "time": 0,
-      "data": {
-        "executionId": "{{id:1}}",
-        "jobId": "snapshot-1",
-        "owner": "{{parent}}",
-        "kind": "snapshot",
-        "label": "snapshot_double",
-        "startedAt": 0,
-        "toolCall": {
-          "callId": "advanced-code:ptc:1",
-          "rootCallId": "advanced-code"
+          "callId": "advanced-native",
+          "rootCallId": "advanced-native"
         },
         "finishedAt": 0,
         "status": "completed",
@@ -507,29 +497,8 @@
       }
     },
     {
-      "type": "tool/ptc-dispatch",
-      "seq": 26,
-      "time": 0,
-      "data": {
-        "rootCallId": "advanced-code",
-        "parentCallId": "advanced-code",
-        "subCallId": "advanced-code:ptc:1",
-        "name": "snapshot_double",
-        "arguments": {
-          "value": 21
-        },
-        "isError": false,
-        "content": [
-          {
-            "type": "text",
-            "text": "42"
-          }
-        ]
-      }
-    },
-    {
       "type": "tool/result",
-      "seq": 27,
+      "seq": 25,
       "time": 0,
       "data": {
         "turn": 1,
@@ -538,9 +507,9 @@
           "role": "tool",
           "source": {
             "kind": "tool",
-            "callId": "advanced-code"
+            "callId": "advanced-native"
           },
-          "toolCallId": "advanced-code",
+          "toolCallId": "advanced-native",
           "content": [
             {
               "type": "text",
@@ -558,7 +527,7 @@
     },
     {
       "type": "step/end",
-      "seq": 28,
+      "seq": 26,
       "time": 0,
       "data": {
         "turn": 1,
@@ -567,7 +536,7 @@
     },
     {
       "type": "step/start",
-      "seq": 29,
+      "seq": 27,
       "time": 0,
       "data": {
         "turn": 1,
@@ -576,17 +545,17 @@
     },
     {
       "type": "session-log-deepseek/delivery-accepted",
-      "seq": 30,
+      "seq": 28,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
         "sessionFormatVersion": 4,
-        "throughSeq": 29
+        "throughSeq": 27
       }
     },
     {
       "type": "assistant/message",
-      "seq": 31,
+      "seq": 29,
       "time": 0,
       "data": {
         "turn": 1,
@@ -710,7 +679,7 @@
     },
     {
       "type": "tool/call",
-      "seq": 32,
+      "seq": 30,
       "time": 0,
       "data": {
         "turn": 1,
@@ -722,7 +691,7 @@
     },
     {
       "type": "tool/result",
-      "seq": 33,
+      "seq": 31,
       "time": 0,
       "data": {
         "turn": 1,
@@ -750,13 +719,13 @@
         }
       },
       "sourceEventSeqs": [
-        32
+        30
       ],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 34,
+      "seq": 32,
       "time": 0,
       "data": {
         "turn": 1,
@@ -765,263 +734,30 @@
     },
     {
       "type": "step/start",
+      "seq": 33,
+      "time": 0,
+      "data": {
+        "turn": 1,
+        "step": 3
+      }
+    },
+    {
+      "type": "session-log-deepseek/delivery-accepted",
+      "seq": 34,
+      "time": 0,
+      "data": {
+        "sessionId": "{{parent}}",
+        "sessionFormatVersion": 4,
+        "throughSeq": 33
+      }
+    },
+    {
+      "type": "assistant/message",
       "seq": 35,
       "time": 0,
       "data": {
         "turn": 1,
-        "step": 3
-      }
-    },
-    {
-      "type": "session-log-deepseek/delivery-accepted",
-      "seq": 36,
-      "time": 0,
-      "data": {
-        "sessionId": "{{parent}}",
-        "sessionFormatVersion": 4,
-        "throughSeq": 35
-      }
-    },
-    {
-      "type": "assistant/message",
-      "seq": 37,
-      "time": 0,
-      "data": {
-        "turn": 1,
         "step": 3,
-        "message": {
-          "role": "assistant",
-          "content": [
-            {
-              "type": "tool-call",
-              "id": "advanced-denied-ptc",
-              "name": "run_code",
-              "arguments": "{\"code\": \"try { await tools.snapshot_double({ value: -1 }) } catch (error) { return error.message }\", \"description\": \"Catch a structured inner tool denial\"}"
-            }
-          ],
-          "source": {
-            "kind": "model",
-            "provider": "deepseek-official",
-            "model": "smoke-model",
-            "replayState": {
-              "response": {
-                "kind": "deepseek-messages",
-                "version": 1,
-                "model": "smoke-model"
-              },
-              "blocks": [
-                {
-                  "type": "tool-call"
-                }
-              ]
-            }
-          },
-          "id": "{{messageId}}"
-        },
-        "usage": {
-          "inputTokens": 3,
-          "outputTokens": 3,
-          "totalTokens": 6
-        },
-        "stream": [
-          {
-            "type": "chunk",
-            "time": 0,
-            "chunk": {
-              "type": "block-start",
-              "index": 0,
-              "blockType": "tool-call"
-            }
-          },
-          {
-            "type": "tool-call-chunks",
-            "time0": 0,
-            "index": 0,
-            "dt": [],
-            "id": "advanced-denied-ptc",
-            "name": "run_code",
-            "args": [
-              ""
-            ]
-          },
-          {
-            "type": "tool-call-chunks",
-            "time0": 0,
-            "index": 0,
-            "dt": [],
-            "id": "advanced-denied-ptc",
-            "args": [
-              "{\"code\": \"try { await tools.snapshot_double({ value: -1 }) } catch (error) { return error.message }\", \"description\": \"Catch a structured inner tool denial\"}"
-            ]
-          },
-          {
-            "type": "chunk",
-            "time": 0,
-            "chunk": {
-              "type": "block-end",
-              "index": 0,
-              "block": {
-                "type": "tool-call",
-                "id": "advanced-denied-ptc",
-                "name": "run_code",
-                "arguments": "{\"code\": \"try { await tools.snapshot_double({ value: -1 }) } catch (error) { return error.message }\", \"description\": \"Catch a structured inner tool denial\"}"
-              }
-            }
-          },
-          {
-            "type": "chunk",
-            "time": 0,
-            "chunk": {
-              "type": "usage",
-              "usage": {
-                "inputTokens": 3,
-                "outputTokens": 3,
-                "totalTokens": 6
-              }
-            }
-          },
-          {
-            "type": "chunk",
-            "time": 0,
-            "chunk": {
-              "type": "finish",
-              "reason": {
-                "kind": "tool-calls"
-              },
-              "replayState": {
-                "response": {
-                  "kind": "deepseek-messages",
-                  "version": 1,
-                  "model": "smoke-model"
-                },
-                "blocks": [
-                  {
-                    "type": "tool-call"
-                  }
-                ]
-              }
-            }
-          }
-        ]
-      },
-      "surfaceOp": "append"
-    },
-    {
-      "type": "tool/call",
-      "seq": 38,
-      "time": 0,
-      "data": {
-        "turn": 1,
-        "step": 3,
-        "callId": "advanced-denied-ptc",
-        "name": "run_code",
-        "arguments": "{\"code\": \"try { await tools.snapshot_double({ value: -1 }) } catch (error) { return error.message }\", \"description\": \"Catch a structured inner tool denial\"}"
-      }
-    },
-    {
-      "type": "tool/ptc-dispatch-start",
-      "seq": 39,
-      "time": 0,
-      "data": {
-        "rootCallId": "advanced-denied-ptc",
-        "parentCallId": "advanced-denied-ptc",
-        "subCallId": "advanced-denied-ptc:ptc:1",
-        "name": "snapshot_double",
-        "arguments": {
-          "value": -1
-        }
-      }
-    },
-    {
-      "type": "tool/ptc-dispatch",
-      "seq": 40,
-      "time": 0,
-      "data": {
-        "rootCallId": "advanced-denied-ptc",
-        "parentCallId": "advanced-denied-ptc",
-        "subCallId": "advanced-denied-ptc:ptc:1",
-        "name": "snapshot_double",
-        "arguments": {
-          "value": -1
-        },
-        "isError": true,
-        "error": {
-          "name": "AutoReviewDeniedError",
-          "code": "AUTO_REVIEW_DENIED",
-          "reason": "  transport raw\r\nreason  "
-        },
-        "content": [
-          {
-            "type": "text",
-            "text": "Error: Auto review rejected tool \"snapshot_double\"; its body was not executed"
-          }
-        ]
-      }
-    },
-    {
-      "type": "tool/result",
-      "seq": 41,
-      "time": 0,
-      "data": {
-        "turn": 1,
-        "step": 3,
-        "message": {
-          "role": "tool",
-          "source": {
-            "kind": "tool",
-            "callId": "advanced-denied-ptc"
-          },
-          "toolCallId": "advanced-denied-ptc",
-          "content": [
-            {
-              "type": "text",
-              "text": "Auto review rejected tool \"snapshot_double\"; its body was not executed"
-            }
-          ],
-          "isError": false,
-          "id": "{{messageId}}"
-        }
-      },
-      "sourceEventSeqs": [
-        38
-      ],
-      "surfaceOp": "append"
-    },
-    {
-      "type": "step/end",
-      "seq": 42,
-      "time": 0,
-      "data": {
-        "turn": 1,
-        "step": 3
-      }
-    },
-    {
-      "type": "step/start",
-      "seq": 43,
-      "time": 0,
-      "data": {
-        "turn": 1,
-        "step": 4
-      }
-    },
-    {
-      "type": "session-log-deepseek/delivery-accepted",
-      "seq": 44,
-      "time": 0,
-      "data": {
-        "sessionId": "{{parent}}",
-        "sessionFormatVersion": 4,
-        "throughSeq": 43
-      }
-    },
-    {
-      "type": "assistant/message",
-      "seq": 45,
-      "time": 0,
-      "data": {
-        "turn": 1,
-        "step": 4,
         "message": {
           "role": "assistant",
           "content": [
@@ -1141,11 +877,11 @@
     },
     {
       "type": "tool/call",
-      "seq": 46,
+      "seq": 36,
       "time": 0,
       "data": {
         "turn": 1,
-        "step": 4,
+        "step": 3,
         "callId": "advanced-direct-child",
         "name": "subagent",
         "arguments": "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
@@ -1153,23 +889,23 @@
     },
     {
       "type": "subagent/catalog",
-      "seq": 47,
+      "seq": 37,
       "time": 0,
       "data": {
         "version": 0,
         "childId": "{{child-1}}",
         "childCreatedAt": 0,
-        "mode": "one-shot",
+        "mode": "continuable",
         "label": "Check direct child"
       }
     },
     {
       "type": "tool/result",
-      "seq": 48,
+      "seq": 38,
       "time": 0,
       "data": {
         "turn": 1,
-        "step": 4,
+        "step": 3,
         "message": {
           "role": "tool",
           "source": {
@@ -1180,7 +916,7 @@
           "content": [
             {
               "type": "text",
-              "text": "DIRECT_CHILD_OK"
+              "text": "started subagent {{child-1}}"
             }
           ],
           "isError": false,
@@ -1188,13 +924,22 @@
         }
       },
       "sourceEventSeqs": [
-        46
+        36
       ],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 49,
+      "seq": 39,
+      "time": 0,
+      "data": {
+        "turn": 1,
+        "step": 3
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 40,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1202,31 +947,57 @@
       }
     },
     {
-      "type": "step/start",
-      "seq": 50,
-      "time": 0,
-      "data": {
-        "turn": 1,
-        "step": 5
-      }
-    },
-    {
       "type": "session-log-deepseek/delivery-accepted",
-      "seq": 51,
+      "seq": 41,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
         "sessionFormatVersion": 4,
-        "throughSeq": 50
+        "throughSeq": 40
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 42,
+      "time": 0,
+      "data": {
+        "target": "next-step",
+        "start": 0,
+        "inserted": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
+              },
+              {
+                "type": "text",
+                "text": "Its closing message:"
+              },
+              {
+                "type": "text",
+                "text": "DIRECT_CHILD_OK"
+              }
+            ],
+            "source": {
+              "kind": "subagent-settled",
+              "form": "notice",
+              "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+              "senderSessionId": "{{child-1}}"
+            },
+            "role": "user",
+            "id": "{{messageId}}"
+          }
+        ]
       }
     },
     {
       "type": "assistant/message",
-      "seq": 52,
+      "seq": 43,
       "time": 0,
       "data": {
         "turn": 1,
-        "step": 5,
+        "step": 4,
         "message": {
           "role": "assistant",
           "content": [
@@ -1346,11 +1117,11 @@
     },
     {
       "type": "tool/call",
-      "seq": 53,
+      "seq": 44,
       "time": 0,
       "data": {
         "turn": 1,
-        "step": 5,
+        "step": 4,
         "callId": "advanced-workflow",
         "name": "workflow",
         "arguments": "{\"script\": \"phase('Delegate')\\nconst reply = await agent('Reply with exactly WORKFLOW_CHILD_OK and nothing else.', { label: 'workflow-child' })\\nreturn { reply }\", \"meta\": {\"name\": \"advanced-exe-snapshot\", \"description\": \"exercise one packaged workflow child\"}}"
@@ -1358,7 +1129,7 @@
     },
     {
       "type": "tool-workflow/run-start",
-      "seq": 54,
+      "seq": 45,
       "time": 0,
       "data": {
         "runId": "{{workflow-run}}",
@@ -1367,18 +1138,19 @@
     },
     {
       "type": "subagent/catalog",
-      "seq": 55,
+      "seq": 46,
       "time": 0,
       "data": {
         "version": 0,
         "childId": "{{child-2}}",
         "childCreatedAt": 0,
-        "mode": "one-shot"
+        "mode": "continuable",
+        "label": "advanced-exe-snapshot child 1"
       }
     },
     {
       "type": "tool-workflow/agent-start",
-      "seq": 56,
+      "seq": 47,
       "time": 0,
       "data": {
         "runId": "{{workflow-run}}",
@@ -1390,7 +1162,7 @@
     },
     {
       "type": "tool-workflow/agent-end",
-      "seq": 57,
+      "seq": 48,
       "time": 0,
       "data": {
         "runId": "{{workflow-run}}",
@@ -1400,7 +1172,7 @@
     },
     {
       "type": "tool-workflow/run-end",
-      "seq": 58,
+      "seq": 49,
       "time": 0,
       "data": {
         "runId": "{{workflow-run}}",
@@ -1409,11 +1181,11 @@
     },
     {
       "type": "tool/result",
-      "seq": 59,
+      "seq": 50,
       "time": 0,
       "data": {
         "turn": 1,
-        "step": 5,
+        "step": 4,
         "message": {
           "role": "tool",
           "source": {
@@ -1432,13 +1204,33 @@
         }
       },
       "sourceEventSeqs": [
-        53
+        44
       ],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 60,
+      "seq": 51,
+      "time": 0,
+      "data": {
+        "turn": 1,
+        "step": 4
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 52,
+      "time": 0,
+      "data": {
+        "target": "next-step",
+        "start": 0,
+        "removedCount": 1,
+        "inserted": []
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 53,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1446,31 +1238,52 @@
       }
     },
     {
-      "type": "step/start",
-      "seq": 61,
+      "type": "user/message",
+      "seq": 54,
       "time": 0,
       "data": {
-        "turn": 1,
-        "step": 6
-      }
+        "content": [
+          {
+            "type": "text",
+            "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
+          },
+          {
+            "type": "text",
+            "text": "Its closing message:"
+          },
+          {
+            "type": "text",
+            "text": "DIRECT_CHILD_OK"
+          }
+        ],
+        "source": {
+          "kind": "subagent-settled",
+          "form": "notice",
+          "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+          "senderSessionId": "{{child-1}}"
+        },
+        "role": "user",
+        "id": "{{messageId}}"
+      },
+      "surfaceOp": "append"
     },
     {
       "type": "session-log-deepseek/delivery-accepted",
-      "seq": 62,
+      "seq": 55,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
         "sessionFormatVersion": 4,
-        "throughSeq": 61
+        "throughSeq": 54
       }
     },
     {
       "type": "assistant/message",
-      "seq": 63,
+      "seq": 56,
       "time": 0,
       "data": {
         "turn": 1,
-        "step": 6,
+        "step": 5,
         "message": {
           "role": "assistant",
           "content": [
@@ -1574,16 +1387,16 @@
     },
     {
       "type": "step/end",
-      "seq": 64,
+      "seq": 57,
       "time": 0,
       "data": {
         "turn": 1,
-        "step": 6
+        "step": 5
       }
     },
     {
       "type": "command/run",
-      "seq": 65,
+      "seq": 58,
       "time": 0,
       "data": {
         "commandId": "{{command:1}}",
@@ -1595,7 +1408,7 @@
     },
     {
       "type": "feedback/record",
-      "seq": 66,
+      "seq": 59,
       "time": 0,
       "data": {
         "text": "The session needs a clearer explanation."
@@ -1603,7 +1416,7 @@
     },
     {
       "type": "command/done",
-      "seq": 67,
+      "seq": 60,
       "time": 0,
       "data": {
         "commandId": "{{command:1}}",
@@ -1613,7 +1426,7 @@
     },
     {
       "type": "feedback/record",
-      "seq": 68,
+      "seq": 61,
       "time": 0,
       "data": {
         "category": "other"
@@ -1621,7 +1434,7 @@
     },
     {
       "type": "feedback/message-put",
-      "seq": 69,
+      "seq": 62,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
@@ -1638,7 +1451,7 @@
     },
     {
       "type": "feedback/message-put",
-      "seq": 70,
+      "seq": 63,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
@@ -1654,7 +1467,7 @@
     },
     {
       "type": "feedback/message-delete",
-      "seq": 71,
+      "seq": 64,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
@@ -1663,7 +1476,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 72,
+      "seq": 65,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1865,13 +1678,17 @@
             "content": [
               {
                 "type": "text",
-                "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`)."
+                "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`)."
               }
             ],
             "source": {
               "kind": "runtime-context",
               "form": "snapshot",
               "sections": [
+                {
+                  "name": "working-directory:current",
+                  "text": "Current working directory: \"{{cwd}}\"."
+                },
                 {
                   "name": "sandbox:policy",
                   "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
@@ -1946,10 +1763,10 @@
                 "job_kill",
                 "job_list",
                 "job_output",
-                "run_code",
                 "snapshot_double",
                 "subagent",
-                "workflow"
+                "workflow",
+                "working_directory"
               ]
             },
             "reason": "initial"
@@ -2072,10 +1889,10 @@
                 "job_kill",
                 "job_list",
                 "job_output",
-                "run_code",
                 "snapshot_double",
                 "subagent",
-                "workflow"
+                "workflow",
+                "working_directory"
               ]
             },
             "reason": "series"
@@ -2115,9 +1932,9 @@
               "content": [
                 {
                   "type": "tool-call",
-                  "id": "advanced-code",
-                  "name": "run_code",
-                  "arguments": "{\"code\": \"return await tools.snapshot_double({ value: 21 })\", \"description\": \"Call the configured Plugin tool\"}"
+                  "id": "advanced-native",
+                  "name": "snapshot_double",
+                  "arguments": "{\"value\": 21}"
                 }
               ],
               "source": {
@@ -2159,8 +1976,8 @@
                 "time0": 0,
                 "index": 0,
                 "dt": [],
-                "id": "advanced-code",
-                "name": "run_code",
+                "id": "advanced-native",
+                "name": "snapshot_double",
                 "args": [
                   ""
                 ]
@@ -2170,9 +1987,9 @@
                 "time0": 0,
                 "index": 0,
                 "dt": [],
-                "id": "advanced-code",
+                "id": "advanced-native",
                 "args": [
-                  "{\"code\": \"return await tools.snapshot_double({ value: 21 })\", \"description\": \"Call the configured Plugin tool\"}"
+                  "{\"value\": 21}"
                 ]
               },
               {
@@ -2183,9 +2000,9 @@
                   "index": 0,
                   "block": {
                     "type": "tool-call",
-                    "id": "advanced-code",
-                    "name": "run_code",
-                    "arguments": "{\"code\": \"return await tools.snapshot_double({ value: 21 })\", \"description\": \"Call the configured Plugin tool\"}"
+                    "id": "advanced-native",
+                    "name": "snapshot_double",
+                    "arguments": "{\"value\": 21}"
                   }
                 }
               },
@@ -2240,29 +2057,9 @@
           "data": {
             "turn": 1,
             "step": 1,
-            "callId": "advanced-code",
-            "name": "run_code",
-            "arguments": "{\"code\": \"return await tools.snapshot_double({ value: 21 })\", \"description\": \"Call the configured Plugin tool\"}"
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
-          "type": "tool/ptc-dispatch-start",
-          "seq": 23,
-          "time": 0,
-          "data": {
-            "rootCallId": "advanced-code",
-            "parentCallId": "advanced-code",
-            "subCallId": "advanced-code:ptc:1",
+            "callId": "advanced-native",
             "name": "snapshot_double",
-            "arguments": {
-              "value": 21
-            }
+            "arguments": "{\"value\": 21}"
           }
         }
       }
@@ -2273,7 +2070,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "job/registered",
-          "seq": 24,
+          "seq": 23,
           "time": 0,
           "data": {
             "executionId": "{{id:1}}",
@@ -2283,8 +2080,8 @@
             "label": "snapshot_double",
             "startedAt": 0,
             "toolCall": {
-              "callId": "advanced-code:ptc:1",
-              "rootCallId": "advanced-code"
+              "callId": "advanced-native",
+              "rootCallId": "advanced-native"
             }
           }
         }
@@ -2296,7 +2093,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "job/settled",
-          "seq": 25,
+          "seq": 24,
           "time": 0,
           "data": {
             "executionId": "{{id:1}}",
@@ -2306,8 +2103,8 @@
             "label": "snapshot_double",
             "startedAt": 0,
             "toolCall": {
-              "callId": "advanced-code:ptc:1",
-              "rootCallId": "advanced-code"
+              "callId": "advanced-native",
+              "rootCallId": "advanced-native"
             },
             "finishedAt": 0,
             "status": "completed",
@@ -2322,35 +2119,8 @@
       "payload": {
         "sessionId": "{{parent}}",
         "event": {
-          "type": "tool/ptc-dispatch",
-          "seq": 26,
-          "time": 0,
-          "data": {
-            "rootCallId": "advanced-code",
-            "parentCallId": "advanced-code",
-            "subCallId": "advanced-code:ptc:1",
-            "name": "snapshot_double",
-            "arguments": {
-              "value": 21
-            },
-            "isError": false,
-            "content": [
-              {
-                "type": "text",
-                "text": "42"
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
           "type": "tool/result",
-          "seq": 27,
+          "seq": 25,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2359,9 +2129,9 @@
               "role": "tool",
               "source": {
                 "kind": "tool",
-                "callId": "advanced-code"
+                "callId": "advanced-native"
               },
-              "toolCallId": "advanced-code",
+              "toolCallId": "advanced-native",
               "content": [
                 {
                   "type": "text",
@@ -2385,7 +2155,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 28,
+          "seq": 26,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2400,7 +2170,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/start",
-          "seq": 29,
+          "seq": 27,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2415,12 +2185,12 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 30,
+          "seq": 28,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 29
+            "throughSeq": 27
           }
         }
       }
@@ -2431,7 +2201,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "assistant/message",
-          "seq": 31,
+          "seq": 29,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2561,7 +2331,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/call",
-          "seq": 32,
+          "seq": 30,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2579,7 +2349,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/result",
-          "seq": 33,
+          "seq": 31,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2607,7 +2377,7 @@
             }
           },
           "sourceEventSeqs": [
-            32
+            30
           ],
           "surfaceOp": "append"
         }
@@ -2619,7 +2389,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 34,
+          "seq": 32,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2634,323 +2404,42 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/start",
+          "seq": 33,
+          "time": 0,
+          "data": {
+            "turn": 1,
+            "step": 3
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "session-log-deepseek/delivery-accepted",
+          "seq": 34,
+          "time": 0,
+          "data": {
+            "sessionId": "{{parent}}",
+            "sessionFormatVersion": 4,
+            "throughSeq": 33
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "assistant/message",
           "seq": 35,
           "time": 0,
           "data": {
             "turn": 1,
-            "step": 3
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
-          "type": "session-log-deepseek/delivery-accepted",
-          "seq": 36,
-          "time": 0,
-          "data": {
-            "sessionId": "{{parent}}",
-            "sessionFormatVersion": 4,
-            "throughSeq": 35
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
-          "type": "assistant/message",
-          "seq": 37,
-          "time": 0,
-          "data": {
-            "turn": 1,
             "step": 3,
-            "message": {
-              "role": "assistant",
-              "content": [
-                {
-                  "type": "tool-call",
-                  "id": "advanced-denied-ptc",
-                  "name": "run_code",
-                  "arguments": "{\"code\": \"try { await tools.snapshot_double({ value: -1 }) } catch (error) { return error.message }\", \"description\": \"Catch a structured inner tool denial\"}"
-                }
-              ],
-              "source": {
-                "kind": "model",
-                "provider": "deepseek-official",
-                "model": "smoke-model",
-                "replayState": {
-                  "response": {
-                    "kind": "deepseek-messages",
-                    "version": 1,
-                    "model": "smoke-model"
-                  },
-                  "blocks": [
-                    {
-                      "type": "tool-call"
-                    }
-                  ]
-                }
-              },
-              "id": "{{messageId}}"
-            },
-            "usage": {
-              "inputTokens": 3,
-              "outputTokens": 3,
-              "totalTokens": 6
-            },
-            "stream": [
-              {
-                "type": "chunk",
-                "time": 0,
-                "chunk": {
-                  "type": "block-start",
-                  "index": 0,
-                  "blockType": "tool-call"
-                }
-              },
-              {
-                "type": "tool-call-chunks",
-                "time0": 0,
-                "index": 0,
-                "dt": [],
-                "id": "advanced-denied-ptc",
-                "name": "run_code",
-                "args": [
-                  ""
-                ]
-              },
-              {
-                "type": "tool-call-chunks",
-                "time0": 0,
-                "index": 0,
-                "dt": [],
-                "id": "advanced-denied-ptc",
-                "args": [
-                  "{\"code\": \"try { await tools.snapshot_double({ value: -1 }) } catch (error) { return error.message }\", \"description\": \"Catch a structured inner tool denial\"}"
-                ]
-              },
-              {
-                "type": "chunk",
-                "time": 0,
-                "chunk": {
-                  "type": "block-end",
-                  "index": 0,
-                  "block": {
-                    "type": "tool-call",
-                    "id": "advanced-denied-ptc",
-                    "name": "run_code",
-                    "arguments": "{\"code\": \"try { await tools.snapshot_double({ value: -1 }) } catch (error) { return error.message }\", \"description\": \"Catch a structured inner tool denial\"}"
-                  }
-                }
-              },
-              {
-                "type": "chunk",
-                "time": 0,
-                "chunk": {
-                  "type": "usage",
-                  "usage": {
-                    "inputTokens": 3,
-                    "outputTokens": 3,
-                    "totalTokens": 6
-                  }
-                }
-              },
-              {
-                "type": "chunk",
-                "time": 0,
-                "chunk": {
-                  "type": "finish",
-                  "reason": {
-                    "kind": "tool-calls"
-                  },
-                  "replayState": {
-                    "response": {
-                      "kind": "deepseek-messages",
-                      "version": 1,
-                      "model": "smoke-model"
-                    },
-                    "blocks": [
-                      {
-                        "type": "tool-call"
-                      }
-                    ]
-                  }
-                }
-              }
-            ]
-          },
-          "surfaceOp": "append"
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
-          "type": "tool/call",
-          "seq": 38,
-          "time": 0,
-          "data": {
-            "turn": 1,
-            "step": 3,
-            "callId": "advanced-denied-ptc",
-            "name": "run_code",
-            "arguments": "{\"code\": \"try { await tools.snapshot_double({ value: -1 }) } catch (error) { return error.message }\", \"description\": \"Catch a structured inner tool denial\"}"
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
-          "type": "tool/ptc-dispatch-start",
-          "seq": 39,
-          "time": 0,
-          "data": {
-            "rootCallId": "advanced-denied-ptc",
-            "parentCallId": "advanced-denied-ptc",
-            "subCallId": "advanced-denied-ptc:ptc:1",
-            "name": "snapshot_double",
-            "arguments": {
-              "value": -1
-            }
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
-          "type": "tool/ptc-dispatch",
-          "seq": 40,
-          "time": 0,
-          "data": {
-            "rootCallId": "advanced-denied-ptc",
-            "parentCallId": "advanced-denied-ptc",
-            "subCallId": "advanced-denied-ptc:ptc:1",
-            "name": "snapshot_double",
-            "arguments": {
-              "value": -1
-            },
-            "isError": true,
-            "error": {
-              "name": "AutoReviewDeniedError",
-              "code": "AUTO_REVIEW_DENIED",
-              "reason": "  transport raw\r\nreason  "
-            },
-            "content": [
-              {
-                "type": "text",
-                "text": "Error: Auto review rejected tool \"snapshot_double\"; its body was not executed"
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
-          "type": "tool/result",
-          "seq": 41,
-          "time": 0,
-          "data": {
-            "turn": 1,
-            "step": 3,
-            "message": {
-              "role": "tool",
-              "source": {
-                "kind": "tool",
-                "callId": "advanced-denied-ptc"
-              },
-              "toolCallId": "advanced-denied-ptc",
-              "content": [
-                {
-                  "type": "text",
-                  "text": "Auto review rejected tool \"snapshot_double\"; its body was not executed"
-                }
-              ],
-              "isError": false,
-              "id": "{{messageId}}"
-            }
-          },
-          "sourceEventSeqs": [
-            38
-          ],
-          "surfaceOp": "append"
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
-          "type": "step/end",
-          "seq": 42,
-          "time": 0,
-          "data": {
-            "turn": 1,
-            "step": 3
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
-          "type": "step/start",
-          "seq": 43,
-          "time": 0,
-          "data": {
-            "turn": 1,
-            "step": 4
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
-          "type": "session-log-deepseek/delivery-accepted",
-          "seq": 44,
-          "time": 0,
-          "data": {
-            "sessionId": "{{parent}}",
-            "sessionFormatVersion": 4,
-            "throughSeq": 43
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
-          "type": "assistant/message",
-          "seq": 45,
-          "time": 0,
-          "data": {
-            "turn": 1,
-            "step": 4,
             "message": {
               "role": "assistant",
               "content": [
@@ -3076,11 +2565,11 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/call",
-          "seq": 46,
+          "seq": 36,
           "time": 0,
           "data": {
             "turn": 1,
-            "step": 4,
+            "step": 3,
             "callId": "advanced-direct-child",
             "name": "subagent",
             "arguments": "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
@@ -3101,7 +2590,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 3,
+          "seq": 4,
           "time": 0,
           "data": {
             "target": "next-step",
@@ -3131,7 +2620,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 4,
+          "seq": 5,
           "time": 0,
           "data": {
             "target": "next-turn",
@@ -3168,7 +2657,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "turn/start",
-          "seq": 5,
+          "seq": 6,
           "time": 0,
           "data": {
             "turn": 1
@@ -3182,7 +2671,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 6,
+          "seq": 7,
           "time": 0,
           "data": {
             "target": "next-step",
@@ -3199,7 +2688,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 7,
+          "seq": 8,
           "time": 0,
           "data": {
             "target": "next-turn",
@@ -3216,13 +2705,13 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "subagent/catalog",
-          "seq": 47,
+          "seq": 37,
           "time": 0,
           "data": {
             "version": 0,
             "childId": "{{child-1}}",
             "childCreatedAt": 0,
-            "mode": "one-shot",
+            "mode": "continuable",
             "label": "Check direct child"
           }
         }
@@ -3231,16 +2720,80 @@
     {
       "method": "session.event",
       "payload": {
-        "sessionId": "{{child-1}}",
+        "sessionId": "{{parent}}",
         "event": {
-          "type": "subagent/descriptor",
-          "seq": 8,
+          "type": "tool/result",
+          "seq": 38,
           "time": 0,
           "data": {
-            "version": 3,
-            "mode": "one-shot",
-            "provider": "spawn",
-            "label": "Check direct child"
+            "turn": 1,
+            "step": 3,
+            "message": {
+              "role": "tool",
+              "source": {
+                "kind": "tool",
+                "callId": "advanced-direct-child"
+              },
+              "toolCallId": "advanced-direct-child",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "started subagent {{child-1}}"
+                }
+              ],
+              "isError": false,
+              "id": "{{messageId}}"
+            }
+          },
+          "sourceEventSeqs": [
+            36
+          ],
+          "surfaceOp": "append"
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "step/end",
+          "seq": 39,
+          "time": 0,
+          "data": {
+            "turn": 1,
+            "step": 3
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "step/start",
+          "seq": 40,
+          "time": 0,
+          "data": {
+            "turn": 1,
+            "step": 4
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "session-log-deepseek/delivery-accepted",
+          "seq": 41,
+          "time": 0,
+          "data": {
+            "sessionId": "{{parent}}",
+            "sessionFormatVersion": 4,
+            "throughSeq": 40
           }
         }
       }
@@ -3351,13 +2904,17 @@
             "content": [
               {
                 "type": "text",
-                "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n\nYou are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it."
+                "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n\nYou are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it."
               }
             ],
             "source": {
               "kind": "runtime-context",
               "form": "snapshot",
               "sections": [
+                {
+                  "name": "working-directory:current",
+                  "text": "Current working directory: \"{{cwd}}\"."
+                },
                 {
                   "name": "sandbox:policy",
                   "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
@@ -3404,10 +2961,10 @@
                 "job_kill",
                 "job_list",
                 "job_output",
-                "run_code",
                 "snapshot_double",
                 "subagent",
-                "workflow"
+                "workflow",
+                "working_directory"
               ]
             },
             "reason": "initial"
@@ -3621,6 +3178,47 @@
       }
     },
     {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "agent/inbox/spliced",
+          "seq": 42,
+          "time": 0,
+          "data": {
+            "target": "next-step",
+            "start": 0,
+            "inserted": [
+              {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
+                  },
+                  {
+                    "type": "text",
+                    "text": "Its closing message:"
+                  },
+                  {
+                    "type": "text",
+                    "text": "DIRECT_CHILD_OK"
+                  }
+                ],
+                "source": {
+                  "kind": "subagent-settled",
+                  "form": "notice",
+                  "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+                  "senderSessionId": "{{child-1}}"
+                },
+                "role": "user",
+                "id": "{{messageId}}"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
       "method": "subagent.finished",
       "payload": {
         "provider": "spawn",
@@ -3642,93 +3240,12 @@
       "payload": {
         "sessionId": "{{parent}}",
         "event": {
-          "type": "tool/result",
-          "seq": 48,
+          "type": "assistant/message",
+          "seq": 43,
           "time": 0,
           "data": {
             "turn": 1,
             "step": 4,
-            "message": {
-              "role": "tool",
-              "source": {
-                "kind": "tool",
-                "callId": "advanced-direct-child"
-              },
-              "toolCallId": "advanced-direct-child",
-              "content": [
-                {
-                  "type": "text",
-                  "text": "DIRECT_CHILD_OK"
-                }
-              ],
-              "isError": false,
-              "id": "{{messageId}}"
-            }
-          },
-          "sourceEventSeqs": [
-            46
-          ],
-          "surfaceOp": "append"
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
-          "type": "step/end",
-          "seq": 49,
-          "time": 0,
-          "data": {
-            "turn": 1,
-            "step": 4
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
-          "type": "step/start",
-          "seq": 50,
-          "time": 0,
-          "data": {
-            "turn": 1,
-            "step": 5
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
-          "type": "session-log-deepseek/delivery-accepted",
-          "seq": 51,
-          "time": 0,
-          "data": {
-            "sessionId": "{{parent}}",
-            "sessionFormatVersion": 4,
-            "throughSeq": 50
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
-          "type": "assistant/message",
-          "seq": 52,
-          "time": 0,
-          "data": {
-            "turn": 1,
-            "step": 5,
             "message": {
               "role": "assistant",
               "content": [
@@ -3854,11 +3371,11 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/call",
-          "seq": 53,
+          "seq": 44,
           "time": 0,
           "data": {
             "turn": 1,
-            "step": 5,
+            "step": 4,
             "callId": "advanced-workflow",
             "name": "workflow",
             "arguments": "{\"script\": \"phase('Delegate')\\nconst reply = await agent('Reply with exactly WORKFLOW_CHILD_OK and nothing else.', { label: 'workflow-child' })\\nreturn { reply }\", \"meta\": {\"name\": \"advanced-exe-snapshot\", \"description\": \"exercise one packaged workflow child\"}}"
@@ -3872,7 +3389,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool-workflow/run-start",
-          "seq": 54,
+          "seq": 45,
           "time": 0,
           "data": {
             "runId": "{{workflow-run}}",
@@ -3894,7 +3411,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 3,
+          "seq": 4,
           "time": 0,
           "data": {
             "target": "next-step",
@@ -3924,7 +3441,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 4,
+          "seq": 5,
           "time": 0,
           "data": {
             "target": "next-turn",
@@ -3961,7 +3478,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "turn/start",
-          "seq": 5,
+          "seq": 6,
           "time": 0,
           "data": {
             "turn": 1
@@ -3975,7 +3492,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 6,
+          "seq": 7,
           "time": 0,
           "data": {
             "target": "next-step",
@@ -3992,7 +3509,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 7,
+          "seq": 8,
           "time": 0,
           "data": {
             "target": "next-turn",
@@ -4009,13 +3526,14 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "subagent/catalog",
-          "seq": 55,
+          "seq": 46,
           "time": 0,
           "data": {
             "version": 0,
             "childId": "{{child-2}}",
             "childCreatedAt": 0,
-            "mode": "one-shot"
+            "mode": "continuable",
+            "label": "advanced-exe-snapshot child 1"
           }
         }
       }
@@ -4026,7 +3544,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool-workflow/agent-start",
-          "seq": 56,
+          "seq": 47,
           "time": 0,
           "data": {
             "runId": "{{workflow-run}}",
@@ -4034,22 +3552,6 @@
             "label": "workflow-child",
             "phase": "Delegate",
             "childId": "{{child-2}}"
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{child-2}}",
-        "event": {
-          "type": "subagent/descriptor",
-          "seq": 8,
-          "time": 0,
-          "data": {
-            "version": 3,
-            "mode": "one-shot",
-            "provider": "spawn"
           }
         }
       }
@@ -4160,13 +3662,17 @@
             "content": [
               {
                 "type": "text",
-                "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n\nYou are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it."
+                "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n\nYou are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it."
               }
             ],
             "source": {
               "kind": "runtime-context",
               "form": "snapshot",
               "sections": [
+                {
+                  "name": "working-directory:current",
+                  "text": "Current working directory: \"{{cwd}}\"."
+                },
                 {
                   "name": "sandbox:policy",
                   "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
@@ -4213,10 +3719,10 @@
                 "job_kill",
                 "job_list",
                 "job_output",
-                "run_code",
                 "snapshot_double",
                 "subagent",
-                "workflow"
+                "workflow",
+                "working_directory"
               ]
             },
             "reason": "initial"
@@ -4452,7 +3958,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool-workflow/agent-end",
-          "seq": 57,
+          "seq": 48,
           "time": 0,
           "data": {
             "runId": "{{workflow-run}}",
@@ -4468,7 +3974,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool-workflow/run-end",
-          "seq": 58,
+          "seq": 49,
           "time": 0,
           "data": {
             "runId": "{{workflow-run}}",
@@ -4483,11 +3989,11 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/result",
-          "seq": 59,
+          "seq": 50,
           "time": 0,
           "data": {
             "turn": 1,
-            "step": 5,
+            "step": 4,
             "message": {
               "role": "tool",
               "source": {
@@ -4506,7 +4012,7 @@
             }
           },
           "sourceEventSeqs": [
-            53
+            44
           ],
           "surfaceOp": "append"
         }
@@ -4518,7 +4024,39 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 60,
+          "seq": 51,
+          "time": 0,
+          "data": {
+            "turn": 1,
+            "step": 4
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "agent/inbox/spliced",
+          "seq": 52,
+          "time": 0,
+          "data": {
+            "target": "next-step",
+            "start": 0,
+            "removedCount": 1,
+            "inserted": []
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "step/start",
+          "seq": 53,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4532,13 +4070,34 @@
       "payload": {
         "sessionId": "{{parent}}",
         "event": {
-          "type": "step/start",
-          "seq": 61,
+          "type": "user/message",
+          "seq": 54,
           "time": 0,
           "data": {
-            "turn": 1,
-            "step": 6
-          }
+            "content": [
+              {
+                "type": "text",
+                "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
+              },
+              {
+                "type": "text",
+                "text": "Its closing message:"
+              },
+              {
+                "type": "text",
+                "text": "DIRECT_CHILD_OK"
+              }
+            ],
+            "source": {
+              "kind": "subagent-settled",
+              "form": "notice",
+              "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+              "senderSessionId": "{{child-1}}"
+            },
+            "role": "user",
+            "id": "{{messageId}}"
+          },
+          "surfaceOp": "append"
         }
       }
     },
@@ -4548,12 +4107,12 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 62,
+          "seq": 55,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 61
+            "throughSeq": 54
           }
         }
       }
@@ -4564,11 +4123,11 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "assistant/message",
-          "seq": 63,
+          "seq": 56,
           "time": 0,
           "data": {
             "turn": 1,
-            "step": 6,
+            "step": 5,
             "message": {
               "role": "assistant",
               "content": [
@@ -4678,11 +4237,11 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 64,
+          "seq": 57,
           "time": 0,
           "data": {
             "turn": 1,
-            "step": 6
+            "step": 5
           }
         }
       }
@@ -4693,7 +4252,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "command/run",
-          "seq": 65,
+          "seq": 58,
           "time": 0,
           "data": {
             "commandId": "{{command:1}}",
@@ -4711,7 +4270,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/record",
-          "seq": 66,
+          "seq": 59,
           "time": 0,
           "data": {
             "text": "The session needs a clearer explanation."
@@ -4725,7 +4284,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "command/done",
-          "seq": 67,
+          "seq": 60,
           "time": 0,
           "data": {
             "commandId": "{{command:1}}",
@@ -4741,7 +4300,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/record",
-          "seq": 68,
+          "seq": 61,
           "time": 0,
           "data": {
             "category": "other"
@@ -4755,7 +4314,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/message-put",
-          "seq": 69,
+          "seq": 62,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
@@ -4778,7 +4337,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/message-put",
-          "seq": 70,
+          "seq": 63,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
@@ -4800,7 +4359,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/message-delete",
-          "seq": 71,
+          "seq": 64,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
@@ -4815,7 +4374,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "turn/end",
-          "seq": 72,
+          "seq": 65,
           "time": 0,
           "data": {
             "turn": 1,
