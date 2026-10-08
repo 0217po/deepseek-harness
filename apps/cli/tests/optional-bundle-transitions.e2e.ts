@@ -185,7 +185,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     expect(assembly.tools.map(tool => tool.name)).toEqual(['run_code'])
     expect(assembly.sections.find(section => section.name === 'tools:sdk')?.text).toContain('session_trace')
     expect(names(native.agent)).toContain('session_search')
-    expect(names(minimal.agent)).toEqual([process.platform === 'win32' ? 'pwsh' : 'bash', 'working_directory'])
+    expect(names(minimal.agent)).toContain('session_search')
     await turn(coded.agent, 'Read this session lineage through run_code.', [
       toolCallResponse('ptc-search', 'run_code', {
         code: 'console.log(await tools.session_trace({}));',
@@ -210,7 +210,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     const foreign = await agent('standard', otherWorkspace)
     await turn(foreign.agent, 'Keep OPTIONAL_SEARCH_MARKER in the other workspace.', [textResponse('Other marker recorded.')])
     await select(bundles.search, true)
-    expect(names(live.agent)).not.toContain('session_search')
+    expect(names(live.agent)).toContain('session_search')
     const searcher = await agent()
     await turn(searcher.agent, 'Find the previous marker in session history.', [
       toolCallResponse('search-history', 'session_search', { query: 'OPTIONAL_SEARCH_MARKER' }), textResponse('SEARCH_DONE'),
@@ -220,11 +220,8 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     expect(toolResult(searcher.agent, 'search-history')).not.toContain(foreign.agent.session.id)
     expect(toolResult(searcher.agent, 'search-history')).toContain('OPTIONAL_SEARCH_MARKER')
     await select(bundles.search, false)
+    expect(names(searcher.agent)).not.toContain('session_search')
     expect(names((await agent()).agent)).not.toContain('session_search')
-    await turn(searcher.agent, 'Search the marker again using the retained capability.', [
-      toolCallResponse('search-retained', 'session_search', { query: 'OPTIONAL_SEARCH_MARKER' }), textResponse('RETAINED_SEARCH_DONE'),
-    ])
-    expect(toolResult(searcher.agent, 'search-retained')).toContain(seedId)
     const sessionId = searcher.agent.session.id
     await searcher.dispose()
     handles.delete(searcher)
@@ -323,10 +320,10 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     expect(titleRequests(restored.agent)[0]?.data.titleProvider).toBe('session-title-first-prompt-llm')
   })
 
-  it('composes all five bundles while leaving minimal and host tools unchanged', async () => {
+  it('composes all five bundles as global tools across every preset', async () => {
     for (const name of Object.values(bundles)) await select(name, true)
     let coded: Agent | undefined
-    for (const preset of ['standard', 'cordis', 'ptc']) {
+    for (const preset of ['standard', 'cordis', 'ptc', 'minimal']) {
       const owner = await agent(preset)
       expect(names(owner.agent)).toEqual(expect.arrayContaining(['session_search', 'terminal_open', 'ralph']))
       if (preset === 'ptc') coded = owner.agent
@@ -340,9 +337,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     ])
     expect(toolResult(coded, 'combined-program')).toContain(coded.session.id)
     expect(toolResult(coded, 'combined-program')).toContain('dsh-badge')
-    const minimal = await agent('minimal')
-    expect(names(minimal.agent)).toEqual([process.platform === 'win32' ? 'pwsh' : 'bash', 'working_directory'])
-    expect(names()).toEqual(['working_directory'])
+    expect(names()).toEqual(expect.arrayContaining(['session_search', 'terminal_open', 'ralph', 'working_directory']))
     for (const name of [...Object.values(bundles)].reverse()) await select(name, false)
     expect(names((await agent()).agent)).not.toContain('session_search')
   })
