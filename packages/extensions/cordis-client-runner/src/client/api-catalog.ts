@@ -341,7 +341,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'target', description: 'known Session identity or durable direct-parent subagent address to display.' }],
       },
       {
-        signature: 'openWorkspace( workspaceId: WorkspaceId, beforeOpen?: (sessionId: SessionId) => void, options?: NewSessionOptions, ): Promise<void>',
+        signature: 'openWorkspace(workspaceId: WorkspaceId, beforeOpen?: (sessionId: SessionId) => void, options?: NewSessionOptions): Promise<void>',
         description: 'Connect a Workspace and open its Session unless a later navigation supersedes it.',
         parameters: [{ name: 'workspaceId', description: 'target Workspace.' }, { name: 'beforeOpen', description: 'optional synchronous preparation for the selected Session, skipped after supersession; a throw aborts the open and releases the retained reference.' }, { name: 'options', description: 'choices for the Session the connection creates or reuses.' }],
         returns: 'completion; a superseded request may create a Session but does not open it.',

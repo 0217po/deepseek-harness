@@ -56,11 +56,7 @@ export interface UiWorkspace {
    * @throws on failure; a refused creation is also shown through the Workspace
    * notice unless a later navigation or disposal superseded the request.
    */
-  openWorkspace(
-    workspaceId: WorkspaceId,
-    beforeOpen?: (sessionId: SessionId) => void,
-    options?: NewSessionOptions,
-  ): Promise<void>
+  openWorkspace(workspaceId: WorkspaceId, beforeOpen?: (sessionId: SessionId) => void, options?: NewSessionOptions): Promise<void>
   /**
    * Fork a Session without changing the current selection.
    * @param sessionId - source Session.
