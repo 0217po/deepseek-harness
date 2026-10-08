@@ -294,7 +294,7 @@ export function TrajectoryView({
         completedAt: request.completedAt,
         ...(request.error === undefined ? {} : { error: request.error }),
         ...(request.errorCode === undefined ? {} : { errorCode: request.errorCode }),
-        resultSeq: request.startSeq,
+        ...(request.status === 'running' ? {} : { resultSeq: request.startSeq }),
         ...(request.providerMetadata?.provider === undefined
           ? {}
           : { provider: request.providerMetadata.provider }),

@@ -43,10 +43,8 @@ async function writeBlob(command: CoverageCommand): Promise<void> {
   const configArgument = command.args.find(argument => argument.startsWith('--config='))!
   const source = await readFile(join(command.cwd, configArgument.slice('--config='.length)), 'utf8')
   const files = [...source.matchAll(/"([^"\n]+\.spec\.tsx?)"/g)].map(match => match[1]!)
-  const reportArgument = command.args.find(argument => argument.startsWith('--outputFile.json='))!
-  await writeFile(join(command.cwd, reportArgument.slice('--outputFile.json='.length)), JSON.stringify({
-    testResults: files.map(file => ({ name: join(command.cwd, file) })),
-  }))
+  const reportArgument = command.args.find(argument => argument.startsWith('--outputFile.fileTimes='))!
+  await writeFile(join(command.cwd, reportArgument.slice('--outputFile.fileTimes='.length)), JSON.stringify(files.map(file => ({ file, duration: 0 }))))
 }
 
 async function temporaryRoot(): Promise<string> {
@@ -288,17 +286,28 @@ describe('coverage file inventory', () => {
     expect(durations.get('packages/a/tests/y.spec.ts')).toBe(7)
   })
 
-  it('extracts per-file durations from partition json reports', async () => {
+  it('extracts per-file durations from compact partition timing reports', async () => {
     const root = await temporaryRoot()
-    const report = join(root, 'partition-1.report.json')
-    await writeFile(report, JSON.stringify({
-      testResults: [
-        { name: join(root, 'packages/a/tests/x.spec.ts'), startTime: 1000, endTime: 1500 },
-        { name: 'not-a-spec', startTime: 1, endTime: 2 },
-      ],
-    }))
-    const durations = collectPartitionDurations([report], root)
+    const report = join(root, 'partition-1.times.json')
+    await writeFile(report, JSON.stringify([
+      { file: 'packages/a/tests/x.spec.ts', duration: 500 },
+      { file: 'packages/a/tests/y.spec.ts', duration: 0 },
+      { file: 'packages/a/tests/invalid.spec.ts', duration: -1 },
+      { file: 'packages/a/tests/malformed.spec.ts', duration: 'unknown' },
+      null,
+      { duration: 10 },
+    ]))
+    const durations = collectPartitionDurations([report])
     expect(durations.get('packages/a/tests/x.spec.ts')).toBe(500)
+    expect(durations.get('packages/a/tests/y.spec.ts')).toBe(0)
+    expect(durations.size).toBe(2)
+  })
+
+  it.each(['null', '{}', '42', '"invalid"', '{'])('ignores corrupt timing metadata %s', async (contents) => {
+    const root = await temporaryRoot()
+    const report = join(root, 'partition.times.json')
+    await writeFile(report, contents)
+    expect(collectPartitionDurations([report])).toEqual(new Map())
   })
 })
 
@@ -457,14 +466,14 @@ describe('coverage partition coordinator', () => {
     const runCommand = vi.fn(async (command: CoverageCommand) => {
       await writeBlob(command)
       if (command.label === 'partition 1/2') {
-        const reportArgument = command.args.find(argument => argument.startsWith('--outputFile.json='))!
-        const reportPath = join(root, reportArgument.slice('--outputFile.json='.length))
-        const report = JSON.parse(await readFile(reportPath, 'utf8')) as { testResults: Array<{ name: string }> }
-        if (failure === 'omitted') report.testResults = []
-        if (failure === 'unexpected') report.testResults.push({ name: join(root, 'unassigned.spec.ts') })
-        if (failure === 'duplicate') report.testResults.push(report.testResults[0]!)
+        const reportArgument = command.args.find(argument => argument.startsWith('--outputFile.fileTimes='))!
+        const reportPath = join(root, reportArgument.slice('--outputFile.fileTimes='.length))
+        let report = JSON.parse(await readFile(reportPath, 'utf8')) as Array<{ file: string; duration: number }>
+        if (failure === 'omitted') report = []
+        if (failure === 'unexpected') report.push({ file: 'unassigned.spec.ts', duration: 0 })
+        if (failure === 'duplicate') report.push(report[0]!)
         await writeFile(reportPath, failure === 'malformed' ? '{}' : JSON.stringify(report))
-        if (failure === 'unnamed') await writeFile(reportPath, '{"testResults":[{}]}')
+        if (failure === 'unnamed') await writeFile(reportPath, '[{}]')
         if (failure === 'missing-report') await rm(reportPath)
       }
       return passed
@@ -556,9 +565,10 @@ describe('coverage partition coordinator', () => {
         '--maxWorkers=1',
         '--reporter=default',
         '--reporter=blob',
-        '--reporter=json',
         '--testTimeout=30000',
       ]))
+      expect(command.args).not.toContain('--reporter=json')
+      expect(command.args).toContain('--reporter=./scripts/coverage-file-times.ts')
       expect(command.args).not.toContain('--shard=1/3')
       expect(command.args.some(argument => argument.startsWith('--config='))).toBe(true)
       expect(command.env).toEqual({
@@ -575,6 +585,8 @@ describe('coverage partition coordinator', () => {
     expect(allConfigs).toContain('c.spec.ts')
     for (const source of partitionConfigs) {
       expect(source).toContain("from '../../vitest.config.ts'")
+      expect(source).toContain("from '../../scripts/coverage-fork-diagnostics.ts'")
+      expect(source).toContain('pool: coverageForkPool')
     }
     const mergeCommand = commands[3]
     if (mergeCommand === undefined) throw new Error('coverage merge command was not observed')
