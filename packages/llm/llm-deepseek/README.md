@@ -99,7 +99,7 @@ Cached ids are scoped by endpoint and credential, refreshed before expiry, inval
 
 Files mode bounds retained request versions by `maxRequestFilesBytes` and `maxImagesPerRequest`; inline fallback has its own base64 budget. Both remove an oldest prefix in configured byte or count quanta. Each omitted image gets its own model-visible placeholder with its display name or attachment id and, when available, normalized dimensions, media type, and current read-only path. The stepped high-watermark policy avoids rewriting an old request prefix after every new image.
 
-`reasoningEffort` selects the advertised default. Exact-model metadata exposes ordered `off`, `low`, `high`, and `max` efforts with selection guidance when deployment policy permits thinking. `low`, `high`, and `max` enable thinking and serialize as `output_config.effort`, while adapter-owned `off` sends `thinking.type: disabled` instead. An unsupported value fails with `UNSUPPORTED_REASONING_EFFORT` before network I/O, and `thinking: disabled` rejects any non-`off` effort at plugin load. Requests with `purpose: 'session-title'` force thinking off to reserve output for visible title text. The adapter forwards an explicit `temperature`; DeepSeek accepts it with thinking enabled but ignores its value in that mode.
+`reasoningEffort` selects the advertised default. Exact-model metadata lists `off`, `low`, `high`, and `max` in increasing effort order with selection guidance when deployment policy permits thinking. `low`, `high`, and `max` enable thinking and serialize as `output_config.effort`, while adapter-owned `off` sends `thinking.type: disabled` instead. An unsupported value fails with `UNSUPPORTED_REASONING_EFFORT` before network I/O, and `thinking: disabled` rejects any non-`off` effort at plugin load. The adapter forwards an explicit `temperature`; DeepSeek accepts it with thinking enabled but ignores its value in that mode.
 
 ### Dynamic configuration
 
@@ -213,7 +213,5 @@ These limits define where the adapter stops and future work begins. They are cur
 ### Dev Note
 
 None.
-
-**Runtime invariant:** No companion is published. This package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam.
 
 `deepseek-official` uses only its configured API-key reference; `deepseek-account` uses only the stored DSH grant for the account provider’s allowed inference origin. Both routes share the Messages transport with independently configured model and file settings. Missing or ineligible account credentials reject the request with a sign-in prompt; neither route falls back to the other. Chat and Files requests reject redirects. The account provider owns sign-out cancellation using running Agents’ logged request contexts, including tool execution; the transport receives the existing request abort signal.

@@ -414,11 +414,13 @@ describe('profile reconciliation settlement', () => {
     onTestFinished(async () => { release.resolve(undefined); await ctx.fiber.dispose() })
     let settled = false
     const operation = reconcileProfilePatches(ctx, [], NAME).then(() => { settled = true })
+    onTestFinished(async () => { release.resolve(undefined); await operation })
     await started.promise
-    expect([...ctx.loader.entries()].some(entry => entry.options.id === 'held')).toBe(false)
+    expect([...ctx.loader.entries()].find(entry => entry.options.id === 'held')?.fiber?.uid).toBeNull()
     expect(settled).toBe(false)
     release.resolve(undefined)
     await operation
+    expect([...ctx.loader.entries()].some(entry => entry.options.id === 'held')).toBe(false)
     expect(settled).toBe(true)
   })
 })

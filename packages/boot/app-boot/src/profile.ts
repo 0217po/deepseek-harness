@@ -25,12 +25,12 @@ import { createRequire } from 'node:module'
 import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
-import { applyEntryPatches, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import type { DshBundleManifest, DshPackageManifest } from '@deepseek-ai/dsh-package-manifest'
 import { evaluatePluginCompatibility, pluginCompatibilityWarning } from './plugin-compatibility.ts'
 import { readProfileVersionExemptions } from './profile-compatibility.ts'
 import { loadOverlayPatches } from './index.ts'
+import { applyProfilePatches, type ProfilePatch } from './profile-patches.ts'
 import { realModuleDirectory } from './profile-resolution/legacy-links.ts'
 
 /** Directory under the Harness home holding every profile. */
@@ -83,7 +83,7 @@ export interface ProfileLayer {
   /** Absolute paths of the bundle's patch files, in application order. */
   patchPaths: readonly string[]
   /** The parsed patch lists of every file, concatenated in application order. */
-  patches: PatchOptions[]
+  patches: ProfilePatch[]
 }
 
 /** A loaded profile: resolved bundle layers plus the user's own patch layer. */
@@ -97,7 +97,7 @@ export interface Profile {
   /** Absolute path of the profile's own patch file. */
   patchPath: string
   /** The profile's own patches; empty when the file is absent. */
-  patches: PatchOptions[]
+  patches: ProfilePatch[]
   /** Selected bundles that contributed no layer, in `dsh.profile.bundles` order, with why. */
   skippedBundles: SkippedBundle[]
 }
@@ -221,10 +221,17 @@ export const DEFAULT_PROFILE_BUNDLES: readonly string[] = ['@deepseek-ai/dsh-bas
  * [admission](../../../../.agents/notes/implemented/architecture/2026-09-21-experimental-capabilities-as-optional-bundles.md)).
  */
 export const OPTIONAL_BUNDLES: readonly string[] = [
+  '@deepseek-ai/dsh-experimental-session-search',
+  '@deepseek-ai/dsh-experimental-ralph-bundle',
+  '@deepseek-ai/dsh-experimental-terminal-bundle',
+  '@deepseek-ai/dsh-experimental-badge-skill-bundle',
+  '@deepseek-ai/dsh-experimental-session-titles-bundle',
   '@deepseek-ai/dsh-experimental-agent-team-profile',
   '@deepseek-ai/dsh-experimental-voice-input-bundle',
+  '@deepseek-ai/dsh-experimental-cot-translation-bundle',
   '@deepseek-ai/dsh-experimental-auto-review',
   '@deepseek-ai/dsh-experimental-inspector-profile',
+  '@deepseek-ai/dsh-experimental-tool-worktree',
 ]
 
 const PROFILE_PATCH_TEMPLATE = `# Your patch layer for this dsh profile, applied after every bundle layer:
@@ -440,7 +447,7 @@ export interface RuntimeResolutionOptions {
  */
 export async function createRuntimeResolution(
   options: RuntimeResolutionOptions,
-): Promise<RuntimeResolution> {
+): Promise<ProfileRuntimeResolution> {
   const { installAnchor, profile, home = resolveDshHome() } = options
   const profilesDir = join(home, PROFILES_DIR)
   const manifest = readOptionalProfileManifest(profile)
@@ -455,7 +462,7 @@ export async function createRuntimeResolution(
     : collectProfileScopePackages(profile, packageNames, profileDeclarers, profileVersions)
   const linkedRoots = profile === undefined ? [] : linkedProfileRoots(profile, profilesDir)
   // The Promise return type is the pre-stable API; construction has no asynchronous step.
-  return await Promise.resolve(Object.freeze({
+  return await Promise.resolve(new ProfileRuntimeResolution({ installAnchor, profileDir: profile?.dir, home }, {
     profilesDir,
     profileDir: profile?.dir,
     localPackageNames: Object.freeze(localPackageNames),
@@ -471,6 +478,54 @@ export async function createRuntimeResolution(
       })),
     ]),
   }))
+}
+
+/** Inputs a {@link ProfileRuntimeResolution} reuses to compute its successor. */
+interface ResolutionSource {
+  installAnchor: string
+  home: string
+  profileDir: string | undefined
+}
+
+/**
+ * A runtime resolution that remembers the inputs it was computed from. Worker environment data carries only its
+ * fields; the inputs stay private to the thread that computed it.
+ */
+export class ProfileRuntimeResolution implements RuntimeResolution {
+  readonly profilesDir: string
+  readonly profileDir: string | undefined
+  readonly localPackageNames: readonly string[]
+  readonly entries: readonly RuntimeResolutionEntry[]
+  readonly linkedRoots: readonly LinkedRoot[]
+  readonly #source: ResolutionSource
+
+  /**
+   * @param source - inputs of {@link createRuntimeResolution}, reused by {@link computeLatestResolution}.
+   * @param table - the computed package table.
+   */
+  constructor(source: ResolutionSource, table: RuntimeResolution) {
+    this.#source = source
+    this.profilesDir = table.profilesDir
+    this.profileDir = table.profileDir
+    this.localPackageNames = table.localPackageNames
+    this.entries = table.entries
+    this.linkedRoots = table.linkedRoots
+    Object.freeze(this)
+  }
+
+  /**
+   * Compute the latest generation from the same installation, profile directory, and Harness home, rereading the
+   * profile's manifest, bundle selection, and installed packages from disk, without retaining synthetic layers.
+   * With no profile directory, only installation packages are recomputed. This instance is unchanged.
+   * @returns a new resolution for the latest generation.
+   */
+  computeLatestResolution(): Promise<ProfileRuntimeResolution> {
+    const { installAnchor, home, profileDir } = this.#source
+    return createRuntimeResolution({
+      installAnchor, home,
+      ...profileDir === undefined ? {} : { profile: loadProfileDirectory('dsh', profileDir, installAnchor) },
+    })
+  }
 }
 
 /** Synthetic profiles used by direct callers may have no on-disk manifest. */
@@ -751,16 +806,16 @@ export function loadProfile(
 
 /**
  * Compose patch layers into the effective entry list over an empty root —
- * the same single `applyEntryPatches` call the boot include makes, so flag
- * derivation and config dumps see exactly what mounts.
+ * compile preset operations and apply the same native patch list as boot,
+ * so flag derivation and config dumps see exactly what mounts.
  * @param layers - patch lists in application order.
  * @param warn - sink for skipped-patch diagnostics; defaults to silent (boot repeats them).
  * @returns the composed entry list.
  */
 export function composeEntries(
-  layers: readonly PatchOptions[][], warn: (message: string) => void = () => {},
+  layers: readonly ProfilePatch[][], warn: (message: string) => void = () => {},
 ): EntryOptions[] {
-  return applyEntryPatches([], structuredClone(layers.flat()), (message: string, ...args: unknown[]) => {
+  return applyProfilePatches([], layers.flat(), (message: string, ...args: unknown[]) => {
     let index = 0
     warn(message.replace(/%C/g, () => JSON.stringify(args[index++])))
   })
