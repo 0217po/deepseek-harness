@@ -268,7 +268,7 @@ describe('Workspace state stream', () => {
     {
       name: 'a normal end before the baseline',
       items: [] as WorkspaceFollowFrame[],
-      message: 'ended before its opening item',
+      message: 'ended before its opening snapshot',
     },
   ])('reports $name as a terminal failure', async ({ items, message }, { mock, start }) => {
     const { remote } = await gatewayClient(mock, start)

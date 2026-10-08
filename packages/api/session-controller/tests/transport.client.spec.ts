@@ -695,7 +695,7 @@ describe('Session Client stream adapters', () => {
     before.start()
     await vi.waitFor(() => { expect(beforeFailed).toHaveBeenCalledOnce() })
     expect(beforeFailed.mock.calls[0]?.[0]).toMatchObject({
-      message: 'session control stream ended before its opening item',
+      message: 'session control stream ended before its opening snapshot',
     })
     await before.dispose()
 

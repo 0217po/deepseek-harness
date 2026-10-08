@@ -673,13 +673,6 @@ interface FaceAnalyzerOptions {
   readonly crossFaceLinks: Map<string, CrossFaceLink>
 }
 
-/** Direct `@Remote` choices read from one decorator. */
-interface DirectRemoteMarker {
-  readonly kind: 'direct'
-  readonly exportName?: string
-  readonly mode?: 'stream'
-}
-
 class FaceAnalyzer {
   private readonly root: string
   private readonly face: TypertFace
@@ -1135,7 +1128,7 @@ class FaceAnalyzer {
     binding: GatewayBinding,
     method: ts.MethodDeclaration,
     invocation:
-      | DirectRemoteMarker
+      | { readonly kind: 'direct'; readonly exportName?: string; readonly mode?: 'stream' }
       | { readonly kind: 'context'; readonly context: string; readonly exportName?: string },
   ): InvocationModel {
     if (visibilityOf(method) !== 'public' || hasModifier(method, ts.SyntaxKind.StaticKeyword)) {
@@ -1392,11 +1385,11 @@ class FaceAnalyzer {
   private remoteMarker(
     member: ts.ClassElement,
   ):
-    | DirectRemoteMarker
+    | { readonly kind: 'direct'; readonly exportName?: string; readonly mode?: 'stream' }
     | { readonly kind: 'context'; readonly context: string; readonly exportName?: string }
     | undefined {
     let found:
-      | DirectRemoteMarker
+      | { readonly kind: 'direct'; readonly exportName?: string; readonly mode?: 'stream' }
       | { readonly kind: 'context'; readonly context: string; readonly exportName?: string }
       | undefined
     for (const decorator of ts.canHaveDecorators(member) ? ts.getDecorators(member) ?? [] : []) {
