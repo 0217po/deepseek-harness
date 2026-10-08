@@ -462,6 +462,33 @@ describe('new-session default', () => {
   })
 })
 
+it('rejects another preset selection until resource cleanup and the first commit finish', async () => {
+  const ctx = await mounted()
+  const session = freshSession('concurrent-preset-selection')
+  const cleaning = Promise.withResolvers<undefined>()
+  const released = Promise.withResolvers<undefined>()
+  const unregister = ctx.sandboxPolicy.registerResource(session.id, { release: () => {
+    cleaning.resolve(undefined)
+    return released.promise
+  } })
+  const switching = ctx.permissionPresets.set(session, 'danger-full-access')
+  try {
+    await cleaning.promise
+    await expect(ctx.permissionPresets.set(session, 'workspace-write')).rejects.toThrow('another preset change is still in progress')
+    expect(session.snapshotEvents()).toEqual([])
+    released.resolve(undefined)
+    await switching
+    expect(ctx.permissionPresets.current(session)).toBe('danger-full-access')
+    await ctx.permissionPresets.set(session, 'workspace-write')
+    expect(ctx.permissionPresets.current(session)).toBe('workspace-write')
+  } finally {
+    released.resolve(undefined)
+    await Promise.allSettled([switching])
+    unregister()
+    await ctx.fiber.dispose()
+  }
+})
+
 it('revalidates Auto after resource cleanup and commits no permission events if its integration disappeared', async () => {
   const ctx = await mounted()
   const auto = await mountAuto(ctx)

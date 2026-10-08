@@ -61,6 +61,19 @@ async function setup(execute?: (bindings: HostBindings, spec: PtcRunSpec) => Pro
 }
 
 describe('workflow host callback validation', () => {
+  it('returns the workflow outcome through a REPL expression without retaining an owner', async () => {
+    const { runtime, start } = await setup(async (bindings, spec) => {
+      expect(spec.stateOwner).toBeUndefined()
+      const evaluate = new Function('workflowHost', `return (async () => (${spec.program}))()`) as (host: HostBindings) => Promise<PtcRunResult['value']>
+      return { logs: [], value: await evaluate(bindings) }
+    })
+    const format = vi.spyOn(runtime, 'programFormat', 'get').mockReturnValue('repl')
+    const handle = start()
+    try {
+      expect(await handle.result).toEqual({ value: null, stopReason: 'completed', agentsStarted: 0 })
+    } finally { await handle.dispose(); format.mockRestore() }
+  })
+
   it('settles a failed directory lookup when the runtime cannot confine execution', async () => {
     const { ctx, runtime, start } = await setup()
     runtime.policyMode = undefined
