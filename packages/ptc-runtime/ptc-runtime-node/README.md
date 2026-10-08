@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Execute model-written TypeScript with host-provided async functions. The default `per-call` mode starts a fresh Node process under the same platform sandbox policy as Bash. Opt-in `in-memory` mode retains an unsandboxed REPL across calls for each Agent. Both return captured logs, an exact JSON value, or a structured failure. Direct Node APIs remain available within the selected restrictions. Elapsed deadlines, output bounds and a V8 heap limit constrain execution; cancellation and per-call completion terminate the managed process range. A requested restricted mode fails when its sandbox backend is unavailable.
+Execute model-written TypeScript with host-provided async functions. The default `per-call` mode starts a fresh Node process under the same platform sandbox policy as Bash. Opt-in `persistent-in-memory` mode retains a confined REPL across calls for each Agent. Both return captured logs, an exact JSON value, or a structured failure. Direct Node APIs remain available within the selected restrictions. Elapsed deadlines, output bounds and a V8 heap limit constrain execution; cancellation and per-call completion terminate the managed process range. A requested restricted mode fails when its sandbox backend is unavailable.
 
 ## Table of Contents
 
@@ -46,7 +46,7 @@ Configure the provider row after its required services are available:
 
 | Field | Default | Meaning |
 |---|---|---|
-| `executionMode` | `per-call` | `per-call` starts fresh processes under file policy; `in-memory` retains an unsandboxed REPL per owner |
+| `executionMode` | `per-call` | `per-call` starts fresh processes under file policy; `persistent-in-memory` retains a confined REPL per owner |
 | `timeoutMs` | `120,000` | Default elapsed execution deadline, including nested tool and approval waits |
 | `maxTimeoutMs` | `600,000` | Elapsed deadline ceiling applied by the resolver |
 | `maxOutputBytes` | `67,108,864` | Combined serialized logs and completion or diagnostic budget |
@@ -55,7 +55,7 @@ Configure the provider row after its required services are available:
 | `maxPendingCalls` | `128` | Maximum simultaneous host binding calls |
 | `graceMs` | `3,000` | Managed termination and output-drain grace |
 | `nodeExecutable` | Current Node executable | Executable resolved in the subprocess execution world |
-| `bootstrapPath` | Package bootstrap | Optional absolute path in that world: `process.js` for `per-call`, `persistent-process.js` for `in-memory` |
+| `bootstrapPath` | Package bootstrap | Optional absolute path in that world: `process.js` for `per-call`, `persistent-process.js` for `persistent-in-memory` |
 
 The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-ptc-runtime-node) defines accepted config fields. `resolve(request)` defaults cwd to the sandbox policy workspace root and supplies the numeric or null deadline choice and execution policy; `run(spec)` accepts those resolved inputs and does not fill missing values.
 
@@ -68,21 +68,21 @@ Direct filesystem, network and subprocess operations remain Node operations, sub
 <a id="persistent-repl"></a>
 ### In-memory mode
 
-Set `executionMode: in-memory` on the existing `@deepseek-ai/dsh-ptc-runtime-node` plugin to retain state. Both modes require `fs`, `subprocess`, `sandbox` and `sandboxPolicy`; in-memory execution does not apply a file sandbox and rejects explicit sandbox policies. Enable it deliberately with a profile patch:
+Set `executionMode: persistent-in-memory` on the existing `@deepseek-ai/dsh-ptc-runtime-node` plugin to retain state. Both modes require `fs`, `subprocess`, `sandbox` and `sandboxPolicy`; both apply the selected file sandbox policy. Enable it deliberately with a profile patch:
 
 ```yaml
 - id: ptc-runtime
   config:
-    executionMode: in-memory
+    executionMode: persistent-in-memory
 ```
 
 Save the patch and pass its path to `dsh headless --patch <path>` in a composition with PTC tool presentation. The default `per-call` mode retains no program memory between calls. Changing the configuration reloads the provider and releases its execution resources. Packaged single-executable hosts require `nodeExecutable` pointing to Node and `bootstrapPath` pointing to this package's built `persistent-process.js` for in-memory execution.
 
 Each live Agent keeps its own process and top-level variables, functions, and imported modules across `run_code` calls and turns. Use `await import(...)`, `console.log(...)`, and a final JSON expression; top-level `return` is not supported. Assignments to undeclared names create retained globals under Node REPL’s non-strict evaluation. `_` and `_error` are ordinary retained globals, without interactive REPL result setters. Node REPL declaration rules apply, including errors on redeclaring existing `let`, `const`, or `class` names; assign to a mutable binding or choose a new name. A leading `{ ... }` is a statement block and can contain top-level await and temporary declarations; parenthesize an object expression to return it. Retained functions and saved tool methods call the current evaluation's bindings. All tool calls must be awaited; callbacks from a completed evaluation cannot invoke tools in a later evaluation.
 
-Memory is best-effort and never saved to disk. Restart, Agent disposal, provider unload, cancellation, timeout, protocol failure, output overflow, or process exit clears it. Missing variables raise normal reference errors; reacquire handles and recreate declarations. Exceptions in the active evaluation settle once and preserve earlier mutations. Exceptions thrown by callbacks from a completed evaluation are not reported in a later result; await asynchronous work before completing an evaluation. The Session still records programs, tool dispatches and visible results; restoring a Session or forking an Agent starts with empty memory. Each evaluation resets the process working directory to its resolved cwd; program calls to `process.chdir()` do not persist across evaluations. Direct Node access remains unsandboxed; explicit sandbox policies are rejected.
+Memory is best-effort and never saved to disk. Restart, Agent disposal, provider unload, cancellation, timeout, protocol failure, output overflow, or process exit clears it. Missing variables raise normal reference errors; reacquire handles and recreate declarations. Exceptions in the active evaluation settle once and preserve earlier mutations. Exceptions thrown by callbacks from a completed evaluation are not reported in a later result; await asynchronous work before completing an evaluation. The Session still records programs, tool dispatches and visible results; restoring a Session or forking an Agent starts with empty memory. Each evaluation resets the process working directory to its resolved cwd; program calls to `process.chdir()` do not persist across evaluations. Direct Node access follows the resolved file policy. A retained owner cannot change mode, workspace root or Session identity until its environment is released.
 
-Service consumers pass an object as `stateOwner` to reuse its environment and await `release(owner)` when finished. Requests without an owner run in temporary processes. Concurrent runs for one owner reject until execution and required cleanup complete; distinct owners may run concurrently. An idle environment has no expiration timer and keeps its process until release or failure. Raw stdout/stderr have no evaluation identity: bytes received during an evaluation share its output budget, even when written by an earlier child process; idle stdout is discarded and idle stderr retains only the bounded diagnostic tail. Await child-process completion before ending an evaluation. Process-exit diagnostics include the exit code and retained stderr tail; idle failures are written to the host logger.
+Service consumers pass an object as `stateOwner` to reuse its environment and await `release(owner)` when finished. Requests without an owner run in temporary processes. The runtime registers each Session-owned process with `sandboxPolicy`. Its `setMode()` cancels admitted operations and awaits registered cleanup before recording a changed mode, and returns a variable-reset notice. Permission presets use the same operation. A one-time approved escalation uses a separate environment and awaits its cleanup before returning; it cannot read the standing environment's variables or retain new declarations. Concurrent runs for one owner reject until execution and required cleanup complete; distinct owners may run concurrently. An idle environment has no expiration timer and keeps its process until release or failure. Raw stdout/stderr have no evaluation identity: bytes received during an evaluation share its output budget, even when written by an earlier child process; idle stdout is discarded and idle stderr retains only the bounded diagnostic tail. Await child-process completion before ending an evaluation. Process-exit diagnostics include the exit code and retained stderr tail; idle failures are written to the host logger. If process observation fails during cleanup, releasing the owner retries termination; new runs remain blocked until cleanup succeeds. Pipes that fail to drain after confirmed process exit produce a diagnostic but do not prevent releasing the environment.
 
 ### Deadlines and cancellation
 
@@ -128,7 +128,6 @@ Source execution loads an erasable-only bootstrap closure without relying on sib
 | [`src/bootstrap.ts`](src/bootstrap.ts) | Program evaluation, binding proxies and output capture |
 | [`src/channel.ts`](src/channel.ts) | Framing, bounded writes and protocol failures |
 | [`src/output-ledger.ts`](src/output-ledger.ts) | Host accounting for the outer result |
-| — | No runtime invariant companion is published; framing and process cleanup are enforced across the process boundary rather than through independent same-process observations. |
 
 </details>
 
@@ -164,7 +163,7 @@ These limits qualify the execution guarantees and retained output.
 - **Confinement inherits the selected backend's limits** — full and partial enforcement are reported separately; sandbox policy and managed-process containment are distinct guarantees.
 - **The heap cap is not a process-tree memory limit** — native allocations and descendant memory are outside the V8 old-generation bound. No process-tree CPU meter is supplied.
 - **Cleanup inherits subprocess observability** — escaped descendants on a fallback platform may remain outside the managed range; see the subprocess provider's stated limits.
-- **Default execution is one-shot** — retained state requires `executionMode: in-memory`; neither mode offers a yield/wait API.
+- **Default execution is one-shot** — retained state requires `executionMode: persistent-in-memory`; neither mode offers a yield/wait API.
 - **In-memory environments retain one process per live owner** — idle owners keep their process and heap until explicit release, owner disposal or failure. Fan-out can retain many processes; idle expiration remains deferred.
 - **Output caps reject rather than retain every byte** — spill can preserve only the bounded result delivered by this provider.
 - **Bindings are bounded at transport admission** — control limits do not bound the memory a host binding allocates while producing its result.

@@ -64,7 +64,7 @@ interface SessionTitleSnapshot extends SessionTitleEventData {
 
 ## 辅助请求记录
 
-共享 LLM 辅助组件会在调用模型前，记录每一项已经过验证且可分发的标题请求。即使后续生成失败，载荷仍会复现模型可见的系统输入与消息输入、路由、输出上限、提供方归属和源消息归因。
+共享 LLM 辅助组件会在调用模型前，记录每一项已经过验证且可分发的标题请求。即使后续生成失败，载荷仍会复现模型可见的系统输入与消息输入、路由、输出上限、解析后的推理强度、提供方归属和源消息归因。
 
 ```ts type-equiv
 /** Exact model-visible request recorded before one auxiliary title dispatch. */
@@ -81,6 +81,8 @@ interface SessionTitleLlmRequestEventData {
   readonly messages: Message[]
   /** Exact auxiliary output-token cap. */
   readonly maxTokens: number
+  /** Resolved reasoning effort when recorded; older requests can omit it. */
+  readonly reasoningEffort?: ReasoningEffortId
 }
 ```
 
@@ -191,7 +193,8 @@ async refresh(session: Session, signal?: AbortSignal): Promise<SessionTitleSnaps
 
 /**
  * Register the sole optional title provider. Disposal aborts its pending and
- * active work before another provider may register.
+ * active work; a replacement may register once disposal has started, and the
+ * closing provider's late results never commit.
  * @param provider - provider identity, cadence, and generation function.
  * @returns exact Cordis effect disposer, which settles after active calls quiesce.
  */

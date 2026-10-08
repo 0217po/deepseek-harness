@@ -1,6 +1,6 @@
 - id: ptc-runtime
   config:
-    executionMode: in-memory
+    executionMode: persistent-in-memory
 - id: tools
   config:
     mode: ptc

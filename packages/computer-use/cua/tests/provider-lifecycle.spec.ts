@@ -434,7 +434,7 @@ it('adds an installation-owned bridge URL when persistent PTC is available', asy
   await f.ctx.plugin(FileSystem)
   await f.ctx.plugin(Sandbox)
   await f.ctx.plugin(SandboxPolicy)
-  await f.ctx.plugin(NodeRuntime, { executionMode: 'in-memory' })
+  await f.ctx.plugin(NodeRuntime, { executionMode: 'persistent-in-memory' })
   expect(await text()).toContain(new URL('../lib/bridge.js', import.meta.url).href)
 })
 

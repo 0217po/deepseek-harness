@@ -4,12 +4,13 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import SandboxPolicy, { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
+import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import { Session, SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import ApprovalService, { type ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import type PluginManager from '../src/index.ts'
+import type { BundleInfo } from '../src/types.ts'
 import * as tool from '../src/tools.ts'
 
 function resultText(result: Awaited<ReturnType<ToolRuntime['execute']>>): string {
@@ -80,17 +81,51 @@ it('preserves selected bundle load errors in the agent list result', async () =>
   `)
 })
 
+it('exposes an absent Official bundle installation target without display metadata', async () => {
+  const { manager, call } = await fixture()
+  const offered: BundleInfo = {
+    name: '@deepseek-ai/dsh-subagent-codex', official: true, availability: 'missing',
+    installed: false, enabled: false, optional: false, removable: false, rows: [], overrides: [],
+    installTarget: { spec: '@deepseek-ai/dsh-subagent-codex@1.2.3', version: '1.2.3' },
+    meta: { title: 'Codex subagent' },
+  }
+  manager.listBundles.mockResolvedValue([offered])
+  expect(JSON.parse(resultText(await call({ action: 'list_bundles' })))).toMatchInlineSnapshot(`
+    {
+      "entries": [
+        {
+          "availability": "missing",
+          "enabled": false,
+          "installTarget": {
+            "spec": "@deepseek-ai/dsh-subagent-codex@1.2.3",
+            "version": "1.2.3",
+          },
+          "installed": false,
+          "name": "@deepseek-ai/dsh-subagent-codex",
+          "official": true,
+          "optional": false,
+          "overrides": [],
+          "removable": false,
+          "rows": [],
+        },
+      ],
+      "nextOffset": null,
+      "total": 1,
+    }
+  `)
+})
+
 it('checks the calling session on each execution, including after permission is revoked', async () => {
-  const { call, manager } = await fixture()
+  const { ctx, call, manager } = await fixture()
   const id = SessionId('manager-permissions')
   const session = Session.create(id, undefined, { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false })
   const agent = { session } as unknown as Agent
-  setSandboxMode(session, 'workspace-write')
+  await ctx.sandboxPolicy.setMode(session, 'workspace-write')
   expect((await call({ action: 'list_plugins' }, agent)).isError).toBe(true)
   expect(manager.listPlugins).not.toHaveBeenCalled()
-  setSandboxMode(session, 'danger-full-access')
+  await ctx.sandboxPolicy.setMode(session, 'danger-full-access')
   expect((await call({ action: 'list_plugins' }, agent)).isError).toBe(false)
-  setSandboxMode(session, 'read-only')
+  await ctx.sandboxPolicy.setMode(session, 'read-only')
   expect((await call({ action: 'list_plugins' }, agent)).isError).toBe(true)
   expect(manager.listPlugins).toHaveBeenCalledTimes(1)
 })
@@ -144,7 +179,7 @@ it('rejects never policy without prompting and keeps full-access calls prompt-fr
   const agent = activeAgent()
   expect((await call({ action: 'set_plugin', target: 'include:demo', enabled: true }, agent)).isError).toBe(true)
   expect(manager.setPluginEnabled).not.toHaveBeenCalled()
-  setSandboxMode(agent.session, 'danger-full-access')
+  await ctx.sandboxPolicy.setMode(agent.session, 'danger-full-access')
   expect((await call({ action: 'set_plugin', target: 'include:demo', enabled: true }, agent)).isError).toBe(false)
   expect(manager.setPluginEnabled).toHaveBeenCalledTimes(1)
   expect(prompted).not.toHaveBeenCalled()
@@ -195,10 +230,10 @@ it('keeps UI translation metadata out of model-facing plugin and bundle lists', 
     entries: [{ entryId: 'include:plugin', enabled: true }], total: 1, nextOffset: null,
   })
   manager.listBundles.mockImplementationOnce(async () => [{
-    name: 'bundle', enabled: true, meta, rows: [{ rowId: 'plugin', moduleName: 'plugin', meta }],
+    name: 'bundle', source: 'bundle@^1.0.0', enabled: true, meta, rows: [{ rowId: 'plugin', moduleName: 'plugin', meta }],
   }])
   expect(JSON.parse(resultText(await call({ action: 'list_bundles' })))).toEqual({
-    entries: [{ name: 'bundle', enabled: true, rows: [{ rowId: 'plugin', moduleName: 'plugin' }] }], total: 1, nextOffset: null,
+    entries: [{ name: 'bundle', source: 'bundle@^1.0.0', enabled: true, rows: [{ rowId: 'plugin', moduleName: 'plugin' }] }], total: 1, nextOffset: null,
   })
 })
 

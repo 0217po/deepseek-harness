@@ -64,7 +64,7 @@ interface SessionTitleSnapshot extends SessionTitleEventData {
 
 ## Auxiliary request record
 
-The shared LLM helper records each validated, dispatchable title request before calling the model. The payload reproduces the model-visible system and message input, routing, output limit, provider ownership, and source-message attribution even when generation later fails.
+The shared LLM helper records each validated, dispatchable title request before calling the model. The payload reproduces the model-visible system and message input, routing, output limit, resolved reasoning effort, provider ownership, and source-message attribution even when generation later fails.
 
 ```ts type-equiv
 /** Exact model-visible request recorded before one auxiliary title dispatch. */
@@ -81,6 +81,8 @@ interface SessionTitleLlmRequestEventData {
   readonly messages: Message[]
   /** Exact auxiliary output-token cap. */
   readonly maxTokens: number
+  /** Resolved reasoning effort when recorded; older requests can omit it. */
+  readonly reasoningEffort?: ReasoningEffortId
 }
 ```
 
@@ -191,7 +193,8 @@ async refresh(session: Session, signal?: AbortSignal): Promise<SessionTitleSnaps
 
 /**
  * Register the sole optional title provider. Disposal aborts its pending and
- * active work before another provider may register.
+ * active work; a replacement may register once disposal has started, and the
+ * closing provider's late results never commit.
  * @param provider - provider identity, cadence, and generation function.
  * @returns exact Cordis effect disposer, which settles after active calls quiesce.
  */

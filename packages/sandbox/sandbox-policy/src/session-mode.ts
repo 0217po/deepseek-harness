@@ -18,7 +18,6 @@
  * @module dsh-sandbox-policy/session-mode
  */
 
-import type { Session } from '@deepseek-ai/dsh-session'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 
 declare module '@deepseek-ai/dsh-session/types' {
@@ -40,16 +39,3 @@ declare module '@deepseek-ai/dsh-session/types' {
 
 /** Every {@link SandboxMode}, for option advertisement and runtime validation of untrusted mode strings. */
 export const SANDBOX_MODES: readonly SandboxMode[] = ['read-only', 'workspace-write', 'danger-full-access']
-
-/**
- * THE write path for a session's sandbox-mode override: appends exactly one
- * `sandbox/mode` event — the switch IS its event; nothing mutates mode state
- * out of band. Takes effect on the session's next confined call (bash or fs)
- * — consumers read the shared projection state.
- * @param session - the session the override belongs to.
- * @param mode - the mode every subsequent confined call in this session runs
- *   under (until the next switch).
- */
-export function setSandboxMode(session: Session, mode: SandboxMode): void {
-  session.append('sandbox/mode', { mode })
-}

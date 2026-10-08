@@ -22,7 +22,7 @@ Host 在子进程启动时保留 `ELECTRON_RUN_AS_NODE`；bootstrap 在求值前
 
 文件模式、观察到的拒绝与强制完整性通过 `PtcRunResult.sandbox` 独立于程序结果传递。所需沙箱后端无法启动时，受限执行失败。完整访问是显式策略模式。程序成功不证明完整强制能力，`process` 描述符与额外控制管道也不声明多租户隔离。
 
-私有 Python 提供方保留现有执行实现与配置的经过时间截止。其解析器接受 cwd，但拒绝显式文件策略或单次 timeout 覆盖；能力描述符不会静默授予不受支持的保护。
+[实验性 Python 提供方](../../../../packages/experimental/ptc-runtime-python/README.zh.md)共享已解析文件策略与沙箱诊断，同时保留本地 Unix 执行和配置的经过时间截止。仍不支持单次 timeout 覆盖。
 
 ### 控制与生命周期
 
@@ -34,7 +34,7 @@ Host 在子进程启动时保留 `ELECTRON_RUN_AS_NODE`；bootstrap 在求值前
 
 默认经过时间截止为 120 秒，默认上限为 600 秒。可信服务消费方可以请求 `timeoutMs: null` 来禁用该定时器；[工作流沙箱复用](2026-09-13-workflow-ptc-sandbox-reuse.zh.md)负责这种由调用方控制的生命周期。省略 timeout 或使用数值的请求（包括面向模型的 `run_code`）保留数值默认值与上限。启用的截止包括运行时准备以及嵌套工具或审批等待。V8 老生代内存、序列化外层输出与控制通信具有独立配置的上限。堆限制不包含原生分配和后代内存，经过时间也不是进程树 CPU 预算。
 
-显式启用的[内存保留执行模式](2026-09-23-best-effort-persistent-ptc.zh.md)在显式完全访问下保留可丢失的内存；本决定继续负责默认的受约束执行模式。
+显式启用的[内存保留执行模式](2026-09-23-best-effort-persistent-ptc.zh.md)在相同文件策略下保留可丢弃内存；[常驻进程权限](2026-10-08-persistent-ptc-sandbox.zh.md)负责策略切换和临时提权。
 
 ## 考虑过的替代方案
 

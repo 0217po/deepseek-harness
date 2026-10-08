@@ -70,7 +70,7 @@ Native preparation serializes compiler checks and publication with the shared fi
 
 ### Connect an external execution environment
 
-To run through persistent PTC, add `--patch packages/computer-use/cua/examples/persistent-ptc.cordis.yml` after the macOS overlay. This provider keeps variables for the live Agent and runs without a file sandbox. The caller imports the bridge and supplies the current authorized `tools.cua` binding. Persistent PTC receives an installation-owned bridge file URL in its CUA instructions, so the project does not need to install this package. The example below is for an external host that resolves the package from its own installation and supplies `tools`; the package does not install a global object or keep variables alive:
+To run through persistent PTC, add `--patch packages/computer-use/cua/examples/persistent-ptc.cordis.yml` after the macOS overlay. This provider keeps variables for the live Agent and applies the selected file sandbox policy. The caller imports the bridge and supplies the current authorized `tools.cua` binding. Persistent PTC receives an installation-owned bridge file URL in its CUA instructions, so the project does not need to install this package. The example below is for an external host that resolves the package from its own installation and supplies `tools`; the package does not install a global object or keep variables alive:
 
 ```javascript
 import { connectCua } from '@deepseek-ai/dsh-cua/bridge'

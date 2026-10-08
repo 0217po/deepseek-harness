@@ -2,7 +2,7 @@
 
 English | [中文](permission-presets.zh.md)
 
-The permission-preset layer of [dsh-permission-presets](../../packages/interaction/permission-presets) (`ctx.permissionPresets`, `PermissionPresetService`) bundles the two independent enforcement knobs — [sandbox mode](sandbox.md) (`sandbox/mode`) and [approval policy](approval.md) (`approval/policy`) — into named presets a client offers as one Permissions selector. The configured table owns future-session defaults, while the fixed `registerAuto(admit)` hook lets the [Auto review](../../packages/experimental/auto-review/README.md) integration publish its current-session-only option for one effect lifetime. The layer is optional and owns no execution policy: prompt narration and replay keep reading their knob folds, while Auto review owns the additional enforcement. The [package README](../../packages/interaction/permission-presets/README.md) owns composition status and limitations; the [sandbox switching design](../../.agents/notes/implemented/feature/2026-07-06-sandbox.md) owns the original knob rationale.
+The permission-preset layer of [dsh-permission-presets](../../packages/interaction/permission-presets) (`ctx.permissionPresets`, `PermissionPresetService`) bundles the two independent enforcement knobs — [sandbox mode](sandbox.md) (`sandbox/mode`) and [approval policy](approval.md) (`approval/policy`) — into named presets a client offers as one Permissions selector. The configured table owns future-session defaults, while the fixed `registerAuto(admit)` hook lets the [Auto review](../../packages/experimental/auto-review/README.md) integration publish its current-session-only option for one effect lifetime. The layer is optional and owns no execution policy: prompt narration and replay keep reading their knob folds, while Auto review owns the additional enforcement. The [package README](../../packages/interaction/permission-presets/README.md) owns composition status and limitations; the [historical sandbox switching design](../../.agents/notes/archived/feature/2026-07-06-sandbox.md) records the original knob rationale.
 
 Source: [`packages/interaction/permission-presets/src/index.ts`](../../packages/interaction/permission-presets/src/index.ts)
 
@@ -70,7 +70,7 @@ interface PresetOption {
 
 ## Switching and the `permission/preset` event
 
-`set(session, name)` resolves the preset (unknown names throw), runs Auto admission when applicable, appends a log-only `permission/preset` event unless `name` is already the effective preset, then writes each knob through its own setter — `setSandboxMode` from [dsh-sandbox-policy](../../packages/sandbox/sandbox-policy) and `setApprovalPolicy` from [dsh-user-approval](../../packages/interaction/user-approval) — only when that knob's effective value changes. The selection event precedes the knob events in the same turn, and re-selecting the effective preset appends nothing.
+`set(session, name)` validates the preset and Auto admission, awaits [sandbox-policy](../../packages/sandbox/sandbox-policy) to release resources and commit a changed file policy, then records a changed preset identity and approval policy. It returns resource-reset notices. The file-policy owner coordinates cleanup for all callers, including callers that select a sandbox mode directly. Selecting the effective preset again appends nothing.
 
 `permission/preset` is durable, log-only user intent: it stays out of the model transcript (the knob events own the model-visible consequences through their consumers), and it exists so `current()` can preserve which preset the user chose when two presets share a bundle. The `permissions` projection folds that selection with both knob events and retains the `session/end-seed` boundary used to distinguish a restored empty seed from a fresh session; replay needs no catch-up state or raw-log rescan. A restored `auto` selection requires the live Auto registration before Agent publication. The complete event declaration is in the [persistence log event catalog](../persistence-catalog.md); the method signatures are in the generated [service catalog](#ctxpermissionpresets--permissionpresetservice).
 
@@ -132,12 +132,13 @@ resolve(name: string): PresetSpec
 optionOf(name: string): PresetOption
 
 /**
- * Record a changed preset, then update each changed knob through its own
- * setter. Selecting the effective preset again appends nothing.
+ * Await file-policy cleanup, then record the changed preset and approval policy.
+ * Selecting the effective preset again appends nothing.
  * @param session - the session the switch belongs to.
- * @param name - the preset to switch to; unknown names throw.
+ * @param name - the preset to switch to; unknown names reject.
+ * @returns Notices after old execution resources are released and the new preset is recorded.
  */
-set(session: Session, name: string): void
+set(session: Session, name: string): Promise<string[]>
 ```
 
 Types: [Session](session.md)

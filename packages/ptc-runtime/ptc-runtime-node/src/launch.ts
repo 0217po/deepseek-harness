@@ -7,7 +7,7 @@ import type { FileSystem } from '@deepseek-ai/dsh-fs'
 export interface LaunchConfig {
   /** Executable in the subprocess world; defaults to the current Node executable. */
   nodeExecutable?: string
-  /** Absolute preinstalled bootstrap matching executionMode: process.js for per-call, persistent-process.js for in-memory. */
+  /** Absolute preinstalled bootstrap matching executionMode: process.js for per-call, persistent-process.js for persistent-in-memory. */
   bootstrapPath?: string
 }
 

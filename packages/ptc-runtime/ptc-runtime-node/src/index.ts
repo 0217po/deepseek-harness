@@ -1,4 +1,5 @@
 /** Node PTC execution with configurable per-call processes or retained in-memory REPL state. */
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { stripTypeScriptTypes } from 'node:module'
 import { isAbsolute } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -30,7 +31,7 @@ const STRIP_SUFFIX = '\n}'
 function messageOf(error: unknown): string { return error instanceof Error ? error.message : String(error) }
 function record(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 
-/** Node provider; per-call execution uses file policy, while in-memory execution has full host access. */
+/** Node execution under file policy, with optional owner-scoped retained memory. */
 export class NodePtcRuntime extends PtcRuntime {
   static inject = ['fs', 'subprocess', 'sandbox', 'sandboxPolicy']
   static Config = NodeConfig
@@ -51,7 +52,7 @@ export class NodePtcRuntime extends PtcRuntime {
     super(ctx)
     this.config = { ...config, nodeExecutable: config.nodeExecutable ?? process.execPath } as ResolvedConfig
     validateConfig(this.config)
-    if (this.config.executionMode === 'in-memory') {
+    if (this.config.executionMode === 'persistent-in-memory') {
       this.inMemory = new InMemoryExecution(ctx, this.config)
       return
     }
@@ -63,7 +64,7 @@ export class NodePtcRuntime extends PtcRuntime {
     }, 'Node ptc-runtime cleanup')
   }
 
-  override get sandboxMode(): SandboxMode | undefined { return this.inMemory ? undefined : this.ctx.sandboxPolicy.defaultMode }
+  override get sandboxMode(): SandboxMode | undefined { return this.ctx.sandboxPolicy.defaultMode }
 
   override release(owner: object): Promise<void> {
     return this.inMemory ? this.inMemory.release(owner) : super.release(owner)
@@ -121,6 +122,7 @@ export class NodePtcRuntime extends PtcRuntime {
     bindings: Map<string, PtcBindingNamespace>,
     controller: AbortController,
   ): Promise<PtcRunResult> {
+    const replyBinding = AsyncLocalStorage.bind(replyToBinding)
     const output = new OutputLedger(this.config.maxOutputBytes)
     const logs: string[] = []
     const sandbox: PtcRunSandbox = { mode: policy.mode, denied: false }
@@ -137,6 +139,17 @@ export class NodePtcRuntime extends PtcRuntime {
     let parsing = true
     const wallTimer = spec.timeoutMs === null ? undefined
       : setTimeout(() => { timedOut = true; controller.abort('execution deadline reached') }, spec.timeoutMs)
+    let stopping: Promise<boolean> | undefined
+    let unregister: (() => void) | undefined
+    const stop = (): Promise<boolean> => {
+      if (stopping !== undefined) return stopping
+      const cleanup = handle === undefined ? Promise.resolve(true) : terminateProcess(handle, this.config.graceMs)
+      stopping = cleanup.then((drained) => { unregister?.(); return drained }, (error: unknown) => {
+        stopping = undefined
+        throw error
+      })
+      return stopping
+    }
     const finish = (failure?: PtcRunFailure, value?: PtcJsonValue): void => {
       if (settled) return
       settled = true
@@ -144,9 +157,9 @@ export class NodePtcRuntime extends PtcRuntime {
       signal.removeEventListener('abort', onAbort)
       channel?.close()
       void (async () => {
-        if (handle !== undefined) {
+        if (handle !== undefined || unregister !== undefined) {
           try {
-            const drained = await terminateProcess(handle, this.config.graceMs)
+            const drained = await stop()
             if (!drained && failure === undefined) {
               failure = { kind: 'worker-exit', message: 'Node process output did not close cleanly' }
             }
@@ -199,6 +212,11 @@ export class NodePtcRuntime extends PtcRuntime {
       if (packaged) {
         env.DSH_PTC_RUNTIME_NODE = '1'
         env.NODE_OPTIONS = heapFlag
+      }
+      if (policy.sessionId !== undefined) {
+        unregister = this.ctx.sandboxPolicy.registerResource(policy.sessionId, {
+          release: async () => { controller.abort(new Error('sandbox mode is changing')); await stop() },
+        })
       }
       handle = this.ctx.subprocess.spawn({ argv: confined?.argv ?? argv, cwd: spec.cwd, env, stdio: { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', control: 'pipe' }, graceMs: this.config.graceMs, signal })
       const launched = handle
@@ -287,7 +305,7 @@ export class NodePtcRuntime extends PtcRuntime {
             if (++pending > this.config.maxPendingCalls || (pendingBytes += bytes) > this.config.maxMessageBytes) { protocolFailure('pending binding calls exceed configured limits'); return }
             const id = raw.id
             void (async () => {
-              const reply = await replyToBinding(id, fn, args).finally(() => {
+              const reply = await replyBinding(id, fn, args).finally(() => {
                 pending -= 1
                 pendingBytes -= bytes
               })

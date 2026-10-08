@@ -14,7 +14,7 @@ const NO_INITIAL_FRAME = Symbol('no initial frame')
 async function setup(config: Config = {}) {
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose() })
-  const { runtime, fiber } = await mountRuntime(ctx, { ...config, executionMode: 'in-memory' })
+  const { runtime, fiber } = await mountRuntime(ctx, { ...config, executionMode: 'persistent-in-memory' })
   const control = new Duplex({
     read() {},
     write(chunk: Buffer, _encoding, callback) {
@@ -187,11 +187,11 @@ describe('persistent PTC host protocol', () => {
       h.stderr.write('stderr')
       h.emit(frame({ type: 'done' }))
     })
-    expect(await h.start()).toEqual({ logs: ['stdout', 'stderr'] })
+    expect(await h.start()).toMatchObject({ logs: ['stdout', 'stderr'] })
     h.stdout.write('idle stdout')
     h.stderr.write('idle stderr')
     h.onBoot(() => { h.emit(frame({ type: 'done' }, 2)) })
-    expect(await h.start(request, NO_INITIAL_FRAME)).toEqual({ logs: [] })
+    expect(await h.start(request, NO_INITIAL_FRAME)).toMatchObject({ logs: [] })
     expect(h.terminate).not.toHaveBeenCalled()
   })
 
@@ -284,7 +284,7 @@ describe('persistent PTC host protocol', () => {
   ])('bounds cleanup failure after parse diagnostics overflow a $maxOutputBytes-byte budget', async ({ maxOutputBytes, kind }) => {
     const h = await setup({ maxOutputBytes })
     h.onBoot(() => { h.emit(frame({ type: 'done' })) })
-    expect(await h.start()).toEqual({ logs: [] })
+    expect(await h.start()).toMatchObject({ logs: [] })
     h.waitForExit.mockRejectedValue(new Error('x'))
     const result = await h.runtime.run(h.runtime.resolve({ ...request, program: 'return 1' }))
     expect(result.error?.kind).toBe(kind)
@@ -293,7 +293,7 @@ describe('persistent PTC host protocol', () => {
     expect(bytes).toBeLessThanOrEqual(maxOutputBytes)
     expect(h.terminate).toHaveBeenCalledTimes(1)
     expect(h.waitForExit).toHaveBeenCalledTimes(1)
-    await h.runtime.release(request.stateOwner!)
+    await expect(h.runtime.release(request.stateOwner!)).rejects.toThrow('x')
   })
 
   it('rejects invalid resolved inputs and deployment bounds', async () => {
@@ -369,13 +369,13 @@ it.each(['owner release', 'provider unload'])('keeps idle-crash cleanup tracked 
     h.stderr.end()
     h.direct.resolve({ exitCode: 9, signal: null })
     await cleanup.promise
-    await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('concurrent runs')
+    await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('cleanup is incomplete')
     expect(h.spawn).toHaveBeenCalledTimes(1)
     let disposed = false
     closing = (action === 'owner release' ? Promise.all([h.runtime.release(request.stateOwner!), h.runtime.release(request.stateOwner!)]) : h.fiber.dispose()).then(() => { disposed = true })
     await setImmediate()
     expect(disposed).toBe(false)
-    if (action === 'owner release') await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('concurrent runs')
+    if (action === 'owner release') await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('cleanup is incomplete')
     stopped.resolve(true)
     await closing
     expect(disposed).toBe(true)
@@ -397,7 +397,7 @@ it('logs an idle process failure with its bounded stderr tail', async () => {
   } finally { reported.mockRestore() }
 })
 
-it('reports a release failure once and removes the failed environment from provider cleanup', async () => {
+it('retries process observation before releasing an owner after cleanup fails', async () => {
   const h = await setup()
   h.onBoot(() => { h.emit(frame({ type: 'done' })) })
   await h.start()
@@ -406,10 +406,12 @@ it('reports a release failure once and removes the failed environment from provi
   await expect(h.runtime.release(request.stateOwner!)).rejects.toBe(failure)
   const reported = vi.spyOn(h.fiber.ctx.logger, 'error').mockImplementation(() => {})
   try {
+    await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('cleanup is incomplete')
+    h.waitForExit.mockResolvedValue(true)
     await h.runtime.release(request.stateOwner!)
     await h.fiber.dispose()
     expect(reported).not.toHaveBeenCalled()
-    expect(h.waitForExit).toHaveBeenCalledOnce()
+    expect(h.waitForExit).toHaveBeenCalledTimes(2)
   } finally { reported.mockRestore() }
 })
 
@@ -423,9 +425,68 @@ it('reserves the owner while parse-output overflow releases its environment', as
   const pending = h.runtime.run(h.runtime.resolve({ ...request, program: 'return 1' }))
   try {
     await cleanup.promise
-    await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('concurrent runs')
+    await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('cleanup is incomplete')
     expect(h.spawn).toHaveBeenCalledOnce()
     stopped.resolve(true)
     expect((await pending).error?.kind).toBe('output-limit')
   } finally { stopped.resolve(true); await pending }
+})
+
+it.each([true, false])('classifies confined process spawn failure with runner evidence %s', async (runnerFailure) => {
+  const h = await setup()
+  const runner = '/missing-ptc-sandbox-runner'
+  const confine = vi.spyOn(h.ctx.sandbox, 'confine').mockResolvedValue({
+    argv: [runner], enforcement: 'partial', denialSignatures: [], runnerFailureRules: [],
+  })
+  h.spawn.mockImplementation(() => {
+    throw Object.assign(new Error('spawn failed'), { code: 'ENOENT', path: runnerFailure ? runner : '/other', syscall: `spawn ${runner}` })
+  })
+  try {
+    const result = await h.start({ ...request, sandboxPolicy: { mode: 'read-only', workspaceRoot: process.cwd() } }, NO_INITIAL_FRAME)
+    expect(result.error?.kind).toBe(runnerFailure ? 'sandbox-unavailable' : 'worker-exit')
+    expect(result.sandbox?.enforcement).toBe('partial')
+  } finally { confine.mockRestore() }
+})
+
+it('reports a sandbox runner refusal before the REPL is ready', async () => {
+  const h = await setup()
+  const confine = vi.spyOn(h.ctx.sandbox, 'confine').mockResolvedValue({
+    argv: ['sandbox-runner'], enforcement: 'full', denialSignatures: [],
+    runnerFailureRules: [{ allowedExitCodes: [127], fatalSignatures: ['sandbox runner rejected'] }],
+  })
+  const pending = h.start({ ...request, sandboxPolicy: { mode: 'read-only', workspaceRoot: process.cwd() } }, NO_INITIAL_FRAME)
+  try {
+    await vi.waitFor(() => { expect(h.spawn).toHaveBeenCalledOnce() })
+    h.stdout.end()
+    h.stderr.end('sandbox runner rejected the file policy')
+    h.direct.resolve({ exitCode: 127, signal: null })
+    const result = await pending
+    expect(result.error?.kind).toBe('sandbox-unavailable')
+    expect(result.sandbox).toEqual({ mode: 'read-only', denied: false, enforcement: 'full' })
+  } finally { h.direct.resolve({ exitCode: 127, signal: null }); await pending; confine.mockRestore() }
+})
+
+it('releases a confirmed exited process even when its output pipe did not drain', async () => {
+  const h = await setup()
+  h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+  await h.start()
+  h.stdout.destroy()
+  const warn = vi.spyOn(h.ctx.logger, 'warn').mockImplementation(() => {})
+  try {
+    await expect(h.runtime.release(request.stateOwner!)).resolves.toBeUndefined()
+    expect(warn).toHaveBeenCalledWith('persistent Node process exited but its output did not drain cleanly')
+    await expect(h.runtime.release(request.stateOwner!)).resolves.toBeUndefined()
+  } finally { warn.mockRestore() }
+})
+
+it('preserves logs in a result-level failure when temporary process pipes do not drain', async () => {
+  const h = await setup()
+  h.onBoot(() => {
+    h.emit(frame({ type: 'log', text: 'captured before cleanup' }))
+    h.emit(frame({ type: 'done', value: encodePtcJsonWire(42) }))
+    h.stdout.destroy()
+  })
+  const result = await h.start({ program: '1', bindings: [] })
+  expect(result.logs).toEqual(['captured before cleanup'])
+  expect(result.error).toEqual({ kind: 'worker-exit', message: 'managed process exited but its output did not drain cleanly' })
 })

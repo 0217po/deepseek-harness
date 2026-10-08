@@ -1,5 +1,6 @@
 import { Duplex, PassThrough } from 'node:stream'
 import { setImmediate } from 'node:timers/promises'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { PtcBindingFunction, PtcRunRequest } from '@deepseek-ai/dsh-ptc-runtime'
@@ -514,4 +515,47 @@ describe('Node runtime host failures', () => {
       else Object.defineProperty(process, 'pkg', prior)
     }
   })
+})
+
+it('keeps failed per-call cleanup registered until process observation succeeds', async () => {
+  const h = await setup()
+  const session = h.ctx.sessions.create(SessionId('per-call-cleanup-retry'))
+  h.waitForExit.mockRejectedValue(new Error('range cannot be observed'))
+  h.onBoot(() => { h.emit({ type: 'done', value: encodePtcJsonWire(42) }) })
+  const result = await h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) })
+  expect(result.error?.kind).toBe('worker-exit')
+  await expect(h.ctx.sandboxPolicy.setMode(session, 'read-only')).rejects.toThrow('range cannot be observed')
+  expect(h.ctx.sandboxPolicy.resolve({ session }).mode).toBe('danger-full-access')
+  h.waitForExit.mockResolvedValue(true)
+  expect(await h.ctx.sandboxPolicy.setMode(session, 'read-only')).toEqual([])
+  expect(h.waitForExit).toHaveBeenCalledTimes(3)
+})
+
+it('unregisters a Session resource when process spawn fails', async () => {
+  const h = await setup()
+  const session = h.ctx.sessions.create(SessionId('failed-session-spawn'))
+  h.spawn.mockImplementation(() => { throw new Error('spawn failed') })
+  const result = await h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) }, NO_INITIAL_FRAME)
+  expect(result.error?.message).toContain('spawn failed')
+  expect(await h.ctx.sandboxPolicy.setMode(session, 'read-only')).toEqual([])
+})
+
+it('preserves execution context for bindings delivered by an external control stream', async () => {
+  const h = await setup()
+  const session = h.ctx.sessions.create(SessionId('external-binding-context'))
+  const booted = Promise.withResolvers<undefined>()
+  h.receive((raw) => {
+    const message = raw as { type: string; ok?: boolean; message?: string }
+    if (message.type === 'boot') booted.resolve(undefined)
+    if (message.type === 'reply') h.emit({ type: 'done', value: encodePtcJsonWire(message.message ?? '') })
+  })
+  const pending = h.ctx.sandboxPolicy.withExecution(session.id, new AbortController().signal, signal =>
+    h.start({ ...request, signal, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }),
+      bindings: [{ global: 'tools', functions: { test: () => h.ctx.sandboxPolicy.setMode(session, 'read-only') } }],
+    }))
+  await booted.promise
+  h.emit(call(1))
+  const result = await pending
+  expect(result.value).toContain('operation that the change must cancel')
+  expect(h.ctx.sandboxPolicy.resolve({ session }).mode).toBe('danger-full-access')
 })

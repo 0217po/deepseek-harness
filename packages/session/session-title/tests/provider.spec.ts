@@ -1,5 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import LlmRuntime, { createUserMessage, markAgentLoopRequest } from '@deepseek-ai/dsh-llm'
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
 import SessionStore, { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
@@ -289,6 +289,41 @@ describe('SessionTitleService Provider lifecycle', () => {
     await disposeReplacement()
   })
 
+  it('accepts a replacement while the previous provider drains and discards its late result', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(SessionTitleService, CONFIG)
+    const pending = deferred<SessionTitleProviderResult>()
+    const dispose = ctx.sessionTitle.register({
+      id: SessionTitleProviderId('retiring'),
+      automatic: 'all-prompts',
+      generate: () => pending.promise,
+    })
+    const session = ctx.sessions.create(SessionId('replace-while-draining'))
+    session.append('turn/start', { turn: 1 })
+    const message = appendHumanPrompt(session, 'Generate this title')
+    await settle()
+    appendRoute(session)
+    await settle()
+
+    const disposal = dispose()
+    const disposeReplacement = ctx.sessionTitle.register({
+      id: SessionTitleProviderId('replacement'),
+      automatic: 'all-prompts',
+      generate: async () => ({ title: 'replacement', messageSeqs: [message.seq] }),
+    })
+    expect(() => ctx.sessionTitle.register({
+      id: SessionTitleProviderId('duplicate'),
+      automatic: 'first-prompt',
+      generate: async () => ({ title: 'duplicate', messageSeqs: [message.seq] }),
+    })).toThrow(/"replacement" is already registered/)
+    pending.resolve({ title: 'stale provider result', messageSeqs: [message.seq] })
+    await disposal
+    expect(ctx.sessionTitle.get(session)?.title).not.toBe('stale provider result')
+    await disposeReplacement()
+  })
+
   it('supersedes an older all-messages revision and cannot commit an ignored abort', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
@@ -334,6 +369,7 @@ describe('SessionTitleService Provider lifecycle', () => {
 
   it('runs an all-messages revision when the next main request reuses its logged header', async () => {
     const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
@@ -355,9 +391,9 @@ describe('SessionTitleService Provider lifecycle', () => {
     session.append('turn/start', {
       turn: 1,
     })
+    session.append('step/start', { turn: 1, step: 1 })
     const first = appendHumanPrompt(session, 'First routed prompt')
     await settle()
-    session.append('step/start', { turn: 1, step: 1 })
     appendRoute(session)
     await settle()
     session.append('step/end', { turn: 1, step: 1 })
@@ -366,9 +402,9 @@ describe('SessionTitleService Provider lifecycle', () => {
     session.append('turn/start', {
       turn: 2,
     })
+    session.append('step/start', { turn: 2, step: 1 })
     const second = appendHumanPrompt(session, 'Second prompt on the same route')
     await settle()
-    session.append('step/start', { turn: 2, step: 1 })
     void ctx.llm.stream(markAgentLoopRequest(deepFreeze({
       provider: 'main-route',
       model: 'chat-model',

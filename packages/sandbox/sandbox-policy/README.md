@@ -51,7 +51,9 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Switching a session's mode
 
-A session's mode can be switched at runtime through a UI policy control or an explicit switch; the switch is recorded in the session log and takes effect on the session's next confined call. The switch survives restart through replay, and each session keeps its own mode — two sessions never see each other's state. A switched session keeps its immutable workspace cwd as the writable boundary.
+Use `await ctx.sandboxPolicy.setMode(session, mode)` for runtime changes. The service cancels admitted operations, waits for registered resources to stop, and then appends the durable `sandbox/mode` event. Cleanup failure preserves the old mode; new reservations and resource registrations reject during the transition. An unchanged effective mode records the override without clearing resources. Permission presets use the same operation. Each Session retains its immutable workspace root, and its selected mode survives restart through replay.
+
+Callers wrap approval, execution and final cleanup with `withExecution(sessionId, signal, run)`. A mode change waits for that complete operation to settle, including nested tools. An operation cannot initiate a mode change that would cancel itself. Providers register live processes with `registerResource(sessionId, resource)` and detach after successful cleanup. Resource cleanup is idempotent and awaited during mode changes or contributor unload. Direct mode-event writes reject while execution or resources are registered.
 
 ### Failures and recovery
 
@@ -77,15 +79,14 @@ A runtime switch is one log-only `sandbox/mode` event on the session it applies 
 
 ### Model-visible text
 
-The `sandbox:policy` contribution states the mode's capability-neutral file-effect contract and the recorded session workspace under `workspace-write`. It does not enumerate mounted capabilities; tool plugins retain operation-specific denial and escalation guidance, approval policy contributes separately to the same snapshot, and plan guidance remains `dsh-plan-mode`'s system section. The optional `./invariant` companion rejects a forged durable `sandbox/mode` event whose value falls outside the closed mode vocabulary.
+The `sandbox:policy` contribution states the mode's capability-neutral file-effect contract and the recorded session workspace under `workspace-write`. It does not enumerate mounted capabilities; tool plugins retain operation-specific denial and escalation guidance, approval policy contributes separately to the same snapshot, and plan guidance remains `dsh-plan-mode`'s system section.
 
 ### Source map
 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `SandboxPolicyService`, `Config` schema, policy resolution and context contribution |
-| [`src/session-mode.ts`](src/session-mode.ts) | The `sandbox/mode` event, its fold, and the write path |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion: rejects `sandbox/mode` values outside the closed vocabulary |
+| [`src/session-mode.ts`](src/session-mode.ts) | The `sandbox/mode` event and accepted mode values |
 
 </details>
 
@@ -98,7 +99,7 @@ Start with the subsystem reference for the shared vocabulary, then the seam cont
 
 - [Process sandbox subsystem](../../../docs/subsystems/sandbox.md) — modes, per-call policy, and enforcement semantics.
 - [Sandbox seam package](../sandbox/README.md) — the confinement contract every enforcing capability implements.
-- [Cross-family file sandbox decision](../../../.agents/notes/implemented/feature/2026-07-14-cross-family-fs-sandbox.md) — why one shared policy home exists.
+- [historical Cross-family file sandbox decision](../../../.agents/notes/archived/feature/2026-07-14-cross-family-fs-sandbox.md) — why one shared policy home exists.
 
 -----
 
@@ -147,6 +148,8 @@ These limits define the policy surface this package provides. They are current p
 - **One primary workspace root per session** — policy resolves `SessionHeader.cwd`; extra writable roots are not part of `SandboxExecutionPolicy`.
 - **File-effect modes only** — `SandboxMode` governs file effects; network and process policy are outside its vocabulary, so no knob here restricts them.
 - **Temporary areas are deliberately summarized** — enforcing backends grant different platform temporary areas, which are selected after policy resolution and therefore cannot be enumerated truthfully in the current context.
+
+Policy-context replacements must be counter-tested on denied-then-escalatable tasks to verify that the model still attempts the initial tool call. The [historical five-of-twelve zero-tool-call measurement](../../../.agents/notes/archived/feature/2026-07-06-sandbox.md) records the failure this check prevents.
 
 <a id="dev-note"></a>
 ### Dev Note

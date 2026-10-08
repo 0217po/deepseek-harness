@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { provideWorkingDirectoryFixture, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { PassThrough } from 'node:stream'
 import { resolve } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -7,7 +8,7 @@ import SessionStore, { SESSION_FORMAT_VERSION, Session, SessionId } from '@deeps
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import SandboxProvider from '@deepseek-ai/dsh-sandbox'
 import type { ConfinedArgv, SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
-import SandboxPolicyService, { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
+import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import TerminalSessionService, { TerminalBackendCleanupError, TerminalSessionId } from '@deepseek-ai/dsh-terminal'
 import type { TerminalSendRequest, TerminalWaitReason } from '@deepseek-ai/dsh-terminal'
@@ -23,7 +24,6 @@ import type {
   SubprocessTerminalHandle,
   SubprocessTerminalSpawnSpec,
 } from '@deepseek-ai/dsh-subprocess'
-import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 
 class EmptySandbox extends SandboxProvider {
   async confine(_argv: readonly string[], _policy: SandboxPolicy): Promise<ConfinedArgv> {
@@ -122,6 +122,7 @@ function registerStubLocalBackend(ctx: Context, createSession: () => LocalPtySes
 describe('BashTerminalBackend startup rollback', () => {
   it('rejects pre-aborted setup and empty sandbox argv', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(EmptySandbox)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SandboxPolicyService, { mode: 'read-only', workspaceRoot: '/tmp' })
@@ -135,6 +136,7 @@ describe('BashTerminalBackend startup rollback', () => {
 
   it('closes failed startup and aggregates cleanup failure', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: '/tmp' })
     const spawnTerminal = async (): Promise<SubprocessTerminalHandle> => terminalHandle()
@@ -161,6 +163,7 @@ describe('BashTerminalBackend startup rollback', () => {
 
   it('awaits terminal cleanup when session construction fails', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: '/tmp' })
     const quiescent = Promise.withResolvers<undefined>()
@@ -196,6 +199,7 @@ describe('BashTerminalBackend startup rollback', () => {
 
   it('starts startup rollback when cancellation wins a stalled initialization', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: '/tmp' })
     const initialization = Promise.withResolvers<undefined>()
@@ -223,6 +227,7 @@ describe('BashTerminalBackend startup rollback', () => {
 
   it('does not allocate a terminal when confinement resolves after cancellation', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(RecordingSandbox)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write', workspaceRoot: '/workspace' })
@@ -246,6 +251,7 @@ describe('BashTerminalBackend startup rollback', () => {
 
   it('wraps confined argv, scrubs the environment, and returns initialized sessions', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(RecordingSandbox)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write', workspaceRoot: '/workspace' })
@@ -294,6 +300,7 @@ describe('BashTerminalBackend startup rollback', () => {
 
   it('resolves session mode and root together before wrapping the shell', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(RecordingSandbox)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SandboxPolicyService, { mode: 'read-only', workspaceRoot: '/deployment-fallback' })
@@ -312,7 +319,7 @@ describe('BashTerminalBackend startup rollback', () => {
       () => session,
     )
     const owner = agent(ctx, '/session-workspace')
-    setSandboxMode(owner.session, 'workspace-write')
+    await ctx.sandboxPolicy.setMode(owner.session, 'workspace-write')
     expect(await backend.spawn(spec(owner))).toBe(session)
 
     expect(spawned).toMatchObject({
@@ -327,6 +334,7 @@ describe('BashTerminalBackend startup rollback', () => {
 
   it('rejects a confined spawn without a sandbox provider', async () => {
     const confinedCtx = new Context()
+    provideWorkingDirectoryFixture(confinedCtx)
     await confinedCtx.plugin(SessionProjectionRegistry)
     await confinedCtx.plugin(SandboxPolicyService, { mode: 'workspace-write', workspaceRoot: '/workspace' })
     const confined = new BashTerminalBackend(
@@ -342,6 +350,7 @@ describe('BashTerminalBackend startup rollback', () => {
 
   it('forwards terminal allocation cancellation directly', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(EmptySandbox)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: '/tmp' })
@@ -387,6 +396,7 @@ describe('BashTerminalBackend startup rollback', () => {
 
   it('composes the default local session around a spawned terminal', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(EmptySandbox)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: '/workspace' })
@@ -419,6 +429,7 @@ describe('BashTerminalBackend startup rollback', () => {
 
   it('bootstraps a pwsh dialect through the prompt function and scrubs bash-only env', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(EmptySandbox)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: '/workspace' })
@@ -457,6 +468,7 @@ describe('BashTerminalBackend startup rollback', () => {
 
   it('keeps waiting for stdin_read when the first settled output only echoes the prompt literal', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(EmptySandbox)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: '/workspace' })
@@ -492,6 +504,7 @@ describe('BashTerminalBackend startup rollback', () => {
 
   it('rejects a pwsh bootstrap whose shell exits or times out', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(EmptySandbox)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: '/workspace' })
@@ -517,6 +530,7 @@ describe('BashTerminalBackend startup rollback', () => {
     vi.useFakeTimers()
     try {
       const ctx = new Context()
+      provideWorkingDirectoryFixture(ctx)
       await ctx.plugin(EmptySandbox)
       await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: '/workspace' })
@@ -570,6 +584,7 @@ describe('BashTerminalBackend startup rollback', () => {
 
   it('forwards the spawn signal into the pwsh bootstrap sends', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(EmptySandbox)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: '/workspace' })
@@ -609,12 +624,13 @@ describe('terminal-bash plugin shape', () => {
     const loader = Object.create(Loader.prototype) as Loader
     const unwrapped = loader.unwrapExports(ptyLocal) as Record<string, unknown>
     expect(unwrapped.name).toBe('terminal-bash')
-    expect(unwrapped.inject).toEqual(['terminals', 'sandboxPolicy', 'sessionProjections', 'subprocess'])
+    expect(unwrapped.inject).toEqual(['terminals', 'sandboxPolicy', 'sessionProjections', 'subprocess', 'workingDirectory'])
     expect(unwrapped.Config).toBeDefined()
   })
 
   it('validates config and registers the configured backend', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(TerminalSessionService)
     await ctx.plugin(SessionProjectionRegistry)
@@ -628,6 +644,7 @@ describe('terminal-bash plugin shape', () => {
 
   it('ignores unrelated session events and mode changes without a live owner', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SessionStore)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(TerminalSessionService)
@@ -641,11 +658,12 @@ describe('terminal-bash plugin shape', () => {
     expect(() => {
       session.append('turn/start', { turn: 1 })
     }).not.toThrow()
-    expect(() => { setSandboxMode(session, 'read-only') }).not.toThrow()
+    await expect(ctx.sandboxPolicy.setMode(session, 'read-only')).resolves.toEqual([])
   })
 
   it('keeps the owner-lifetime sandbox fence after the local provider unloads', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SessionStore)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(TerminalSessionService)
@@ -670,15 +688,15 @@ describe('terminal-bash plugin shape', () => {
     const created = await ctx.terminals.spawn(owner, { type: 'stub' })
 
     const unrelated = ctx.sessions.create(SessionId('unrelated-mode'))
-    expect(() => { setSandboxMode(unrelated, 'read-only') }).not.toThrow()
+    await expect(ctx.sandboxPolicy.setMode(unrelated, 'read-only')).resolves.toEqual([])
     expect(() => {
       session.append('turn/start', { turn: 1 })
     }).not.toThrow()
 
-    expect(() => { setSandboxMode(session, 'danger-full-access') }).not.toThrow()
+    await expect(ctx.sandboxPolicy.setMode(session, 'danger-full-access')).resolves.toEqual([])
     await providerFiber.dispose()
     expect(ctx.terminals.listBackends()).toEqual([])
-    expect(() => { setSandboxMode(session, 'read-only') }).toThrow(
+    await expect(ctx.sandboxPolicy.setMode(session, 'read-only')).rejects.toThrow(
       'cannot change sandbox mode from "danger-full-access" to "read-only" while persistent terminal sessions are open or being created; wait for creation to settle and close them first',
     )
     expect(session.snapshotEvents().filter(event => event.type === 'sandbox/mode')).toHaveLength(1)
@@ -686,16 +704,17 @@ describe('terminal-bash plugin shape', () => {
     const replacementFiber = await registerStubLocalBackend(ctx, () => stubLocalSession())
     const second = await ctx.terminals.spawn(owner, { type: 'stub' })
     await replacementFiber.dispose()
-    expect(() => { setSandboxMode(session, 'read-only') }).toThrow('open or being created')
+    await expect(ctx.sandboxPolicy.setMode(session, 'read-only')).rejects.toThrow('open or being created')
 
     await ctx.terminals.kill(owner, created.sessionId)
     await ctx.terminals.kill(owner, second.sessionId)
-    expect(() => { setSandboxMode(session, 'read-only') }).not.toThrow()
+    await expect(ctx.sandboxPolicy.setMode(session, 'read-only')).resolves.toEqual([])
     expect(session.snapshotEvents().filter(event => event.type === 'sandbox/mode')).toHaveLength(2)
   })
 
   it('also fences sandbox-mode changes across unpublished PTY creation', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SessionStore)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(TerminalSessionService)
@@ -721,7 +740,7 @@ describe('terminal-bash plugin shape', () => {
     const spawning = ctx.terminals.spawn(owner, { type: 'stub' })
 
     expect(ctx.terminals.hasOwnerActivity(owner)).toBe(true)
-    expect(() => { setSandboxMode(session, 'read-only') }).toThrow('open or being created')
+    await expect(ctx.sandboxPolicy.setMode(session, 'read-only')).rejects.toThrow('open or being created')
     gate.resolve(undefined)
     const created = await spawning
     await ctx.terminals.kill(owner, created.sessionId)
