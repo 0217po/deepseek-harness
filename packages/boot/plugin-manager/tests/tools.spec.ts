@@ -116,7 +116,7 @@ it('exposes an absent Official bundle installation target without display metada
 })
 
 it('checks the calling session on each execution, including after permission is revoked', async () => {
-  const { call, manager } = await fixture()
+  const { ctx, call, manager } = await fixture()
   const id = SessionId('manager-permissions')
   const session = Session.create(id, undefined, { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false })
   const agent = { session } as unknown as Agent

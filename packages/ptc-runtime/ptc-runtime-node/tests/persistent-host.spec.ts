@@ -369,13 +369,13 @@ it.each(['owner release', 'provider unload'])('keeps idle-crash cleanup tracked 
     h.stderr.end()
     h.direct.resolve({ exitCode: 9, signal: null })
     await cleanup.promise
-    await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('concurrent runs')
+    await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('cleanup is incomplete')
     expect(h.spawn).toHaveBeenCalledTimes(1)
     let disposed = false
     closing = (action === 'owner release' ? Promise.all([h.runtime.release(request.stateOwner!), h.runtime.release(request.stateOwner!)]) : h.fiber.dispose()).then(() => { disposed = true })
     await setImmediate()
     expect(disposed).toBe(false)
-    if (action === 'owner release') await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('concurrent runs')
+    if (action === 'owner release') await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('cleanup is incomplete')
     stopped.resolve(true)
     await closing
     expect(disposed).toBe(true)

@@ -104,9 +104,9 @@ it('releases a contributor resource before detaching its registration', async ()
   const { ctx, session, policy } = await setup()
   const entered = Promise.withResolvers<undefined>()
   const done = Promise.withResolvers<undefined>()
-  const contributor = await ctx.plugin((child) => {
+  const contributor = await ctx.plugin(Object.assign((child: Context) => {
     child.sandboxPolicy.registerResource(session.id, { release: async () => { entered.resolve(undefined); await done.promise } })
-  })
+  }, { inject: ['sandboxPolicy'] }))
   const disposing = contributor.dispose()
   try {
     await entered.promise
