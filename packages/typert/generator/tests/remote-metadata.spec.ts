@@ -349,6 +349,37 @@ declare module '@fixture/remote/types' {
     expect(method.result.create().parse({ ref: 'created' })).toEqual({ ref: 'created' })
   })
 
+  it('projects every emitted schema into the enforced tool-schema subset', async () => {
+    const [artifact] = new WorkspaceTypertGenerator(fixture()).generate()
+    const remote = await executable(artifact!.remote!.js)
+    const host = await executableRemoteModule<{ readonly TYPERT: { readonly invocations: readonly RuntimeDescriptor[] } }>(artifact!.js)
+    let projected = 0
+    let reported = 0
+    const verify = (value: RuntimeValue): void => {
+      if (value.jsonSchema === undefined) {
+        // An unrepresentable type must say so instead of publishing a weaker schema.
+        expect(value.jsonSchemaError).toContain('typert tool schema:')
+        reported += 1
+        return
+      }
+      assertSupportedJsonSchema(value.jsonSchema)
+      projected += 1
+    }
+    for (const method of Object.values(remote.TYPERT_REMOTE.methods)) {
+      verify(method.input())
+      verify(method.input({ strict: true }))
+      verify(method.result)
+    }
+    for (const descriptor of host.TYPERT.invocations) {
+      for (const parameter of descriptor.parameters) verify(parameter.codec)
+      verify(descriptor.result)
+    }
+    const expected = Object.keys(remote.TYPERT_REMOTE.methods).length * 3
+      + host.TYPERT.invocations.reduce((total, descriptor) => total + descriptor.parameters.length + 1, 0)
+    expect(projected + reported).toBe(expected)
+    expect(projected).toBeGreaterThan(0)
+  })
+
   it('typechecks ordinary declarations for named invocation, Context exclusion, uplink, and decoded bytes', () => {
     const root = fixture()
     editFile(root, 'packages/remote/src/index.ts', source => `import type { RemoteStream } from '@deepseek-ai/dsh-typert-protocol'\n${source.replace('  constructor() {', `  @Remote

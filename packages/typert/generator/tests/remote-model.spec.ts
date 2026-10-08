@@ -75,7 +75,7 @@ describe('Remote model generation', { timeout: 60_000 }, () => {
     if (descriptor === undefined) throw new Error('binary descriptor missing')
     expect(generated.TYPERT_REMOTE.methods['goals/bytes']).toBe(descriptor)
     expect(descriptor.result.jsonSchema).toBeUndefined()
-    expect(descriptor.result.jsonSchemaError).toContain('Remote JSON Schema:')
+    expect(descriptor.result.jsonSchemaError).toContain('typert tool schema:')
     const schema = descriptor.result.create()
     for (const data of [new Uint8Array(), new Uint8Array([0, 128, 255]), new Uint8Array(new SharedArrayBuffer(3))]) {
       const parsed = schema.safeParse({ data, size: data.length })

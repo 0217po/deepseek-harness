@@ -1,11 +1,11 @@
-/** Lossless JSON Schema projection for Remote methods selected by command and tool consumers. */
+/** Lossless projection into the harness tool-schema subset. */
 
 import type { MemberModel, TypeNodeId } from './model.ts'
 import { TypeGraphRenderer } from './renderer.ts'
 
-/** A valid Remote codec whose type cannot be represented by the tool-schema subset. */
-export class RemoteJsonSchemaError extends Error {
-  override name = 'RemoteJsonSchemaError'
+/** A resolved codec whose type the tool-schema subset cannot represent without weakening constraints. */
+export class ToolSchemaError extends Error {
+  override name = 'ToolSchemaError'
 }
 
 interface Schema extends Record<string, unknown> {
@@ -21,18 +21,21 @@ interface Schema extends Record<string, unknown> {
 }
 
 /**
- * Project one resolved Remote type without weakening unsupported constraints.
+ * Project one resolved type into the tool-schema subset that `@deepseek-ai/dsh-tools`
+ * enforces on tool parameters, tool output, and the generated PTC SDK. A type the
+ * subset cannot express without weakening constraints raises {@link ToolSchemaError},
+ * which callers report as an absent projection rather than a narrower schema.
  * @param renderer - complete analyzed type graph.
  * @param type - resolved wire type.
  * @param closedObjects - close declared request objects with `additionalProperties: false`.
  * @param optional - omit a top-level undefined alternative supplied by an optional argument.
- * @returns an acyclic schema in the command/tool subset.
+ * @returns an acyclic schema in the tool-schema subset.
  */
-export function remoteJsonSchema(
+export function projectToolSchema(
   renderer: TypeGraphRenderer, type: TypeNodeId, closedObjects = false, optional = false,
 ): Record<string, unknown> {
   const active = new Set<TypeNodeId>()
-  const fail = (subject: string): never => { throw new RemoteJsonSchemaError(`typert Remote JSON Schema: ${subject}`) }
+  const fail = (subject: string): never => { throw new ToolSchemaError(`typert tool schema: ${subject}`) }
   const project = (id: TypeNodeId, optional = false): Schema => {
     const node = renderer.node(id)
     if (node.json) return {}

@@ -23,7 +23,7 @@ import type {
 } from './model.ts'
 import { TypeGraphRenderer } from './renderer.ts'
 import { childTypeNodeIds } from './model.ts'
-import { remoteJsonSchema, RemoteJsonSchemaError } from './remote-json-schema.ts'
+import { projectToolSchema, ToolSchemaError } from './tool-schema.ts'
 
 /** Failure to project a modeled construct into an emitted artifact. */
 export class TypertEmitError extends Error {
@@ -337,7 +337,7 @@ export class FaceModelEmitter {
           parameter.boundary,
           schemas.boundary(parameterBoundaryKey(invocation, index, strict)),
           undefined,
-          toolProjection(() => remoteJsonSchema(
+          toolProjection(() => projectToolSchema(
             this.renderer, parameter.boundary.codecType, strict, parameter.boundary.acceptsUndefined,
           )),
         ), 6).trimStart()},`)
@@ -361,7 +361,7 @@ export class FaceModelEmitter {
       invocation.result,
       schemas.boundary(resultBoundaryKey(invocation)),
       schemas.encoder(resultBoundaryKey(invocation)),
-      toolProjection(() => remoteJsonSchema(this.renderer, invocation.result.codecType)),
+      toolProjection(() => projectToolSchema(this.renderer, invocation.result.codecType)),
       returns,
     ), 2).trimStart()},`)
     lines.push(`  sourceLocation: ${JSON.stringify(invocation.location)},`)
@@ -570,7 +570,7 @@ function toolProjection(project: () => Record<string, unknown>): string {
   try {
     return `jsonSchema: ${JSON.stringify(project())}`
   } catch (error) {
-    if (!(error instanceof RemoteJsonSchemaError)) throw error
+    if (!(error instanceof ToolSchemaError)) throw error
     return `jsonSchemaError: ${quote(error.message)}`
   }
 }
