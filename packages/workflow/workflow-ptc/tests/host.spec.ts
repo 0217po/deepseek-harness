@@ -3,7 +3,7 @@ import { compileFunction, constants } from 'node:vm'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
-import type { PtcBindingFunction, PtcRunRequest, PtcRunResult, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcBindingFunction, PtcJsonValue, PtcRunRequest, PtcRunResult, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
@@ -67,7 +67,7 @@ describe('workflow host callback validation', () => {
       expect(spec.stateOwner).toBeUndefined()
       const evaluate = compileFunction(`return (async () => (${spec.program}))()`, ['workflowHost'], {
         importModuleDynamically: constants.USE_MAIN_CONTEXT_DEFAULT_LOADER,
-      }) as (host: HostBindings) => Promise<PtcRunResult['value']>
+      }) as (host: HostBindings) => Promise<PtcJsonValue>
       return { logs: [], value: await evaluate(bindings) }
     })
     const format = vi.spyOn(runtime, 'programFormat', 'get').mockReturnValue('repl')
