@@ -38,14 +38,14 @@ function endFailure(reason: TurnEndReason): { readonly message: string; readonly
     case 'error':
       return reason.error
     case 'aborted':
+      // User and parent cancellations show only the stopped turn summary.
       return reason.reason.kind === 'hook' && reason.reason.reason === 'deepseek-account/signed-out'
         ? { message: 'Stopped because you signed out of DeepSeek.', code: 'ACCOUNT_SIGNED_OUT' }
         : undefined
     case 'interrupted':
       return { message: 'DSH stopped running before this turn finished.', code: 'INTERRUPTED' }
     default:
-      // Completed, blocked, max-tokens, forked, user/parent cancellation, and
-      // plugin-merged endings have no failure row.
+      // Completed, blocked, max-tokens, forked, and plugin-merged endings have no failure row.
       return undefined
   }
 }

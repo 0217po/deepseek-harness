@@ -3030,6 +3030,23 @@ describe('ChatView', () => {
     expect(view.getByRole('button', { name: /用量/ })).toBeTruthy()
   })
 
+  it('summarizes an interrupted turn as stopped, without elapsed time, and keeps it open', () => {
+    const answer: AssistantMessageNode = {
+      kind: 'assistant', seq: 2, time: 2_000, turn: 1, step: 1, blocks: [{ kind: 'text', text: 'answer' }],
+    }
+    const h = makeHarness({ chat: chatSnapshotFixture({
+      nodes: [user(1, 'hi'), answer, turnError(3, 'INTERRUPTED')],
+      turnTimings: new Map([[1, { startTime: 1_000, endTime: 20_000 }]]),
+      turnEnds: new Map([[1, 3]]),
+      turnEndReasons: new Map([[1, { kind: 'interrupted' }]]),
+    }) })
+    const view = render(<h.ChatView {...h.props} />)
+    const control = turnProcessControl(view.container)
+    expect(control?.textContent).toBe('已停止')
+    expect(control?.disabled).toBe(true)
+    expect(view.getByText('任务已停止')).toBeTruthy()
+  })
+
   it('withholds the usage-details trigger when turn usage is outside the window', () => {
     const settled: AssistantMessageNode = {
       kind: 'assistant', seq: 2, time: 2_000, turn: 1, step: 1, blocks: [{ kind: 'text', text: 'answer' }],
