@@ -137,6 +137,17 @@ export class NodePtcRuntime extends PtcRuntime {
     let parsing = true
     const wallTimer = spec.timeoutMs === null ? undefined
       : setTimeout(() => { timedOut = true; controller.abort('execution deadline reached') }, spec.timeoutMs)
+    let stopping: Promise<boolean> | undefined
+    let unregister: (() => void) | undefined
+    const stop = (): Promise<boolean> => {
+      if (stopping !== undefined) return stopping
+      const cleanup = handle === undefined ? Promise.resolve(true) : terminateProcess(handle, this.config.graceMs)
+      stopping = cleanup.then((drained) => { unregister?.(); return drained }, (error: unknown) => {
+        stopping = undefined
+        throw error
+      })
+      return stopping
+    }
     const finish = (failure?: PtcRunFailure, value?: PtcJsonValue): void => {
       if (settled) return
       settled = true
@@ -144,9 +155,9 @@ export class NodePtcRuntime extends PtcRuntime {
       signal.removeEventListener('abort', onAbort)
       channel?.close()
       void (async () => {
-        if (handle !== undefined) {
+        if (handle !== undefined || unregister !== undefined) {
           try {
-            const drained = await terminateProcess(handle, this.config.graceMs)
+            const drained = await stop()
             if (!drained && failure === undefined) {
               failure = { kind: 'worker-exit', message: 'Node process output did not close cleanly' }
             }
@@ -199,6 +210,11 @@ export class NodePtcRuntime extends PtcRuntime {
       if (packaged) {
         env.DSH_PTC_RUNTIME_NODE = '1'
         env.NODE_OPTIONS = heapFlag
+      }
+      if (policy.sessionId !== undefined) {
+        unregister = this.ctx.sandboxPolicy.registerResource(policy.sessionId, {
+          release: async () => { controller.abort(new Error('sandbox mode is changing')); await stop() },
+        })
       }
       handle = this.ctx.subprocess.spawn({ argv: confined?.argv ?? argv, cwd: spec.cwd, env, stdio: { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', control: 'pipe' }, graceMs: this.config.graceMs, signal })
       const launched = handle

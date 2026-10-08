@@ -1,5 +1,6 @@
 import { Duplex, PassThrough } from 'node:stream'
 import { setImmediate } from 'node:timers/promises'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { PtcBindingFunction, PtcRunRequest } from '@deepseek-ai/dsh-ptc-runtime'
@@ -514,4 +515,18 @@ describe('Node runtime host failures', () => {
       else Object.defineProperty(process, 'pkg', prior)
     }
   })
+})
+
+it('keeps failed per-call cleanup registered until process observation succeeds', async () => {
+  const h = await setup()
+  const session = h.ctx.sessions.create(SessionId('per-call-cleanup-retry'))
+  h.waitForExit.mockRejectedValue(new Error('range cannot be observed'))
+  h.onBoot(() => { h.emit({ type: 'done', value: encodePtcJsonWire(42) }) })
+  const result = await h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) })
+  expect(result.error?.kind).toBe('worker-exit')
+  await expect(h.ctx.sandboxPolicy.setMode(session, 'read-only')).rejects.toThrow('range cannot be observed')
+  expect(h.ctx.sandboxPolicy.resolve({ session }).mode).toBe('danger-full-access')
+  h.waitForExit.mockResolvedValue(true)
+  expect(await h.ctx.sandboxPolicy.setMode(session, 'read-only')).toEqual([])
+  expect(h.waitForExit).toHaveBeenCalledTimes(3)
 })
