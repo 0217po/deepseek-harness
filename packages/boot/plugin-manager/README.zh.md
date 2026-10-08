@@ -41,8 +41,6 @@ kind: "package-reference"
 
 已选择但无法加载的组合包仍会出现在 `listBundles` 中，并携带 `error`；`enabled` 表示保存的选择，不代表加载成功。插件页面显示错误并允许取消选择。损坏的组合包无法启用。管理组合包的文件变得不可读后仍受保护。
 
-限定到 preset 的组合包行同时携带声明的 `rowId` 和外层 `preset` 目标。管理器读取声明，不单独组合该 bundle，因此 Off 状态下仍能列出这些行。可选的 `composition` 状态来自当前 preset 清单；这些行没有可编辑的根条目 `entryId`，其 `preset-managed` 只读原因指引用户通过预设或组合包进行配置。启用根据注册的声明行检查所有受影响的 preset，包括注册表保留而未抛出的故障；无关且未变化的 preset 故障作为警告返回。即使没有 HMR，组合包开关也会校验保存后的组合；组合失败会保留已保存的选择并立即返回诊断。当前或被保留的 preset 代仍使用贡献行（按定义 preset 的行、子行 ID 和解析后的模块匹配），或属于组合包自身的任意模块时，Remove 都会拒绝。这项保护在 Off 后仍持续，直到这些代释放模块；无关行使用共享依赖不会阻止移除。匿名作用域插入行受到相同保护。模块文件缺失不会导致另一贡献项被误认为匹配；文件不可用时，相同的保留声明仍受保护。
-
 `listBundles` 为各组合包及其声明的插件行提供可选的展示 `meta`，包括已禁用的组合包。Client 从这些值中选择语言。单独的 `description` 字段是该组合包原始的 `package.json.description`；元信息诊断不会阻止管理操作。`source` 以 `pnpm add` 接受的 spec 给出 profile 依赖：git 地址或 URL 按记录给出，但去掉 http(s) URL 的 user information（查询字符串保持原样）；`file:` 或 `link:` 路径按 profile 目录解析为绝对路径，`~` 展开为主目录；注册表版本范围、标签或别名接在包名的 `@` 之后，以别名安装的包的 spec 也是如此。安装提供的组合包没有该字段，即使 profile 也依赖它，因为实际加载的是安装中的副本。`plugin_manager` 工具的列表结果不包含 UI 展示元信息。
 
 `listBundles` 将随附可选组合包和按需目录项标为 `official`，与包的安装状态独立。`availability` 表示可读取的安装随附包、profile 包，或 `missing`；按需目录项不计入未声明的传递依赖副本。`installed` 仅表示 profile 是否声明该依赖。尚未安装的按需条目携带内嵌的本地化元信息，以及 Host 生成、包含当前 DSH 版本与安装 spec 的 `installTarget`，无需访问注册表。profile 已声明但文件不可读的包保留依赖声明，并展示原有错误。
@@ -141,7 +139,7 @@ service 运行若在 `idleTimeoutMs` 内没有任何捕获输出即被终止，�
 - Web 一次批准显示出来的整组待决定包，没有逐包选择。
 - 替换已有包后需要重启进程，以加载新的 JavaScript 模块版本。
 - 仅启动时加载的 profile 不能删除当前进程启动时使用的包；停止进程后使用 `dsh plugin`。
-- 管理器不能关闭自身所需的管理组件、修改其他 profile 或直接编辑 agent 预设内部的单个条目。
+- 管理器不能关闭自身所需的管理组件、修改其他 profile 或编辑 agent 预设组合。
 - 失败的删除可能留下部分依赖改动，失败或被取消的安装可能在 `node_modules` 或 pnpm 缓存中留下已下载文件。文件缺失的未启用依赖仍可删除。诊断日志保留在 profile 的 `.plugin-manager/logs` 目录中。
 - 管理结果描述 Host 激活状态。浏览器同步失败会在设置的插件列表中单独显示。
 - Desktop 包管理操作仍由 Desktop shell 负责。

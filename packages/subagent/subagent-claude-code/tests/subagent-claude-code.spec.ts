@@ -343,7 +343,7 @@ afterEach(() => {
 })
 
 describe('task admission and package contracts', () => {
-  it('ships the provider with scoped delegation tools for all full Web presets', () => {
+  it('ships the provider with a global delegation tool', () => {
     const root = fileURLToPath(new URL('..', import.meta.url))
     const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as {
       dependencies?: Record<string, string>
@@ -393,15 +393,12 @@ describe('task admission and package contracts', () => {
     }
 
     const parsed = yaml.load(readFileSync(resolve(root, manifest.dsh!.bundle!.patch!), 'utf8'))
-    expect(parsed).toEqual([
-      { insert: [{ id: 'subagent-claude-code', name: '@deepseek-ai/dsh-subagent-claude-code' }] },
-      ...['standard', 'cordis', 'ptc'].map(preset => ({
-        preset: `preset-${preset}`,
-        insert: [{ id: 'tool-subagent-claude-code', name: '@deepseek-ai/dsh-tool-subagent', config: {
-          provider: 'claude-code', toolName: 'subagent_claude_code', maxDepth: 'provider-managed',
-        } }],
-      })),
-    ])
+    expect(parsed).toEqual([{ insert: [
+      { id: 'subagent-claude-code', name: '@deepseek-ai/dsh-subagent-claude-code' },
+      { id: 'tool-subagent-claude-code', name: '@deepseek-ai/dsh-tool-subagent', config: {
+        provider: 'claude-code', toolName: 'subagent_claude_code', maxDepth: 'provider-managed',
+      } },
+    ] }])
     expect(manifest.dependencies).toHaveProperty('@deepseek-ai/dsh-tool-subagent', 'workspace:*')
   })
 

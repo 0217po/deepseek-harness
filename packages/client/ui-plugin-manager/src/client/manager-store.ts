@@ -62,18 +62,14 @@ export type ManagerNotice =
 export interface PackageRow {
   /** The Loader entry carrying the row while the bundle is on; absent for a row of a bundle that is off. */
   readonly entryId?: PluginEntryId
-  /** Declared row id, or an internal identity for an anonymous scoped insertion. */
+  /** The row id as the bundle declares it. */
   readonly rowId: string
-  /** Outer preset row id for a scoped, read-only contribution. */
-  readonly preset?: string
   /** The module the row names. */
   readonly moduleName: string
   /** Local package display text and metadata diagnostics supplied by the Host. */
   readonly meta?: PluginLocalizedMeta
   /** Whether the entry runs; false for a row without a live entry. */
   readonly enabled: boolean
-  /** Whether a preset expression has not yet resolved this row's enablement. */
-  readonly conditional?: boolean
   /** The entry's fiber phase, null without a live fiber. */
   readonly phase: PluginInfo['fiberPhase']
   /** Why the Host refuses to switch the row, when it does. */
@@ -423,14 +419,6 @@ export function rowKey(entryId: string): string {
   return `row:${entryId}`
 }
 
-/** Identify a bundle row independently of equal child ids in other presets.
- * @param row Bundle declaration with its optional preset target.
- * @returns Stable identity for list and detail navigation.
- */
-export function packageRowKey(row: Pick<PackageRow, 'rowId' | 'preset'>): string {
-  return row.preset === undefined ? row.rowId : JSON.stringify([row.preset, row.rowId])
-}
-
 /**
  * One bundle as the page shows it: its rows joined with the Host's entries.
  * @param bundle - the Host's bundle.
@@ -440,17 +428,14 @@ export function packageRowKey(row: Pick<PackageRow, 'rowId' | 'preset'>): string
 export function packageView(bundle: BundleInfo, plugins: readonly PluginInfo[]): PackageView {
   const rows = bundle.rows.map((row): PackageRow => {
     const live = row.entryId === undefined ? undefined : plugins.find(plugin => plugin.entryId === row.entryId)
-    const readOnlyReason = row.readOnlyReason ?? live?.readOnlyReason
     return {
       rowId: row.rowId,
-      ...row.preset === undefined ? {} : { preset: row.preset },
       moduleName: row.moduleName,
-      enabled: row.composition === undefined ? live?.enabled ?? false : row.composition.enabled === true,
-      phase: row.composition?.fiberPhase ?? live?.fiberPhase ?? null,
-      ...row.composition?.enabled === 'conditional' ? { conditional: true } : {},
+      enabled: live?.enabled ?? false,
+      phase: live?.fiberPhase ?? null,
       ...row.meta === undefined ? {} : { meta: row.meta },
       ...row.entryId === undefined ? {} : { entryId: row.entryId },
-      ...readOnlyReason === undefined ? {} : { readOnlyReason },
+      ...live?.readOnlyReason === undefined ? {} : { readOnlyReason: live.readOnlyReason },
     }
   })
   return {

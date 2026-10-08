@@ -13,7 +13,7 @@ import { basename, dirname, isAbsolute, resolve } from 'node:path'
 import * as yaml from 'js-yaml'
 import { Context, type FiberState } from '@deepseek-ai/cordis'
 import Loader, { type Entry, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
-import Include, { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
+import Include, { applyEntryPatches, entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import Group from '@deepseek-ai/cordis-plugin-group'
 import { dshHomePath, resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { createLaunchEnvironmentSnapshot, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
@@ -25,12 +25,9 @@ export {
   setProfileVersionExemption, type ProfileCompatibility,
 } from './profile-compatibility.ts'
 import { prepareProfilePatches } from './compatibility-preflight.ts'
-import { applyProfilePatches, compileProfilePatches, profilePatchPreset, prepareLoadedProfilePatches, type ProfilePatch } from './profile-patches.ts'
-export { applyProfilePatches, compileProfilePatches, profilePatchPreset, type ProfilePatch, type ProfilePatchWarning } from './profile-patches.ts'
 export { prepareProfileEntries, prepareProfilePatches } from './compatibility-preflight.ts'
 export { readPluginMeta, resolvePluginResource } from './package-meta.ts'
 export { ON_DEMAND_BUNDLES, OFFICIAL_ON_DEMAND_CATALOG, type OfficialBundleCatalogEntry } from './official-bundles.ts'
-export { realModuleFile } from './profile-resolution/legacy-links.ts'
 export { generateConfigSchema, type ConfigSchemaDump, type NativeConfigSchema } from './config-schema/index.ts'
 export { createConfigProjector, LOADER_EXPRESSION_SCHEMA, type ConfigProjection } from './config-schema/projector.ts'
 export { isNativeConfigSchema } from './config-schema/native.ts'
@@ -276,7 +273,7 @@ const userPatchesSchema = entryListSchema
  * @returns Diagnostics for unchanged pre-existing inactive entries; new or changed failures reject.
  */
 export async function reconcileProfilePatches(
-  ctx: Context, patches: ProfilePatch[], binName: string, requiredIds: readonly string[] = [],
+  ctx: Context, patches: PatchOptions[], binName: string, requiredIds: readonly string[] = [],
 ): Promise<string[]> {
   const entry = bootstrapIncludes.get(ctx)
   if (entry === undefined) throw new Error(`${binName}: profile reload requires the root Include entry`)
@@ -290,9 +287,7 @@ export async function reconcileProfilePatches(
   const { patches: _previous, ...includeConfig } = entry.options.config as Include.Config
   // The recomposition judges the rows the launch judged, resolved from the file this Include read.
   const parentURL = new URL('.', new URL(includeConfig.path, entry.parent.tree.ctx.baseUrl)).href
-  const initial = readRootEntries(includeConfig.path, parentURL, binName)
-  const prepared = prepareRootPatches(ctx, patches, includeConfig.path, parentURL, binName, initial)
-  await drainRetiringEntries(ctx, entry, initial, prepared)
+  const prepared = prepareProfilePatches(ctx, patches, parentURL, binName)
   await entry.update({ config: { ...includeConfig, patches: prepared } })
   const results = await Promise.allSettled(previousFibers.map(({ fiber }) => fiber.await()))
   await ctx.loader.await()
@@ -308,35 +303,10 @@ export async function reconcileProfilePatches(
   return failures.map(inactiveDiagnostic)
 }
 
-/** Disappearing and literal-disabled rows release singleton services before their replacements activate. */
-async function drainRetiringEntries(
-  ctx: Context, root: Entry, initial: EntryOptions[], patches: readonly ProfilePatch[],
-): Promise<void> {
-  const rows = applyProfilePatches(initial, patches)
-  const next = new Map<string, boolean>()
-  const visit = (rows: EntryOptions[], outerDisabled = false): void => {
-    for (const row of rows) {
-      const disabled = outerDisabled || row.disabled === true
-      next.set(row.id, !row.group && disabled)
-      if (row.group && Array.isArray(row.config)) visit(row.config as EntryOptions[], disabled)
-    }
-  }
-  visit(rows)
-  const retiring = [...ctx.loader.entries()].flatMap((entry) => {
-    const fiber = entry.fiber
-    return entry.parent.tree === root.subtree && fiber?.state === FIBER_ACTIVE
-      && (!next.has(entry.options.id) || next.get(entry.options.id)) ? [fiber] : []
-  })
-  await Promise.all(retiring.map(async (fiber) => {
-    await fiber.dispose()
-    await fiber.await()
-  }))
-}
-
 /**
- * Load an optional patch-list file: a top-level YAML array of profile patch
- * entries: id-targeted overrides, `insert` lists, and preset-scoped operations,
- * with `!!js` expressions allowed. A missing
+ * Load an optional patch-list file: a top-level YAML array of loader patch
+ * entries (`@deepseek-ai/cordis-plugin-include`'s `PatchOptions`): id-targeted config
+ * overrides and `insert` lists, with `!!js` expressions allowed. A missing
  * file means "no layer"; an unreadable, unparsable, or non-array file throws —
  * a present patch file that cannot apply is a misconfiguration and must fail
  * loud at boot, never be silently skipped.
@@ -344,7 +314,7 @@ async function drainRetiringEntries(
  * @param file - absolute path of the patch file.
  * @returns the parsed patches, or `undefined` when the file does not exist.
  */
-export function loadOptionalPatches(binName: string, file: string): ProfilePatch[] | undefined {
+export function loadOptionalPatches(binName: string, file: string): PatchOptions[] | undefined {
   let content: string
   try {
     content = readFileSync(file, 'utf8')
@@ -364,7 +334,7 @@ export function loadOptionalPatches(binName: string, file: string): ProfilePatch
  * @param file - absolute path of the overlay file.
  * @returns the parsed patch list.
  */
-export function loadOverlayPatches(binName: string, file: string): ProfilePatch[] {
+export function loadOverlayPatches(binName: string, file: string): PatchOptions[] {
   let content: string
   try {
     content = readFileSync(file, 'utf8')
@@ -375,30 +345,24 @@ export function loadOverlayPatches(binName: string, file: string): ProfilePatch[
 }
 
 /** Convert inserted filesystem paths to file URLs, anchoring relative paths beside the patch; keep assertion names literal. */
-function anchorInsertedPluginNames(patches: ProfilePatch[], file: string): ProfilePatch[] {
+function anchorInsertedPluginNames(patches: PatchOptions[], file: string): PatchOptions[] {
   const base = dirname(resolve(file))
   const visit = (entry: EntryOptions): void => {
     if (typeof entry.name === 'string' && (isAbsolute(entry.name) || entry.name.startsWith('./') || entry.name.startsWith('../'))) {
       entry.name = pathToFileURL(resolve(base, entry.name)).href
     }
     if (entry.group && Array.isArray(entry.config)) entry.config.forEach(visit)
-    const config = entry.config as { plugins?: unknown } | undefined
-    if (entry.name === '@deepseek-ai/dsh-agent-preset' && Array.isArray(config?.plugins)) {
-      (config.plugins as EntryOptions[]).forEach(visit)
-    }
   }
-  for (const patch of patches) {
-    patch.insert?.forEach(visit)
-  }
+  for (const patch of patches) patch.insert?.forEach(visit)
   return patches
 }
 /**
  * Parse one loader patch list: a top-level YAML array of
- * profile patches (id-targeted overrides, `insert` lists, and preset-scoped
- * operations, with `!!js` expressions allowed). Invalid lists and malformed
- * preset targets throw because they cannot be applied. An ordinary or scoped
- * child patch whose target is absent stays a per-entry Loader warning; a
- * missing outer preset target fails composition.
+ * `@deepseek-ai/cordis-plugin-include` `PatchOptions` (id-targeted config overrides and
+ * `insert` lists, `!!js` expressions allowed). Every invalid field or value throws,
+ * because a patch file that cannot be applied at all is a misconfiguration; a
+ * single patch whose target row is absent stays a per-entry Loader warning, so
+ * one overlay shared across surfaces does not have to match every tree.
  * @param binName - the diagnostic prefix on the thrown error.
  * @param file - the source path, quoted in errors.
  * @param content - the file's text.
@@ -407,7 +371,7 @@ function anchorInsertedPluginNames(patches: ProfilePatch[], file: string): Profi
  */
 function parsePatchList(
   binName: string, file: string, content: string, label: string,
-): ProfilePatch[] {
+): PatchOptions[] {
   let parsed: unknown
   try {
     parsed = yaml.load(content, { schema: userPatchesSchema })
@@ -422,7 +386,7 @@ function parsePatchList(
       throw new Error(`${binName}: ${label} entry ${index + 1} in ${file} must be a mapping (a loader patch entry)`)
     }
   })
-  return anchorInsertedPluginNames(prepareLoadedProfilePatches(parsed as ProfilePatch[], file, binName), file)
+  return anchorInsertedPluginNames(parsed as PatchOptions[], file)
 }
 
 /** One overlay patch list with the source label printed in dump comments. */
@@ -430,13 +394,13 @@ export interface ConfigDumpLayer {
   /** Source name shown in dump comments (a file basename or path). */
   label: string
   /** The layer's patches, from {@link loadOverlayPatches} / {@link loadOptionalPatches}. */
-  patches: ProfilePatch[]
+  patches: PatchOptions[]
 }
 
 /**
  * Compose the configured entry list: parse the base config file with the
- * include's entry-list dialect, compile preset operations, then apply the
- * flattened native patch list through Include's `applyEntryPatches` — the
+ * include's entry-list dialect, apply every layer's patches as ONE flattened
+ * list through the include's own patch algorithm (`applyEntryPatches`) — the
  * same call `boot()` makes, so even patch-visibility corner cases (a later
  * layer targeting a group child a plain config replacement introduced, which
  * the single-pass id index never sees) compose identically — then render the
@@ -456,8 +420,8 @@ export interface ConfigDumpLayer {
  * A patch that matches no row is reported through `warn` with its layer
  * label, mirroring the Loader's boot-time warning. Earlier layers' patches
  * see an identical preceding state in every snapshot that includes them, so
- * additional warnings belong to the added layer. Warning multiplicity is
- * preserved when scoped and ordinary diagnostics have different ordering.
+ * each snapshot's warning list extends the previous one and the new tail
+ * belongs to the added layer.
  * @param binName - the diagnostic prefix on read/parse errors.
  * @param absoluteConfigPath - the base config file `boot()` would include.
  * @param layers - overlay layers in application order (later wins).
@@ -490,14 +454,16 @@ export function renderConfigDump(
   // YAML parsing yields untyped rows; the include validates each entry
   // at mount, and the dump prints whatever the file holds, so `EntryOptions`
   // here is structural trust in the same file `boot()` would include.
-  const base = parsed as EntryOptions[]
+  const base = parsed as Parameters<typeof applyEntryPatches>[0]
   // snapshot_k = ONE application of layers 1..k flattened, using the exact
   // arguments boot passes for that prefix. snapshot_N is the mounted composition.
-  // The compiler clones patch objects for each snapshot: native insertions retain
-  // references, so sharing them would let later snapshots mutate earlier results.
-  const snapshot = (count: number, warnings: string[]): EntryOptions[] => {
-    const flattened = layers.slice(0, count).flatMap(layer => layer.patches)
-    return applyProfilePatches(base, flattened, (message: string, ...args: unknown[]) => {
+  // The patches are cloned per call: applyEntryPatches detaches the entry
+  // list but pushes `insert` rows by reference from the patch list, so
+  // sharing patch objects across snapshot calls would leak a later
+  // snapshot's mutations into an earlier one's result.
+  const snapshot = (count: number, warnings: string[]): ReturnType<typeof applyEntryPatches> => {
+    const flattened = structuredClone(layers.slice(0, count).flatMap(layer => layer.patches))
+    return applyEntryPatches(base, flattened, (message: string, ...args: unknown[]) => {
       // The include logs through cordis's printf-style logger (`%C` = code); a
       // dump has no logger, so substitute inline for a plain line.
       let index = 0
@@ -514,11 +480,8 @@ export function renderConfigDump(
     if (layer === undefined) continue
     const warnings: string[] = []
     composed = snapshot(count, warnings)
-    const remaining = [...previousWarnings]
-    for (const line of warnings) {
-      const previousIndex = remaining.indexOf(line)
-      if (previousIndex >= 0) remaining.splice(previousIndex, 1)
-      else warn(`${binName}: [${layer.label}] ${line}`)
+    for (const line of warnings.slice(previousWarnings.length)) {
+      warn(`${binName}: [${layer.label}] ${line}`)
     }
     const before = previous.map(entry => JSON.stringify(entry))
     for (let index = 0; index < composed.length; index += 1) {
@@ -562,22 +525,6 @@ function groupedDump(
   return lines.join('\n') + '\n'
 }
 
-/** Compile profile operations before passing an ordinary patch list to the root Include. */
-function readRootEntries(configPath: string, parentURL: string, binName: string): EntryOptions[] {
-  const parsed: unknown = yaml.load(readFileSync(new URL(configPath, parentURL), 'utf8'), { schema: entryListSchema })
-  if (!Array.isArray(parsed)) throw new Error(`${binName}: config ${configPath} must be a top-level array of entries`)
-  return parsed as EntryOptions[]
-}
-
-function prepareRootPatches(
-  ctx: Context, patches: ProfilePatch[], configPath: string, parentURL: string, binName: string, initial?: EntryOptions[],
-): ProfilePatch[] {
-  if (ctx.get('profileContext') !== undefined) return prepareProfilePatches(ctx, patches, parentURL, binName)
-  if (!patches.some(patch => profilePatchPreset(patch) !== undefined)) return patches
-  return compileProfilePatches(initial ?? readRootEntries(configPath, parentURL, binName), patches,
-    (message, ...args) => { ctx.logger.warn(message, ...args) })
-}
-
 /**
  * Mount and remember the exact root Include entry used by app boot and user patch-layer HMR.
  * @param ctx - context carrying an initialized Loader service.
@@ -593,7 +540,7 @@ function prepareRootPatches(
 export async function mountRootInclude(
   ctx: Context,
   absoluteConfigPath: string,
-  patches: readonly ProfilePatch[] = [],
+  patches: readonly PatchOptions[] = [],
   bareModuleBaseUrl?: string,
   binName = 'dsh',
 ): Promise<Entry | undefined> {
@@ -621,7 +568,7 @@ export async function mountRootInclude(
   // diagnostics unstable across runs (and snapshot fixtures).
   // The launcher's own copy is prepared here: compatibility decisions must be made before the root
   // Include imports anything, and they change no profile patch layer, manifest, or bundle list.
-  const prepared = prepareRootPatches(ctx, [...patches], pathToFileURL(absoluteConfigPath).href, pathToFileURL(dirname(absoluteConfigPath)).href + '/', binName)
+  const prepared = prepareProfilePatches(ctx, [...patches], pathToFileURL(dirname(absoluteConfigPath)).href + '/', binName)
   const includeConfig: Include.Config = {
     path: pathToFileURL(absoluteConfigPath).href,
     ...prepared.length > 0 ? { patches: prepared } : {},
@@ -1027,7 +974,7 @@ export async function auditStartupEntries(
 export async function boot(
   binName: string,
   absoluteConfigPath: string,
-  patches?: ProfilePatch[],
+  patches?: PatchOptions[],
   prepare?: (ctx: Context) => Promise<void> | void,
   bareModuleBaseUrl?: string,
 ): Promise<Context> {

@@ -6,8 +6,6 @@ The [boot package group](../../packages/boot/README.md) owns launcher-provided p
 
 ## Management records
 
-`ProfilePatch` adds an optional literal `preset` row id to native Include patch fields; `id` then targets a child in that preset. [App-boot](../../packages/boot/app-boot/README.md#profiles) owns compilation, ordering, validation, and path resolution.
-
 `PluginEntryId` identifies one Loader entry; callers obtain it from `listPlugins` rather than constructing a patch id.
 
 `PluginInfo` carries module identity, effective enablement, fiber phase and optional display `meta`, plus a unique `patchId` or a `readOnlyReason`.
@@ -32,7 +30,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.configEditor` — `ConfigEditor`
 
-Persist Host entry configs without changing preset-scoped operations, then reconcile through Loader.
+Persist complete raw configs and apply them through the normal Loader path.
 
 ```ts cordis-catalog
 /** Addressable profile rows; nested Includes have independent configuration ownership.
@@ -116,7 +114,7 @@ Manage profile files and apply their declared reload lifecycle.
  * @returns Package versions, manifest descriptions, the installable spec of profile dependencies, rows, optional
  * display metadata, activation selections, whether the installation offers the bundle, and removal availability.
  */
-@Remote async listBundles(): Promise<BundleInfo[]>
+@Remote listBundles(): Promise<BundleInfo[]>
 
 /** Read the registries this manager asks: the configured first one, its fallbacks in order, and what pnpm's own configuration names.
  * @returns The registries in pnpm's comparison form; null is the one pnpm's own configuration names, `resolved` as pnpm reads it now.

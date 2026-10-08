@@ -1950,12 +1950,6 @@ importers:
       '@deepseek-ai/dsh-agent':
         specifier: workspace:*
         version: link:../../core/agent
-      '@deepseek-ai/dsh-agent-preset':
-        specifier: workspace:*
-        version: link:../../preset/agent-preset
-      '@deepseek-ai/dsh-agent-preset-registry':
-        specifier: workspace:*
-        version: link:../../preset/agent-preset-registry
       '@deepseek-ai/dsh-brand':
         specifier: workspace:*
         version: link:../../util/brand
@@ -1974,18 +1968,12 @@ importers:
       '@deepseek-ai/dsh-sandbox-policy':
         specifier: workspace:*
         version: link:../../sandbox/sandbox-policy
-      '@deepseek-ai/dsh-scope':
-        specifier: workspace:*
-        version: link:../../core/scope
       '@deepseek-ai/dsh-session':
         specifier: workspace:*
         version: link:../../core/session
       '@deepseek-ai/dsh-session-projection':
         specifier: workspace:*
         version: link:../../session/session-projection
-      '@deepseek-ai/dsh-session-title':
-        specifier: workspace:*
-        version: link:../../session/session-title
       '@deepseek-ai/dsh-subprocess':
         specifier: workspace:*
         version: link:../../subprocess/subprocess

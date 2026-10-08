@@ -804,14 +804,14 @@ describe('headless stream-json snapshots', () => {
               if (typeof message !== 'object' || message === null || Array.isArray(message)) return false
               const source = (message as JsonObject).source
               return typeof source === 'object' && source !== null && !Array.isArray(source)
-                && (source as JsonObject).kind === 'team-message'
+                && (source as JsonObject).kind === 'agent-message'
             })
         })
         const steeredMessageIndex = implementerRows.findIndex((row) => {
           if (row.type !== 'user/message') return false
           const source = (row.data as JsonObject).source
           return typeof source === 'object' && source !== null && !Array.isArray(source)
-            && (source as JsonObject).kind === 'team-message'
+            && (source as JsonObject).kind === 'agent-message'
         })
         const openTurnStart = implementerRows.findLastIndex((row, index) => (
           index < steeredMessageIndex && row.type === 'turn/start'
@@ -874,7 +874,7 @@ describe('headless stream-json snapshots', () => {
           "researcher",
         ],
         "checkedRoster": true,
-        "deliveredMessages": 2,
+        "deliveredMessages": 0,
         "identityReminders": [
           "<system-reminder>
       You are teammate "implementer".
@@ -892,7 +892,7 @@ describe('headless stream-json snapshots', () => {
       </system-reminder>",
         ],
         "memberEdges": 4,
-        "queuedMessages": 2,
+        "queuedMessages": 0,
         "sessions": 4,
         "steerEvidence": {
           "completedAfterMessage": true,

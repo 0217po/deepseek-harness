@@ -4,17 +4,17 @@ import { existsSync, readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, open, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { execa } from 'execa'
+import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import {
   DEFAULT_PROFILE_BUNDLES, bundlePatchPaths, initProfile, PROFILE_TEMPLATES, readProfileManifest,
-  resolveBundleDir, resolveProfileDir, loadOverlayPatches, readProfileVersionExemptions,
+  resolveBundleDir, resolveProfileDir, loadOverlayPatches, composeEntries, readProfileVersionExemptions,
   evaluatePluginCompatibility, pluginCompatibilityWarning, type ProfileManifest,
 } from '@deepseek-ai/dsh-app-boot'
 import { scrubbedParentEnv } from '@deepseek-ai/dsh-subprocess'
 import { parseInstallSpec } from './install-spec.ts'
 import { awaitTreeGone, leadsOwnGroup, treeAlive, type RunTree } from './run-tree.ts'
 import { incompatiblePlugin } from './failure.ts'
-import { bundleDeclarations } from './bundle-rows.ts'
 import type { IncompatiblePlugin, PackageResult, Registry } from './types.ts'
 export { setProfileVersionExemption, readProfileVersionExemptions } from '@deepseek-ai/dsh-app-boot'
 
@@ -251,11 +251,15 @@ function bundleComponentManifests(manifest: ProfileManifest, dir: string, anchor
   if (bundle === undefined) return []
   const patches = bundlePatchPaths(dir, bundle).flatMap(file => loadOverlayPatches('dsh', file))
   const names = new Set<string>()
-  for (const { row } of bundleDeclarations(patches)) {
-    if (typeof row.name !== 'string' || row.name.startsWith('.') || row.name.startsWith('/') || row.name.includes(':')) continue
-    const parts = row.name.split('/')
-    names.add(parts.slice(0, row.name.startsWith('@') ? 2 : 1).join('/'))
+  const visit = (rows: EntryOptions[]) => {
+    for (const row of rows) {
+      if (row.group && Array.isArray(row.config)) visit(row.config as EntryOptions[])
+      if (typeof row.name !== 'string' || row.name.startsWith('.') || row.name.startsWith('/') || row.name.includes(':')) continue
+      const parts = row.name.split('/')
+      names.add(parts.slice(0, row.name.startsWith('@') ? 2 : 1).join('/'))
+    }
   }
+  visit(composeEntries([patches.filter(patch => patch.insert !== undefined)]))
   return [...names].flatMap((name) => {
     let packageDir: string
     try { packageDir = resolveBundleDir('dsh', name, anchor, dir) } catch (error) {

@@ -75,17 +75,13 @@
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-sandbox-policy": "workspace:*",
     "@deepseek-ai/dsh-sandbox": "workspace:*",
-    "@deepseek-ai/dsh-user-approval": "workspace:*",
-    "@deepseek-ai/dsh-agent-preset-registry": "workspace:*"
+    "@deepseek-ai/dsh-user-approval": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh-hmr": {
       "optional": true
     },
     "@deepseek-ai/dsh-user-approval": {
-      "optional": true
-    },
-    "@deepseek-ai/dsh-agent-preset-registry": {
       "optional": true
     }
   },
@@ -107,10 +103,6 @@
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-session-projection": "workspace:*",
     "@deepseek-ai/dsh-sandbox": "workspace:*",
-    "@deepseek-ai/dsh-user-approval": "workspace:*",
-    "@deepseek-ai/dsh-agent-preset-registry": "workspace:*",
-    "@deepseek-ai/dsh-agent-preset": "workspace:*",
-    "@deepseek-ai/dsh-scope": "workspace:*",
-    "@deepseek-ai/dsh-session-title": "workspace:*"
+    "@deepseek-ai/dsh-user-approval": "workspace:*"
   }
 }

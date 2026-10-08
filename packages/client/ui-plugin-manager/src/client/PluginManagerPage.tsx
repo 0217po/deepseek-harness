@@ -26,7 +26,7 @@ import type { createNavigationStore } from './navigation-store.ts'
 import { rowConfigKey, type OfficialItem } from './config-ledger.ts'
 import { INSTALL_GIT_EXAMPLE, INSTALL_PATH_EXAMPLE, type PluginManagerLocaleKey } from './locales.ts'
 import {
-  asksMirror, githubRecoveryRegistry, isInstallPending, offeredRegistries, rowKey, packageRowKey,
+  asksMirror, githubRecoveryRegistry, isInstallPending, offeredRegistries, rowKey,
   type InstallInputError, type InstallState, type InstallSubject, type PackageRow, type PackageView,
   type PluginManagerFace, type RegistryChoice,
 } from './manager-store.ts'
@@ -129,7 +129,7 @@ const PHASE_STATES = {
 /** The count line over a pack's components: the total, then only the states that occur. */
 function partsSummary(rows: readonly PackageRow[], t: Translate): string {
   const failed = rows.filter(row => row.phase === 'failed').length
-  const off = rows.filter(row => !row.enabled && !row.conditional).length
+  const off = rows.filter(row => !row.enabled).length
   const running = rows.filter(row => row.enabled && row.phase === 'active').length
   return [
     t('partsCountTotal', { count: String(rows.length) }),
@@ -195,7 +195,6 @@ function RowSwitch({ row, title, t, busy, onChange }: {
   readonly busy: boolean
   readonly onChange: (enabled: boolean) => void
 }): ReactNode {
-  if (row.conditional) return null
   const locked = row.readOnlyReason !== undefined || row.entryId === undefined
   return (
     <Switch
@@ -208,9 +207,8 @@ function RowSwitch({ row, title, t, busy, onChange }: {
   )
 }
 
-/** What a row's state line says: conditional, off, or its active fiber phase. */
+/** What a row's state line says: off, or the phase its fiber is in. */
 function rowStateText(row: PackageRow, t: Translate): string {
-  if (row.conditional) return t('rowStateConditional')
   if (!row.enabled) return t('partOff')
   return row.phase === null ? t('rowStateIdle') : t(PHASE_KEYS[row.phase])
 }
@@ -243,7 +241,7 @@ function RowsSection({ rows, t, resolveText, toggle, configure }: {
   const query = filter.trim().toLowerCase()
   const localized = rows.map(row => ({ row, ...rowText(row, resolveText) }))
   const shown = query === '' ? localized : localized.filter(({ row, title, description }) =>
-    [title, description, row.rowId, row.preset, row.moduleName].some(value => value?.toLowerCase().includes(query)))
+    [title, description, row.rowId, row.moduleName].some(value => value?.toLowerCase().includes(query)))
   return (
     <section className={css.detailSection} data-plugin-rows>
       <div className={css.sectionHead}>
@@ -270,10 +268,10 @@ function RowsSection({ rows, t, resolveText, toggle, configure }: {
           <ul className={css.rows}>
             {shown.map(({ row, title, description }) => (
               <li
-                key={packageRowKey(row)}
+                key={row.rowId}
                 className={css.row}
-                data-plugin-row={row.entryId ?? packageRowKey(row)}
-                {...row.phase === 'failed' ? { 'data-state': 'failed' } : row.enabled || row.conditional ? {} : { 'data-state': 'off' }}
+                data-plugin-row={row.entryId ?? row.rowId}
+                {...row.phase === 'failed' ? { 'data-state': 'failed' } : row.enabled ? {} : { 'data-state': 'off' }}
               >
                 <div className={css.rowLine}>
                   <span className={css.rowIcon} aria-hidden="true"><PackageArtwork key={row.meta?.icon} src={row.meta?.icon} row /></span>
@@ -287,7 +285,7 @@ function RowsSection({ rows, t, resolveText, toggle, configure }: {
                       )
                       : <span className={css.rowId}>{title}</span>}
                     {description === undefined ? null : <span className={css.rowModule}>{description}</span>}
-                    {title === row.rowId && row.preset === undefined ? null : <code className={css.rowModule}>{row.preset === undefined ? row.rowId : `${row.preset}/${row.rowId}`}</code>}
+                    {title === row.rowId ? null : <code className={css.rowModule}>{row.rowId}</code>}
                     {title === row.moduleName ? null : <code className={css.rowModule}>{row.moduleName}</code>}
                   </div>
                   <span className={css.rowState}>
@@ -522,8 +520,7 @@ function ItemCard({ item, t, onOpen, renderSlot }: {
 
 /** One row as the detail slots see it. */
 function rowRef(row: PackageRow): PluginRowRef {
-  return { rowId: row.rowId, ...row.preset === undefined ? {} : { preset: row.preset },
-    moduleName: row.moduleName, enabled: row.enabled }
+  return { rowId: row.rowId, moduleName: row.moduleName, enabled: row.enabled }
 }
 
 /** One bundle as the detail slots see it. */
@@ -1402,7 +1399,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const refreshing = state.refreshStatus === 'refreshing'
   const openPkg = view.kind === 'package' || view.kind === 'row' ? listed.find(pkg => pkg.name === view.name) : undefined
   const openItem = view.kind === 'item' ? ledger.items.find(item => item.id === view.id) : undefined
-  const openRow = view.kind === 'row' && openPkg !== undefined ? openPkg.rows.find(row => packageRowKey(row) === view.rowId) : undefined
+  const openRow = view.kind === 'row' && openPkg !== undefined ? openPkg.rows.find(row => row.rowId === view.rowId) : undefined
   const showsCards = openPkg === undefined && openItem === undefined
   const activated = listed.find(pkg => pkg.name === activation && pkg.enabled && !state.busy.includes(pkg.name))
   const setRowEnabled = (row: PackageRow, enabled: boolean): void => {
@@ -1410,8 +1407,8 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
     if (row.entryId !== undefined) props.setRowEnabled(row.entryId, enabled)
   }
   const configure = (pkg: PackageView): RowConfigure => ({
-    has: row => row.preset === undefined && ledger.rows.has(rowConfigKey(pkg.name, row.rowId)),
-    open: (row) => { setView({ kind: 'row', name: pkg.name, rowId: packageRowKey(row) }) },
+    has: row => ledger.rows.has(rowConfigKey(pkg.name, row.rowId)),
+    open: (row) => { setView({ kind: 'row', name: pkg.name, rowId: row.rowId }) },
   })
   const packageBusy = (pkg: PackageView): boolean => state.busy.includes(pkg.name)
     || (state.install.subject?.name === pkg.name && (isInstallPending(state.install.phase) || state.install.phase === 'checking'))

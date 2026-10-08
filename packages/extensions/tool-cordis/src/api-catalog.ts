@@ -145,13 +145,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'inspectCompositions(ctx?: Context): AgentPresetInspection[]',
         description: 'Inspect retained revisions, or the exact revision an Agent joined.',
         parameters: [{ name: 'ctx', description: 'optional Agent context; omission includes all retained revisions.' }],
-        returns: 'detached definition and module row identities, resolution bases, and isolation diagnostics; no match returns an empty list.',
+        returns: 'detached module references and isolation diagnostics; no match returns an empty list.',
       },
       {
         signature: 'async list(): Promise<AgentPreset[]>',
         description: 'Read every declared preset, including activation failures.',
         parameters: [],
-        returns: 'Display metadata, declaring Loader row identities, and loading diagnostics.',
+        returns: 'Display metadata and loading diagnostics.',
       },
       {
         signature: '@Remote(\'list\') async remoteExportList(): Promise<AgentPresetRoster>',
@@ -342,9 +342,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async sendMessage(caller: Agent, request: SendTeamMessageRequest): Promise<SendTeamMessageResult>',
-        description: 'Queue one durable peer message, then attempt immediate delivery.',
-        parameters: [{ name: 'caller', description: 'exact live sending Team member.' }, { name: 'request', description: 'target name, content, and pre-queue cancellation.' }],
-        returns: 'durable message identity and immediate-delivery observation.',
+        description: 'Steer one peer message into the target inbox or reject the attempt.',
+        parameters: [{ name: 'caller', description: 'exact live sending Team member.' }, { name: 'request', description: 'target name, content, and cancellation before acceptance.' }],
+        returns: 'accepted inbox identity; acceptance follows normal Agent persistence and does not await model processing.',
       },
       {
         signature: 'async createTask(caller: Agent, request: CreateTeamTaskRequest): Promise<TeamTaskView>',
@@ -715,8 +715,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'configEditor',
-    summary: 'Persist Host entry configs without changing preset-scoped operations, then reconcile through Loader.',
-    description: 'Persist Host entry configs without changing preset-scoped operations, then reconcile through Loader.',
+    summary: 'Persist complete raw configs and apply them through the normal Loader path.',
+    description: 'Persist complete raw configs and apply them through the normal Loader path.',
     methods: [
       {
         signature: 'entries(): Entry[]',
@@ -1691,7 +1691,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Current runtime entries with persistent patch targets.',
       },
       {
-        signature: '@Remote async listBundles(): Promise<BundleInfo[]>',
+        signature: '@Remote listBundles(): Promise<BundleInfo[]>',
         description: 'Read installed, installation-provided, and offline Official catalog bundles, plus selected non-bundle names. A dependency without a bundle patch is listed, as a `not-bundle` problem, only while it is selected.',
         parameters: [],
         returns: 'Package versions, manifest descriptions, the installable spec of profile dependencies, rows, optional display metadata, activation selections, whether the installation offers the bundle, and removal availability.',
@@ -1813,7 +1813,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
       },
       {
-        signature: 'readonly overlays: readonly ProfilePatch[]',
+        signature: 'readonly overlays: readonly PatchOptions[]',
         description: 'Parsed command-line overlays, applied above profile and home patches.',
         parameters: [],
       },
@@ -2522,7 +2522,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'register(provider: SessionTitleProvider): () => Promise<void>',
-        description: 'Register the sole optional title provider. Disposal aborts its pending and active work before another provider may register.',
+        description: 'Register the sole optional title provider. Disposal aborts its pending and active work; a replacement may register once disposal has started, and the closing provider\'s late results never commit.',
         parameters: [{ name: 'provider', description: 'provider identity, cadence, and generation function.' }],
         returns: 'exact Cordis effect disposer, which settles after active calls quiesce.',
       },
@@ -4614,11 +4614,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AgentPresetInspection',
-    declaration: 'export interface AgentPresetInspection {\n    readonly id: string;\n    readonly definitionEntryId?: string;\n    readonly modules: readonly {\n        readonly moduleName: string;\n        readonly entryId: string;\n        readonly baseUrl?: string;\n        readonly useHostBase: boolean;\n    }[];\n    readonly leakedServices: readonly string[];\n}',
-  },
-  {
-    name: 'AgentPresetPluginRow',
-    declaration: 'export interface AgentPresetPluginRow {\n    readonly entryId: string | null;\n    readonly moduleName: string;\n    readonly meta?: PluginLocalizedMeta;\n    readonly enabled: PresetPluginEnablement;\n    readonly condition?: string;\n    readonly fiberPhase: PluginFiberPhase;\n}',
+    declaration: 'export interface AgentPresetInspection {\n    readonly id: string;\n    readonly modules: readonly {\n        readonly moduleName: string;\n        readonly baseUrl?: string;\n        readonly useHostBase: boolean;\n    }[];\n    readonly leakedServices: readonly string[];\n}',
   },
   {
     name: 'AgentPresetRoster',
@@ -4858,7 +4854,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'BundleRowInfo',
-    declaration: 'export interface BundleRowInfo {\n    rowId: string;\n    preset?: string;\n    readOnlyReason?: ReadOnlyReason;\n    composition?: Pick<AgentPresetPluginRow, \'enabled\' | \'fiberPhase\'>;\n    moduleName: string;\n    meta?: PluginLocalizedMeta;\n    entryId?: PluginEntryId;\n}',
+    declaration: 'export interface BundleRowInfo {\n    rowId: string;\n    moduleName: string;\n    meta?: PluginLocalizedMeta;\n    entryId?: PluginEntryId;\n}',
   },
   {
     name: 'ButtonProps',
@@ -6269,10 +6265,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface PresetOption {\n    value: string;\n    name: string;\n    description?: string;\n}',
   },
   {
-    name: 'PresetPluginEnablement',
-    declaration: 'export type PresetPluginEnablement = boolean | \'conditional\';',
-  },
-  {
     name: 'PresetSpec',
     declaration: 'export interface PresetSpec {\n    sandbox: SandboxMode;\n    approval: ApprovalPolicy;\n    name?: string;\n    description?: string;\n}',
   },
@@ -6295,10 +6287,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ProductTelemetryRecord',
     declaration: 'export type ProductTelemetryRecord = OTelEventRecord;',
-  },
-  {
-    name: 'ProfilePatch',
-    declaration: 'export interface ProfilePatch extends PatchOptions {\n    preset?: string;\n}',
   },
   {
     name: 'ProfilePnpmInvocation',
@@ -6426,7 +6414,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ReadOnlyReason',
-    declaration: 'export type ReadOnlyReason = \'management-required\' | \'unaddressable\' | \'preset-managed\';',
+    declaration: 'export type ReadOnlyReason = \'management-required\' | \'unaddressable\';',
   },
   {
     name: 'ReadResultView',
@@ -6694,7 +6682,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SendTeamMessageResult',
-    declaration: 'export interface SendTeamMessageResult {\n    readonly messageId: TeamMessageId;\n    readonly status: \'accepted\' | \'queued\';\n}',
+    declaration: 'export interface SendTeamMessageResult {\n    readonly messageId: MessageId;\n}',
   },
   {
     name: 'SerializedElement',
@@ -7747,10 +7735,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TeamMemberView',
     declaration: 'export interface TeamMemberView {\n    readonly id: SessionId;\n    readonly name: string;\n    readonly role: \'lead\' | \'teammate\';\n    readonly status: \'running\' | \'inactive\' | \'provisioning\' | \'failed\';\n    readonly description?: string;\n    readonly provider?: string;\n    readonly context?: \'fresh\' | \'fork\';\n    readonly model?: string;\n    readonly diagnostics: string[];\n}',
-  },
-  {
-    name: 'TeamMessageId',
-    declaration: 'export type TeamMessageId = Branded<\'TeamMessageId\'>;',
   },
   {
     name: 'TeamTaskAction',
