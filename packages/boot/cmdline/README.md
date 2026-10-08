@@ -35,6 +35,8 @@ The launcher makes three things available to your app:
 - `ctx.appExit` — a way to ask the process to exit once the tree has shut down, wired to the launcher's shutdown controller.
 - `ctx.appReady` — the successful-startup signal, committed only after the Loader tree and launcher-owned setup succeed.
 
+`ctx.appExit(code, beforeDispose)` can release caller-owned resources while their providers remain mounted. The callback and whole-tree disposal share the launcher's existing exit bound; rejecting cleanup still attempts tree disposal.
+
 An app launched with no arguments sees an empty list — that is the honest answer, not a missing value.
 
 `exitOnStdinEnd(ctx, label)` binds a successfully started stdio application's EOF to `ctx.appExit(0)`. It never reads or resumes stdin, so a protocol transport receives bytes buffered before it mounts; startup rejection wins over a racing EOF, and the owning fiber removes both pending listeners.

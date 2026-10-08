@@ -35,10 +35,11 @@ export interface CmdlineArgs {
 /** Request bounded process exit; the launcher wires it to its shutdown controller. */
 export interface AppExit {
   /**
-   * Request exit once the tree has been disposed.
+   * Request exit after caller-owned cleanup and whole-tree disposal within the launcher's bound.
    * @param code - the process exit code.
+   * @param beforeDispose - optional owned-resource cleanup that needs the tree's providers alive.
    */
-  (code: number): void
+  (code: number, beforeDispose?: () => Promise<void>): void
 }
 
 /** Successful application-startup signal owned by the launcher. */

@@ -256,6 +256,25 @@ Additional instructions from: nested\AGENTS.md`,
 })
 
 describe('normalizeSessionLog', () => {
+  it('keeps job execution identities distinct in single-log and single-snapshot paths', () => {
+    const ids = ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb']
+    const raw = [
+      { type: 'session', version: 0, id: ctx.sessionIds[0], cwd: ctx.cwd, createdAt: 100 },
+      { type: 'user/message', data: { text: 'Keep {{id:1}} literal.' } },
+      ...ids.flatMap(executionId => [
+        { type: 'job/registered', data: { executionId, startedAt: 100 } },
+        { type: 'job/settled', data: { executionId, startedAt: 100, finishedAt: 200 } },
+      ]),
+    ].map(record => JSON.stringify(record)).join('\n') + '\n'
+    for (const normalize of [normalizeSessionLog, normalizeSessionSnapshot]) {
+      const output = normalize(raw, ctx)
+      const jobs = output.split('\n').filter(Boolean).map(line => JSON.parse(line) as { type: string; data: { executionId: string } })
+        .filter(record => record.type.startsWith('job/'))
+      expect(jobs.map(record => record.data.executionId)).toEqual(['{{id:2}}', '{{id:2}}', '{{id:3}}', '{{id:3}}'])
+      expect(output).toContain('Keep {{id:1}} literal.')
+      expect(normalize(output, ctx)).toBe(output)
+    }
+  })
   it('normalizes only message-feedback item clocks', () => {
     const item = { messageId: 'answer', version: 'version', createdAt: 123, updatedAt: 456, note: 'keep 123' }
     const input = ['feedback/message-put', 'tool/result'].map(type => JSON.stringify({ type, data: { item } })).join('\n')
@@ -529,7 +548,7 @@ describe('normalizeSessionLog', () => {
     const input = [
       header({}),
       { type: 'job/registered', data: { startedAt: 100, jobId: 'bash-1' } },
-      { type: 'job/settled', data: { startedAt: 100, finishedAt: 200, terminationConfirmed: false } },
+      { type: 'job/settled', data: { startedAt: 100, finishedAt: 200, producerReported: false } },
       { type: 'job/registered', data: {} },
       { type: 'job/settled', data: null },
       { type: 'job/settled', data: 'invalid fixture remains invalid' },
@@ -538,7 +557,7 @@ describe('normalizeSessionLog', () => {
     const normalized = normalizeSessionLog(input, ctx).trim().split('\n')
       .map(line => JSON.parse(line) as { data?: unknown })
     expect(normalized[1]?.data).toEqual({ startedAt: 0, jobId: 'bash-1' })
-    expect(normalized[2]?.data).toEqual({ startedAt: 0, finishedAt: 0, terminationConfirmed: false })
+    expect(normalized[2]?.data).toEqual({ startedAt: 0, finishedAt: 0, producerReported: false })
     expect(normalized[3]?.data).toEqual({})
     expect(normalized[4]?.data).toBeNull()
     expect(normalized[5]?.data).toBe('invalid fixture remains invalid')

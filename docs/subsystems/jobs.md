@@ -24,7 +24,7 @@ interface JobKindMap {
 
 ## Session lifecycle records
 
-Owned jobs publish `job/registered` and `job/settled` in their original owner Session. `executionId` identifies one execution across registry restarts and copied history; `jobId` remains the process-local control id. The SDK forwards these log-only records through `session.event`, independently of output reads. Timestamps describe registry commits, not CPU time or exact OS process boundaries; a missing settlement remains incomplete. `terminationConfirmed` means the producer fulfilled its resource-release promise, and is false for forced teardown or a rejected promise.
+Owned jobs publish `job/registered` and `job/settled` in their original owner Session. `executionId` identifies one execution across registry restarts and copied history; `jobId` remains the process-local control id. The SDK forwards these log-only records through `session.event`, independently of output reads. Timestamps describe registry commits, not CPU time or exact OS process boundaries; a missing settlement remains incomplete. `producerReported` means the producer fulfilled `done` with a terminal outcome; it is false for forced teardown or rejection and does not independently certify resource release.
 
 `job/settled` may follow `turn/end`. An SDK run result covers only its own observation window; consumers needing later settlements retain a Session subscription or read persisted history. Turn completion does not imply that every owned job stopped.
 
@@ -32,35 +32,35 @@ Owned jobs publish `job/registered` and `job/settled` in their original owner Se
 /** Durable identity and registration time of one owned job execution. */
 interface JobRegisteredData {
   /** UUID unique to this execution, even when the registry reuses a display id. */
-  executionId: JobExecutionId
+  readonly executionId: JobExecutionId
   /** Runtime-local id accepted by job controls. */
-  jobId: JobId
+  readonly jobId: JobId
   /** Original owner; copied history does not transfer execution ownership. */
-  owner: SessionId
+  readonly owner: SessionId
   /** Producer kind. */
-  kind: string
+  readonly kind: string
   /** Producer-supplied label. */
-  label: string
+  readonly label: string
   /** Unix epoch milliseconds when registration committed. */
-  startedAt: number
+  readonly startedAt: number
   /** Creating tool invocation, when the producer was called through a tool. */
-  toolCall?: JobToolCall
+  readonly toolCall?: JobToolCall
 }
 ```
 
 ```ts type-equiv
-/** Registry settlement, including whether the producer confirmed resource release. */
+/** Registry settlement, including whether the producer reported a terminal outcome. */
 interface JobSettledData extends JobRegisteredData {
   /** Unix epoch milliseconds when the registry committed the terminal record. */
-  finishedAt: number
+  readonly finishedAt: number
   /** Recorded terminal outcome. */
-  status: JobOutcome['status']
+  readonly status: JobOutcome['status']
   /** Source of the termination request, or producer completion. */
-  cause: JobSettleCause
-  /** False for a rejected producer promise or forced teardown failure; work may remain alive. */
-  terminationConfirmed: boolean
+  readonly cause: JobSettleCause
+  /** True when done fulfilled; false for rejection or forced failure. Does not certify resource release. */
+  readonly producerReported: boolean
   /** Terminal reason, including a recorded kill reason when applicable. */
-  detail?: string
+  readonly detail?: string
 }
 ```
 

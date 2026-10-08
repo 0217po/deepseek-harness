@@ -45,7 +45,7 @@ The [format references](persistence-changes/historical-formats/README.md) cover 
 | `event:hook/result` | event | `e75916628f3f10c2d50658bd143052a46285fbf1a9a700ba54947614603d26b4` | [`{ type: "hook/result" }`](#persistence-type-sha256-e75916628f3f10c2d50658bd143052a46285fbf1a9a700ba54947614603d26b4) |
 | `event:image/offload` | event | `b222069eea2d768065161c1147b1f2c78c1b54328c84b3586ae5c8f91b8ed35e` | [`{ type: "image/offload" }`](#persistence-type-sha256-b222069eea2d768065161c1147b1f2c78c1b54328c84b3586ae5c8f91b8ed35e) |
 | `event:job/registered` | event | `f05be3e066ef054a610f0825251f19ee3fcfc98908b5ceaa869ee143d7e91fa5` | [`{ type: "job/registered" }`](#persistence-type-sha256-f05be3e066ef054a610f0825251f19ee3fcfc98908b5ceaa869ee143d7e91fa5) |
-| `event:job/settled` | event | `e1a4e287dd40ca5559cc4a00bef7e111631c2556e17a114b7a21dfa735487782` | [`{ type: "job/settled" }`](#persistence-type-sha256-e1a4e287dd40ca5559cc4a00bef7e111631c2556e17a114b7a21dfa735487782) |
+| `event:job/settled` | event | `a103c03b3bc0ca7a7809d1eb2572dec08899f7a15a90072736777acd4e517648` | [`{ type: "job/settled" }`](#persistence-type-sha256-a103c03b3bc0ca7a7809d1eb2572dec08899f7a15a90072736777acd4e517648) |
 | `event:llm/retry` | event | `525254db03b1d1e6b74cf55aced52817568331ac1f96c0818728910b6692e336` | [`{ type: "llm/retry" }`](#persistence-type-sha256-525254db03b1d1e6b74cf55aced52817568331ac1f96c0818728910b6692e336) |
 | `event:llm/retry-started` | event | `48e5c9861f16ac07e78cb7b5ae9dabdf7bb85c58baed5a51b4ad275050ea58e3` | [`{ type: "llm/retry-started" }`](#persistence-type-sha256-48e5c9861f16ac07e78cb7b5ae9dabdf7bb85c58baed5a51b4ad275050ea58e3) |
 | `event:model/selection` | event | `35203ba7ad5ef6f97d556b85df20ae98f04f09c65748cecdf8eefdb8b6405ffc` | [`{ type: "model/selection" }`](#persistence-type-sha256-35203ba7ad5ef6f97d556b85df20ae98f04f09c65748cecdf8eefdb8b6405ffc) |
@@ -636,22 +636,28 @@ Source: [`packages/compaction/compaction-image-offload/src/projection.ts:25`](..
 #### `job/registered` — log-only
 
 ```ts persistence-catalog
-/** Log-only job registration; model output collection is not required. */
+/**
+ * Log-only job registration; model output collection is not required.
+ * @param data - Execution identity, original owner, registration time, and creating tool call.
+ */
 'job/registered': JobRegisteredData
 ```
 
-Source: [`packages/jobs/jobs/src/types.ts:58`](../packages/jobs/jobs/src/types.ts)
+Source: [`packages/jobs/jobs/src/types.ts:61`](../packages/jobs/jobs/src/types.ts)
 
 <a id="jobsettled--log-only"></a>
 
 #### `job/settled` — log-only
 
 ```ts persistence-catalog
-/** Log-only terminal record, paired by executionId rather than a reusable jobId. */
+/**
+ * Log-only terminal record, paired by executionId rather than a reusable jobId.
+ * @param data - Registration facts plus settlement time, outcome, and producer acknowledgement.
+ */
 'job/settled': JobSettledData
 ```
 
-Source: [`packages/jobs/jobs/src/types.ts:60`](../packages/jobs/jobs/src/types.ts)
+Source: [`packages/jobs/jobs/src/types.ts:66`](../packages/jobs/jobs/src/types.ts)
 
 ### `llm/*`
 
@@ -3802,7 +3808,7 @@ Sources: [`packages/jobs/jobs/src/types.ts:24`](../packages/jobs/jobs/src/types.
 
 SHA-256: `750a2b129d67704df675c06823c20c80b65cbae89d5aaa914fd5a72e3df395b5`
 
-Sources: [`packages/jobs/jobs/src/types.ts:243`](../packages/jobs/jobs/src/types.ts)
+Sources: [`packages/jobs/jobs/src/types.ts:249`](../packages/jobs/jobs/src/types.ts)
 
 One of:
 
@@ -3810,7 +3816,7 @@ One of:
 - `"producer"`
 - `"teardown"`
 
-<a id="persistence-type-sha256-33bcef7271c33388ee9e6d908ea95ffb2aad355fda91f334a0ca2533fb9e86e5"></a>
+<a id="persistence-type-sha256-9aaca69bf3c44a4486ee23a54aa9ec8e7189a935f818c8ed670de2352f3c12c9"></a>
 
 <a id="persistence-type-jobsettleddata"></a>
 
@@ -3818,7 +3824,7 @@ One of:
 
 ### `JobSettledData`
 
-SHA-256: `33bcef7271c33388ee9e6d908ea95ffb2aad355fda91f334a0ca2533fb9e86e5`
+SHA-256: `9aaca69bf3c44a4486ee23a54aa9ec8e7189a935f818c8ed670de2352f3c12c9`
 
 Sources: [`packages/jobs/jobs/src/types.ts:42`](../packages/jobs/jobs/src/types.ts)
 
@@ -3832,9 +3838,9 @@ Sources: [`packages/jobs/jobs/src/types.ts:42`](../packages/jobs/jobs/src/types.
 | `kind` | required | `string` |
 | `label` | required | `string` |
 | `owner` | required | `string` |
+| `producerReported` | required | `boolean` |
 | `startedAt` | required | `number` |
 | `status` | required | [`union (3 variants)`](#persistence-type-sha256-c2f49004d9ae38a964e80850c87bc6849d6a872091a1d43e99eedf00c641e2a3) |
-| `terminationConfirmed` | required | `boolean` |
 | `toolCall` | optional | [`JobToolCall`](#persistence-type-sha256-39cf2d3ff8bac81c62d49ac2ba38a095b18e80f3ad700819fa1f650a4e60197f) |
 
 <a id="persistence-type-sha256-39cf2d3ff8bac81c62d49ac2ba38a095b18e80f3ad700819fa1f650a4e60197f"></a>
@@ -8317,17 +8323,17 @@ SHA-256: `f05be3e066ef054a610f0825251f19ee3fcfc98908b5ceaa869ee143d7e91fa5`
 | `time` | required | `number` |
 | `type` | required | `"job/registered"` |
 
-<a id="persistence-type-sha256-e1a4e287dd40ca5559cc4a00bef7e111631c2556e17a114b7a21dfa735487782"></a>
+<a id="persistence-type-sha256-a103c03b3bc0ca7a7809d1eb2572dec08899f7a15a90072736777acd4e517648"></a>
 
 <a id="persistence-type-eventjobsettled"></a>
 
 ### `{ type: "job/settled" }`
 
-SHA-256: `e1a4e287dd40ca5559cc4a00bef7e111631c2556e17a114b7a21dfa735487782`
+SHA-256: `a103c03b3bc0ca7a7809d1eb2572dec08899f7a15a90072736777acd4e517648`
 
 | Property | Presence | Type |
 |---|---|---|
-| `data` | required | [`JobSettledData`](#persistence-type-sha256-33bcef7271c33388ee9e6d908ea95ffb2aad355fda91f334a0ca2533fb9e86e5) |
+| `data` | required | [`JobSettledData`](#persistence-type-sha256-9aaca69bf3c44a4486ee23a54aa9ec8e7189a935f818c8ed670de2352f3c12c9) |
 | `ignorable` | optional | `true` |
 | `seq` | required | `number` |
 | `time` | required | `number` |

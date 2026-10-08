@@ -24,7 +24,7 @@ interface JobKindMap {
 
 ## Session 生命周期记录
 
-有所有者的 job 在原始所有者 Session 中发布 `job/registered` 与 `job/settled`。`executionId` 在注册表重启和历史复制后仍标识同一次执行；`jobId` 仍是进程内控制 id。SDK 通过 `session.event` 转发这些仅日志记录，不依赖输出读取。时间戳描述注册表提交时刻，不是 CPU 时间或精确的 OS 进程边界；缺少结算时保持不完整。`terminationConfirmed` 表示生产方兑现了释放资源的 promise，强制销毁或 promise 拒绝时为 false。
+有所有者的 job 在原始所有者 Session 中发布 `job/registered` 与 `job/settled`。`executionId` 在注册表重启和历史复制后仍标识同一次执行；`jobId` 仍是进程内控制 id。SDK 通过 `session.event` 转发这些仅日志记录，不依赖输出读取。时间戳描述注册表提交时刻，不是 CPU 时间或精确的 OS 进程边界；缺少结算时保持不完整。`producerReported` 表示生产方通过兑现 `done` 报告了终态；强制销毁或 promise 拒绝时为 false，不独立确认资源已释放。
 
 `job/settled` 可能出现在 `turn/end` 之后。SDK run 结果只覆盖自身观测窗口；需要较晚结算的消费方应保留 Session 订阅或读取持久化历史。轮次完成不表示所有有主 job 都已停止。
 
@@ -32,35 +32,35 @@ interface JobKindMap {
 /** Durable identity and registration time of one owned job execution. */
 interface JobRegisteredData {
   /** UUID unique to this execution, even when the registry reuses a display id. */
-  executionId: JobExecutionId
+  readonly executionId: JobExecutionId
   /** Runtime-local id accepted by job controls. */
-  jobId: JobId
+  readonly jobId: JobId
   /** Original owner; copied history does not transfer execution ownership. */
-  owner: SessionId
+  readonly owner: SessionId
   /** Producer kind. */
-  kind: string
+  readonly kind: string
   /** Producer-supplied label. */
-  label: string
+  readonly label: string
   /** Unix epoch milliseconds when registration committed. */
-  startedAt: number
+  readonly startedAt: number
   /** Creating tool invocation, when the producer was called through a tool. */
-  toolCall?: JobToolCall
+  readonly toolCall?: JobToolCall
 }
 ```
 
 ```ts type-equiv
-/** Registry settlement, including whether the producer confirmed resource release. */
+/** Registry settlement, including whether the producer reported a terminal outcome. */
 interface JobSettledData extends JobRegisteredData {
   /** Unix epoch milliseconds when the registry committed the terminal record. */
-  finishedAt: number
+  readonly finishedAt: number
   /** Recorded terminal outcome. */
-  status: JobOutcome['status']
+  readonly status: JobOutcome['status']
   /** Source of the termination request, or producer completion. */
-  cause: JobSettleCause
-  /** False for a rejected producer promise or forced teardown failure; work may remain alive. */
-  terminationConfirmed: boolean
+  readonly cause: JobSettleCause
+  /** True when done fulfilled; false for rejection or forced failure. Does not certify resource release. */
+  readonly producerReported: boolean
   /** Terminal reason, including a recorded kill reason when applicable. */
-  detail?: string
+  readonly detail?: string
 }
 ```
 

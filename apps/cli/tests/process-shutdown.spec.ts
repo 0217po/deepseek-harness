@@ -20,6 +20,35 @@ afterEach(() => {
 })
 
 describe('process shutdown', () => {
+  it('releases caller-owned work before disposing its providers within the exit bound', async () => {
+    vi.useFakeTimers()
+    const release = deferred()
+    const dispose = vi.fn(() => Promise.resolve())
+    const exit = vi.fn()
+    const complete = vi.fn()
+    const shutdown = createProcessShutdown(dispose, exit, complete)
+    const cleanup = vi.fn(() => release.promise)
+    const pending = shutdown.shutdown(0, cleanup)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(cleanup).toHaveBeenCalledOnce()
+    expect(dispose).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(PROCESS_SHUTDOWN_TIMEOUT_MS)
+    expect(exit).toHaveBeenCalledWith(0)
+    release.resolve()
+    await pending
+    expect(dispose).toHaveBeenCalledOnce()
+    expect(complete).not.toHaveBeenCalled()
+  })
+
+  it('still disposes the tree if caller-owned cleanup rejects', async () => {
+    const dispose = vi.fn(() => Promise.resolve())
+    const exit = vi.fn()
+    const shutdown = createProcessShutdown(dispose, exit, vi.fn())
+    await shutdown.shutdown(1, () => Promise.reject(new Error('cleanup failed')))
+    expect(dispose).toHaveBeenCalledOnce()
+    expect(exit).toHaveBeenCalledWith(1)
+  })
+
   it('completes naturally after disposal resolves and forces exit when it rejects', async () => {
     const resolvedExit = vi.fn()
     const resolvedComplete = vi.fn()
@@ -42,7 +71,7 @@ describe('process shutdown', () => {
     expect(rejectedComplete).not.toHaveBeenCalled()
   })
 
-  it('uses process.exitCode for default normal completion', async () => {
+  it('uses the process exit defaults for natural completion and signal escalation', async () => {
     const exit = vi.spyOn(process, 'exit').mockImplementation(_code => undefined as never)
     const originalExitCode = process.exitCode
     process.exitCode = undefined
@@ -53,6 +82,8 @@ describe('process shutdown', () => {
 
       expect(process.exitCode).toBe(7)
       expect(exit).not.toHaveBeenCalled()
+      shutdown.interrupt(130)
+      expect(exit).toHaveBeenCalledWith(130)
     } finally {
       process.exitCode = originalExitCode
     }

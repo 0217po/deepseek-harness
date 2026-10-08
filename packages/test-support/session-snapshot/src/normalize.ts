@@ -354,8 +354,24 @@ export function normalizeSessionLog(
   const cwdPathMode = options.cwdPathMode ?? 'canonical'
   const identityMode = options.identityMode ?? 'legacy'
   const lines = rawLog.split('\n').filter(line => line.trim().length > 0)
+  const executionTokens = new Map<string, string>()
+  const reservedTokens = new Set(rawLog.match(/\{\{id:[1-9]\d*\}\}/g) ?? [])
+  let nextExecutionToken = 1
   const records = lines.map((line) => {
     const record = JSON.parse(line) as Record<string, unknown>
+    if (identityMode === 'legacy' && (record.type === 'job/registered' || record.type === 'job/settled')
+      && record.data !== null && typeof record.data === 'object') {
+      const data = record.data as Record<string, unknown>
+      const id = data.executionId
+      if (typeof id === 'string' && id.length === 36 && id.search(UUID_RE) === 0) {
+        let token = executionTokens.get(id)
+        if (token === undefined) {
+          do { token = `{{id:${nextExecutionToken++}}}` } while (reservedTokens.has(token))
+          executionTokens.set(id, token)
+        }
+        data.executionId = token
+      }
+    }
     if (record.type === 'session') {
       if ('createdAt' in record) record.createdAt = 0
     } else if (isPackedFixtureRow(record)) {

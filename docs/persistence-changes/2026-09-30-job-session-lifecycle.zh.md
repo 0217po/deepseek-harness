@@ -9,7 +9,7 @@ kind: persistence-change
 
 ## 概述
 
-将有所有者 job 的注册与结算记录为仅日志 Session 事件，包含执行标识、原始时间戳、创建工具调用及生产方终止确认。
+将有所有者 job 的注册与结算记录为仅日志 Session 事件，包含执行标识、原始时间戳、创建工具调用及生产方完成报告。
 
 ## 目录
 
@@ -32,19 +32,19 @@ changes:
     decision: same-version
   - root: "event:job/settled"
     previous: null
-    after: "e1a4e287dd40ca5559cc4a00bef7e111631c2556e17a114b7a21dfa735487782"
+    after: "a103c03b3bc0ca7a7809d1eb2572dec08899f7a15a90072736777acd4e517648"
     decision: same-version
 ```
 
 <a id="compatibility"></a>
 ## 兼容性
 
-增加事件类型，不修改现有负载或 Session 封装。历史会话仍有效，不补造 job 历史。旧构建会拒绝未知的必需事件类型。这些事实不会恢复工作、改变模型消息或在强制失败后确认资源已释放。
+增加事件类型，不修改现有负载或 Session 封装。历史会话仍有效，不补造 job 历史。旧构建会拒绝未知的必需事件类型。producerReported 描述生产方完成 promise 的兑现情况，不确认资源已释放。
 
 <a id="verification"></a>
 ## 验证
 
-job 注册表与快照归一化定向测试通过：181 个测试，受影响文件覆盖率 100%。生产方测试通过：432 个测试、7 个平台跳过，受影响文件覆盖率 100%。同一改动包含 SDK 回放和持久化验证。
+定向注册表、归一化、关停与 headless 回归覆盖因果发布顺序、不同执行标识，以及已有退出时限内的清理。真实 CLI 快照和 SDK 回放验证注册/结算持久化与通知。
 
 <a id="dev-note"></a>
 ## 开发备注

@@ -23,40 +23,46 @@ export interface JobToolCall {
 /** Durable identity and registration time of one owned job execution. */
 export interface JobRegisteredData {
   /** UUID unique to this execution, even when the registry reuses a display id. */
-  executionId: JobExecutionId
+  readonly executionId: JobExecutionId
   /** Runtime-local id accepted by job controls. */
-  jobId: JobId
+  readonly jobId: JobId
   /** Original owner; copied history does not transfer execution ownership. */
-  owner: SessionId
+  readonly owner: SessionId
   /** Producer kind. */
-  kind: string
+  readonly kind: string
   /** Producer-supplied label. */
-  label: string
+  readonly label: string
   /** Unix epoch milliseconds when registration committed. */
-  startedAt: number
+  readonly startedAt: number
   /** Creating tool invocation, when the producer was called through a tool. */
-  toolCall?: JobToolCall
+  readonly toolCall?: JobToolCall
 }
 
-/** Registry settlement, including whether the producer confirmed resource release. */
+/** Registry settlement, including whether the producer reported a terminal outcome. */
 export interface JobSettledData extends JobRegisteredData {
   /** Unix epoch milliseconds when the registry committed the terminal record. */
-  finishedAt: number
+  readonly finishedAt: number
   /** Recorded terminal outcome. */
-  status: JobOutcome['status']
+  readonly status: JobOutcome['status']
   /** Source of the termination request, or producer completion. */
-  cause: JobSettleCause
-  /** False for a rejected producer promise or forced teardown failure; work may remain alive. */
-  terminationConfirmed: boolean
+  readonly cause: JobSettleCause
+  /** True when done fulfilled; false for rejection or forced failure. Does not certify resource release. */
+  readonly producerReported: boolean
   /** Terminal reason, including a recorded kill reason when applicable. */
-  detail?: string
+  readonly detail?: string
 }
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
-    /** Log-only job registration; model output collection is not required. */
+    /**
+     * Log-only job registration; model output collection is not required.
+     * @param data - Execution identity, original owner, registration time, and creating tool call.
+     */
     'job/registered': JobRegisteredData
-    /** Log-only terminal record, paired by executionId rather than a reusable jobId. */
+    /**
+     * Log-only terminal record, paired by executionId rather than a reusable jobId.
+     * @param data - Registration facts plus settlement time, outcome, and producer acknowledgement.
+     */
     'job/settled': JobSettledData
   }
 }

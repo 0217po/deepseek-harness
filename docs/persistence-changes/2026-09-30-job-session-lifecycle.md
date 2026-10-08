@@ -9,7 +9,7 @@ English | [中文](2026-09-30-job-session-lifecycle.zh.md)
 
 ## Summary
 
-Records owned job registration and settlement as log-only Session events with execution identity, original timestamps, creating tool calls, and producer termination acknowledgement.
+Records owned job registration and settlement as log-only Session events with execution identity, original timestamps, creating tool calls, and producer completion reports.
 
 ## Table of Contents
 
@@ -32,19 +32,19 @@ changes:
     decision: same-version
   - root: "event:job/settled"
     previous: null
-    after: "e1a4e287dd40ca5559cc4a00bef7e111631c2556e17a114b7a21dfa735487782"
+    after: "a103c03b3bc0ca7a7809d1eb2572dec08899f7a15a90072736777acd4e517648"
     decision: same-version
 ```
 
 <a id="compatibility"></a>
 ## Compatibility
 
-Adds event kinds without changing existing payloads or the Session envelope. Historical sessions remain valid and receive no fabricated job history. Older builds reject unknown required event types. These facts do not resume work, alter model messages, or certify resource release after forced failure.
+Adds event kinds without changing existing payloads or the Session envelope. Historical sessions remain valid and receive no fabricated job history. Older builds reject unknown required event types. producerReported describes fulfillment of the producer completion promise, not verified resource release.
 
 <a id="verification"></a>
 ## Verification
 
-Focused jobs registry and snapshot-normalizer tests passed: 181 tests with 100% affected-file coverage. Producer tests passed: 432 tests, 7 platform skips, with 100% affected-file coverage. SDK replay and persistence verification are included in the same change.
+Focused registry, normalizer, shutdown, and headless regressions cover causal publication order, distinct execution identities, and cleanup within the existing exit bound. Real CLI snapshot and SDK replay verify registration/settlement persistence and notifications.
 
 <a id="dev-note"></a>
 ## Dev Note

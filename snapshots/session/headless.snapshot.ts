@@ -1337,6 +1337,11 @@ describe('headless recorded-session snapshots', () => {
             if (scenario.name === 'background-confinement-failure') {
               await verifyBackgroundConfinementFailure(actualLogs[0]!.content, cwd)
             }
+            if (scenario.name === 'bash-startup-timeout') {
+              const jobs = records(actualLogs[0]!.content).filter(event => event.type === 'job/registered' || event.type === 'job/settled')
+              expect(jobs.map(event => event.type)).toEqual(['job/registered', 'job/settled'])
+              expect(jobs[1]?.data).toMatchObject({ status: 'killed', cause: 'teardown', producerReported: true })
+            }
             if (scenario.name === 'working-directory') {
               verifyWorkingDirectory(actualLogs[0]!.content, await realpath(cwd))
             }

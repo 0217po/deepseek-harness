@@ -122,7 +122,7 @@
       "kind": "event",
       "event": "job/settled",
       "surface": false,
-      "digest": "e1a4e287dd40ca5559cc4a00bef7e111631c2556e17a114b7a21dfa735487782",
+      "digest": "a103c03b3bc0ca7a7809d1eb2572dec08899f7a15a90072736777acd4e517648",
       "schema": {
         "root": 0,
         "nodes": [
@@ -201,18 +201,18 @@
                 "optional": false
               },
               {
+                "name": "producerReported",
+                "type": 8,
+                "optional": false
+              },
+              {
                 "name": "startedAt",
                 "type": 7,
                 "optional": false
               },
               {
                 "name": "status",
-                "type": 8,
-                "optional": false
-              },
-              {
-                "name": "terminationConfirmed",
-                "type": 12,
+                "type": 9,
                 "optional": false
               },
               {
@@ -252,11 +252,15 @@
             "type": "number"
           },
           {
+            "kind": "primitive",
+            "type": "boolean"
+          },
+          {
             "kind": "union",
             "types": [
-              9,
               10,
-              11
+              11,
+              12
             ]
           },
           {
@@ -270,10 +274,6 @@
           {
             "kind": "literal",
             "value": "killed"
-          },
-          {
-            "kind": "primitive",
-            "type": "boolean"
           },
           {
             "kind": "object",

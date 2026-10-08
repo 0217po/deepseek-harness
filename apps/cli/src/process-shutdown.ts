@@ -5,8 +5,8 @@ export const PROCESS_SHUTDOWN_TIMEOUT_MS = 5_000
 
 /** Process-exit controller shared by normal completion and Unix signal handlers. */
 export interface ProcessShutdown {
-  /** Start or join graceful disposal before allowing natural completion with `code`. */
-  shutdown(code: number): Promise<void>
+  /** Start or join graceful disposal; caller-owned cleanup runs under the same bound before the tree. */
+  shutdown(code: number, beforeDispose?: () => Promise<void>): Promise<void>
   /** Start graceful disposal followed by exit, or force exit when shutdown is already running. */
   interrupt(code: number): void
 }
@@ -49,10 +49,16 @@ export function createProcessShutdown(
     complete(code)
   }
 
-  const start = (code: number, forceAfterDispose: boolean): Promise<void> => {
+  const start = (code: number, forceAfterDispose: boolean, beforeDispose?: () => Promise<void>): Promise<void> => {
     if (pending !== undefined) return pending
     timeout = setTimeout(() => { forceExitOnce(code) }, timeoutMs)
-    pending = Promise.resolve().then(dispose).then(
+    pending = Promise.resolve().then(async () => {
+      try {
+        if (beforeDispose !== undefined) await beforeDispose()
+      } finally {
+        await dispose()
+      }
+    }).then(
       () => {
         if (forceAfterDispose) forceExitOnce(code)
         else completeOnce(code)
@@ -63,8 +69,8 @@ export function createProcessShutdown(
   }
 
   return {
-    shutdown(code) {
-      return start(code, false)
+    shutdown(code, beforeDispose) {
+      return start(code, false, beforeDispose)
     },
     interrupt(code) {
       if (pending !== undefined) {

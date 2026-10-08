@@ -1612,7 +1612,7 @@ def smoke_sdk_snapshot_mode(
         registered, settled = (event["data"] for event in jobs)
         assert registered["executionId"] == settled["executionId"]
         assert registered["startedAt"] == settled["startedAt"] <= settled["finishedAt"]
-        assert settled["terminationConfirmed"] is True and settled["status"] == "completed"
+        assert settled["producerReported"] is True and settled["status"] == "completed"
         root_call_id = "advanced-code" if mode == "ptc" else "advanced-native"
         call_id = root_call_id + ":ptc:1" if mode == "ptc" else root_call_id
         assert registered["toolCall"] == {"callId": call_id, "rootCallId": root_call_id}

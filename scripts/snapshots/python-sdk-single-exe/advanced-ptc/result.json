@@ -491,7 +491,7 @@
         "finishedAt": 0,
         "status": "completed",
         "cause": "producer",
-        "terminationConfirmed": true
+        "producerReported": true
       }
     },
     {
@@ -1641,7 +1641,7 @@
             "finishedAt": 0,
             "status": "completed",
             "cause": "producer",
-            "terminationConfirmed": true
+            "producerReported": true
           }
         }
       }

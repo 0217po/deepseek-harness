@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { bindScopeParent, createScope, scopeOf } from '@deepseek-ai/dsh-scope'
@@ -1496,6 +1497,24 @@ describe('owned job Session lifecycle records', () => {
   beforeEach(async () => { ctx = await harness() })
   afterEach(async () => { await ctx.fiber.dispose() })
 
+  it('records lifecycle commits before synchronous hub reactions', async () => {
+    const owner = await liveAgent(ctx, 'ordered-owner')
+    const p = producer({ owner, cancel: () => { p.settle({ status: 'killed' }) } })
+    ctx.jobs.events.subscribe({ owners: 'all' }, (event) => {
+      if (event.type !== 'registered' && event.type !== 'settled') return
+      owner.session.append('agent/inbox/spliced', {
+        target: 'next-step', start: 0,
+        inserted: [createUserMessage({ content: [{ type: 'text', text: event.type }], source: { kind: 'user' } })],
+      })
+    })
+    const id = ctx.jobs.start(p.spec)
+    p.settle({ status: 'completed' })
+    await ctx.jobs.wait(id, 1000, owner.id)
+    expect(owner.session.snapshotEvents().map(event => event.type)).toEqual([
+      'job/registered', 'agent/inbox/spliced', 'job/settled', 'agent/inbox/spliced',
+    ])
+  })
+
   it('publishes original timestamps and nested tool identity without consuming output', async () => {
     const owner = await liveAgent(ctx, 'journal-owner')
     const p = producer({ owner, cancel: () => { p.settle({ status: 'killed' }) } })
@@ -1513,7 +1532,7 @@ describe('owned job Session lifecycle records', () => {
       const settled = owner.session.snapshotEvents().find(event => event.type === 'job/settled')
       expect(settled?.data).toEqual({
         ...registered?.data, finishedAt: 2500, status: 'completed', cause: 'producer',
-        terminationConfirmed: true, detail: 'exit code: 0',
+        producerReported: true, detail: 'exit code: 0',
       })
       expect(ctx.jobs.read(id, owner.id).chunks.map(chunk => chunk.text)).toEqual(['unread output'])
       expect(owner.session.deriveMessages()).toEqual([])
@@ -1531,30 +1550,30 @@ describe('owned job Session lifecycle records', () => {
     expect(owner.session.snapshotEvents().filter(event => event.type === 'job/settled')).toEqual([])
     await ctx.jobs.wait(id, 1000, owner.id)
     expect(owner.session.snapshotEvents().find(event => event.type === 'job/settled')?.data)
-      .toMatchObject({ status: 'killed', cause: 'kill', terminationConfirmed: true, detail: 'requested by user' })
+      .toMatchObject({ status: 'killed', cause: 'kill', producerReported: true, detail: 'requested by user' })
   })
 
-  it('records a producer-reported failure as confirmed settlement', async () => {
+  it('records a producer-reported failed outcome', async () => {
     const owner = await liveAgent(ctx, 'failed-owner')
     const p = producer({ owner, cancel: () => { p.settle({ status: 'killed' }) } })
     const id = ctx.jobs.start(p.spec)
     p.settle({ status: 'failed', detail: 'operation failed after cleanup' })
     await ctx.jobs.wait(id, 1000, owner.id)
     expect(owner.session.snapshotEvents().find(event => event.type === 'job/settled')?.data)
-      .toMatchObject({ status: 'failed', cause: 'producer', terminationConfirmed: true })
+      .toMatchObject({ status: 'failed', cause: 'producer', producerReported: true })
   })
 
-  it('does not certify resource release when a producer rejects its done promise', async () => {
+  it('records absence of a producer report when its done promise rejects', async () => {
     const owner = await liveAgent(ctx, 'rejected-owner')
     const p = producer({ owner, cancel: () => { p.settle({ status: 'killed' }) } })
     const id = ctx.jobs.start(p.spec)
     p.reject(new Error('producer rejected'))
     await ctx.jobs.wait(id, 1000, owner.id)
     expect(owner.session.snapshotEvents().find(event => event.type === 'job/settled')?.data)
-      .toMatchObject({ status: 'failed', cause: 'producer', terminationConfirmed: false })
+      .toMatchObject({ status: 'failed', cause: 'producer', producerReported: false })
   })
 
-  it('preserves an unconfirmed teardown record against late completion', async () => {
+  it('preserves a forced teardown record against late completion', async () => {
     const owner = await liveAgent(ctx, 'teardown-owner')
     const p = producer({ owner, cancel: () => { throw new Error('cancel failed') } })
     ctx.jobs.start(p.spec)
@@ -1563,30 +1582,8 @@ describe('owned job Session lifecycle records', () => {
     await tick()
     const events = owner.session.snapshotEvents().filter(event => event.type === 'job/settled')
     expect(events).toHaveLength(1)
-    expect(events[0]?.data).toMatchObject({ status: 'failed', cause: 'teardown', terminationConfirmed: false })
+    expect(events[0]?.data).toMatchObject({ status: 'failed', cause: 'teardown', producerReported: false })
     expect(ctx.jobs.list(owner.id)).toEqual([])
-  })
-
-  it('publishes registration outside an enclosing Session event callback', async () => {
-    await ctx.plugin(SessionStore)
-    const owner = await liveAgent(ctx, 'reentrant-owner')
-    const detach = ctx.sessions.enter(owner.session)
-    const p = producer({ owner, cancel: () => { p.settle({ status: 'killed' }) } })
-    let id: JobId | undefined
-    ctx.on('session/event', (_session, event) => {
-      if (event.type === 'turn/start') id = ctx.jobs.start(p.spec)
-    })
-    try {
-      owner.session.append('turn/start', { turn: 1 })
-      await Promise.resolve()
-      expect(owner.session.snapshotEvents().map(event => event.type)).toEqual(['turn/start', 'job/registered'])
-      if (id === undefined) throw new Error('job was not started')
-      p.settle({ status: 'completed' })
-      await ctx.jobs.wait(id, 1000, owner.id)
-      expect(owner.session.snapshotEvents().at(-1)?.type).toBe('job/settled')
-    } finally {
-      detach()
-    }
   })
 
   it('keeps execution identity distinct when a fresh registry reuses a job id', async () => {

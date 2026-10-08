@@ -10460,7 +10460,7 @@
       "kind": "event",
       "event": "job/settled",
       "surface": false,
-      "digest": "e1a4e287dd40ca5559cc4a00bef7e111631c2556e17a114b7a21dfa735487782",
+      "digest": "a103c03b3bc0ca7a7809d1eb2572dec08899f7a15a90072736777acd4e517648",
       "schema": {
         "root": 0,
         "nodes": [
@@ -10539,18 +10539,18 @@
                 "optional": false
               },
               {
+                "name": "producerReported",
+                "type": 8,
+                "optional": false
+              },
+              {
                 "name": "startedAt",
                 "type": 7,
                 "optional": false
               },
               {
                 "name": "status",
-                "type": 8,
-                "optional": false
-              },
-              {
-                "name": "terminationConfirmed",
-                "type": 12,
+                "type": 9,
                 "optional": false
               },
               {
@@ -10590,11 +10590,15 @@
             "type": "number"
           },
           {
+            "kind": "primitive",
+            "type": "boolean"
+          },
+          {
             "kind": "union",
             "types": [
-              9,
               10,
-              11
+              11,
+              12
             ]
           },
           {
@@ -10608,10 +10612,6 @@
           {
             "kind": "literal",
             "value": "killed"
-          },
-          {
-            "kind": "primitive",
-            "type": "boolean"
           },
           {
             "kind": "object",
@@ -23100,15 +23100,6 @@
       ]
     },
     {
-      "digest": "33bcef7271c33388ee9e6d908ea95ffb2aad355fda91f334a0ca2533fb9e86e5",
-      "names": [
-        "packages/jobs/jobs/src/types.ts#JobSettledData"
-      ],
-      "sources": [
-        "packages/jobs/jobs/src/types.ts:42"
-      ]
-    },
-    {
       "digest": "347de3380f2da308d0c74e08821f9e85559f55af4c5010795b110d00f7fc9dbd",
       "names": [],
       "sources": []
@@ -24080,7 +24071,7 @@
         "packages/jobs/jobs/src/types.ts#JobSettleCause"
       ],
       "sources": [
-        "packages/jobs/jobs/src/types.ts:243"
+        "packages/jobs/jobs/src/types.ts:249"
       ]
     },
     {
@@ -24644,6 +24635,15 @@
       ]
     },
     {
+      "digest": "9aaca69bf3c44a4486ee23a54aa9ec8e7189a935f818c8ed670de2352f3c12c9",
+      "names": [
+        "packages/jobs/jobs/src/types.ts#JobSettledData"
+      ],
+      "sources": [
+        "packages/jobs/jobs/src/types.ts:42"
+      ]
+    },
+    {
       "digest": "9ac52f0f84fec2eb9f71c2937e497d759db5ca0da4836d93a679d113684141f2",
       "names": [],
       "sources": []
@@ -24710,6 +24710,11 @@
     },
     {
       "digest": "a0f906856fc06f1c6f2083eb970e5a657a82b1a84c06c095445e5d6d161cda80",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "a103c03b3bc0ca7a7809d1eb2572dec08899f7a15a90072736777acd4e517648",
       "names": [],
       "sources": []
     },
@@ -25603,11 +25608,6 @@
     },
     {
       "digest": "e0a787e6ec76c7c94fecbc501b489164ab0293db05bc947914077ad01e674f05",
-      "names": [],
-      "sources": []
-    },
-    {
-      "digest": "e1a4e287dd40ca5559cc4a00bef7e111631c2556e17a114b7a21dfa735487782",
       "names": [],
       "sources": []
     },

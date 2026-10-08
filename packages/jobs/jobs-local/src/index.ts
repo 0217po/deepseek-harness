@@ -286,11 +286,11 @@ export class LocalJobRegistry extends JobRegistry {
     // The producer's settlement or a registry-forced one ends the pump; the
     // pump's final drain then lands before this registry trims the ring.
     const producerDone = hooks.done.then(
-      outcome => ({ outcome, terminationConfirmed: true }),
-      (error: unknown): { outcome: JobOutcome; terminationConfirmed: boolean } => {
+      outcome => ({ outcome, producerReported: true }),
+      (error: unknown): { outcome: JobOutcome; producerReported: boolean } => {
         // Contain a producer contract violation (`done` rejected) so cleanup and waiters cannot hang.
         this.selfCtx.logger.warn(`jobs: job ${job.id} producer done promise rejected (producer contract violation): ${String(error)}`)
-        return { outcome: { status: 'failed', detail: String(error) }, terminationConfirmed: false }
+        return { outcome: { status: 'failed', detail: String(error) }, producerReported: false }
       },
     )
     if (spec.output !== undefined && spec.output.length > 0) {
@@ -304,9 +304,9 @@ export class LocalJobRegistry extends JobRegistry {
         Promise.race([producerDone, settled]),
       )
     }
-    void producerDone.then(async ({ outcome, terminationConfirmed }) => {
+    void producerDone.then(async ({ outcome, producerReported }) => {
       if (job.pump !== undefined) await job.pump.done
-      this.settle(job, outcome, job.settleCause ?? 'producer', terminationConfirmed)
+      this.settle(job, outcome, job.settleCause ?? 'producer', producerReported)
     })
     return id
   }
@@ -444,10 +444,10 @@ export class LocalJobRegistry extends JobRegistry {
     this.hub.emit(event, owner)
   }
 
-  /** Capture facts at commit and publish after any enclosing Session append has returned. */
+  /** Publish committed facts before live subscribers or completion waiters react. */
   private recordSessionEvent(
     job: TrackedJob,
-    settlement?: Pick<JobSettledData, 'finishedAt' | 'status' | 'cause' | 'terminationConfirmed' | 'detail'>,
+    settlement?: Pick<JobSettledData, 'finishedAt' | 'status' | 'cause' | 'producerReported' | 'detail'>,
   ): void {
     const owner = job.owner
     if (owner === undefined) return
@@ -457,17 +457,13 @@ export class LocalJobRegistry extends JobRegistry {
       kind: job.kind, label: job.label, startedAt: job.startedAt,
       ...job.toolCall !== undefined ? { toolCall: job.toolCall } : {},
     }
-    // A job may be started from a Session observer. Deferred publication avoids
-    // append reentrancy and runs before settlement waiters or teardown can resume.
-    queueMicrotask(() => {
-      try {
-        if (settlement === undefined) session.append('job/registered', data)
-        else session.append('job/settled', { ...data, ...settlement })
-      } catch (error: unknown) {
-        // Recording cannot orphan already-started work or prevent waiter release.
-        this.selfCtx.logger.warn(`jobs: failed to record lifecycle for ${job.executionId}: ${String(error)}`)
-      }
-    })
+    try {
+      if (settlement === undefined) session.append('job/registered', data)
+      else session.append('job/settled', { ...data, ...settlement })
+    } catch (error: unknown) {
+      // Recording cannot orphan already-started work or prevent waiter release.
+      this.selfCtx.logger.warn(`jobs: failed to record lifecycle for ${job.executionId}: ${String(error)}`)
+    }
   }
 
   /**
@@ -608,7 +604,7 @@ export class LocalJobRegistry extends JobRegistry {
    * reports whether it released one: a timed-out or aborted wait has already
    * left the set, so only a wait still owed the projection counts.
    */
-  private settle(job: TrackedJob, outcome: JobOutcome, cause: JobSettleCause, terminationConfirmed: boolean): void {
+  private settle(job: TrackedJob, outcome: JobOutcome, cause: JobSettleCause, producerReported: boolean): void {
     if (isTerminal(job.status)) return
     job.status = outcome.status
     // A killed settlement carries the recorded kill reason in its detail:
@@ -626,7 +622,7 @@ export class LocalJobRegistry extends JobRegistry {
     job.result = outcome.result
     job.finishedAt = Date.now()
     this.recordSessionEvent(job, {
-      finishedAt: job.finishedAt, status: outcome.status, cause, terminationConfirmed,
+      finishedAt: job.finishedAt, status: outcome.status, cause, producerReported,
       ...job.detail !== undefined ? { detail: job.detail } : {},
     })
     // Settlement ends the stream: trim to the settled cap before any observer

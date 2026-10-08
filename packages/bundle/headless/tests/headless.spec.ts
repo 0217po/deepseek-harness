@@ -40,6 +40,8 @@ interface ObservationStub {
 
 /** Runner invocation options layered over the scripted Agent factory. */
 interface BenchOptions {
+  /** Owned-agent cleanup performed while providers remain available. */
+  onDispose?: () => Promise<void>
   /** Provider-resolved cwd, which can differ from the harness process directory. */
   filesystemCwd?: string
   task?: string
@@ -188,13 +190,13 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
       })
       script.before?.(session)
       const agent = await mount(ownerCtx, session, createOptions)
-      return { agent, dispose: () => Promise.resolve() }
+      return { agent, dispose: options.onDispose ?? (() => Promise.resolve()) }
     },
     async resume(ownerCtx: Context, resumeOptions: ResumeAgentOptions): Promise<AgentHandle> {
       const session = ctx.sessions.get(resumeOptions.resumeSessionId)
       if (session === undefined) throw new Error(`no attached Session ${resumeOptions.resumeSessionId}`)
       const agent = await mount(ownerCtx, session, resumeOptions)
-      return { agent, dispose: () => Promise.resolve() }
+      return { agent, dispose: options.onDispose ?? (() => Promise.resolve()) }
     },
   })
   if (options.omitSessionQuery !== true && (options.sessionId !== undefined || options.observe !== undefined)) {
@@ -213,7 +215,9 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
       internals.stderr = { write: (chunk: string) => { err += chunk; return true } }
       if (options.readStdin !== undefined) internals.readStdin = options.readStdin
       const exited = new Promise<number>((resolve) => {
-        ctx.provide('appExit', (code: number) => { order.push('exit'); resolve(code) })
+        ctx.provide('appExit', (code: number, beforeDispose?: () => Promise<void>) => {
+          void Promise.resolve().then(beforeDispose).then(() => { order.push('exit'); resolve(code) })
+        })
       })
       if (options.prelive === true || options.preliveMeta !== undefined) {
         await ctx.agents.create({
@@ -232,6 +236,29 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
 }
 
 describe('headless runner', () => {
+  it.each([false, true])('releases its owned Agent before tree teardown on a failed run: %s', async (failed) => {
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const test = await bench({
+      afterPrompt(session, message) {
+        if (failed) throw new Error('run failed')
+        appendTurn(session, 1, message, 'done', true)
+      },
+    }, {
+      onDispose: async () => { entered.resolve(undefined); await release.promise },
+    })
+    const running = test.run()
+    try {
+      await entered.promise
+      expect(test.output().order).not.toContain('exit')
+      release.resolve(undefined)
+      expect(await running).toMatchObject({ code: failed ? 1 : 0, order: failed ? ['exit'] : ['flush', 'exit'] })
+    } finally {
+      release.resolve(undefined)
+      await running
+      await test.ctx.fiber.dispose()
+    }
+  })
   it('waits for parent awakened between idle and child observation', async () => {
     const cleanup = Promise.withResolvers<undefined>()
     const cleaning = Promise.withResolvers<undefined>()

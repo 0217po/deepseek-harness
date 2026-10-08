@@ -579,6 +579,7 @@ describe('dsh-tool-workflow', () => {
       expect(jobs.get('workflow-1' as never, parent.id).detail).toBe('1 agent')
       expect(warn.mock.calls.map(args => String(args[0])).join('\n')).toContain('dispose failed')
       expect(session.snapshotEvents().map(event => event.type)).toEqual(['job/registered', 'job/settled'])
+      expect(session.snapshotEvents().at(-1)?.data).toMatchObject({ producerReported: true })
     })
 
     it('a synchronous engine rejection registers no job', async () => {

@@ -60,7 +60,7 @@ Jobs belong to their owner and backend, not to the producer tool, so producer or
 
 Owned jobs record registration and settlement in their original Session, independently of model output collection. SDK consumers receive the same events through `session.event`; the [jobs reference](../../../docs/subsystems/jobs.md#session-lifecycle-records) defines identities, timestamps, and termination confirmation. These records survive through normal Session persistence; live jobs and output rings are not resumed.
 
-Facts are captured at commit and published in a microtask before completion waiters resume. This also permits a Session observer to start work without reentering Session append. Append failures warn without abandoning execution or blocking cleanup; consumers must retain incomplete histories as incomplete.
+Lifecycle facts are appended synchronously at the registration or settlement commit, before live hub subscribers and completion waiters react. Append failures warn without abandoning execution or blocking cleanup; consumers must retain incomplete histories as incomplete.
 
 ### What can go wrong
 
