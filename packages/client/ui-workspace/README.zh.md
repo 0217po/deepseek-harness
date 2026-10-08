@@ -69,11 +69,11 @@ Session 行渲染运行时的实时 `pendingInteraction` 分类：审批显示**
 
 -----
 
-`ctx.uiWorkspace.openSession(target)` 会同步替换其拥有的 `mainView` reference，并让主区域返回 Conversation，而不等待 `reference.ready`，因此历史加载会显示在已经选中的 Session 视图内。目标可以是已知 Session id，也可以是持久的直接父子 subagent 地址；显式地址不要求预先加载 parent catalog。`openWorkspace(id, beforeOpen?)` 仅在请求未被后续导航替代时打开结果；新会话使用 `openWorkspace`。`forkSession(id)` 创建子会话，不导航，也不替代尚未完成的导航。可选的同步准备回调在目标被 retain 后执行，并且仅对仍有效的 Workspace 请求执行，因此过期请求不会搬移 composer 草稿。后续导航或 owner 释放会阻止晚到的 UI 提交，但不取消底层 Session 创建。启动恢复会 retain 主 reference，不改变已选面板，也不取消后续导航。归档主 Session 会释放其 reference 并清除主选择。选择失败时保留当前全局面板。Session 行读取 `usePanelInfo`，在全局面板活跃时不显示 Session 选中样式；仅把焦点移到搜索框或目录选择器不会离开该面板。
+`ctx.uiWorkspace.openSession(target)` 会同步替换其拥有的 `mainView` reference，并让主区域返回 Conversation，而不等待 `reference.ready`，因此历史加载会显示在已经选中的 Session 视图内。目标可以是已知 Session id，也可以是持久的直接父子 subagent 地址；显式地址不要求预先加载 parent catalog。`openWorkspace(id, beforeOpen?)` 仅在请求未被后续导航替代时打开工作区空白 Session；显式新会话操作会创建新的 Session。`forkSession(id)` 创建子会话，不导航，也不替代尚未完成的导航。可选的同步准备回调在目标被 retain 后执行，并且仅对仍有效的 Workspace 请求执行，因此过期请求不会搬移 composer 草稿。后续导航或 owner 释放会阻止晚到的 UI 提交，但不取消底层 Session 创建。启动恢复会 retain 主 reference，不改变已选面板，也不取消后续导航。归档主 Session 会释放其 reference 并清除主选择。选择失败时保留当前全局面板。Session 行读取 `usePanelInfo`，在全局面板活跃时不显示 Session 选中样式；仅把焦点移到搜索框或目录选择器不会离开该面板。
 
 导航和启动恢复通过所选 Session 的 `follow` 获取投影，不会另行刷新该 Session 或其父会话的投影。
 
-新建会话尝试获取列表中第一个符合条件的空白会话；启动恢复尝试已保存的空白会话。若该写锁被占用，导航直接新建 Session，不再尝试其他空白会话。其他获取错误会中止请求：显式新建会话或在 hero 中选择工作区时，失败以短暂提示展示，引用 Host 的错误码和消息（例如 preset 挂载失败），非 Host 拒绝的失败则显示其自身消息；已被后续导航或 owner 销毁取代的请求不弹提示，启动恢复仍只报告到控制台。已释放的空白会话被复用时保留 slash 命令状态。后续导航会取消尚未完成的启动选择。
+重新打开工作区和显式准备草稿尝试获取列表中第一个符合条件的空白会话；启动恢复尝试已保存的空白会话。若该写锁被占用，导航直接新建 Session，不再尝试其他空白会话。其他获取错误会中止请求：显式新建会话或在 hero 中选择工作区时，失败以短暂提示展示，引用 Host 的错误码和消息（例如 preset 挂载失败），非 Host 拒绝的失败则显示其自身消息；已被后续导航或 owner 销毁取代的请求不弹提示，启动恢复仍只报告到控制台。已释放的空白会话被复用时保留 slash 命令状态。后续导航会取消尚未完成的启动选择。
 
 Workspace 和 Session 的启动基线均就绪后，空安装环境调用 `workspaces.initializeDefault`，创建或复用其空白 Session。选中该 Session 后输入框才可编辑，不会自动提交消息。后续导航或所属上下文销毁会阻止启动流程选中其结果。不符合首次使用条件时仍可选择文件夹，不显示错误。默认工作区创建失败时显示短暂提示，引导用户通过“选择工作区”选择文件夹，直到下次启动才重试。Session 创建失败沿用普通的恢复错误处理。登记成功的工作区在 Session 创建或后续提交失败时仍然保留。
 
@@ -89,11 +89,11 @@ Workspace 和 Session 的启动基线均就绪后，空安装环境调用 `works
 
 浏览器入口还为每个 Session 行声明两个 root 作用域的 `list` 子 slot：`sidebar.session.row.leading` 仅在该行主状态为 idle 时渲染、归档行留空，`sidebar.session.row.hover` 仅在该行的悬浮卡片打开时挂载。两者只接收行的 Session 身份，占用方据此读取自己的数据；Session 作用域的 slot 会强制建立 Session 绑定，从而激活并保留列表中每个 Session。
 
-客户端调用方可以在 `uiWorkspace.startSession` 的第二参数中传入 `prompt` 与 `clearPreviousDraft`。提示词仅接受普通文字；结构化草稿由内部恢复和工作区携带流程处理。不清空时保留已有文字或附件；显式清空只替换目标 Session 的文字和内联引用，不删除附件。在异步创建前捕获选项值，在导航提交前应用到准确保留的 binding。已被后续操作取代的导航不写内容；输入处于提交阻塞状态时拒绝准备并保留原选择。不传选项时保持正常新会话流程。[草稿初始化决策](../../../.agents/notes/implemented/architecture/2026-09-30-structured-draft-initialization.zh.md)说明输入 owner 的数据流。
+客户端调用方可以在 `uiWorkspace.startSession` 的第二参数中传入 `prompt` 与 `clearPreviousDraft`。提示词仅接受普通文字；结构化草稿由内部恢复和工作区携带流程处理。不清空时保留已有文字或附件；显式清空只替换目标 Session 的文字和内联引用，不删除附件。在异步创建前捕获选项值，在导航提交前应用到准确保留的 binding。已被后续操作取代的导航不写内容；输入处于提交阻塞状态时拒绝准备并保留原选择。不传选项时按当前 Agent 预设定义创建新的 Session。工作区重连和显式草稿准备仍可复用已有空 Session。[草稿初始化决策](../../../.agents/notes/implemented/architecture/2026-09-30-structured-draft-initialization.zh.md)说明输入 owner 的数据流。
 
 ### 目录流子 slot
 
-每个注册各自声明一个**目录流子 slot**（`single` kind：`conversation.hero.workspace.directoryFlow`／`sidebar.workspaces.directoryFlow`），由组合的选择器包 client half 填入其选取交互——`-native` 后端的无渲染 OS 选择器驱动，`-browse` 组合下则是应用内浏览对话框。平铺显示的**添加工作区…** 操作仅在当前界面的 slot 被占用时渲染；slot 为空意味着该组合没有目录选择能力。本包持有触发与接纳：占用方通过 slot 的属主交互约定（`open`/`busy`/`onPicked`/`onCancel`/`onError`）每次打开上报一个所选路径，owner 通过对象层接纳它，并等待 Workspace 列表投影刷新后才选中已提交的 Workspace。
+每个注册各自声明一个**目录流子 slot**（`single` kind：`conversation.hero.workspace.directoryFlow`／`sidebar.workspaces.directoryFlow`），由组合的选择器包 client half 填入其选取交互——`-native` 后端的无渲染 OS 选择器驱动，`-browse` 组合下则是应用内浏览对话框。平铺显示的**添加工作区…** 操作仅在当前界面的 slot 被占用时渲染；slot 为空意味着该组合没有目录选择能力。侧栏的添加工作区操作保留已有空白 Session 及其草稿。本包持有触发与接纳：占用方通过 slot 的属主交互约定（`open`/`busy`/`onPicked`/`onCancel`/`onError`）每次打开上报一个所选路径，owner 通过对象层接纳它，并等待 Workspace 列表投影刷新后才选中已提交的 Workspace。
 
 ### Session 行 action
 

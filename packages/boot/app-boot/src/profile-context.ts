@@ -2,7 +2,7 @@
 import { join } from 'node:path'
 import { composeEntries, loadProfileDirectory, PROFILE_PATCH_FILENAME, type Profile } from './profile.ts'
 import { loadOptionalPatches } from './index.ts'
-import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
+import { cloneProfilePatches, type ProfilePatch } from './profile-patches.ts'
 
 /** Application-owned package manager executable; environment applies only to package operations. */
 export interface ProfilePnpmInvocation {
@@ -24,7 +24,7 @@ export interface ProfileContext {
   /** Bundle packages used to start this process, before any persisted edits. */
   readonly startedBundles: readonly string[]
   /** Parsed command-line overlays, applied above profile and home patches. */
-  readonly overlays: readonly PatchOptions[]
+  readonly overlays: readonly ProfilePatch[]
   /** Launch-time DSH_TELEMETRY_DISABLED value; any non-empty value opts out. */
   readonly telemetryDisabledEnv: string | undefined
 }
@@ -49,7 +49,7 @@ const TELEMETRY_ROW_ID = 'session-telemetry-otel'
  * @param hasRow - whether the composition carries the telemetry row.
  * @returns the disable patch, or `undefined` when no hard-disable patch is required.
  */
-export function resolveTelemetryPatch(disabledEnv: string | undefined, hasRow: boolean): PatchOptions | undefined {
+export function resolveTelemetryPatch(disabledEnv: string | undefined, hasRow: boolean): ProfilePatch | undefined {
   if ((disabledEnv ?? '') === '' || !hasRow) return undefined
   return { id: TELEMETRY_ROW_ID, disabled: true }
 }
@@ -60,9 +60,9 @@ export function resolveTelemetryPatch(disabledEnv: string | undefined, hasRow: b
  * @param initialProfile Already loaded startup profile; omitted reads the current files.
  * @returns Detached ordered patches; this function does not update the Loader.
  */
-export function readProfilePatches(binName: string, context: ProfileContext, initialProfile?: Profile): PatchOptions[] {
+export function readProfilePatches(binName: string, context: ProfileContext, initialProfile?: Profile): ProfilePatch[] {
   const profile = initialProfile ?? loadProfileDirectory(binName, context.dir, context.installAnchor, { userLayer: false })
-  const patches = structuredClone([
+  const patches = cloneProfilePatches([
     ...profile.layers.flatMap(layer => layer.patches),
     ...(initialProfile?.patches ?? loadOptionalPatches(binName, context.patchPath) ?? []),
     ...(loadOptionalPatches(binName, join(context.home, PROFILE_PATCH_FILENAME)) ?? []),

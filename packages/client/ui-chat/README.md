@@ -95,7 +95,7 @@ Chat registers its process Group Definition through `uiConversation.groups`. Rea
 
 `groupPart` selects reasoning or response in the Assistant renderer without copying Node payloads. A Tool node owns its preparing, dispatched, and result stages under one callId. Each part has a distinct DOM anchor for reading-position restoration; Turn navigation addresses the original Node key and lands on its first visible part. Group sources, member parents, and keys survive display-mode changes and newly loaded prefixes that extend an intact group. The source Node Store remains the only Node-data owner, and a replaced Builder rebinds keyed subscriptions without remounting seats. Mode changes retain size observers and reuse the Turn-state selector.
 
-Live tool deltas share reasoning's frame-batched publication; durable calls and results publish immediately. Repeated deltas retain the Tool node when observed argument answers, the anchor, location, and visibility are unchanged. The Definition supplies the same lazy argument reader to tool rows and group detail, without tool-specific registration.
+Live tool deltas share reasoning's frame-batched publication; durable calls and results publish immediately. Native and nested results retain event presentation metadata, so historical file and command labels use the operation’s location. Repeated deltas retain the Tool node when observed argument answers, the anchor, location, and visibility are unchanged. The Definition supplies the same lazy argument reader to tool rows and group detail, without tool-specific registration.
 
 The process group uses a stable `div` layout box, a scroll body, and an uncapped content box that reports growth inside the body. Business styles must adapt spacing within and across groups, including hidden or empty members and the answer-spacing exception. CSS variables do not belong in the Group Definition.
 
@@ -106,6 +106,8 @@ The running status shows a whale whose APNG mask inherits the text color. CSS se
 Scroll-edge fades initialize when `ResizeObserver` reports the open group's layout; opening the group performs no immediate scroll-dimension read in a layout effect.
 
 Each group owns local `useDisclosure` state that survives mode changes while its component stays mounted.
+
+The `conversation.chat.reasoning-body` chain offers the original reasoning text and streaming state only when its body is expanded. An unclaimed body keeps compact Markdown; a claiming display extension must preserve access to the original text. Extensions do not replace the reasoning preview or its disclosure policy.
 
 The Chat-node slot injects a reset-bound `useDisclosure` Hook for reasoning and tools. Intermediate renderers forward it without subscribing; each invocation owns independent open state. Source callbacks retain their receiver and stable identity. When an enclosing Turn actually hides a process member, its seat resets those disclosures without replacing component keys or changing the Hook reference. Display-mode changes preserve their open state.
 

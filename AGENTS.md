@@ -40,7 +40,6 @@ packages/    @deepseek-ai/dsh-<pkg> workspaces at packages/<group>/<pkg>/
   jobs/                 background jobs
   bundle/               profile bundles
   workflow/             workflow execution
-  webhook/              webhook ingress
   todo/                 todo_write tool
   plan/                 logged planning
   goal/                 session goals
@@ -48,7 +47,6 @@ packages/    @deepseek-ai/dsh-<pkg> workspaces at packages/<group>/<pkg>/
   preset/               agent composition
   guard/                loop/tool guards
   extensions/           runtime self-modification
-  hooks/                Claude Code/Codex bridges
   session/              durable sessions
   session-query/        browsing/search/export
   attachment/           binary attachments
@@ -66,7 +64,7 @@ packages/    @deepseek-ai/dsh-<pkg> workspaces at packages/<group>/<pkg>/
   host/                 GUI host
   client/               GUI client
   mcp/                  external tools
-  experimental/         pre-stable prototypes; public by default with explicit private exceptions
+  experimental/         evaluated capabilities without a product-support commitment
   test-support/         test infrastructure
   util/                 zero-dependency utilities
 python/      Python SDK/runtime (python/README.md)
@@ -78,7 +76,7 @@ scripts/     gates and generators
 website/     VitePress documentation projection
 ```
 
-Package groups: [packages/README.md](packages/README.md).
+Package groups: [packages/README.md](packages/README.md). [Experimental status](packages/experimental/README.md#status) is independent of optional delivery; nonexperimental packages need product use or an explicit [classification](scripts/product-package-policy.ts).
 
 ## Commands
 

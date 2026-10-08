@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-As a deployment, configure this policy through the [first-prompt](../session-title-first-prompt-llm/README.md) or [all-prompts](../session-title-all-prompts-llm/README.md) provider plugin. As a provider author, register through the shared helper instead of hand-rolling generation.
+As a deployment, configure this policy through the [first-prompt](../session-title-first-prompt-llm/README.md) or [all-prompts](../../experimental/session-title-all-prompts-llm/README.md) provider plugin. As a provider author, register through the shared helper instead of hand-rolling generation.
 
 ### Registering a provider
 
@@ -33,7 +33,7 @@ A provider plugin calls `registerSessionTitleLlmProvider(ctx, config, id, automa
 
 ### Route and failure contract
 
-`provider` and `model` overrides are optional but must be supplied together as non-empty strings. Without that pair, the helper uses the exact provider/model route captured from the current session's logged `request/header`, so an explicit refresh before any route exists needs overrides. The helper measures the final JSON-framed user prompt against `maxInputBytes` before logging or dispatch instead of truncating it, and rechecks timeout and caller cancellation while consuming the stream and after it completes, so a late successful result cannot be accepted even if an interceptor or adapter ignores abort. Malformed or empty output, tool calls, and non-stop finish reasons reject; the session-title service decides whether that rejection is an automatic warning or an explicit caller failure.
+`provider` and `model` overrides are optional but must be supplied together as non-empty strings. Without that pair, the helper uses the exact provider/model route captured from the current session's logged `request/header`, so an explicit refresh before any route exists needs overrides. The helper measures the final JSON-framed user prompt against `maxInputBytes` before logging or dispatch instead of truncating it, and rechecks timeout and caller cancellation while consuming the stream and after it completes, so a late successful result cannot be accepted even if an interceptor or adapter ignores abort. Malformed or empty output, tool calls, and non-stop finish reasons reject; the session-title service decides whether that rejection is an automatic warning or an explicit caller failure. The accepted title is the first non-empty line of the model's text output, with one emphasis pair removed when it wraps that whole line, so commentary a model writes after the title cannot become the title. The title request uses `maxOutputTokens` independently of the conversation's cap. Its route must have a registered adapter so preparation can resolve the request before it is recorded.
 
 ### Configuration
 
@@ -46,7 +46,7 @@ Every field is required except the paired route override; there are no library d
 | `targetWords` | required | Target word count for non-CJK titles |
 | `targetCjkCharacters` | required | Target character count for Chinese, Japanese, or Korean titles |
 | `maxInputBytes` | required | UTF-8 byte ceiling for the final JSON-framed user prompt |
-| `maxOutputTokens` | required | Auxiliary generation token cap |
+| `maxOutputTokens` | required | Title output-token cap, independent of conversation requests |
 | `timeoutMs` | required | End-to-end deadline within the runtime timer limit |
 | `provider`, `model` | optional | Explicit route; both or neither |
 
@@ -72,7 +72,7 @@ One shared policy so provider plugins cannot drift: config validation, route res
 
 ### Request flow
 
-A generation validates the config once at registration; each revision frames the selected messages as JSON, measures the framed prompt's UTF-8 bytes against `maxInputBytes`, resolves the route (the explicit pair or the logged `request/header`), appends a log-only `session/title-llm-request` event carrying the exact dispatchable request, then streams through `ctx.llm` under a composed timeout and cancellation deadline. The dispatched envelope carries `purpose: 'session-title'` and deliberately lacks the agent loop's process-local request identity; the DeepSeek adapter maps that purpose to thinking-disabled so the small output budget is reserved for visible title text, and other adapters own their purpose-specific behavior. Output assembles into text blocks only; tool calls, malformed or empty output, and non-stop finish reasons reject, and a later model failure leaves the request record intact.
+Each revision frames the selected messages as JSON and checks `maxInputBytes`. The title configuration function selects the first effort from the route's least-to-greatest list during `ctx.llm.prepareCall()`. The helper records the exact input, output cap, and resolved effort in `session/title-llm-request`, then dispatches through the same captured adapter generation under the shared deadline. `purpose: 'session-title'` supplies attribution only. The request has no agent-loop identity and does not enter conversation history. Generation failures preserve the request record.
 
 </details>
 
@@ -86,7 +86,7 @@ Read these pages when the generation policy is not enough. They move from the se
 - [Session title service](../session-title/README.md) — the title service, fallback behavior, and provider registration contract.
 - [Session title subsystem](../../../docs/subsystems/session-title.md) — durable title state and the auxiliary request record.
 - [First-message title provider](../session-title-first-prompt-llm/README.md) — titles from the first eligible human message.
-- [All-messages title provider](../session-title-all-prompts-llm/README.md) — titles from every eligible human message.
+- [All-messages title provider](../../experimental/session-title-all-prompts-llm/README.md) — titles from every eligible human message.
 - [Session package map](../README.md) — adjacent persistence, projection, title, and telemetry packages.
 
 -----
@@ -98,11 +98,11 @@ Read these pages when the generation policy is not enough. They move from the se
 
 #### What the model sees
 
-The title model receives a fixed system instruction to return one concise unadorned title in the input language, including the configured word and CJK-character targets. Its one user message contains a JSON array of the exact selected human messages and their seqs.
+The title model receives a fixed system instruction to return one concise unadorned title in the input language, including the configured word and CJK-character targets and a short title instead of an explanation when the messages give little to name. Its one user message contains a JSON array of the exact selected human messages and their seqs.
 
 #### Token effect
 
-The auxiliary request consumes tokens according to selected input size and `maxOutputTokens`. It is separate from the main agent request and does not add title text or framing to agent history. DeepSeek title calls disable thinking; the main conversation retains its configured thinking mode.
+The auxiliary request consumes tokens according to selected input size and `maxOutputTokens`. It is separate from the main agent request and does not add title text or framing to agent history. Title calls disable thinking on DeepSeek routes and use the model's lowest supported level on pi-ai routes; a model that cannot stop reasoning still spends part of `maxOutputTokens` on it. The main conversation retains its configured thinking mode.
 
 #### KV Cache effect
 
@@ -117,6 +117,7 @@ These limits define the accepted generation shapes. They are current package con
 
 - **Text output only** — the helper accepts text output and rejects tool calls; structured-output adapters and provider-specific prompt variants are not exposed.
 - **Whole-prompt byte ceiling** — it enforces a byte ceiling for the whole framed user prompt rather than clipping individual messages or applying a retention policy.
+- **Minimum reasoning is capability-dependent** — title policy selects the first advertised effort. Routes without selectable reasoning leave effort unspecified; the least selectable effort does not guarantee zero reasoning tokens or a complete title within the output cap.
 
 <a id="dev-note"></a>
 ### Dev Note
