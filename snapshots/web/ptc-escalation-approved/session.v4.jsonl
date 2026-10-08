@@ -3,8 +3,8 @@
 {"type":"sandbox/mode","data":{"mode":"workspace-write"}}
 {"type":"approval/policy","data":{"policy":"ask"}}
 {"type":"command/run","data":{"commandId":"{{command:1}}","name":"permission","args":" read-only","source":{"kind":"user"}}}
-{"type":"permission/preset","data":{"preset":"read-only"}}
 {"type":"sandbox/mode","data":{"mode":"read-only"}}
+{"type":"permission/preset","data":{"preset":"read-only"}}
 {"type":"command/done","data":{"commandId":"{{command:1}}","kind":"success","text":"preset read-only"}}
 {"type":"agent/inbox/spliced","data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Use run_code with timeoutMs 120000 and direct Node filesystem access to create approved.txt in the working directory containing exactly \"approved\\n\". Use await import(\"node:fs/promises\") and writeFile; do not call nested tools. First attempt the write under the current read-only sandbox without escalation. In that first program, catch only filesystem errors with code EPERM, EACCES or EROFS and return exactly \"EXPECTED_SANDBOX_DENIAL\"; rethrow any other error. If the sandbox denies it, explicitly retry the program with sandbox_permissions \"workspace-write\" and justification \"Create the file requested by the user\". I will answer the approval prompt. After the file is written, reply DONE and stop."}],"source":{"kind":"user","rpcId":"{{rpc:1}}","clientTimeZone":"{{clientTimeZone}}"},"role":"user","id":"{{message:1}}"}]}}
 {"type":"turn/start","data":{"turn":1}}
