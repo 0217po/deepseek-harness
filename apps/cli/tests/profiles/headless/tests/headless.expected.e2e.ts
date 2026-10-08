@@ -47,9 +47,19 @@ const headlessSessionExpected = join(goldensDir, 'headless-profile', 'session.ex
 const headlessReasoningExpected = join(goldensDir, 'headless-profile', 'reasoning.stderr.expected.txt')
 const headlessFailureExpected = join(goldensDir, 'headless-profile', 'stderr.expected.txt')
 const refreshing = process.env.DSH_SNAPSHOT === 'refresh'
+/** The shipped base bundle's title output cap, which marks a title request's `max_tokens`. */
+const TITLE_MAX_TOKENS = 4096
 
 interface JsonObject {
   [key: string]: unknown
+}
+
+/** Framed user text that distinguishes the auxiliary title request from a main request. */
+const TITLE_PROMPT_MARKER = 'Generate the session title from this JSON array of human messages'
+
+/** Whether one recorded request body is the auxiliary title request. */
+function isTitleRequest(request: JsonObject): boolean {
+  return JSON.stringify(request['messages'] ?? null).includes(TITLE_PROMPT_MARKER)
 }
 
 interface PersistedLog {
@@ -100,7 +110,7 @@ async function deepseekDefaultsServer(
       const write = (): void => {
         // One-shot teardown may cancel background title work after the main response.
         if (keepAlives-- > 0
-          || (options.waitForTitleRequest === true && !requests.some(request => request.max_tokens === 64))) {
+          || (options.waitForTitleRequest === true && !requests.some(isTitleRequest))) {
           response.write(': keep-alive\n\n')
           timer = setTimeout(write, 60)
           return
@@ -259,6 +269,8 @@ describe('headless stream-json snapshots', () => {
         if (actual === undefined) throw new Error('the headless profile did not persist its session')
         const context = contextFromLogs([actual.content])
         const session = normalizeSessionSnapshot(actual.content, context)
+        const titleRequest = parseJsonl(session).find(event => event.type === 'session/title-llm-request')
+        expect(titleRequest?.data).toMatchObject({ reasoningEffort: 'off', maxTokens: TITLE_MAX_TOKENS })
         if (refreshing) await writeFile(headlessSessionExpected, session)
         await expectSessionSnapshot(session, context, headlessSessionExpected)
         expect(session).toContain(task)
@@ -610,7 +622,8 @@ describe('headless stream-json snapshots', () => {
       expect(server.requests).toHaveLength(2)
       expect(server.paths).toEqual(['/v1/messages', '/v1/messages'])
       const agentRequest = server.requests.find(request => request.max_tokens === 256_000)
-      const titleRequest = server.requests.find(request => request.max_tokens === 64)
+      const titleRequest = server.requests.find(isTitleRequest)
+      expect(titleRequest?.max_tokens).toBe(TITLE_MAX_TOKENS)
       expect(agentRequest?.output_config).toEqual({ effort: 'low' })
       expect(titleRequest).toBeDefined()
       const header = (parseJsonl(result.stdout)
@@ -659,7 +672,10 @@ describe('headless stream-json snapshots', () => {
         }
         const title = await fetch(server.url, {
           method: 'POST',
-          body: JSON.stringify({ max_tokens: 64 }),
+          body: JSON.stringify({
+            max_tokens: TITLE_MAX_TOKENS,
+            messages: [{ role: 'user', content: [{ type: 'text', text: TITLE_PROMPT_MARKER }] }],
+          }),
         })
         for (;;) {
           const chunk = await reader.read()
@@ -699,10 +715,10 @@ describe('headless stream-json snapshots', () => {
 
       expect(result.stderr).toBe('')
       expect(server.requests).toHaveLength(2)
-      const agentRequest = server.requests.find(request => request.max_tokens === 1024)
-      const titleRequest = server.requests.find(request => request.max_tokens === 64)
+      const agentRequest = server.requests.find(request => !isTitleRequest(request))
+      const titleRequest = server.requests.find(isTitleRequest)
       expect(agentRequest).not.toHaveProperty('max_completion_tokens')
-      expect(titleRequest).toBeDefined()
+      expect(titleRequest?.max_tokens).toBe(TITLE_MAX_TOKENS)
       const header = (parseJsonl(result.stdout)
         .map(record => record.event)
         .find((event): event is JsonObject => (
@@ -752,12 +768,12 @@ describe('headless stream-json snapshots', () => {
         const parent = logs.find(log => typeof log.header.parentSession !== 'string')
         if (parent === undefined) throw new Error('Agent Teams snapshot did not persist its Lead')
         const rows = parseJsonl(parent.content)
-        const workflowChild = logs.find(log => parseJsonl(log.content).some(row => row.type === 'subagent/descriptor'
-          && (row.data as JsonObject).mode === 'one-shot'))
+        const workflowChild = logs.find(log => parseJsonl(log.content).some(row => row.type === 'user/message'
+          && JSON.stringify((row.data as JsonObject).content) === JSON.stringify([{ type: 'text', text: 'TEAM_WORKFLOW_CHILD' }])))
         if (workflowChild === undefined) throw new Error('Team profile did not persist its workflow child')
         const workflowRows = parseJsonl(workflowChild.content)
         expect(workflowRows.find(row => row.type === 'subagent/descriptor')?.data)
-          .toMatchObject({ mode: 'one-shot', provider: 'spawn' })
+          .toMatchObject({ mode: 'continuable', provider: 'spawn' })
         expect(workflowRows.filter(row => row.type === 'user/message'
           && ((row.data as JsonObject).source as JsonObject).kind === 'user').map(row => row.data))
           .toEqual([expect.objectContaining({ content: [{ type: 'text', text: 'TEAM_WORKFLOW_CHILD' }] })])
@@ -958,13 +974,13 @@ describe('headless stream-json snapshots', () => {
     await expectHeadlessStream(normalized, streamExpected)
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 
-  it('delivers a continuable child result without parent polling', async () => {
+  it('notifies the parent when a continuable child settles without polling', async () => {
     const parentReplay = join(settlementScenarioDir, 'parent.replay.jsonl')
     const parentOverride = join(settlementScenarioDir, 'parent.override.json')
     const childReplay = join(settlementScenarioDir, 'child.replay.jsonl')
     const childExpected = join(settlementScenarioDir, 'child.expected.jsonl')
     const streamExpected = join(settlementScenarioDir, 'stream-json.expected.jsonl')
-    const task = 'Start one continuable background subagent and answer from its completion notice. Do not call list_agents, send_message, job_output, or job_list.'
+    const task = 'Start one continuable subagent and acknowledge its completion notice. Do not call list_agents or send_message.'
     let runCwd = ''
     const result = await runLoaderSmoke({
       label: 'continuable settlement headless stream-json snapshot',
@@ -1007,6 +1023,10 @@ describe('headless stream-json snapshots', () => {
           })
         })
         expect(notices).toHaveLength(1)
+        expect(notices[0]).toMatchObject({
+          source: { kind: 'subagent-settled', form: 'notice', senderSessionId: child.header.id },
+        })
+        expect(JSON.stringify(notices[0])).toContain('finished and will do no further work unless you send it more.')
         expect(JSON.stringify(notices[0])).toContain('CHILD_RESULT')
 
         const context = contextFromLogs([parent.content, child.content])
@@ -1022,7 +1042,7 @@ describe('headless stream-json snapshots', () => {
     const records = parseJsonl(result.stdout)
     expect(records.at(-1)).toMatchObject({
       type: 'result',
-      output: 'PARENT_RECEIVED_CHILD_RESULT',
+      output: 'PARENT_RECEIVED_SETTLEMENT_NOTICE',
     })
     const normalized = normalizeHeadlessStream(result.stdout, runCwd)
     if (refreshing) await writeFile(streamExpected, normalized)

@@ -662,6 +662,18 @@ describe('UiWorkspaceService', () => {
     expect(b.sessions.retain).not.toHaveBeenCalled()
   })
 
+  it('creates a fresh Agent on explicit New Session instead of reusing a mounted blank', async () => {
+    const b = bench({
+      sessions: sessionState([summary('blank', { blank: true, cwd: '/w/a' })], 'pending'),
+      workspaces: workspaceState([workspace('a', [sid('blank')])]),
+    })
+    b.uiWorkspace.startSession(wid('a'))
+    await vi.waitFor(() => {
+      expect(b.sessions.create).toHaveBeenCalledExactlyOnceWith({ workspaceId: wid('a') })
+    })
+    await vi.waitFor(() => { expect(b.sessions.retain).toHaveBeenCalledWith(sid('created-a'), expect.anything()) })
+  })
+
   it('reports a refused explicit Session creation through the Workspace notice', async () => {
     const b = bench({ workspaces: workspaceState([workspace('a')]), sessions: sessionState() })
     // Startup restoration creates its own Session first and stays quiet on failure (pinned above).
@@ -797,7 +809,8 @@ describe('UiWorkspaceService', () => {
       const opening = vi.spyOn(b.uiWorkspace, 'openWorkspace')
 
       b.uiWorkspace.startSession(wid('a'), options)
-      await lastOpening(opening)
+      if (options === undefined) await vi.waitFor(() => { expect(b.sessions.retain).toHaveBeenCalledOnce() })
+      else await lastOpening(opening)
 
       expect(b.sessions.retain).toHaveBeenCalledExactlyOnceWith(sid('created-a'), { source: 'mainView' })
       expect(b.sessions.binding).not.toHaveBeenCalled()

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { FiberState } from '@deepseek-ai/cordis'
-import { OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-app-boot'
+import { ON_DEMAND_BUNDLES, OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-app-boot'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
 import { join } from 'node:path'
@@ -16,7 +16,9 @@ import {
   SCAFFOLD_DEFAULTS_BUNDLE, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { ZH_BROWSER_LOCALE, connectFreshWorkspaceZh, openSettings, saveFailureShot } from './support.ts'
+import {
+  ZH_BROWSER_LOCALE, connectFreshWorkspaceZh, openSettings, PLUGIN_TOGGLE_SETTLE_MS, saveFailureShot,
+} from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/plugin-manager', import.meta.url))
 const MANAGER_EXPECTED = join(SNAPSHOT_DIR, 'manager.expected.md')
@@ -186,9 +188,10 @@ describe('web e2e: plugin manager', () => {
         await official.locator('[data-plugin-package]').first().waitFor()
         // The Official group lists the shipped bundles and then the
         // configuration-only items; an item card carries no action cell, so the
-        // placeholder rows model the bundle cards alone.
+        // placeholder rows model the first four bundle cards.
         const loaded = await measure(official, ':scope > ul > li[data-plugin-package]')
-        expect(loaded.rows).toHaveLength(OPTIONAL_BUNDLES.length)
+        expect(await official.locator(':scope > ul > li[data-plugin-package]').count()).toBe(OPTIONAL_BUNDLES.length + ON_DEMAND_BUNDLES.length)
+        expect(loaded.rows).toHaveLength(loading.rows.length)
         const compare = (name: string, a: typeof loading.pageHeader, b: typeof loaded.pageHeader, axes: readonly (keyof typeof a)[] = ['x', 'y', 'width', 'height']) => {
           for (const axis of axes) {
             expect(Math.abs(a[axis] - b[axis]), `${width}px ${name}.${axis}: loading=${a[axis]}, loaded=${b[axis]}`).toBeLessThanOrEqual(0.1)
@@ -437,12 +440,15 @@ describe('web e2e: plugin manager', () => {
     // optional bundles open the Official group, followed by the official plugins that registered their
     // configuration, and its other bundles stay off the page.
     expect(await panel.locator('[data-plugin-group="bundles"] [data-plugin-package]').count()).toBe(2)
-    expect(await panel.locator('[data-plugin-group="official"] [data-plugin-package]').count()).toBe(OPTIONAL_BUNDLES.length)
+    expect(await panel.locator('[data-plugin-group="official"] [data-plugin-package]').count()).toBe(OPTIONAL_BUNDLES.length + ON_DEMAND_BUNDLES.length)
     expect(await panel.locator('[data-plugin-group="official"] [data-plugin-item]').count()).toBe(4)
     expect(await panel.getByText('实验性', { exact: true }).count())
       .toBe(OPTIONAL_BUNDLES.filter(name => name.startsWith('@deepseek-ai/dsh-experimental-')).length)
     expect(await panel.locator('[data-plugin-package="@deepseek-ai/dsh-experimental-inspector"]').count()).toBe(0)
     expect(await panel.getByRole('switch', { name: '启用 语音输入', exact: true }).getAttribute('aria-checked')).toBe('false')
+    expect(await panel.getByRole('switch', { name: '启用 开发者工具', exact: true }).getAttribute('aria-checked')).toBe('false')
+    expect(await panel.getByText('查看调试会话原始数据、聊天消息分组数据，以及调试 NodeJS 后端', { exact: true }).count()).toBe(1)
+    expect(await panel.getByText(/Cordis|Chrome DevTools/).count()).toBe(0)
     // A bundle that is off still shows the rows its patch declares, without switches.
     await panel.getByRole('button', { name: '查看 @fixture/bundle' }).click()
     await panel.locator('[data-plugin-row]', { hasText: 'fixture-row' }).waitFor({ timeout: 10_000 })
@@ -639,7 +645,7 @@ describe('web e2e: plugin manager', () => {
       await toggle.click()
       try {
         await expect.poll(() => teamRows().filter(entry => entry.fiber?.state === FiberState.ACTIVE).length, { timeout: 20_000 }).toBe(3)
-        await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
+        await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('true')
         await action.waitFor({ timeout: 20_000 })
         await action.getByRole('button', { name: '智能体团队', exact: true }).click()
         const teamPanel = teamPage.getByRole('dialog', { name: '智能体团队', exact: true })
@@ -842,7 +848,8 @@ describe('web e2e: plugin manager', () => {
     const install = dialog.getByRole('button', { name: '安装', exact: true })
     expect(await install.isDisabled()).toBe(true)
     expect(await dialog.getByRole('note').textContent()).toContain('请确认插件来源可信')
-    expect(await dialog.getByRole('note').textContent()).toContain('暂不支持自动更新')
+    expect(await dialog.getByRole('note').textContent()).toContain('按需安装的官方插件会在版本与 DSH 不同时提供“更新”')
+    expect(await dialog.getByRole('note').textContent()).toContain('其他插件请先卸载再安装新版')
     await dialog.getByRole('button', { name: '插件安装引导和示例' }).click()
     // The guide carries the package-name example only; the former template strings keep their replacement reminder.
     await expect.poll(() => dialog.getByRole('listitem').count()).toBe(1)
@@ -892,10 +899,10 @@ describe('web e2e: plugin manager', () => {
     const bundles = async () => (JSON.parse(await homeFile('profiles', 'scaffold', 'package.json')) as {
       dsh: { profile: { bundles: string[] } }
     }).dsh.profile.bundles
-    await expect.poll(bundles, { timeout: 10_000 }).toEqual([...SCAFFOLD_BUNDLES, '@fixture/bundle'])
+    await expect.poll(bundles, { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toEqual([...SCAFFOLD_BUNDLES, '@fixture/bundle'])
     // A live profile: the row mounts once the whole tree recomposed, the switch is on, and nothing waits for a restart.
     await expect.poll(() => mounted()?.fiber?.state, { timeout: 20_000 }).toBe(2)
-    await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: 10_000 }).toBe('true')
+    await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('true')
     expect(await panel.getByText(/下次启动生效/).count()).toBe(0)
     const snapshot = await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(LIVE_EXPECTED, snapshot, MODE)
@@ -905,8 +912,8 @@ describe('web e2e: plugin manager', () => {
     await rowSwitch.waitFor({ timeout: 10_000 })
     expect(await rowSwitch.getAttribute('aria-checked')).toBe('true')
     await rowSwitch.click()
-    await expect.poll(async () => (await homeFile('profiles', 'scaffold', 'cordis.patch.yml')).includes('fixture-row'), { timeout: 10_000 }).toBe(true)
-    await expect.poll(() => rowSwitch.getAttribute('aria-checked'), { timeout: 10_000 }).toBe('false')
+    await expect.poll(async () => (await homeFile('profiles', 'scaffold', 'cordis.patch.yml')).includes('fixture-row'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe(true)
+    await expect.poll(() => rowSwitch.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('false')
     // A disabled entry keeps its disposed fiber; only an active one counts as mounted.
     await expect.poll(() => mounted()?.fiber?.state, { timeout: 20_000 }).not.toBe(2)
     await rowSwitch.click()
@@ -915,7 +922,7 @@ describe('web e2e: plugin manager', () => {
 
     await toggle.click()
     await expect.poll(() => mounted()?.fiber?.state, { timeout: 20_000 }).not.toBe(2)
-    await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
+    await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('false')
     expect(tripwire.pageErrors).toEqual([])
   }, 90_000)
 
@@ -954,8 +961,8 @@ describe('web e2e: startup-applied plugin management', () => {
       expect(mounted()?.fiber?.state).toBeUndefined()
       await toggle.click()
       // The selection is saved and the switch turns on, but nothing mounts before the next start; a toast says so.
-      await expect.poll(bundles).toEqual([...SCAFFOLD_BUNDLES, '@fixture/bundle'])
-      await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
+      await expect.poll(bundles, { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toEqual([...SCAFFOLD_BUNDLES, '@fixture/bundle'])
+      await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('true')
       await page.getByText('更改将在下次启动生效', { exact: true }).waitFor({ timeout: 10_000 })
       expect(mounted()?.fiber?.state).toBeUndefined()
       // The pack's page lists its rows from their declarations, with no live entry to switch.
@@ -965,8 +972,8 @@ describe('web e2e: startup-applied plugin management', () => {
       await panel.getByRole('button', { name: '返回插件列表' }).click()
 
       await toggle.click()
-      await expect.poll(bundles).toEqual(SCAFFOLD_BUNDLES)
-      await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
+      await expect.poll(bundles, { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toEqual(SCAFFOLD_BUNDLES)
+      await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('false')
       expect(tripwire.pageErrors).toEqual([])
     } finally {
       await browser?.close()
