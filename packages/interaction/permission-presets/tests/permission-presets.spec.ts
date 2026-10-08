@@ -1,3 +1,4 @@
+import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SessionStore, {
@@ -23,6 +24,7 @@ async function mounted(options: {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
   if (options.projection !== false) await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(SandboxPolicyService, { mode: options.bashDefault ?? 'workspace-write' })
   ctx.provide('shell', {
     sandboxMode: 'bashDefault' in options ? options.bashDefault : 'workspace-write',
     resolve() { throw new Error('permission tests do not execute bash') },
@@ -48,6 +50,7 @@ async function mountedStore(options: { approvalDefault?: ApprovalPolicy | undefi
   const ctx = new Context()
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write' })
   ctx.provide('shell', {
     sandboxMode: 'workspace-write',
     resolve() { throw new Error('permission tests do not execute bash') },
@@ -132,8 +135,8 @@ describe('PermissionPresetService', () => {
     await ctx.permissionPresets.set(session, AUTO_PRESET)
     expect(admissions).toBe(1)
     expect(session.snapshotEvents().map(event => [event.type, event.data])).toEqual([
-      ['permission/preset', { preset: AUTO_PRESET }],
       ['sandbox/mode', { mode: 'danger-full-access' }],
+      ['permission/preset', { preset: AUTO_PRESET }],
     ])
     expect(ctx.permissionPresets.current(session)).toBe(AUTO_PRESET)
 
@@ -228,8 +231,8 @@ describe('PermissionPresetService', () => {
     const session = freshSession('sess-set')
     await ctx.permissionPresets.set(session, 'danger-full-access')
     expect(session.snapshotEvents().map(e => [e.type, e.data])).toEqual([
-      ['permission/preset', { preset: 'danger-full-access' }],
       ['sandbox/mode', { mode: 'danger-full-access' }],
+      ['permission/preset', { preset: 'danger-full-access' }],
       ['approval/policy', { policy: 'never' }],
     ])
   })
@@ -251,8 +254,8 @@ describe('PermissionPresetService', () => {
     await ctx.permissionPresets.set(session, 'danger-full-access')
     const tail = session.snapshotEvents().slice(4)
     expect(tail.map(e => [e.type, e.data])).toEqual([
-      ['permission/preset', { preset: 'danger-full-access' }],
       ['sandbox/mode', { mode: 'danger-full-access' }],
+      ['permission/preset', { preset: 'danger-full-access' }],
     ])
   })
 
@@ -375,6 +378,7 @@ describe('new-session default', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write' })
     ctx.provide('shell', {
       sandboxMode: 'workspace-write',
       resolve() { throw new Error('permission tests do not execute bash') },
@@ -396,6 +400,7 @@ describe('new-session default', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write' })
     ctx.provide('shell', {
       sandboxMode: 'workspace-write',
       resolve() { throw new Error('permission tests do not execute bash') },
@@ -455,4 +460,28 @@ describe('new-session default', () => {
     await configurations.get(ctx)!.update({ defaultPreset: 'workspace-write' })
     expect(ctx.permissionPresets.defaultPreset).toBe('workspace-write')
   })
+})
+
+it('revalidates Auto after resource cleanup and commits no permission events if its integration disappeared', async () => {
+  const ctx = await mounted()
+  const auto = await mountAuto(ctx)
+  const session = freshSession('auto-disappeared-during-cleanup')
+  const unregister = ctx.sandboxPolicy.registerResource(session.id, { release: () => auto.dispose() })
+  try {
+    await expect(ctx.permissionPresets.set(session, AUTO_PRESET)).rejects.toThrow('unknown preset')
+    expect(session.snapshotEvents()).toEqual([])
+  } finally { unregister(); await ctx.fiber.dispose() }
+})
+
+it('rechecks approval policy at the commit point after cleanup', async () => {
+  const ctx = await mounted()
+  const auto = await mountAuto(ctx)
+  const session = freshSession('approval-changed-during-cleanup')
+  const unregister = ctx.sandboxPolicy.registerResource(session.id, { release: async () => {
+    session.append('approval/policy', { policy: 'never' })
+  } })
+  try {
+    await ctx.permissionPresets.set(session, AUTO_PRESET)
+    expect(session.snapshotEvents().filter(event => event.type === 'approval/policy').at(-1)?.data.policy).toBe('ask')
+  } finally { unregister(); await auto.dispose(); await ctx.fiber.dispose() }
 })

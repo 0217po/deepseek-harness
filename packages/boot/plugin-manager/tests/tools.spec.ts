@@ -4,7 +4,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import SandboxPolicy, { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
+import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import { Session, SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import ApprovalService, { type ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
@@ -120,12 +120,12 @@ it('checks the calling session on each execution, including after permission is 
   const id = SessionId('manager-permissions')
   const session = Session.create(id, undefined, { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false })
   const agent = { session } as unknown as Agent
-  setSandboxMode(session, 'workspace-write')
+  await ctx.sandboxPolicy.setMode(session, 'workspace-write')
   expect((await call({ action: 'list_plugins' }, agent)).isError).toBe(true)
   expect(manager.listPlugins).not.toHaveBeenCalled()
-  setSandboxMode(session, 'danger-full-access')
+  await ctx.sandboxPolicy.setMode(session, 'danger-full-access')
   expect((await call({ action: 'list_plugins' }, agent)).isError).toBe(false)
-  setSandboxMode(session, 'read-only')
+  await ctx.sandboxPolicy.setMode(session, 'read-only')
   expect((await call({ action: 'list_plugins' }, agent)).isError).toBe(true)
   expect(manager.listPlugins).toHaveBeenCalledTimes(1)
 })
@@ -179,7 +179,7 @@ it('rejects never policy without prompting and keeps full-access calls prompt-fr
   const agent = activeAgent()
   expect((await call({ action: 'set_plugin', target: 'include:demo', enabled: true }, agent)).isError).toBe(true)
   expect(manager.setPluginEnabled).not.toHaveBeenCalled()
-  setSandboxMode(agent.session, 'danger-full-access')
+  await ctx.sandboxPolicy.setMode(agent.session, 'danger-full-access')
   expect((await call({ action: 'set_plugin', target: 'include:demo', enabled: true }, agent)).isError).toBe(false)
   expect(manager.setPluginEnabled).toHaveBeenCalledTimes(1)
   expect(prompted).not.toHaveBeenCalled()

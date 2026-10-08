@@ -944,6 +944,12 @@ export class ToolRuntime extends Service {
    */
   private requirePtcTransport(): ToolDefinition {
     this.ptcTransport ??= createRunCodeTool(this, {
+      runSandboxExecution: (exec, run) => {
+        if (exec.agent === undefined) return run(exec.signal)
+        const policy = this.ctx.get('sandboxPolicy')
+        if (policy === undefined) throw new Error('dsh-tools: confined PTC runtime requires sandboxPolicy')
+        return policy.withExecution(exec.agent.session.id, exec.signal, run)
+      },
       resolveWorkingDirectory: async (exec) => {
         // Only Agent-owned PTC requires directory state; native registries
         // and unowned programs can run without this service.

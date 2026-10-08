@@ -1,18 +1,19 @@
 import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { Context } from '@deepseek-ai/cordis'
 import { SandboxUnavailableError } from '@deepseek-ai/dsh-sandbox'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { mountRuntime } from './setup.ts'
 
-async function setup(mode: 'read-only' | 'workspace-write' = 'read-only') {
+async function setup(mode: 'read-only' | 'workspace-write' = 'read-only', executionMode: 'per-call' | 'persistent-in-memory' = 'persistent-in-memory') {
   const root = await mkdtemp(join(homedir(), '.dsh-persistent-sandbox-'))
   const cwd = join(root, 'workspace')
   await mkdir(cwd)
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
-  const { runtime } = await mountRuntime(ctx, { executionMode: 'persistent-in-memory' }, { mode, workspaceRoot: cwd })
+  const { runtime } = await mountRuntime(ctx, { executionMode }, { mode, workspaceRoot: cwd })
   const owner = {}
   const run = (program: string) => runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))
   return { root, cwd, ctx, runtime, owner, run }
@@ -75,4 +76,73 @@ it('cancels a pending confinement operation before spawning', async () => {
     confine.mockRestore()
     spawn.mockRestore()
   }
+})
+
+it('clears a registered live REPL through the file-policy setter before starting under the new mode', async () => {
+  const { ctx, cwd, runtime, owner } = await setup('workspace-write')
+  const session = ctx.sessions.create(SessionId('retained-policy-change'), { meta: { cwd } })
+  const run = (program: string) => runtime.run(runtime.resolve({
+    program, bindings: [], stateOwner: owner, sandboxPolicy: ctx.sandboxPolicy.resolve({ session }),
+  }))
+  const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+  onTestFinished(() => { spawn.mockRestore() })
+  expect((await run('const retained = 7; retained')).value).toBe(7)
+  const started = spawn.mock.results[0]
+  if (started?.type !== 'return') throw new Error('the retained process did not start')
+  expect(await ctx.sandboxPolicy.setMode(session, 'read-only')).toEqual([
+    'PTC variables were cleared after the sandbox mode changed. Recreate variables before using them.',
+  ])
+  await started.value.done
+  expect((await run('typeof retained')).value).toBe('undefined')
+  const denied = await run('await (await import("node:fs/promises")).writeFile("denied-after-switch.txt", "denied")')
+  expect(denied.sandbox).toMatchObject({ mode: 'read-only', denied: true })
+  await expect(readFile(join(cwd, 'denied-after-switch.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+})
+
+it('keeps a one-shot wider policy separate from standing variables and subsequent writes', async () => {
+  const { ctx, cwd, runtime, owner } = await setup()
+  const session = ctx.sessions.create(SessionId('temporary-policy'), { meta: { cwd } })
+  const standing = ctx.sandboxPolicy.resolve({ session })
+  const run = (program: string) => runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner, sandboxPolicy: standing }))
+  expect((await run('const retained = 7; retained')).value).toBe(7)
+  const result = await runtime.run(runtime.resolve({
+    program: 'const temporary = 9; await (await import("node:fs/promises")).writeFile("elevated.txt", typeof retained); temporary',
+    bindings: [], sandboxPolicy: { ...standing, mode: 'danger-full-access' },
+  }))
+  expect(result.value).toBe(9)
+  expect(await readFile(join(cwd, 'elevated.txt'), 'utf8')).toBe('undefined')
+  expect((await run('({ retained, temporary: typeof temporary })')).value).toEqual({ retained: 7, temporary: 'undefined' })
+  expect((await run('await (await import("node:fs/promises")).writeFile("denied.txt", "denied")')).sandbox?.denied).toBe(true)
+  await expect(readFile(join(cwd, 'denied.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+  expect(ctx.sandboxPolicy.resolve({ session }).mode).toBe('read-only')
+})
+
+it('preserves the current execution context for bindings in a reused REPL', async () => {
+  const { ctx, cwd, runtime, owner } = await setup('workspace-write')
+  const session = ctx.sessions.create(SessionId('reentrant-mode-change'), { meta: { cwd } })
+  const run = (program: string) => ctx.sandboxPolicy.withExecution(session.id, new AbortController().signal, signal =>
+    runtime.run(runtime.resolve({ program, signal, stateOwner: owner,
+      sandboxPolicy: ctx.sandboxPolicy.resolve({ session }),
+      bindings: [{ global: 'tools', functions: { change: () => ctx.sandboxPolicy.setMode(session, 'read-only') } }],
+    })))
+  expect((await run('const retained = 7; retained')).value).toBe(7)
+  const result = await run('await tools.change({})')
+  expect(result.error?.message).toContain('operation that the change must cancel')
+  expect(ctx.sandboxPolicy.resolve({ session }).mode).toBe('workspace-write')
+  expect((await run('retained')).value).toBe(7)
+})
+
+it.each(['per-call', 'persistent-in-memory'] as const)('waits for canceled %s execution before changing policy', async (executionMode) => {
+  const { ctx, cwd, runtime, owner } = await setup('workspace-write', executionMode)
+  const session = ctx.sessions.create(SessionId(`active-${executionMode}`), { meta: { cwd } })
+  const entered = Promise.withResolvers<undefined>()
+  const pending = ctx.sandboxPolicy.withExecution(session.id, new AbortController().signal, signal =>
+    runtime.run(runtime.resolve({ program: 'await tools.ready({}); await new Promise(() => {})',
+      signal, stateOwner: owner, sandboxPolicy: ctx.sandboxPolicy.resolve({ session }),
+      bindings: [{ global: 'tools', functions: { ready: async () => { entered.resolve(undefined); return null } } }],
+    })))
+  await entered.promise
+  await ctx.sandboxPolicy.setMode(session, 'read-only')
+  expect((await pending).error?.kind).toBe('abort')
+  expect(ctx.sandboxPolicy.resolve({ session }).mode).toBe('read-only')
 })

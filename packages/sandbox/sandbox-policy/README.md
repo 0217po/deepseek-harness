@@ -51,7 +51,9 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Switching a session's mode
 
-A session's mode can be switched at runtime through a UI policy control or an explicit switch; the switch is recorded in the session log and takes effect on the session's next confined call. The switch survives restart through replay, and each session keeps its own mode — two sessions never see each other's state. A switched session keeps its immutable workspace cwd as the writable boundary.
+Use `await ctx.sandboxPolicy.setMode(session, mode)` for runtime changes. The service cancels admitted operations, waits for registered resources to stop, and then appends the durable `sandbox/mode` event. Cleanup failure preserves the old mode; new reservations and resource registrations reject during the transition. An unchanged effective mode records the override without clearing resources. Permission presets use the same operation. Each Session retains its immutable workspace root, and its selected mode survives restart through replay.
+
+Callers wrap approval, execution and final cleanup with `withExecution(sessionId, signal, run)`. A mode change waits for that complete operation to settle, including nested tools. An operation cannot initiate a mode change that would cancel itself. Providers register live processes with `registerResource(sessionId, resource)` and detach after successful cleanup. Resource cleanup is idempotent and awaited during mode changes or contributor unload. Direct mode-event writes reject while execution or resources are registered.
 
 ### Failures and recovery
 
@@ -84,7 +86,7 @@ The `sandbox:policy` contribution states the mode's capability-neutral file-effe
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `SandboxPolicyService`, `Config` schema, policy resolution and context contribution |
-| [`src/session-mode.ts`](src/session-mode.ts) | The `sandbox/mode` event, its fold, and the write path |
+| [`src/session-mode.ts`](src/session-mode.ts) | The `sandbox/mode` event and accepted mode values |
 
 </details>
 

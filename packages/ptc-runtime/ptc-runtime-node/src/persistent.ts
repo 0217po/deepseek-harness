@@ -1,4 +1,5 @@
 /** Node PTC in-memory execution with retained processes scoped to caller-owned objects. */
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { stripTypeScriptTypes } from 'node:module'
 import { isAbsolute } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -29,6 +30,7 @@ interface Evaluation {
   data: ProgramBootData
   spec: PtcRunSpec
   bindings: Map<string, PtcBindingNamespace>
+  reply: typeof replyToBinding
   pending: number
   pendingBytes: number
   admit(text: string): void
@@ -37,6 +39,7 @@ interface Evaluation {
 
 /** One managed process; all mutable program state belongs to this process alone. */
 class Kernel {
+  private readonly unregister: (() => void) | undefined
   private confined: ConfinedArgv | undefined
   private handle?: SubprocessHandle
   private channel?: JsonChannel
@@ -48,16 +51,24 @@ class Kernel {
   private sequence = 0
   private nextCall = 1
   private stderr = ''
-  private stopped?: Promise<void>
+  private stopped: Promise<boolean> | undefined
   private starting?: Promise<void>
   private exitOutcome?: SubprocessOutcome
   private readonly controller = new AbortController()
   closed = false
 
-  constructor(private readonly ctx: Context, private readonly config: ResolvedConfig, readonly policy: SandboxExecutionPolicy) {}
+  constructor(
+    private readonly ctx: Context, private readonly config: ResolvedConfig, readonly policy: SandboxExecutionPolicy, retained: boolean,
+  ) {
+    this.unregister = policy.sessionId === undefined ? undefined : ctx.sandboxPolicy.registerResource(policy.sessionId, {
+      release: () => this.dispose(),
+      ...retained ? { notice: 'PTC variables were cleared after the sandbox mode changed. Recreate variables before using them.' } : {},
+    })
+  }
 
   assertIdle(): void {
-    if (this.running || this.cleanupPending) throw new Error('persistent PTC does not accept concurrent runs for one state owner')
+    if (this.running) throw new Error('persistent PTC does not accept concurrent runs for one state owner')
+    if (this.cleanupPending) throw new Error('persistent PTC environment cleanup is incomplete; release the owner before running another program')
   }
 
   async run(spec: PtcRunSpec, bindings: Map<string, PtcBindingNamespace>, code: string): Promise<PtcRunResult> {
@@ -98,7 +109,7 @@ class Kernel {
       data: { code, maxOutputBytes: this.config.maxOutputBytes, namespaces: [...bindings.values()].map(binding => ({
         global: binding.global, names: Object.keys(binding.functions), ...binding.errorClass ? { errorClass: binding.errorClass } : {},
       })) },
-      spec, bindings, pending: 0, pendingBytes: 0,
+      spec, bindings, reply: AsyncLocalStorage.bind(replyToBinding), pending: 0, pendingBytes: 0,
       admit: (text) => {
         if (!output.admit(text, logs)) {
           logs.push(text)
@@ -112,8 +123,10 @@ class Kernel {
         this.active = undefined
         const outcome = error?.kind === 'output-limit' ? output.limit(logs)
           : error ? output.failure(logs, error) : output.success(logs, value)
-        const cleanup = discard || outcome.error?.kind === 'output-limit' || spec.stateOwner === undefined ? this.stop() : Promise.resolve()
-        void cleanup.then(() => { result.resolve(outcome) }, (failure: unknown) => {
+        const cleanup = discard || outcome.error?.kind === 'output-limit' || spec.stateOwner === undefined ? this.stop() : Promise.resolve(true)
+        void cleanup.then((drained) => {
+          result.resolve(drained ? outcome : output.failure(logs, { kind: 'worker-exit', message: 'managed process exited but its output did not drain cleanly' }))
+        }, (failure: unknown) => {
           result.resolve(output.failure(logs, { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(failure)}` }))
         })
       },
@@ -134,7 +147,7 @@ class Kernel {
     await this.stop()
   }
 
-  private stop(): Promise<void> {
+  private stop(): Promise<boolean> {
     if (this.stopped) return this.stopped
     this.closed = true
     this.cleanupPending = true
@@ -143,9 +156,13 @@ class Kernel {
     this.stopped = (async () => {
       await this.starting?.catch(() => {})
       const handle = this.handle
-      if (!handle) return
-      if (!await terminateProcess(handle, this.config.graceMs)) throw new Error('persistent Node process output did not close cleanly')
-    })().then(() => { this.cleanupPending = false })
+      return handle === undefined || await terminateProcess(handle, this.config.graceMs)
+    })().then((drained) => {
+      this.unregister?.()
+      this.cleanupPending = false
+      if (!drained) this.ctx.logger.warn('persistent Node process exited but its output did not drain cleanly')
+      return drained
+    }, (error: unknown) => { this.stopped = undefined; throw error })
     return this.stopped
   }
 
@@ -250,7 +267,7 @@ class Kernel {
         const fn = functions && Object.hasOwn(functions, payload.name) ? functions[payload.name] : undefined
         const id = payload.id
         void (async () => {
-          const reply = await replyToBinding(id, fn, args).finally(() => {
+          const reply = await evaluation.reply(id, fn, args).finally(() => {
             evaluation.pending -= 1
             evaluation.pendingBytes -= bytes
           })
@@ -334,7 +351,7 @@ export class InMemoryExecution {
     }
     if (!kernel || kernel.closed) {
       if (kernel) this.kernels.delete(kernel)
-      kernel = new Kernel(this.ctx, this.config, { ...spec.sandboxPolicy })
+      kernel = new Kernel(this.ctx, this.config, { ...spec.sandboxPolicy }, spec.stateOwner !== undefined)
       this.kernels.add(kernel)
       if (spec.stateOwner !== undefined) this.owners.set(spec.stateOwner, kernel)
     }

@@ -397,7 +397,7 @@ it('logs an idle process failure with its bounded stderr tail', async () => {
   } finally { reported.mockRestore() }
 })
 
-it('keeps an owner unavailable after release cleanup fails', async () => {
+it('retries process observation before releasing an owner after cleanup fails', async () => {
   const h = await setup()
   h.onBoot(() => { h.emit(frame({ type: 'done' })) })
   await h.start()
@@ -406,11 +406,12 @@ it('keeps an owner unavailable after release cleanup fails', async () => {
   await expect(h.runtime.release(request.stateOwner!)).rejects.toBe(failure)
   const reported = vi.spyOn(h.fiber.ctx.logger, 'error').mockImplementation(() => {})
   try {
-    await expect(h.runtime.release(request.stateOwner!)).rejects.toBe(failure)
-    await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('concurrent runs')
+    await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('cleanup is incomplete')
+    h.waitForExit.mockResolvedValue(true)
+    await h.runtime.release(request.stateOwner!)
     await h.fiber.dispose()
-    expect(reported).toHaveBeenCalled()
-    expect(h.waitForExit).toHaveBeenCalledOnce()
+    expect(reported).not.toHaveBeenCalled()
+    expect(h.waitForExit).toHaveBeenCalledTimes(2)
   } finally { reported.mockRestore() }
 })
 
@@ -424,7 +425,7 @@ it('reserves the owner while parse-output overflow releases its environment', as
   const pending = h.runtime.run(h.runtime.resolve({ ...request, program: 'return 1' }))
   try {
     await cleanup.promise
-    await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('concurrent runs')
+    await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('cleanup is incomplete')
     expect(h.spawn).toHaveBeenCalledOnce()
     stopped.resolve(true)
     expect((await pending).error?.kind).toBe('output-limit')

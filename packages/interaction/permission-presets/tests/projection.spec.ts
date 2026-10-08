@@ -1,3 +1,4 @@
+import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 /**
  * The `permissions` projection unit and the `/permission` command: mounting
  * the permission service beside the projection registry serves only the
@@ -30,6 +31,7 @@ async function harness(options: {
   const ctx = options.ctx ?? new Context()
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write' })
   await ctx.plugin(CommandRuntime)
   ctx.provide('shell', {
     sandboxMode: 'workspace-write',

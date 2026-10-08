@@ -1,7 +1,7 @@
 /**
  * User-facing permission presets over the independent sandbox-mode and
- * approval-policy knobs. A switch records the selected preset, then writes
- * changed knobs through their canonical setters. Execution, prompt narration,
+ * approval-policy knobs. A switch awaits the file-policy owner, then records
+ * the selected preset and changed approval policy. Execution, prompt narration,
  * and replay keep reading their knob folds. The preset event preserves user
  * intent when two presets share a bundle. The Auto review integration may
  * publish one fixed, current-session-only preset with a synchronous admission
@@ -22,7 +22,7 @@ import { z as zod } from 'zod'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
-import { SANDBOX_MODES, setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
+import { SANDBOX_MODES } from '@deepseek-ai/dsh-sandbox-policy'
 // Side-effect type import: declaration-merges `ctx.shell` (the capability fact
 // `sandboxMode` this service reads), without a value dependency on the seam.
 import type {} from '@deepseek-ai/dsh-shell'
@@ -40,18 +40,6 @@ declare module '@deepseek-ai/cordis' {
     permissionPresets: PermissionPresetService
   }
 
-  interface Events {
-    /**
-     * Wrap a permission change while resources using the old policy are released.
-     * A rejection prevents the preset and its policy events from being recorded.
-     * @param next - Commit the validated preset and return change notices.
-     * @param session - Session receiving the new preset.
-     * @param sandboxMode - File policy selected by the preset.
-     * @returns Notices describing resources invalidated by the change.
-     * @mode waterfall
-     */
-    'permission-presets/apply'(session: Session, sandboxMode: SandboxMode, next: () => Promise<string[]>): Promise<string[]>
-  }
 }
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
@@ -211,7 +199,7 @@ export class PermissionPresetService extends TypertRemoteService {
     defaultPreset: z.string().volatile(),
   })
 
-  static inject = ['shell', 'approval', 'sessions', 'sessionProjections']
+  static inject = ['shell', 'approval', 'sessions', 'sessionProjections', 'sandboxPolicy']
 
   private readonly presets: Record<string, PresetSpec>
   private readonly changing = new WeakSet<Session>()
@@ -404,8 +392,8 @@ export class PermissionPresetService extends TypertRemoteService {
   }
 
   /**
-   * Record a changed preset, then update each changed knob through its own
-   * setter. Selecting the effective preset again appends nothing.
+   * Await file-policy cleanup, then record the changed preset and approval policy.
+   * Selecting the effective preset again appends nothing.
    * @param session - the session the switch belongs to.
    * @param name - the preset to switch to; unknown names reject.
    * @returns Notices after old execution resources are released and the new preset is recorded.
@@ -417,18 +405,23 @@ export class PermissionPresetService extends TypertRemoteService {
   /** Apply one preset through its durable identity and canonical knob setters. */
   private async apply(session: Session, name: string, setApproval: (policy: ApprovalPolicy) => void): Promise<string[]> {
     const spec = this.resolve(name)
-    if (name === AUTO_PRESET) this.autoAdmit?.()
-    const current = this.current(session)
-    const knobs = this.permissionState(session)
     if (this.changing.has(session)) throw new Error('permission: another preset change is still in progress')
     this.changing.add(session)
     try {
-      return await this.ctx.waterfall('permission-presets/apply', session, spec.sandbox, () => {
+      const commit = (writeMode?: () => void): void => {
+        this.resolve(name)
+        if (name === AUTO_PRESET) this.autoAdmit?.()
+        const current = this.current(session)
+        writeMode?.()
         if (current !== name) session.append('permission/preset', { preset: name })
-        if (spec.sandbox !== (knobs.sandbox ?? this.ctx.shell.sandboxMode)) setSandboxMode(session, spec.sandbox)
-        if (spec.approval !== (knobs.approval ?? this.ctx.approval.config.policy ?? 'ask')) setApproval(spec.approval)
-        return Promise.resolve([])
-      })
+        const approval = this.permissionState(session).approval ?? this.ctx.approval.config.policy ?? 'ask'
+        if (spec.approval !== approval) setApproval(spec.approval)
+      }
+      if (spec.sandbox !== this.ctx.sandboxPolicy.resolve({ session }).mode) {
+        return await this.ctx.sandboxPolicy.setMode(session, spec.sandbox, commit)
+      }
+      commit()
+      return []
     } finally { this.changing.delete(session) }
   }
 
@@ -453,7 +446,7 @@ export class PermissionPresetService extends TypertRemoteService {
       const name = this.defaultPreset
       const spec = this.resolve(name)
       session.append('permission/preset', { preset: name })
-      setSandboxMode(session, spec.sandbox)
+      session.append('sandbox/mode', { mode: spec.sandbox })
       setApprovalPolicy(session, spec.approval)
       return
     }
@@ -463,7 +456,7 @@ export class PermissionPresetService extends TypertRemoteService {
       session.append('permission/preset', { preset: effective })
     }
     if (sandbox === null) {
-      setSandboxMode(session, this.ctx.shell.sandboxMode as SandboxMode)
+      session.append('sandbox/mode', { mode: this.ctx.shell.sandboxMode as SandboxMode })
     }
     if (approval === null) {
       setApprovalPolicy(session, this.ctx.approval.config.policy ?? 'ask')

@@ -16,7 +16,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import SandboxPolicyService, { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
+import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
@@ -94,7 +94,7 @@ describe('continuable policy inheritance', () => {
     async (preset) => {
       const { ctx, parent } = await setup([textResponse('child done'), textResponse('resumed child done')])
       parent.session.append('permission/preset', { preset })
-      setSandboxMode(parent.session, 'danger-full-access')
+      await ctx.sandboxPolicy.setMode(parent.session, 'danger-full-access')
       const current = vi.fn((session: Session) => session === parent.session ? preset : 'custom')
       ctx.provide('permissionPresets', { current } as never)
 
@@ -133,7 +133,7 @@ describe('continuable policy inheritance', () => {
   ] as const)('captures $preset before child creation and overrides the $seedPreset fork prefix', { timeout: 20_000 }, async ({ seedPreset, preset }) => {
     const { ctx, parent } = await setup([textResponse('parent turn'), textResponse('forked child')])
     parent.session.append('permission/preset', { preset: seedPreset })
-    setSandboxMode(parent.session, 'danger-full-access')
+    await ctx.sandboxPolicy.setMode(parent.session, 'danger-full-access')
     parent.followup(createUserMessage({
       content: [{ type: 'text', text: 'parent work' }],
       source: { kind: 'user' },
@@ -159,7 +159,7 @@ describe('continuable policy inheritance', () => {
 
   it('seeds the parent sandbox override and pins approval to never', { timeout: 20_000 }, async () => {
     const { ctx, parent } = await setup([textResponse('child done')])
-    setSandboxMode(parent.session, 'danger-full-access')
+    await ctx.sandboxPolicy.setMode(parent.session, 'danger-full-access')
     // No parent approval override: the child pin must not depend on one.
     expect(ctx.approval.overrideOf(parent.session)).toBeUndefined()
     let child: Agent | undefined
@@ -196,12 +196,12 @@ describe('continuable policy inheritance', () => {
 
   it('captures policy at delegation before asynchronous child creation', { timeout: 20_000 }, async () => {
     const { ctx, parent } = await setup([textResponse('child done')])
-    setSandboxMode(parent.session, 'read-only')
+    await ctx.sandboxPolicy.setMode(parent.session, 'read-only')
 
     const starting = ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     // A parent switch after the synchronous capture belongs to the parent's
     // future, not to this child.
-    setSandboxMode(parent.session, 'danger-full-access')
+    await ctx.sandboxPolicy.setMode(parent.session, 'danger-full-access')
     const started = await starting
 
     await waitNoActivation(ctx, started.childId)
@@ -244,7 +244,7 @@ describe('continuable policy inheritance', () => {
 
   it('lets a later child-side switch win over the delegation snapshot', { timeout: 20_000 }, async () => {
     const { ctx, parent } = await setup([textResponse('child done')])
-    setSandboxMode(parent.session, 'danger-full-access')
+    await ctx.sandboxPolicy.setMode(parent.session, 'danger-full-access')
     let child: Agent | undefined
     ctx.on('agent/created', ({ agent }) => {
       if (agent !== parent) child = agent
@@ -254,7 +254,7 @@ describe('continuable policy inheritance', () => {
     if (child === undefined) throw new Error('expected the continuable child to be created')
     expect(ctx.sandboxPolicy.overrideOf(child.session)).toBe('danger-full-access')
     // Last event wins: the child's own runtime switch beats the seeded snapshot.
-    setSandboxMode(child.session, 'read-only')
+    await ctx.sandboxPolicy.setMode(child.session, 'read-only')
     expect(ctx.sandboxPolicy.overrideOf(child.session)).toBe('read-only')
 
     await waitNoActivation(ctx, started.childId)
@@ -264,13 +264,13 @@ describe('continuable policy inheritance', () => {
 
   it('cold-resumes on the persisted snapshot without re-capturing the parent', { timeout: 20_000 }, async () => {
     const { ctx, parent } = await setup([textResponse('first'), textResponse('after resume')])
-    setSandboxMode(parent.session, 'read-only')
+    await ctx.sandboxPolicy.setMode(parent.session, 'read-only')
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
 
     // The parent widens AFTER the child was created; the resumed child keeps
     // the delegation-time snapshot from its own log.
-    setSandboxMode(parent.session, 'danger-full-access')
+    await ctx.sandboxPolicy.setMode(parent.session, 'danger-full-access')
     await queueHostSubagentPrompt(
       ctx.subagents,
       parent,
@@ -295,13 +295,13 @@ describe('continuable policy inheritance', () => {
   it('places inherited events after a fork prefix so fresh policy wins stale seed state', { timeout: 20_000 }, async () => {
     const { ctx, parent } = await setup([textResponse('parent turn'), textResponse('forked child')])
     // The stale mode lands inside the completed turn the fork seed replays.
-    setSandboxMode(parent.session, 'workspace-write')
+    await ctx.sandboxPolicy.setMode(parent.session, 'workspace-write')
     parent.followup(createUserMessage({
       content: [{ type: 'text', text: 'parent work' }],
       source: { kind: 'user' },
     }))
     await parent.whenIdle()
-    setSandboxMode(parent.session, 'read-only')
+    await ctx.sandboxPolicy.setMode(parent.session, 'read-only')
 
     const started = await ctx.subagents.startActivation({ ...startSpec(parent, 'fork'), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)

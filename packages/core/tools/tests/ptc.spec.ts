@@ -2361,6 +2361,18 @@ describe('per-program execution controls', () => {
     } finally { await ctx.fiber.dispose() }
   })
 
+  it('reuses the standing owner when sandbox_permissions repeats the current mode', async () => {
+    const { ctx, runtime, session, agent, execute } = await controlledSetup()
+    const ask = vi.fn(() => Promise.resolve<ApprovalOutcome>('allowed-once'))
+    ctx.on('approval/request', ask)
+    try {
+      await ctx.sandboxPolicy.setMode(session, 'workspace-write')
+      expect((await execute({ sandbox_permissions: 'workspace-write', justification: 'Use current file permissions' })).isError).toBe(false)
+      expect(runtime.lastRequest?.stateOwner).toBe(agent)
+      expect(ask).not.toHaveBeenCalled()
+    } finally { await ctx.fiber.dispose() }
+  })
+
   it('fails closed when no approval service is mounted', async () => {
     const { ctx, runtime, execute } = await controlledSetup(false)
     try {
@@ -2370,8 +2382,8 @@ describe('per-program execution controls', () => {
     } finally { await ctx.fiber.dispose() }
   })
 
-  it('cancels an outstanding approval without launching the program', async () => {
-    const { ctx, runtime, execute } = await controlledSetup()
+  it.each(['caller', 'policy'] as const)('cancels an outstanding approval after %s cancellation without launching the program', async (source) => {
+    const { ctx, runtime, session, execute } = await controlledSetup()
     const asked = Promise.withResolvers<undefined>()
     const answer = Promise.withResolvers<ApprovalOutcome>()
     const controller = new AbortController()
@@ -2379,7 +2391,8 @@ describe('per-program execution controls', () => {
     const result = execute({ sandbox_permissions: 'workspace-write', justification: 'Write generated source' }, controller.signal)
     try {
       await asked.promise
-      controller.abort('cancel outer approval')
+      if (source === 'caller') controller.abort('cancel outer approval')
+      else await ctx.sandboxPolicy.setMode(session, 'workspace-write')
       expect((await result).isError).toBe(true)
       expect(runtime.lastRequest).toBeUndefined()
     } finally { answer.resolve('cancelled'); await result; await ctx.fiber.dispose() }
@@ -2437,8 +2450,7 @@ describe('per-program execution controls', () => {
       expect(completed.isError).toBe(false)
       expect(requests.map(req => req.toolName)).toEqual([RUN_CODE_NAME, 'echo'])
       expect(runtime.lastRequest?.timeoutMs).toBe(1234)
-      expect(runtime.lastRequest?.stateOwner).not.toBe(agent)
-      expect(runtime.lastRequest?.stateOwner).toBeDefined()
+      expect(runtime.lastRequest?.stateOwner).toBeUndefined()
       expect(ctx.sandboxPolicy.resolve({ session: agent.session }).mode).toBe('read-only')
     } finally { answer.resolve('cancelled'); await result; await ctx.fiber.dispose() }
   })

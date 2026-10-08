@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
+import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-agent'
 
 export const name = 'parent-sandbox-override'
@@ -12,8 +12,8 @@ export const name = 'parent-sandbox-override'
  * instead of falling back to the deployment default.
  */
 export function apply(ctx: Context): void {
-  ctx.on('agent/created', ({ agent }) => {
+  ctx.on('agent/created', async ({ agent }) => {
     if (agent.session.header.parentSession !== undefined) return
-    setSandboxMode(agent.session, 'read-only')
+    await ctx.sandboxPolicy.setMode(agent.session, 'read-only')
   })
 }

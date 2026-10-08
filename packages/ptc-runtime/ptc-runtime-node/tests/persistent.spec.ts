@@ -229,7 +229,6 @@ describe('persistent Node REPL', () => {
   it('resolves confinement and validates options before starting a process', async () => {
     const { run, runtime } = await setup()
     expect(runtime.sandboxMode).toBe('danger-full-access')
-    expect(runtime.retainsState).toBe(true)
     expect(runtime.programFormat).toBe('repl')
     expect(runtime.timeout).toEqual({ defaultMs: 120_000, maxMs: 600_000 })
     expect(runtime.resolve({ program: '1', bindings: [], sandboxPolicy: { mode: 'read-only', workspaceRoot: process.cwd() } }).sandboxPolicy?.mode).toBe('read-only')

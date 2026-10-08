@@ -1643,7 +1643,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'set(session: Session, name: string): Promise<string[]>',
-        description: 'Record a changed preset, then update each changed knob through its own setter. Selecting the effective preset again appends nothing.',
+        description: 'Await file-policy cleanup, then record the changed preset and approval policy. Selecting the effective preset again appends nothing.',
         parameters: [{ name: 'session', description: 'the session the switch belongs to.' }, { name: 'name', description: 'the preset to switch to; unknown names reject.' }],
         returns: 'Notices after old execution resources are released and the new preset is recorded.',
       },
@@ -1895,6 +1895,27 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Resolve the complete policy for one capability call. An approved explicit mode outranks the session\'s last `sandbox/mode` event, which outranks the deployment default. A session cwd is its workspace-write boundary; the configured root is the fallback for agentless calls and sessions without a cwd.',
         parameters: [{ name: 'request', description: 'optional session and approved mode override.' }],
         returns: 'the fully resolved per-call mode and absolute workspace root.',
+      },
+      {
+        signature: 'async setMode(session: Session, mode: SandboxMode, commit?: (writeMode: () => void) => void): Promise<string[]>',
+        description: 'Cancel admitted operations and release registered resources before recording a new mode. An unchanged effective mode records the override without clearing resources.',
+        parameters: [{ name: 'session', description: 'Session whose file policy changes.' }, { name: 'mode', description: 'Mode for subsequent executions.' }, { name: 'commit', description: 'Optional synchronous commit: validate caller state, invoke the supplied mode writer, then record related changes.' }],
+        returns: 'Resource-reset notices after the mode event is committed.',
+        throws: ['On concurrent changes, disposal, or cleanup failure; cleanup failures leave the mode unchanged.'],
+      },
+      {
+        signature: 'registerResource(sessionId: SessionId, resource: SandboxPolicyResource): () => void',
+        description: 'Register an execution resource under its Session\'s file policy.',
+        parameters: [{ name: 'sessionId', description: 'Session identity carried in the resolved execution policy.' }, { name: 'resource', description: 'Awaited cleanup and optional reset notice.' }],
+        returns: 'Disposer for an already stopped resource; contributor unload awaits cleanup before detaching.',
+        throws: ['While the Session changes mode or this provider is disposed.'],
+      },
+      {
+        signature: 'async withExecution<T>(sessionId: SessionId, signal: AbortSignal, run: (signal: AbortSignal) => Promise<T>): Promise<T>',
+        description: 'Run one cancellable operation, including asynchronous preparation and final cleanup.',
+        parameters: [{ name: 'sessionId', description: 'Session whose standing mode applies to the operation.' }, { name: 'signal', description: 'Caller-owned cancellation.' }, { name: 'run', description: 'Operation that observes the combined signal and awaits its own cleanup before settling.' }],
+        returns: 'The operation\'s result; mode changes await its settlement even when it rejects.',
+        throws: ['While the Session changes mode or this provider is disposed.'],
       },
       {
         signature: 'overrideOf(session: Session): SandboxMode | undefined',
@@ -4261,14 +4282,6 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'options', description: 'the full request. A LOOP-built request carries the process-local {@link markAgentLoopRequest} identity and arrives deep-frozen (mutation throws): its content is a pure function of the session log (the reconstructability Agent Note), so listeners read it, never rewrite it. Hand-built calls do not carry that marker; callers own their request inputs and must keep them unchanged until the stream settles.' }],
   },
   {
-    name: 'permission-presets/apply',
-    mode: 'waterfall',
-    signature: '\'permission-presets/apply\'(session: Session, sandboxMode: SandboxMode, next: () => Promise<string[]>): Promise<string[]>',
-    summary: 'Wrap a permission change while resources using the old policy are released.',
-    description: 'Wrap a permission change while resources using the old policy are released. A rejection prevents the preset and its policy events from being recorded.',
-    parameters: [{ name: 'next', description: 'Commit the validated preset and return change notices.' }, { name: 'session', description: 'Session receiving the new preset.' }, { name: 'sandboxMode', description: 'File policy selected by the preset.' }],
-  },
-  {
     name: 'permission-presets/catalog-changed',
     mode: 'emit',
     signature: '\'permission-presets/catalog-changed\'(): void',
@@ -6579,6 +6592,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SandboxPolicyRequest',
     declaration: 'export interface SandboxPolicyRequest {\n    session?: Session;\n    mode?: SandboxMode;\n}',
+  },
+  {
+    name: 'SandboxPolicyResource',
+    declaration: 'export interface SandboxPolicyResource {\n    release(): Promise<void>;\n    notice?: string;\n}',
   },
   {
     name: 'SaveFileAttachment',

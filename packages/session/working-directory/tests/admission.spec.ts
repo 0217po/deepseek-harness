@@ -6,7 +6,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import SandboxPolicy, { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
+import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import ApprovalService from '@deepseek-ai/dsh-user-approval'
 import { describe, expect, it, vi } from 'vitest'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -32,7 +32,7 @@ describe.each(['pre-step', 'prepareCall'] as const)('%s context changes', (phase
         if (changed) return
         changed = true
         await ctx.workingDirectory.set(agent, selected)
-        setSandboxMode(agent.session, 'danger-full-access')
+        await ctx.sandboxPolicy.setMode(agent.session, 'danger-full-access')
         ctx.approval.setPolicy(agent, 'ask')
       }
       if (phase === 'pre-step') {

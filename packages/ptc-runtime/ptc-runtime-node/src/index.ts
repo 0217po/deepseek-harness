@@ -63,8 +63,6 @@ export class NodePtcRuntime extends PtcRuntime {
     }, 'Node ptc-runtime cleanup')
   }
 
-  override get retainsState(): boolean { return this.inMemory !== undefined }
-
   override get sandboxMode(): SandboxMode | undefined { return this.ctx.sandboxPolicy.defaultMode }
 
   override release(owner: object): Promise<void> {

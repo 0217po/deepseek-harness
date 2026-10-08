@@ -12,9 +12,9 @@ Retaining JavaScript variables does not require broader file access. A process t
 
 `persistent-in-memory` starts its Node process through the same sandbox provider as `per-call`. A retained owner uses one resolved mode, workspace root and Session identity until release. The [memory decision](2026-09-23-best-effort-persistent-ptc.md) owns retained values, failure recovery and package composition; this note owns file authority.
 
-The PTC consumer tracks retained and temporary owners under the Agent lifecycle. Permission preset changes run through an awaited waterfall before writing any permission events. PTC closes admission, cancels admitted calls, awaits environment release, and delegates the permission commit while admission remains closed. Cleanup failure prevents the permission change. Direct sandbox-event appends reject while retained environments remain; callers use the asynchronous permission preset setter to perform cleanup.
+The file-policy service owns mode transitions. PTC reserves each Session execution before approval or directory resolution; Node registers each process for cleanup under the resolved policy's Session identity. `sandboxPolicy.setMode()` closes admission, cancels reservations and awaits registered resources before recording the new mode. Cleanup failure prevents the change. Direct sandbox-event appends reject while resources or operations are registered. Permission presets call the same setter as direct mode callers. The tools package keeps Agent ownership and omits the owner for temporary escalations; it does not depend on permission presets.
 
-An approved one-time escalation receives a separate temporary owner. Its process is released before the call returns. It cannot access standing variables, and its declarations do not survive. The standing environment keeps its original policy and variables. Nested tools continue to apply their own permissions and approvals.
+An approved one-time escalation omits the state owner and receives a fresh temporary environment. Its process is released before the call returns. It cannot access standing variables, and its declarations do not survive. The standing environment keeps its original policy and variables. Nested tools continue to apply their own permissions and approvals.
 
 ## Alternatives considered
 
@@ -22,7 +22,9 @@ An approved one-time escalation receives a separate temporary owner. Its process
 
 **Changing the running process policy.** Existing backends apply restrictions at launch. Arbitrary retained objects, open handles and background work cannot be transferred into another policy with the existing interface. Releasing the environment gives the permission change a definite completion point.
 
-**Keeping an elevated environment.** A one-time approval cannot authorize future programs or idle background work. A separate temporary owner makes the approval lifetime explicit while preserving the standing environment.
+**Coordinating through permission presets.** File-policy changes also have direct callers. The file-policy owner provides one cleanup operation for both paths and keeps user-facing preset selection out of the tool registry.
+
+**Keeping an elevated environment.** A one-time approval cannot authorize future programs or idle background work. Omitting the state owner makes the approval lifetime explicit while preserving the standing environment.
 
 ## Consequences
 

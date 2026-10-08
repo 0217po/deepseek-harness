@@ -46,9 +46,6 @@
     },
     {
       "path": "../../session/working-directory"
-    },
-    {
-      "path": "../../interaction/permission-presets"
     }
   ]
 }

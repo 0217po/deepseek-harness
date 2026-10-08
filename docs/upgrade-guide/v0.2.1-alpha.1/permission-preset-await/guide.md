@@ -8,7 +8,7 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-`ctx.permissionPresets.set(session, name)` returns `Promise<string[]>`. The promise resolves after retained execution resources are released and permission events are committed. Its strings describe cleared resources. Invalid presets and cleanup failures reject the promise.
+`ctx.permissionPresets.set(session, name)` returns `Promise<string[]>`. The promise resolves after retained execution resources are released and permission events are committed. Its strings describe cleared resources. The standalone `setSandboxMode(session, mode)` export is replaced by `await ctx.sandboxPolicy.setMode(session, mode)` so direct mode changes use the same cleanup operation. A mode change also cancels pending approvals and in-flight PTC programs in the default `per-call` mode, waiting for nested tools to finish cleanup. Invalid presets and cleanup failures reject the promise.
 
 ## Migration
 

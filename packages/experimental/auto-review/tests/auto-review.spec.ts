@@ -1,3 +1,4 @@
+import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 import { externalTestParent } from '../../../subagent/subagent/tests/external-activation-helpers.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -137,6 +138,7 @@ async function harness(
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write' })
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime)
   ctx.provide('shell', {
@@ -1523,6 +1525,7 @@ describe('cancellation and integration teardown', () => {
     await invalid.plugin(LlmRuntime)
     await invalid.plugin(SessionStore)
     await invalid.plugin(SessionProjectionRegistry)
+    await invalid.plugin(SandboxPolicyService, { mode: 'workspace-write' })
     await invalid.plugin(SystemPrompt, {})
     await invalid.plugin(ToolRuntime)
     invalid.provide('shell', {

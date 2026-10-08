@@ -6,6 +6,7 @@
  * @module @deepseek-ai/dsh-tools/src/ptc
  */
 
+import { symbols } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createUserMessage, HarnessError } from '@deepseek-ai/dsh-llm'
 declare module '@deepseek-ai/dsh-llm' {
@@ -25,7 +26,6 @@ import { defineTool, parameterSchemaSpecToJsonSchema } from './schema.ts'
 import { TOOL_RUNTIME_SCHEDULER } from './index.ts'
 import type { PtcDispatchLog, ToolDefinition, ToolExecutionResult, ToolRuntime, ToolRunContext } from './index.ts'
 import type {} from './types.ts'
-import { PtcOwners } from './ptc-owners.ts'
 
 /** The model-facing name of the PTC mode tool. */
 export const RUN_CODE_NAME = 'run_code'
@@ -283,6 +283,8 @@ type RunCodeOutput = { logs: string[]; result?: JsonValue; sandbox?: PtcRunSandb
  * off its public service API and flow here as closures instead.
  */
 export interface RunCodeBridgeOptions {
+  /** Scope execution through the file-policy owner, including approval and nested-call cleanup. */
+  runSandboxExecution: (exec: ToolRunContext, run: (signal: AbortSignal) => Promise<RunCodeOutput>) => Promise<RunCodeOutput>
   /** Captures the calling Session current directory before program creation. */
   resolveWorkingDirectory: (exec: ToolRunContext) => Promise<string | undefined>
   /** Reads the approval channel when a program requests a wider sandbox mode. */
@@ -317,7 +319,7 @@ export interface RunCodeBridgeOptions {
  */
 export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeOptions): ToolDefinition {
   const { requireRuntime, peekRuntime, maxParallel, shapeDispatchLog } = options
-  const stateOwners = new PtcOwners()
+  const stateOwners = new WeakMap<object, WeakSet<PtcRuntime>>()
   const definition = defineTool({
     name: RUN_CODE_NAME,
     // The description and `code` parameter description are placeholders here:
@@ -367,10 +369,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
         throw new Error('invalid description: expected a non-empty string')
       }
       const runtime = requireRuntime()
-      const admission = stateOwners.enter(exec.agent, runtime, exec.signal, args.sandbox_permissions !== undefined,
-        () => runtime.sandboxMode === undefined ? undefined : options.resolveSandboxPolicy(exec))
-      const callSignal = admission.signal
-      try {
+      const run = async (callSignal: AbortSignal): Promise<RunCodeOutput> => {
         validateEscalationArgs(args.sandbox_permissions, args.justification)
         if (args.timeoutMs !== undefined && runtime.timeout === undefined) {
           throw new Error('timeoutMs is not available for this PTC runtime')
@@ -686,9 +685,25 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
         try {
           let result: PtcRunResult
           try {
+            if (exec.agent !== undefined) {
+              const agent = exec.agent
+              let runtimes = stateOwners.get(agent)
+              if (runtimes === undefined) stateOwners.set(agent, runtimes = new WeakSet())
+              // Cordis can wrap service returns repeatedly; cleanup belongs to the original provider.
+              let provider = runtime
+              for (;;) {
+                const original = (provider as PtcRuntime & { [symbols.original]?: PtcRuntime })[symbols.original]
+                if (original === undefined) break
+                provider = original
+              }
+              if (!runtimes.has(provider)) {
+                agent.ctx.effect(() => () => runtime.release(agent), 'PTC retained environment')
+                runtimes.add(provider)
+              }
+            }
             result = await runtime.run(runtime.resolve({
               program: args.code,
-              ...admission.owner === undefined ? {} : { stateOwner: admission.owner },
+              ...exec.agent === undefined || policy?.mode !== standingPolicy?.mode ? {} : { stateOwner: exec.agent },
               bindings: [{
                 global: 'tools',
                 functions,
@@ -721,7 +736,8 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
         } finally {
           callSignal.removeEventListener('abort', onOuterAbort)
         }
-      } finally { await admission.finish() }
+      }
+      return runtime.sandboxMode === undefined ? run(exec.signal) : options.runSandboxExecution(exec, run)
     },
     // The model-authored description is the call's always-visible UI label
     // (the bash `description` precedent); the program itself rides rawInput.
