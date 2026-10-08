@@ -146,7 +146,7 @@ function backgroundJobId(result: Awaited<ReturnType<typeof call>>): string {
   if (typeof value !== 'object' || value === null || !('jobId' in value) || typeof value.jobId !== 'string') {
     throw new Error('missing background job id')
   }
-  expect(value.jobId).toMatch(/^pty-send-[0-9a-f-]{36}$/)
+  expect(value.jobId).toMatch(/^pty-send-[0-9a-f]{16}$/)
   return value.jobId
 }
 
@@ -355,7 +355,7 @@ describe('tool-terminal foreground API', () => {
     const background = await call(ctx, 'terminal_send', {
       sessionId: 'pty-1', text: 'work', run_in_background: true,
     }, agent)
-    expect(text(background)).toBe(`started job ${backgroundJobId(background)}`)
+    expect(text(background)).toBe(`started background job ${backgroundJobId(background)}`)
     expect(Buffer.byteLength(text(background))).toBeLessThanOrEqual(64)
   })
 

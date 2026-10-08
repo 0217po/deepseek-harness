@@ -690,7 +690,7 @@ it('lets a preset producer reach the background-job registry', async () => {
       agent: handle.agent,
     })
     const reported = started.content.map(block => block.type === 'text' ? block.text : '').join('')
-    const matched = /^started background job (bash-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/.exec(reported)
+    const matched = /^started background job (bash-[0-9a-f]{16})$/.exec(reported)
     if (matched === null) throw new Error(`background bash reported no job id: ${reported}`)
     const jobId = matched[1]
     expect({ isError: started.isError, content: started.content }).toEqual({

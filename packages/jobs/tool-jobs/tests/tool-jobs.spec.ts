@@ -930,7 +930,7 @@ describe('completion notices', () => {
       owner: owner.id,
       kind: 'test-task',
       label: 'x'.repeat(1_000),
-      outputLimitBytes: 61,
+      outputLimitBytes: 55,
     })
     ctx.jobs.start(first.spec)
     first.settle({ status: 'completed', detail: 'd'.repeat(1_000) })
@@ -956,7 +956,7 @@ describe('completion notices', () => {
       owner: owner.id,
       kind: 'test-task',
       label: 'x'.repeat(1_000),
-      outputLimitBytes: 80,
+      outputLimitBytes: 60,
     })
     ctx.jobs.start(second.spec)
     second.settle({ status: 'completed', detail: 'd'.repeat(1_000) })
@@ -982,7 +982,7 @@ describe('completion notices', () => {
       owner: owner.id,
       kind: 'pty-send',
       label: 'x'.repeat(1_000),
-      outputLimitBytes: 64,
+      outputLimitBytes: 56,
     })
     ctx.jobs.start(target.spec)
 
@@ -991,7 +991,7 @@ describe('completion notices', () => {
 
     const content = (inject.mock.calls[0]?.[0] as { content?: Array<{ type: string; text?: string }> } | undefined)?.content
     const notice = content?.[0]?.text ?? ''
-    expect(Buffer.byteLength(notice)).toBeLessThanOrEqual(64)
+    expect(Buffer.byteLength(notice)).toBeLessThanOrEqual(56)
     expect(notice).toBe('background job ended; use job_list for id.')
   })
 
@@ -999,11 +999,11 @@ describe('completion notices', () => {
     const { ctx } = await setup()
     const inject = vi.fn()
     const owner = await fakeAgent(ctx, 'notice-boundary', { inject })
-    const fixedBytes = Buffer.byteLength(`background job test-task-${'0'.repeat(36)}\n[notice truncated]\nDone; job_output.`)
+    const fixedBytes = Buffer.byteLength(`background job test-task-${'0'.repeat(16)}\n[notice truncated]\nDone; job_output.`)
     for (const [index, extra] of ['', ' (t'].entries()) {
       const p = producer({ owner: owner.id, kind: 'test-task', label: 'x'.repeat(1_000), outputLimitBytes: fixedBytes + extra.length })
       const id = ctx.jobs.start(p.spec)
-      expect(id).toMatch(/^test-task-[0-9a-f-]{36}$/)
+      expect(id).toMatch(/^test-task-[0-9a-f]{16}$/)
       p.settle({ status: 'completed' })
       await tick()
       const notice = (inject.mock.calls[index]?.[0] as { content?: Array<{ text?: string }> } | undefined)?.content?.[0]?.text

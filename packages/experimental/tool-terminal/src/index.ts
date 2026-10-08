@@ -145,13 +145,6 @@ function sendDetail(result: TerminalSendResult): string {
     : `session exited: ${result.sessionStatus.exitCode ?? result.sessionStatus.signal ?? 'unknown'}`
 }
 
-function renderBackgroundJobId(jobId: string, maxBytes: number): string {
-  const acknowledgement = `started background job ${jobId}`
-  return Buffer.byteLength(acknowledgement) <= maxBytes
-    ? acknowledgement
-    : `started job ${jobId}`
-}
-
 /** Register all terminal tools and the minimal usage guidance. */
 export function apply(ctx: Context, config: Config = {}): void {
   const enableRunInBackground = config.enableRunInBackground ?? true
@@ -243,7 +236,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       render: (_args, value) => [{
         type: 'text',
         text: value.kind === 'background'
-          ? renderBackgroundJobId(value.jobId, maxResultBytes)
+          ? `started background job ${value.jobId}`
           : renderSend(value, maxResultBytes),
       }],
       presentationMeta: (_args, value) => value.kind === 'foreground'

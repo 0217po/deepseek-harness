@@ -746,7 +746,7 @@ async function verifyBackgroundConfinementFailure(log: string, cwd: string): Pro
   const inspected = results.find(result => result.toolCallId === 'async-confinement-result')
   const registered = events.find(event => event.type === 'job/registered')
   if (registered?.type !== 'job/registered') throw new Error('missing registered job')
-  expect(registered.data.jobId).toMatch(/^bash-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  expect(registered.data.jobId).toMatch(/^bash-[0-9a-f]{16}$/)
   expect(started).toMatchObject({
     isError: false, content: [{ type: 'text', text: `started background job ${registered.data.jobId}` }],
   })

@@ -227,7 +227,7 @@ describe('bash tool through the agent loop', () => {
       }),
       textResponse('Started it in the background.'),
       (options) => {
-        const jobId = /started background job (bash-[0-9a-f-]{36})/.exec(JSON.stringify(options.messages))?.[1]
+        const jobId = /started background job (bash-[0-9a-f]{16})/.exec(JSON.stringify(options.messages))?.[1]
         if (jobId === undefined) throw new Error('model history lacks the started job id')
         return toolCallResponse('call-2', 'job_output', { job_id: jobId })
       },
@@ -241,7 +241,7 @@ describe('bash tool through the agent loop', () => {
 
     const firstResult = findEvent(events(agent), 'tool/result')
     expect(firstResult.data.message.isError).toBe(false)
-    const jobId = /^started background job (bash-[0-9a-f-]{36})$/.exec(resultText(firstResult))?.[1]
+    const jobId = /^started background job (bash-[0-9a-f]{16})$/.exec(resultText(firstResult))?.[1]
     if (jobId === undefined) throw new Error('first tool result lacks a job id')
     // The turn closed with the task still running, so the notice cannot exist yet.
     const isNotice = (e: SessionEvent): e is SessionEvent<'user/message'> =>

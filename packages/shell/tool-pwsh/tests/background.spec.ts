@@ -289,7 +289,7 @@ describe('foreground commands as jobs (pwsh)', () => {
     const body = (result.content[0] as { text: string }).text
     expect(body).toContain('early-output')
     const jobId = ctx.jobs.list()[0]?.id
-    expect(jobId).toMatch(/^pwsh-[0-9a-f-]{36}$/)
+    expect(jobId).toMatch(/^pwsh-[0-9a-f]{16}$/)
     expect(body).toContain(`moved to background job ${jobId}]`)
     expect(body).toContain('read newer output with job_output, stop it with job_kill')
 

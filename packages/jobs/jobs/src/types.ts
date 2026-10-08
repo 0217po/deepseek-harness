@@ -137,7 +137,7 @@ export interface JobAppendOptions {
  * throwing, so a producer's trailing flush cannot break its own teardown path.
  */
 export interface JobHandle {
-  /** The registry-issued id (`<kind>-<uuid>`). */
+  /** The registry-issued id (`<kind>-<short-uuid>`). */
   readonly id: JobId
   /**
    * Append one chunk to the output ring. Offsets advance by the chunk's UTF-8

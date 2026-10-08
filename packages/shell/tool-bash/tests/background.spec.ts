@@ -122,7 +122,7 @@ describe('background bash output', () => {
       workdir: '/nonexistent-dsh',
       run_in_background: true,
     })
-    expect(text(started)).toMatch(/^started background job bash-[0-9a-f-]{36}$/)
+    expect(text(started)).toMatch(/^started background job bash-[0-9a-f]{16}$/)
     const jobs = ctx.jobs
     const job = jobs.list()[0]
     await until(() => jobs.get(job!.id).status === 'killed' ? true : undefined)
@@ -218,7 +218,7 @@ describe('foreground commands as jobs', () => {
       await until(() => execution?.observed.stdout.readFrom(0).text.includes('early-output') ? true : undefined, task.timeout)
       // The job exists from the start: the command is listed while the call still waits.
       const jobId = ctx.jobs.list()[0]?.id
-      expect(jobId).toMatch(/^bash-[0-9a-f-]{36}$/)
+      expect(jobId).toMatch(/^bash-[0-9a-f]{16}$/)
       expect(ctx.jobs.list()[0]).toMatchObject({ id: jobId, kind: 'bash', status: 'running', label: 'printf "early-output\\n"; sleep 30' })
       await vi.advanceTimersByTimeAsync(250)
       const result = await pending
