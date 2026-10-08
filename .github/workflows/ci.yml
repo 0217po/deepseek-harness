@@ -584,7 +584,7 @@ jobs:
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "dsh-win-ci", "windows"]')
           || 'dsh-windows-2025-16core' }}
-    name: windows node 26 / coverage
+    name: windows node 24 / coverage
     timeout-minutes: 120
     env:
       # Shared hosts expose host CPUs, not an isolated allocation.
@@ -620,12 +620,9 @@ jobs:
       - uses: pnpm/action-setup@v5.0.0
         with:
           dest: ${{ runner.temp }}/setup-pnpm-js-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
-      # Node 24 still awaits the cppgc Realm-lifetime backport (#66168).
-      # 26.10.0 contains nodejs/node#65778; an exact version prevents a
-      # runner cache from selecting an older Node 26 with the same crash.
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: '26.10.0'
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
       - name: Install (immutable)
         shell: pwsh
         # See 2026-08-30-windows-refs-store-block-clone-install for the

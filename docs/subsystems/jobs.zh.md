@@ -6,7 +6,7 @@
 
 ## ID 与状态
 
-`JobId` 是按 `<kind>-N` 生成的[品牌化 id](core.zh.md#branded-ids)。访问控制依赖拥有者授权，而非 id 的保密性。`JobKind` 派生自可合并扩展的 map；注册表将各个 kind 视为不透明的 id 命名空间。
+`JobId` 是按 `<kind>-<uuid>` 生成的[品牌化 id](core.zh.md#branded-ids)。访问控制依赖拥有者授权，而非 id 的保密性。`JobKind` 派生自可合并扩展的 map；注册表将各个 kind 视为不透明的 id 命名空间。
 
 ```ts type-equiv
 /**
@@ -24,16 +24,14 @@ interface JobKindMap {
 
 ## Session 生命周期记录
 
-有所有者的 job 在原始所有者 Session 中发布 `job/registered` 与 `job/settled`。`executionId` 在注册表重启和历史复制后仍标识同一次执行；`jobId` 仍是进程内控制 id。SDK 通过 `session.event` 转发这些仅日志记录，不依赖输出读取。时间戳描述注册表提交时刻，不是 CPU 时间或精确的 OS 进程边界；缺少结算时保持不完整。`producerReported` 表示生产方通过兑现 `done` 报告了终态；强制销毁或 promise 拒绝时为 false，不独立确认资源已释放。
+有所有者的 job 在原始所有者 Session 中发布 `job/registered` 与 `job/settled`。全局唯一的 `jobId` 同时配对这两条记录并控制运行中的 job。SDK 通过 `session.event` 转发这些仅日志记录，不依赖输出读取。时间戳描述注册表提交时刻，不是 CPU 时间或精确的 OS 进程边界；缺少结算时保持不完整。`producerReported` 表示生产方通过兑现 `done` 报告了终态；强制销毁或 promise 拒绝时为 false，不独立确认资源已释放。
 
 `job/settled` 可能出现在 `turn/end` 之后。SDK run 结果只覆盖自身观测窗口；需要较晚结算的消费方应保留 Session 订阅或读取持久化历史。轮次完成不表示所有有主 job 都已停止。
 
 ```ts type-equiv
 /** Durable identity and registration time of one owned job execution. */
 interface JobRegisteredData {
-  /** UUID unique to this execution, even when the registry reuses a display id. */
-  readonly executionId: JobExecutionId
-  /** Runtime-local id accepted by job controls. */
+  /** Unique execution id accepted by job controls and retained in Session history. */
   readonly jobId: JobId
   /** Original owner; copied history does not transfer execution ownership. */
   readonly owner: SessionId
@@ -132,7 +130,7 @@ interface JobSpec {
  * throwing, so a producer's trailing flush cannot break its own teardown path.
  */
 interface JobHandle {
-  /** The registry-issued id (`<kind>-N`). */
+  /** The registry-issued id (`<kind>-<uuid>`). */
   readonly id: JobId
   /**
    * Append one chunk to the output ring. Offsets advance by the chunk's UTF-8
@@ -275,7 +273,7 @@ interface JobOutputRead {
  * stream all consume this one shape.
  */
 interface JobView {
-  /** The registry-issued id (`<kind>-N`). */
+  /** The registry-issued id (`<kind>-<uuid>`). */
   readonly id: JobId
   /**
    * The producer kind the job was registered with: a Host-registered
@@ -461,7 +459,7 @@ Implementations must honor these semantics:
  * rejection leaves no job id or execution resource. A throwing starter
  * leaves nothing registered; after it returns, registration cannot fail.
  * @param spec - job identity, owner, output sources, and synchronous starter.
- * @returns the registry-issued `<kind>-N` id.
+ * @returns the registry-issued `<kind>-<uuid>` id.
  */
 abstract start(spec: JobSpec): JobId
 

@@ -66,7 +66,7 @@ interface HeadlessIo {
   stdout: { write(chunk: string): unknown }
   stderr: { write(chunk: string): unknown }
   /** Request process exit with `code` after the tree disposes. */
-  exit: (code: number, beforeDispose?: () => Promise<void>) => void
+  exit: (code: number) => void
 }
 
 /** Aggregate the last assistant text and turn outcome in one owned interval. */
@@ -340,17 +340,22 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
   const sessionId = brandString<SessionId>(config.sessionId ?? `session-${randomUUID()}`)
   const fs = ctx.get('fs')
   const cwd = fs === undefined ? process.cwd() : fs.processPath(await fs.resolve('.'))
-  const handle = config.sessionId === undefined
-    ? await agents.create({
+  const shutdown = ctx.get('appShutdown')
+  if (shutdown === undefined) throw new Error('headless-runner: the launcher must provide ctx.appShutdown')
+  const pendingHandle = config.sessionId === undefined
+    ? agents.create({
       sessionId,
       meta: { cwd },
       agentOptions,
       setup,
     })
-    : await resolveAgent(ctx, agents, sessionId, agentOptions, setup, cwd)
-  const agent = handle.agent
-  const exit = io.exit
-  io.exit = (code) => { exit(code, () => handle.dispose()) }
+    : resolveAgent(ctx, agents, sessionId, agentOptions, setup, cwd)
+  ctx.effect(() => shutdown.addDisposer(async () => {
+    // A failed acquisition owns its own rollback; the run reports the original error.
+    const handle = await pendingHandle.catch((_acquisitionFailed: unknown) => undefined)
+    await handle?.dispose()
+  }))
+  const { agent } = await pendingHandle
   await agent.whenIdle()
   if (config.sessionId !== undefined) {
     // The resume-time check read a snapshot; an overlay can still append a

@@ -461,8 +461,7 @@
       "seq": 24,
       "time": 0,
       "data": {
-        "executionId": "{{id:1}}",
-        "jobId": "snapshot-1",
+        "jobId": "{{id:1}}",
         "owner": "{{parent}}",
         "kind": "snapshot",
         "label": "snapshot_double",
@@ -478,8 +477,7 @@
       "seq": 25,
       "time": 0,
       "data": {
-        "executionId": "{{id:1}}",
-        "jobId": "snapshot-1",
+        "jobId": "{{id:1}}",
         "owner": "{{parent}}",
         "kind": "snapshot",
         "label": "snapshot_double",
@@ -1605,8 +1603,7 @@
           "seq": 24,
           "time": 0,
           "data": {
-            "executionId": "{{id:1}}",
-            "jobId": "snapshot-1",
+            "jobId": "{{id:1}}",
             "owner": "{{parent}}",
             "kind": "snapshot",
             "label": "snapshot_double",
@@ -1628,8 +1625,7 @@
           "seq": 25,
           "time": 0,
           "data": {
-            "executionId": "{{id:1}}",
-            "jobId": "snapshot-1",
+            "jobId": "{{id:1}}",
             "owner": "{{parent}}",
             "kind": "snapshot",
             "label": "snapshot_double",

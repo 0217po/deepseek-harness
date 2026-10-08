@@ -9,8 +9,8 @@
   en: 1387c4505dde2faf
   zh: 48570fa1c13d6910
 /session-persistence-event-catalog/persistence-type-fingerprints:
-  en: 5efd64128ee0beba
-  zh: a3aeb74af3e4ceed
+  en: f6421cacbfe510db
+  zh: 6c24e981ac836d0c
 /session-persistence-event-catalog/event-envelope:
   en: 7ebb1a2e0dd1f916
   zh: 8946f415dda5c1b8
@@ -123,11 +123,11 @@
   en: 941358a5fef6a5b4
   zh: 941358a5fef6a5b4
 /session-persistence-event-catalog/events/job/job-registered-log-only:
-  en: 9bc39178c96d5299
-  zh: d6111271de612006
+  en: 37ab7f962b199555
+  zh: af05a3274adbe530
 /session-persistence-event-catalog/events/job/job-settled-log-only:
-  en: ea26934b0ef807b0
-  zh: 3083ab90282177e2
+  en: dde416e1c0d32dfb
+  zh: fa08197cad8acb9d
 /session-persistence-event-catalog/events/llm:
   en: 8a5c09e48ec0a6ae
   zh: 8a5c09e48ec0a6ae
@@ -1068,17 +1068,17 @@
   en: a3087ab7bebe9371
   zh: abf6afc2f9f5b692
 /session-persistence-event-catalog/resolved-persistence-types/inboxtarget:
-  en: f6262b716c38eda8
-  zh: 5283994136fa5c84
+  en: 938113c1b01efad1
+  zh: d6829dbe979e6819
 /session-persistence-event-catalog/resolved-persistence-types/jobregistereddata:
-  en: ba731d919da94e90
-  zh: 0a5c909faed0d777
+  en: f604eebb973fe2cf
+  zh: 0c0aba1e17ecf66e
 /session-persistence-event-catalog/resolved-persistence-types/jobsettlecause:
-  en: 15b854ca2279b10a
-  zh: bd5812e35d8e9e30
+  en: 748a4269d86e007a
+  zh: 4ce04c4451bdcfe8
 /session-persistence-event-catalog/resolved-persistence-types/jobsettleddata:
-  en: 2e881aee85a405a0
-  zh: aecc2aee48d2e151
+  en: fc8caf270a7581f7
+  zh: b467e1d4191106eb
 /session-persistence-event-catalog/resolved-persistence-types/jobtoolcall:
   en: 7ffee3cc96604a88
   zh: 026abfab0e46c21a
@@ -1335,11 +1335,11 @@
   en: 5e7d82a493a1d4d8
   zh: d2d785891dd766fc
 /session-persistence-event-catalog/resolved-persistence-types/number~2:
-  en: a80b187744cc8374
-  zh: c115c644aac2c802
+  en: 2786fef560851bb4
+  zh: 5d787475356b2606
 /session-persistence-event-catalog/resolved-persistence-types/string:
-  en: c2d10e67ca221c64
-  zh: b7f58ee3db797d07
+  en: b6921e3641b63763
+  zh: ee8ef743a532417b
 /session-persistence-event-catalog/resolved-persistence-types/string~2:
   en: 0089620bf4638263
   zh: 1922bef1713094bb
@@ -1986,14 +1986,14 @@
   en: 8b523e0be5327519
   zh: 86ec891087b8bf24
 /session-persistence-event-catalog/resolved-persistence-types/type-image-offload:
-  en: 56e0870404de34d8
-  zh: b1350f62badf6ed7
+  en: bf512693267d4262
+  zh: 805710898b4e913a
 /session-persistence-event-catalog/resolved-persistence-types/type-job-registered:
-  en: 9724ff355d3c4eb7
-  zh: e1d476636ddfc348
+  en: 734d3bb283cc6f66
+  zh: 75bcb55f71673e34
 /session-persistence-event-catalog/resolved-persistence-types/type-job-settled:
-  en: a57217bb1b7e1f57
-  zh: cf5ec59f480511e7
+  en: 742c3a1543414ecb
+  zh: e256fb92d72b8184
 /session-persistence-event-catalog/resolved-persistence-types/type-llm-retry:
   en: 6d026baeac30a0f1
   zh: 55131683e3d5ed27

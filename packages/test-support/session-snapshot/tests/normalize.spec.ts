@@ -257,20 +257,26 @@ Additional instructions from: nested\AGENTS.md`,
 
 describe('normalizeSessionLog', () => {
   it('keeps job execution identities distinct in single-log and single-snapshot paths', () => {
-    const ids = ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb']
+    const ids = ['bash-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bash-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb']
     const raw = [
       { type: 'session', version: 0, id: ctx.sessionIds[0], cwd: ctx.cwd, createdAt: 100 },
       { type: 'user/message', data: { text: 'Keep {{id:1}} literal.' } },
-      ...ids.flatMap(executionId => [
-        { type: 'job/registered', data: { executionId, startedAt: 100 } },
-        { type: 'job/settled', data: { executionId, startedAt: 100, finishedAt: 200 } },
+      ...ids.flatMap(jobId => [
+        { type: 'job/registered', data: { jobId, startedAt: 100 } },
+        { type: 'job/settled', data: { jobId, startedAt: 100, finishedAt: 200 } },
       ]),
+      { type: 'tool/call', data: { arguments: JSON.stringify({ job_id: ids[0] }) } },
+      { type: 'tool/result', data: { message: { content: [{ type: 'text', text: `read ${ids[0]}` }] } } },
     ].map(record => JSON.stringify(record)).join('\n') + '\n'
     for (const normalize of [normalizeSessionLog, normalizeSessionSnapshot]) {
       const output = normalize(raw, ctx)
-      const jobs = output.split('\n').filter(Boolean).map(line => JSON.parse(line) as { type: string; data: { executionId: string } })
+      const jobs = output.split('\n').filter(Boolean).map(line => JSON.parse(line) as { type: string; data: { jobId: string } })
         .filter(record => record.type.startsWith('job/'))
-      expect(jobs.map(record => record.data.executionId)).toEqual(['{{id:2}}', '{{id:2}}', '{{id:3}}', '{{id:3}}'])
+      expect(jobs.map(record => record.data.jobId)).toEqual(['{{id:2}}', '{{id:2}}', '{{id:3}}', '{{id:3}}'])
+      const call = output.split('\n').filter(Boolean).map(line => JSON.parse(line) as { type: string; data: { arguments: string } })
+        .find(record => record.type === 'tool/call')
+      expect(JSON.parse(call!.data.arguments)).toEqual({ job_id: '{{id:2}}' })
+      expect(output).toContain('read {{id:2}}')
       expect(output).toContain('Keep {{id:1}} literal.')
       expect(normalize(output, ctx)).toBe(output)
     }

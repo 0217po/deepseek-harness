@@ -8,6 +8,14 @@ import { existsSync } from 'node:fs'
  */
 export function apply(ctx) {
   const keepAlive = setInterval(() => {}, 60_000)
+  const shutdown = ctx.get('appShutdown')
+  if (shutdown === undefined) throw new Error('missing ordered shutdown')
+  ctx.effect(() => shutdown.addDisposer(async () => {
+    const armFile = process.env.DSH_TEST_SHUTDOWN_ARM_FILE
+    if (armFile !== undefined && existsSync(armFile)) {
+      process.stderr.write('dsh-test: ordered cleanup started\n')
+    }
+  }))
   process.stderr.write('dsh-test: never-dispose ready\n')
   ctx.effect(() => async () => {
     clearInterval(keepAlive)

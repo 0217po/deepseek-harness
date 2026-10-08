@@ -58,7 +58,7 @@ kind: "package-reference"
 
 ### Session 时间记录
 
-有所有者的 job 在原始 Session 中记录注册与结算，不依赖模型收集输出。SDK 消费方通过 `session.event` 收到同样的事件；[jobs 参考](../../../docs/subsystems/jobs.zh.md#session-lifecycle-records)定义标识、时间戳和终止确认。这些记录通过正常 Session 持久化保留；运行中的 job 和输出环不会被恢复。
+有所有者的 job 在原始 Session 中记录注册与结算，不依赖模型收集输出。SDK 消费方通过 `session.event` 收到同样的事件；[jobs 参考](../../../docs/subsystems/jobs.zh.md#session-lifecycle-records)定义标识、时间戳和生产方结算报告。这些记录通过正常 Session 持久化保留；运行中的 job 和输出环不会被恢复。
 
 生命周期事实在注册或结算提交时同步追加，先于运行期 hub 订阅者和完成等待方的反应。追加失败会记录警告，不放弃执行或阻塞清理；消费方必须将不完整历史保留为不完整。
 

@@ -6,7 +6,7 @@ Types shared by long-running producers, `ctx.jobs`, and job controls. The [seam 
 
 ## Ids and status
 
-`JobId` is a [branded id](core.md#branded-ids) generated as `<kind>-N`. Access control relies on owner authorization, not id secrecy. `JobKind` derives from a merge-extensible map; the registry treats kinds as opaque id namespaces.
+`JobId` is a [branded id](core.md#branded-ids) generated as `<kind>-<uuid>`. Access control relies on owner authorization, not id secrecy. `JobKind` derives from a merge-extensible map; the registry treats kinds as opaque id namespaces.
 
 ```ts type-equiv
 /**
@@ -24,16 +24,14 @@ interface JobKindMap {
 
 ## Session lifecycle records
 
-Owned jobs publish `job/registered` and `job/settled` in their original owner Session. `executionId` identifies one execution across registry restarts and copied history; `jobId` remains the process-local control id. The SDK forwards these log-only records through `session.event`, independently of output reads. Timestamps describe registry commits, not CPU time or exact OS process boundaries; a missing settlement remains incomplete. `producerReported` means the producer fulfilled `done` with a terminal outcome; it is false for forced teardown or rejection and does not independently certify resource release.
+Owned jobs publish `job/registered` and `job/settled` in their original owner Session. The globally unique `jobId` pairs those records and controls the live job. The SDK forwards these log-only records through `session.event`, independently of output reads. Timestamps describe registry commits, not CPU time or exact OS process boundaries; a missing settlement remains incomplete. `producerReported` means the producer fulfilled `done` with a terminal outcome; it is false for forced teardown or rejection and does not independently certify resource release.
 
 `job/settled` may follow `turn/end`. An SDK run result covers only its own observation window; consumers needing later settlements retain a Session subscription or read persisted history. Turn completion does not imply that every owned job stopped.
 
 ```ts type-equiv
 /** Durable identity and registration time of one owned job execution. */
 interface JobRegisteredData {
-  /** UUID unique to this execution, even when the registry reuses a display id. */
-  readonly executionId: JobExecutionId
-  /** Runtime-local id accepted by job controls. */
+  /** Unique execution id accepted by job controls and retained in Session history. */
   readonly jobId: JobId
   /** Original owner; copied history does not transfer execution ownership. */
   readonly owner: SessionId
@@ -132,7 +130,7 @@ interface JobSpec {
  * throwing, so a producer's trailing flush cannot break its own teardown path.
  */
 interface JobHandle {
-  /** The registry-issued id (`<kind>-N`). */
+  /** The registry-issued id (`<kind>-<uuid>`). */
   readonly id: JobId
   /**
    * Append one chunk to the output ring. Offsets advance by the chunk's UTF-8
@@ -275,7 +273,7 @@ interface JobOutputRead {
  * stream all consume this one shape.
  */
 interface JobView {
-  /** The registry-issued id (`<kind>-N`). */
+  /** The registry-issued id (`<kind>-<uuid>`). */
   readonly id: JobId
   /**
    * The producer kind the job was registered with: a Host-registered
@@ -461,7 +459,7 @@ Implementations must honor these semantics:
  * rejection leaves no job id or execution resource. A throwing starter
  * leaves nothing registered; after it returns, registration cannot fail.
  * @param spec - job identity, owner, output sources, and synchronous starter.
- * @returns the registry-issued `<kind>-N` id.
+ * @returns the registry-issued `<kind>-<uuid>` id.
  */
 abstract start(spec: JobSpec): JobId
 

@@ -6,7 +6,7 @@
  */
 
 import type { SessionEventMap, SessionId } from '@deepseek-ai/dsh-session'
-import type { JobExecutionId, JobId } from './brand.ts'
+import type { JobId } from './brand.ts'
 import type { JobChannel, JobChunk, JobKind, JobView } from './view.ts'
 
 export { JobId } from './brand.ts'
@@ -22,9 +22,7 @@ export interface JobToolCall {
 
 /** Durable identity and registration time of one owned job execution. */
 export interface JobRegisteredData {
-  /** UUID unique to this execution, even when the registry reuses a display id. */
-  readonly executionId: JobExecutionId
-  /** Runtime-local id accepted by job controls. */
+  /** Unique execution id accepted by job controls and retained in Session history. */
   readonly jobId: JobId
   /** Original owner; copied history does not transfer execution ownership. */
   readonly owner: SessionId
@@ -60,7 +58,7 @@ declare module '@deepseek-ai/dsh-session/types' {
      */
     'job/registered': JobRegisteredData
     /**
-     * Log-only terminal record, paired by executionId rather than a reusable jobId.
+     * Log-only terminal record, paired by the same unique jobId used for live control.
      * @param data - Registration facts plus settlement time, outcome, and producer acknowledgement.
      */
     'job/settled': JobSettledData
@@ -139,7 +137,7 @@ export interface JobAppendOptions {
  * throwing, so a producer's trailing flush cannot break its own teardown path.
  */
 export interface JobHandle {
-  /** The registry-issued id (`<kind>-N`). */
+  /** The registry-issued id (`<kind>-<uuid>`). */
   readonly id: JobId
   /**
    * Append one chunk to the output ring. Offsets advance by the chunk's UTF-8

@@ -10344,7 +10344,7 @@
       "kind": "event",
       "event": "job/registered",
       "surface": false,
-      "digest": "f05be3e066ef054a610f0825251f19ee3fcfc98908b5ceaa869ee143d7e91fa5",
+      "digest": "f5520c1d261ca86ea03735799c311a0a9ede8babb588cf0a65422576d2ee0ad1",
       "schema": {
         "root": 0,
         "nodes": [
@@ -10382,11 +10382,6 @@
           {
             "kind": "object",
             "properties": [
-              {
-                "name": "executionId",
-                "type": 2,
-                "optional": false
-              },
               {
                 "name": "jobId",
                 "type": 2,
@@ -10460,7 +10455,7 @@
       "kind": "event",
       "event": "job/settled",
       "surface": false,
-      "digest": "a103c03b3bc0ca7a7809d1eb2572dec08899f7a15a90072736777acd4e517648",
+      "digest": "edd37b1e4974af648633014435572089b1e8fb71910468a0767a7e28fdd22abf",
       "schema": {
         "root": 0,
         "nodes": [
@@ -10507,11 +10502,6 @@
                 "name": "detail",
                 "type": 6,
                 "optional": true
-              },
-              {
-                "name": "executionId",
-                "type": 6,
-                "optional": false
               },
               {
                 "name": "finishedAt",
@@ -23446,7 +23436,6 @@
         "packages/goal/goal/src/types.ts#GoalId",
         "packages/interaction/commands/src/brand.ts#CommandId",
         "packages/interaction/user-approval/src/types.ts#ApprovalRequestId",
-        "packages/jobs/jobs/src/brand.ts#JobExecutionId",
         "packages/jobs/jobs/src/brand.ts#JobId",
         "packages/llm/llm-retry/src/brand.ts#RetryId",
         "packages/llm/llm/src/brand.ts#MessageId",
@@ -23474,7 +23463,6 @@
         "packages/interaction/commands/src/brand.ts:31",
         "packages/interaction/user-approval/src/types.ts:17",
         "packages/jobs/jobs/src/brand.ts:19",
-        "packages/jobs/jobs/src/brand.ts:31",
         "packages/llm/llm-retry/src/brand.ts:4",
         "packages/llm/llm/src/brand.ts:16",
         "packages/llm/llm/src/brand.ts:31",
@@ -23802,6 +23790,15 @@
       "sources": []
     },
     {
+      "digest": "611d82d2dc50df706cf08a0fc04bc8eaf78083391fe6f10313de943e615dd2da",
+      "names": [
+        "packages/jobs/jobs/src/types.ts#JobSettledData"
+      ],
+      "sources": [
+        "packages/jobs/jobs/src/types.ts:40"
+      ]
+    },
+    {
       "digest": "616f93a5047de668e1c30d57b1786abd76beeb4123599637ec1dc5290320ede5",
       "names": [],
       "sources": []
@@ -24071,7 +24068,7 @@
         "packages/jobs/jobs/src/types.ts#JobSettleCause"
       ],
       "sources": [
-        "packages/jobs/jobs/src/types.ts:249"
+        "packages/jobs/jobs/src/types.ts:247"
       ]
     },
     {
@@ -24635,15 +24632,6 @@
       ]
     },
     {
-      "digest": "9aaca69bf3c44a4486ee23a54aa9ec8e7189a935f818c8ed670de2352f3c12c9",
-      "names": [
-        "packages/jobs/jobs/src/types.ts#JobSettledData"
-      ],
-      "sources": [
-        "packages/jobs/jobs/src/types.ts:42"
-      ]
-    },
-    {
       "digest": "9ac52f0f84fec2eb9f71c2937e497d759db5ca0da4836d93a679d113684141f2",
       "names": [],
       "sources": []
@@ -24710,11 +24698,6 @@
     },
     {
       "digest": "a0f906856fc06f1c6f2083eb970e5a657a82b1a84c06c095445e5d6d161cda80",
-      "names": [],
-      "sources": []
-    },
-    {
-      "digest": "a103c03b3bc0ca7a7809d1eb2572dec08899f7a15a90072736777acd4e517648",
       "names": [],
       "sources": []
     },
@@ -25353,15 +25336,6 @@
       "sources": []
     },
     {
-      "digest": "c98cb9b944f83bf77ad098039861cbad71c3b8377e19c2bfccf72e1db16a6be2",
-      "names": [
-        "packages/jobs/jobs/src/types.ts#JobRegisteredData"
-      ],
-      "sources": [
-        "packages/jobs/jobs/src/types.ts:24"
-      ]
-    },
-    {
       "digest": "c99e20441bf15341e9db54385e558e5c03d21dff2eb1ac08ccbf47c2d8747954",
       "names": [],
       "sources": []
@@ -25627,6 +25601,15 @@
       "sources": []
     },
     {
+      "digest": "e3056e0dda3a379e895386e368c3ce42131460ea65e410e1d091cca98a347305",
+      "names": [
+        "packages/jobs/jobs/src/types.ts#JobRegisteredData"
+      ],
+      "sources": [
+        "packages/jobs/jobs/src/types.ts:24"
+      ]
+    },
+    {
       "digest": "e308ccf867a5398e316e0af8cb6ce238a8d33a63b9b384c8250a686786285f72",
       "names": [],
       "sources": []
@@ -25768,6 +25751,11 @@
       "sources": []
     },
     {
+      "digest": "edd37b1e4974af648633014435572089b1e8fb71910468a0767a7e28fdd22abf",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "ee577a0cc18664c9daee50e9455153321155604f8f1817362f8f4a4b6fb9e1ad",
       "names": [],
       "sources": []
@@ -25801,11 +25789,6 @@
     },
     {
       "digest": "ef4f00923b9edbae15c7ef05320280bf61147ca17146cf59690359bfd5e5da45",
-      "names": [],
-      "sources": []
-    },
-    {
-      "digest": "f05be3e066ef054a610f0825251f19ee3fcfc98908b5ceaa869ee143d7e91fa5",
       "names": [],
       "sources": []
     },
@@ -25883,6 +25866,11 @@
     },
     {
       "digest": "f4a66f654996c093aae700ea4c434ff2ee3569fea9c0e5813ccf6afdccabd163",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "f5520c1d261ca86ea03735799c311a0a9ede8babb588cf0a65422576d2ee0ad1",
       "names": [],
       "sources": []
     },

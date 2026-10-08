@@ -1610,7 +1610,7 @@ def smoke_sdk_snapshot_mode(
         jobs = [event for event in result.events if event.get("type") in ("job/registered", "job/settled")]
         assert [event["type"] for event in jobs] == ["job/registered", "job/settled"], jobs
         registered, settled = (event["data"] for event in jobs)
-        assert registered["executionId"] == settled["executionId"]
+        assert registered["jobId"] == settled["jobId"]
         assert registered["startedAt"] == settled["startedAt"] <= settled["finishedAt"]
         assert settled["producerReported"] is True and settled["status"] == "completed"
         root_call_id = "advanced-code" if mode == "ptc" else "advanced-native"
@@ -2608,11 +2608,11 @@ def normalize_snapshot_value(
 
     if value.get("type") in ("job/registered", "job/settled"):
         data = value.get("data")
-        execution_id = data.get("executionId") if isinstance(data, dict) else None
-        if (isinstance(execution_id, str) and not re.fullmatch(r"\{\{id:[1-9]\d*\}\}", execution_id)
-                and not any(actual == execution_id for actual, _ in replacements)):
+        job_id = data.get("jobId") if isinstance(data, dict) else None
+        if (isinstance(job_id, str) and not re.fullmatch(r"\{\{id:[1-9]\d*\}\}", job_id)
+                and not any(actual == job_id for actual, _ in replacements)):
             index = 1 + sum(token.startswith("{{id:") for _, token in replacements)
-            replacements.append((execution_id, "{{id:" + str(index) + "}}"))
+            replacements.append((job_id, "{{id:" + str(index) + "}}"))
 
     normalized = {
         key: normalize_snapshot_value(item, replacements)

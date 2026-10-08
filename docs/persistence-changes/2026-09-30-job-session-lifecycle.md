@@ -9,7 +9,7 @@ English | [中文](2026-09-30-job-session-lifecycle.zh.md)
 
 ## Summary
 
-Records owned job registration and settlement as log-only Session events with execution identity, original timestamps, creating tool calls, and producer completion reports.
+Records owned job registration and settlement with one unique JobId, original timestamps, creating tool calls, and producer completion reports.
 
 ## Table of Contents
 
@@ -28,23 +28,23 @@ baseline: false
 changes:
   - root: "event:job/registered"
     previous: null
-    after: "f05be3e066ef054a610f0825251f19ee3fcfc98908b5ceaa869ee143d7e91fa5"
+    after: "f5520c1d261ca86ea03735799c311a0a9ede8babb588cf0a65422576d2ee0ad1"
     decision: same-version
   - root: "event:job/settled"
     previous: null
-    after: "a103c03b3bc0ca7a7809d1eb2572dec08899f7a15a90072736777acd4e517648"
+    after: "edd37b1e4974af648633014435572089b1e8fb71910468a0767a7e28fdd22abf"
     decision: same-version
 ```
 
 <a id="compatibility"></a>
 ## Compatibility
 
-Adds event kinds without changing existing payloads or the Session envelope. Historical sessions remain valid and receive no fabricated job history. Older builds reject unknown required event types. producerReported describes fulfillment of the producer completion promise, not verified resource release.
+Adds required job event kinds without changing the Session envelope. New JobIds use a kind-prefixed UUID for both live controls and durable pairing; historical sessions receive no fabricated job history. Older builds reject unknown required events. producerReported describes completion-promise fulfillment, not verified resource release.
 
 <a id="verification"></a>
 ## Verification
 
-Focused registry, normalizer, shutdown, and headless regressions cover causal publication order, distinct execution identities, and cleanup within the existing exit bound. Real CLI snapshot and SDK replay verify registration/settlement persistence and notifications.
+Registry, snapshot-normalizer, shutdown, and headless tests cover causal order, unique JobIds, and ordered cleanup for normal and signal exit. CLI and SDK snapshots verify durable registration/settlement and notices.
 
 <a id="dev-note"></a>
 ## Dev Note

@@ -306,7 +306,8 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
       // to every app plugin that injects the argument snapshot.
       provideCmdline(hostCtx, {
         args: options.args,
-        exit: (code, beforeDispose) => void shutdown.shutdown(code, beforeDispose),
+        exit: code => void shutdown.shutdown(code),
+        shutdown,
         ready: appReady.service,
       })
     })

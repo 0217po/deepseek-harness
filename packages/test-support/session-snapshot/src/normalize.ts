@@ -354,24 +354,35 @@ export function normalizeSessionLog(
   const cwdPathMode = options.cwdPathMode ?? 'canonical'
   const identityMode = options.identityMode ?? 'legacy'
   const lines = rawLog.split('\n').filter(line => line.trim().length > 0)
-  const executionTokens = new Map<string, string>()
+  const parsed = lines.map(line => JSON.parse(line) as Record<string, unknown>)
+  const jobTokens = new Map<string, string>()
   const reservedTokens = new Set(rawLog.match(/\{\{id:[1-9]\d*\}\}/g) ?? [])
-  let nextExecutionToken = 1
-  const records = lines.map((line) => {
-    const record = JSON.parse(line) as Record<string, unknown>
-    if (identityMode === 'legacy' && (record.type === 'job/registered' || record.type === 'job/settled')
-      && record.data !== null && typeof record.data === 'object') {
-      const data = record.data as Record<string, unknown>
-      const id = data.executionId
-      if (typeof id === 'string' && id.length === 36 && id.search(UUID_RE) === 0) {
-        let token = executionTokens.get(id)
-        if (token === undefined) {
-          do { token = `{{id:${nextExecutionToken++}}}` } while (reservedTokens.has(token))
-          executionTokens.set(id, token)
-        }
-        data.executionId = token
-      }
+  let nextJobToken = 1
+  if (identityMode === 'legacy') {
+    for (const record of parsed) {
+      if ((record.type !== 'job/registered' && record.type !== 'job/settled')
+        || record.data === null || typeof record.data !== 'object') continue
+      const id = (record.data as Record<string, unknown>).jobId
+      if (typeof id !== 'string' || id.search(UUID_RE) < 0 || jobTokens.has(id)) continue
+      let token: string
+      do { token = `{{id:${nextJobToken++}}}` } while (reservedTokens.has(token))
+      jobTokens.set(id, token)
     }
+  }
+  const replaceJobs = (value: unknown): unknown => {
+    if (typeof value === 'string') {
+      let output = value
+      for (const [id, token] of jobTokens) output = output.split(id).join(token)
+      return output
+    }
+    if (Array.isArray(value)) return value.map(replaceJobs)
+    if (value !== null && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, replaceJobs(item)]))
+    }
+    return value
+  }
+  const records = parsed.map((raw) => {
+    const record = jobTokens.size === 0 ? raw : replaceJobs(raw) as Record<string, unknown>
     if (record.type === 'session') {
       if ('createdAt' in record) record.createdAt = 0
     } else if (isPackedFixtureRow(record)) {

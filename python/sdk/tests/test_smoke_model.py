@@ -771,14 +771,14 @@ def test_live_turn_rejects_missing_standalone_acknowledgement(answer: str) -> No
 def test_job_snapshot_normalization_preserves_pairing_and_uncertainty():
     normalize = SMOKE["normalize_snapshot_value"]
     replacements = []
-    first = {"type": "job/registered", "data": {"executionId": "job-a", "startedAt": 10}}
-    last = {"type": "job/settled", "data": {"executionId": "job-a", "startedAt": 10,
+    first = {"type": "job/registered", "data": {"jobId": "job-a", "startedAt": 10}}
+    last = {"type": "job/settled", "data": {"jobId": "job-a", "startedAt": 10,
                                           "finishedAt": 20, "producerReported": False}}
-    other = {"type": "job/registered", "data": {"executionId": "job-b", "startedAt": 30}}
+    other = {"type": "job/registered", "data": {"jobId": "job-b", "startedAt": 30}}
     a, b, c = normalize([first, last, other], replacements)
-    assert a["data"] == {"executionId": "{{id:1}}", "startedAt": 0}
-    assert b["data"] == {"executionId": "{{id:1}}", "startedAt": 0, "finishedAt": 0, "producerReported": False}
-    assert c["data"]["executionId"] == "{{id:2}}"
+    assert a["data"] == {"jobId": "{{id:1}}", "startedAt": 0}
+    assert b["data"] == {"jobId": "{{id:1}}", "startedAt": 0, "finishedAt": 0, "producerReported": False}
+    assert c["data"]["jobId"] == "{{id:2}}"
     assert normalize([a, b, c], []) == [a, b, c]
     assert normalize({"type": "tool/result", "data": {"startedAt": 100, "finishedAt": 200}}, []) == {
         "type": "tool/result", "data": {"startedAt": 100, "finishedAt": 200},

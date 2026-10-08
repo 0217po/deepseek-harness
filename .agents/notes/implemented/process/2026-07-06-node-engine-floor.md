@@ -10,11 +10,7 @@ The Node 22 branch of the root `engines.node` range is a contract for the instal
 
 ## Decision
 
-Set `engines.node` to `^22.19.0 || >=24.0.0` and test keyless CI on `['22.19', 24, 26]`. The primary Linux Node 24 jobs own the complete typecheck and unit coverage inventory; every version runs focused source-worker, Zstandard, source-launch, and [jsdom storage](../../archived/testing/2026-07-30-vitest-jsdom-webstorage-ownership.md) smokes without repeating that inventory. The real-API e2e workflow stays on Node 24 because it exercises API integration rather than the runtime floor.
-
-<a id="windows-coverage-runtime"></a>
-
-Windows PR coverage uses Node 26.10.0, which includes the [cppgc Realm cleanup fix](https://github.com/nodejs/node/pull/65778). Windows build and native-process checks use Node 24. Moving coverage back requires a Node 24 release containing the [pending backport](https://github.com/nodejs/node/pull/66168); the full test inventory, isolation and coverage thresholds remain required.
+Set `engines.node` to `^22.19.0 || >=24.0.0` and test keyless CI on `['22.19', 24, 26]`. The primary Node 24 jobs own the complete typecheck and unit coverage inventory; every version runs focused source-worker, Zstandard, source-launch, and [jsdom storage](../../archived/testing/2026-07-30-vitest-jsdom-webstorage-ownership.md) smokes without repeating that inventory. The real-API e2e workflow stays on Node 24 because it exercises API integration rather than the runtime floor.
 
 Two Node features gate the source runtime:
 
@@ -28,7 +24,7 @@ Those source features clear on the 22.x line at **22.18**, but the installed Pi 
 ## Consequences
 
 - The advertised LTS branch no longer undercuts the Pi adapter dependency floor.
-- CI proves the Node 22 LTS floor directly with Node 22.19, keeps primary Linux coverage on `node: 24`, and exercises Node 26 as the next even line; focused compatibility smokes run on all three versions.
+- CI proves the Node 22 LTS floor directly with Node 22.19, keeps primary coverage on `node: 24`, and exercises Node 26 as the next even line; focused compatibility smokes run on all three versions.
 - The built-mode smoke needs no version-conditional flag: at 22.19 type-stripping is already the default, so the example-owned TypeScript driver stays a plain `node fixture.ts` path.
 - A future dependency or source API that raises the runtime floor must move `engines.node`, the compatibility matrix, and this Agent Note in the same change.
 

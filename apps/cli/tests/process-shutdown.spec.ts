@@ -20,6 +20,30 @@ afterEach(() => {
 })
 
 describe('process shutdown', () => {
+  it.each(['normal', 'signal'] as const)('runs registered cleanup in order for %s exit', async (mode) => {
+    const release = deferred()
+    const entered = deferred()
+    const order: string[] = []
+    const exit = vi.fn()
+    const complete = vi.fn()
+    const shutdown = createProcessShutdown(async () => { order.push('providers') }, exit, complete)
+    shutdown.addDisposer(async () => { order.push('first'); entered.resolve(); await release.promise })
+    const removed = vi.fn(() => Promise.resolve())
+    shutdown.addDisposer(removed)()
+    shutdown.addDisposer(async () => { order.push('second') })
+    if (mode === 'signal') shutdown.interrupt(130)
+    else void shutdown.shutdown(0)
+    await entered.promise
+    expect(order).toEqual(['first'])
+    expect(() => shutdown.addDisposer(() => Promise.resolve())).toThrow('after shutdown starts')
+    release.resolve()
+    await shutdown.shutdown(0)
+    expect(order).toEqual(['first', 'second', 'providers'])
+    expect(removed).not.toHaveBeenCalled()
+    if (mode === 'signal') expect(exit).toHaveBeenCalledWith(130)
+    else expect(complete).toHaveBeenCalledWith(0)
+  })
+
   it('releases caller-owned work before disposing its providers within the exit bound', async () => {
     vi.useFakeTimers()
     const release = deferred()
@@ -28,7 +52,8 @@ describe('process shutdown', () => {
     const complete = vi.fn()
     const shutdown = createProcessShutdown(dispose, exit, complete)
     const cleanup = vi.fn(() => release.promise)
-    const pending = shutdown.shutdown(0, cleanup)
+    shutdown.addDisposer(cleanup)
+    const pending = shutdown.shutdown(0)
     await vi.advanceTimersByTimeAsync(0)
     expect(cleanup).toHaveBeenCalledOnce()
     expect(dispose).not.toHaveBeenCalled()
@@ -44,7 +69,11 @@ describe('process shutdown', () => {
     const dispose = vi.fn(() => Promise.resolve())
     const exit = vi.fn()
     const shutdown = createProcessShutdown(dispose, exit, vi.fn())
-    await shutdown.shutdown(1, () => Promise.reject(new Error('cleanup failed')))
+    shutdown.addDisposer(() => Promise.reject(new Error('cleanup failed')))
+    const later = vi.fn(() => Promise.resolve())
+    shutdown.addDisposer(later)
+    await shutdown.shutdown(1)
+    expect(later).toHaveBeenCalledOnce()
     expect(dispose).toHaveBeenCalledOnce()
     expect(exit).toHaveBeenCalledWith(1)
   })

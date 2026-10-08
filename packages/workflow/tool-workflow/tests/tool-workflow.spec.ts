@@ -475,14 +475,15 @@ describe('dsh-tool-workflow', () => {
       const result = await execute(ctx, { script: SCRIPT, meta: META, run_in_background: true }, { agent: parent })
       expect(result.isError).toBe(false)
       if (result.isError) throw new Error('expected background acceptance')
-      expect(result.value).toEqual({ kind: 'background', jobId: 'workflow-1', runId: 'run-1' })
+      const jobId = (result.value as { jobId: string }).jobId as JobId
+      expect(result.value).toEqual({ kind: 'background', jobId, runId: 'run-1' })
       expect((result.content[0] as { text: string }).text)
-        .toContain('workflow "audit" started in the background as job workflow-1')
+        .toContain(`workflow "audit" started in the background as job ${jobId}`)
       // The engine run carries no tool-step signal: the job owns cancellation.
       expect(engine.requests[0]!.signal).toBeUndefined()
 
       const jobs = ctx.jobs
-      const job = jobs.get('workflow-1' as never, parent.id)
+      const job = jobs.get(jobId, parent.id)
       expect(job).toMatchObject({ kind: 'workflow', label: 'audit', status: 'running', owner: parent.id })
       expect(job.output.total).toBe(0)
 
@@ -500,7 +501,7 @@ describe('dsh-tool-workflow', () => {
         signal: testToolSignal,
         callId: ToolCallId('call-early-read'),
         name: 'job_output',
-        arguments: { job_id: 'workflow-1' },
+        arguments: { job_id: jobId },
         agent: parent,
       })
       expect((early.content[0] as { text: string }).text).toBe('(no new output)\n[status: running, Scan]')
@@ -549,18 +550,20 @@ describe('dsh-tool-workflow', () => {
       const { ctx, engine, parent } = await setupBackground()
       const result = await execute(ctx, { script: SCRIPT, meta: META, args: { files: ['a.ts'] }, run_in_background: true }, { agent: parent })
       if (result.isError) throw new Error('expected background acceptance')
+      const firstId = (result.value as { jobId: string }).jobId as JobId
       expect(engine.requests[0]).toMatchObject({ args: { files: ['a.ts'] } })
       engine.settleRun(WorkflowRunId('run-1'), { value: null, stopReason: 'error', error: 'script exploded', agentsStarted: 2 })
       const jobs = ctx.jobs
-      await vi.waitFor(() => { expect(jobs.get('workflow-1' as never, parent.id).status).toBe('failed') })
-      expect(jobs.get('workflow-1' as never, parent.id).detail).toBe('script exploded')
+      await vi.waitFor(() => { expect(jobs.get(firstId, parent.id).status).toBe('failed') })
+      expect(jobs.get(firstId, parent.id).detail).toBe('script exploded')
 
       // A failure without a message falls back to the unknown-error detail.
       const second = await execute(ctx, { script: SCRIPT, meta: META, run_in_background: true }, { agent: parent })
       if (second.isError) throw new Error('expected background acceptance')
+      const secondId = (second.value as { jobId: string }).jobId as JobId
       engine.settleRun(WorkflowRunId('run-2'), { value: null, stopReason: 'error', agentsStarted: 0 })
-      await vi.waitFor(() => { expect(jobs.get('workflow-2' as never, parent.id).status).toBe('failed') })
-      expect(jobs.get('workflow-2' as never, parent.id).detail).toBe('unknown error')
+      await vi.waitFor(() => { expect(jobs.get(secondId, parent.id).status).toBe('failed') })
+      expect(jobs.get(secondId, parent.id).detail).toBe('unknown error')
     })
 
     it('a nested transport call records job lifecycle but no workflow events, and a dispose failure still settles', async () => {
@@ -573,10 +576,11 @@ describe('dsh-tool-workflow', () => {
         { agent: parent, parent: {} as ToolExecutionToken },
       )
       if (result.isError) throw new Error('expected background acceptance')
+      const jobId = (result.value as { jobId: string }).jobId as JobId
       engine.settleRun(WorkflowRunId('run-1'), { value: 'ok', stopReason: 'completed', agentsStarted: 1 })
       const jobs = ctx.jobs
-      await vi.waitFor(() => { expect(jobs.get('workflow-1' as never, parent.id).status).toBe('completed') })
-      expect(jobs.get('workflow-1' as never, parent.id).detail).toBe('1 agent')
+      await vi.waitFor(() => { expect(jobs.get(jobId, parent.id).status).toBe('completed') })
+      expect(jobs.get(jobId, parent.id).detail).toBe('1 agent')
       expect(warn.mock.calls.map(args => String(args[0])).join('\n')).toContain('dispose failed')
       expect(session.snapshotEvents().map(event => event.type)).toEqual(['job/registered', 'job/settled'])
       expect(session.snapshotEvents().at(-1)?.data).toMatchObject({ producerReported: true })

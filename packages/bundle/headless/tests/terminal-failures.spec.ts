@@ -37,6 +37,7 @@ async function harness() {
   internals.stderr = { write: (chunk: string) => { err += chunk; return true } }
   const exited = Promise.withResolvers<number>()
   context.provide('appExit', exited.resolve)
+  context.provide('appShutdown', { addDisposer: () => () => {} })
   return {
     ctx: context,
     async run(json = false) {

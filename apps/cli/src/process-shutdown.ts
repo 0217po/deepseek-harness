@@ -1,12 +1,14 @@
 /** Bounded, escalating process shutdown for the long-lived CLI surfaces. */
 
+import type { AppShutdown } from '@deepseek-ai/dsh-cmdline'
+
 /** Maximum grace allowed for the application tree to dispose before process exit. */
 export const PROCESS_SHUTDOWN_TIMEOUT_MS = 5_000
 
 /** Process-exit controller shared by normal completion and Unix signal handlers. */
-export interface ProcessShutdown {
-  /** Start or join graceful disposal; caller-owned cleanup runs under the same bound before the tree. */
-  shutdown(code: number, beforeDispose?: () => Promise<void>): Promise<void>
+export interface ProcessShutdown extends AppShutdown {
+  /** Start or join graceful disposal before allowing natural completion with `code`. */
+  shutdown(code: number): Promise<void>
   /** Start graceful disposal followed by exit, or force exit when shutdown is already running. */
   interrupt(code: number): void
 }
@@ -29,6 +31,7 @@ export function createProcessShutdown(
   let timeout: ReturnType<typeof setTimeout> | undefined
   let completed = false
   let forceExited = false
+  const disposers = new Set<{ dispose: () => Promise<void> }>()
 
   const clearExitTimeout = (): void => {
     /* v8 ignore else -- shutdown() arms the timer before any asynchronous exit path can run. */
@@ -49,15 +52,17 @@ export function createProcessShutdown(
     complete(code)
   }
 
-  const start = (code: number, forceAfterDispose: boolean, beforeDispose?: () => Promise<void>): Promise<void> => {
+  const start = (code: number, forceAfterDispose: boolean): Promise<void> => {
     if (pending !== undefined) return pending
     timeout = setTimeout(() => { forceExitOnce(code) }, timeoutMs)
     pending = Promise.resolve().then(async () => {
-      try {
-        if (beforeDispose !== undefined) await beforeDispose()
-      } finally {
-        await dispose()
+      const failures: unknown[] = []
+      for (const entry of disposers) {
+        disposers.delete(entry)
+        try { await entry.dispose() } catch (error) { failures.push(error) }
       }
+      try { await dispose() } catch (error) { failures.push(error) }
+      if (failures.length > 0) throw new AggregateError(failures, 'process cleanup failed')
     }).then(
       () => {
         if (forceAfterDispose) forceExitOnce(code)
@@ -69,8 +74,14 @@ export function createProcessShutdown(
   }
 
   return {
-    shutdown(code, beforeDispose) {
-      return start(code, false, beforeDispose)
+    addDisposer(dispose) {
+      if (pending !== undefined) throw new Error('cannot register cleanup after shutdown starts')
+      const entry = { dispose }
+      disposers.add(entry)
+      return () => { disposers.delete(entry) }
+    },
+    shutdown(code) {
+      return start(code, false)
     },
     interrupt(code) {
       if (pending !== undefined) {

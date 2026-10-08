@@ -6,7 +6,7 @@
       "kind": "event",
       "event": "job/registered",
       "surface": false,
-      "digest": "f05be3e066ef054a610f0825251f19ee3fcfc98908b5ceaa869ee143d7e91fa5",
+      "digest": "f5520c1d261ca86ea03735799c311a0a9ede8babb588cf0a65422576d2ee0ad1",
       "schema": {
         "root": 0,
         "nodes": [
@@ -44,11 +44,6 @@
           {
             "kind": "object",
             "properties": [
-              {
-                "name": "executionId",
-                "type": 2,
-                "optional": false
-              },
               {
                 "name": "jobId",
                 "type": 2,
@@ -122,7 +117,7 @@
       "kind": "event",
       "event": "job/settled",
       "surface": false,
-      "digest": "a103c03b3bc0ca7a7809d1eb2572dec08899f7a15a90072736777acd4e517648",
+      "digest": "edd37b1e4974af648633014435572089b1e8fb71910468a0767a7e28fdd22abf",
       "schema": {
         "root": 0,
         "nodes": [
@@ -169,11 +164,6 @@
                 "name": "detail",
                 "type": 6,
                 "optional": true
-              },
-              {
-                "name": "executionId",
-                "type": 6,
-                "optional": false
               },
               {
                 "name": "finishedAt",

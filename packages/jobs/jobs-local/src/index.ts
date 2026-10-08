@@ -17,7 +17,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ScopedLayers, scopeOf } from '@deepseek-ai/dsh-scope'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
-import { JobRegistry, JobExecutionId, JobId } from '@deepseek-ai/dsh-jobs'
+import { JobRegistry, JobId } from '@deepseek-ai/dsh-jobs'
 import type {
   JobAppendOptions, JobEvent, JobEvents, JobHandle, JobKind, JobOutcome, JobOutputRead, JobOutputSource,
   JobRead, JobRegisteredData, JobSettleCause, JobSettledData, JobSpec, JobStatus, JobToolCall, JobView,
@@ -76,7 +76,6 @@ interface ProducerState {
 /** The registry's mutable per-job record (never handed out — see {@link LocalJobRegistry.view}). */
 interface TrackedJob {
   id: JobId
-  executionId: JobExecutionId
   toolCall: JobToolCall | undefined
   kind: JobKind
   label: string
@@ -161,7 +160,6 @@ export class LocalJobRegistry extends JobRegistry {
   /** Schemastery-defaulted pull-source poll interval. */
   private readonly pumpPollMs: number
   private store = new Map<JobId, TrackedJob>()
-  private counters = new Map<string, number>()
   /**
    * Controllers and scoped subscriptions layered by the scope that registered
    * them, in the tools-registry shape: a contribution files into its
@@ -226,13 +224,8 @@ export class LocalJobRegistry extends JobRegistry {
       )
     }
 
-    // The id is issued before the starter runs so the producer face can carry
-    // it; a throwing starter still leaves nothing registered — its ordinal is
-    // simply skipped.
-    const count = (this.counters.get(spec.kind) ?? 0) + 1
-    this.counters.set(spec.kind, count)
-    const id = JobId(`${spec.kind}-${count}`)
-    const executionId = JobExecutionId(randomUUID())
+    // The producer uses the same identity as controls and durable lifecycle records.
+    const id = JobId(`${spec.kind}-${randomUUID()}`)
     const toolCall = spec.toolCall === undefined ? undefined : { ...spec.toolCall }
     const ring = new OutputRing()
     const state: ProducerState = { progress: undefined, job: undefined }
@@ -247,7 +240,6 @@ export class LocalJobRegistry extends JobRegistry {
     const settled = new Promise<void>((resolve) => { markSettled = resolve })
     const job: TrackedJob = {
       id,
-      executionId,
       toolCall,
       kind: spec.kind,
       label: spec.label,
@@ -453,7 +445,7 @@ export class LocalJobRegistry extends JobRegistry {
     if (owner === undefined) return
     const session = owner.session
     const data: JobRegisteredData = {
-      executionId: job.executionId, jobId: job.id, owner: owner.id,
+      jobId: job.id, owner: owner.id,
       kind: job.kind, label: job.label, startedAt: job.startedAt,
       ...job.toolCall !== undefined ? { toolCall: job.toolCall } : {},
     }
@@ -462,7 +454,7 @@ export class LocalJobRegistry extends JobRegistry {
       else session.append('job/settled', { ...data, ...settlement })
     } catch (error: unknown) {
       // Recording cannot orphan already-started work or prevent waiter release.
-      this.selfCtx.logger.warn(`jobs: failed to record lifecycle for ${job.executionId}: ${String(error)}`)
+      this.selfCtx.logger.warn(`jobs: failed to record lifecycle for ${job.id}: ${String(error)}`)
     }
   }
 
