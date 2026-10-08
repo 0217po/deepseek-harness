@@ -53,6 +53,8 @@ kind: "package-reference"
 
 一次工具调用创建后台子 agent 并立即返回子会话 ID。子级在自己的会话中工作，父级通过完成通知收到其最终答案。子级也可以通过 `send_message` 发送消息。被拒绝的启动不会留下已发布的子 agent；工作流等程序调用方可以直接等待 activation 的结果。
 
+显式 `agentPreset` 独立选择当前注册的 preset；省略时加入父方的活跃代际。只有 spawn 支持此选择。可复用的 persona 与工具放在 [preset 定义](../../preset/agent-preset-registry/README.zh.md)中，现有逐子级覆盖仍会应用。冷恢复遵守共享的[子级组装规则](../subagent/README.zh.md#restoring-child-composition)。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -79,7 +81,7 @@ kind: "package-reference"
 
 ### 所有权与作用域
 
-子 agent 获得全新的扁平注册作用域：父级工具限制与权限绝不会被导入，工具所施加的过滤属于组合而非父级派生授权。后端声明包括 `agentOptions` 在内的全部五项启动时能力，因为它控制子 agent 的创建窗口，可以逐一强制执行。
+子级在继承或独立选择的 preset 之下拥有自身注册作用域，不导入父方的 Agent 局部工具限制。后端在其他启动时能力之外声明 `agentPreset` 和 `agentOptions`，由 subagent manager 在创建子级时应用。
 
 </details>
 
@@ -104,7 +106,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-全新子 agent 逐字接收任务内容，作为新空对话中的唯一用户消息，默认使用父级提供方、模型、推理强度、输出 token 上限与工作目录。配置的 persona 会在子 agent 作用域中遮蔽全局提示词文本；工具过滤器会从其 schema、可执行工具查找与 PTC mode SDK 绑定中移除指定的全局工具，但保留独立注册的指导内容。不包含任何父级对话消息；过滤属于组合，而非继承的权限授予。
+全新子 agent 逐字接收任务内容，作为新空对话中的唯一用户消息，默认使用父级提供方、模型、推理强度、输出 token 上限与工作目录。继承或选定的 preset 提供工具和提示词片段。配置的逐子级 persona 会遮蔽继承的提示词文本；工具过滤器从其 schema、可执行工具查找与 PTC mode SDK 绑定中过滤继承工具，同时保留子级自有工具，但保留独立注册的指导内容。不包含任何父级对话消息；过滤属于组合，而非继承的权限授予。
 
 #### Token 影响
 
@@ -112,7 +114,7 @@ kind: "package-reference"
 
 #### KV Cache 影响
 
-子 agent 的请求缓存与父级相互独立。子 agent 历史仅追加；persona、工具过滤、生成 SDK、提供方或模型变化会建立不同的子 agent 前缀。
+子 agent 的请求缓存与父级相互独立。子 agent 历史仅追加；preset、persona、工具过滤、生成 SDK、提供方或模型变化会建立不同的子 agent 前缀。
 
 ### 父级工具结果（间接）
 

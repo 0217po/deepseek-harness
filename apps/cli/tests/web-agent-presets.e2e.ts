@@ -782,7 +782,7 @@ describe('a delegated child', () => {
       sessionId: SessionId('preset-child'),
       meta: childSessionMeta(parent.agent, 1, false),
       setup: (agentCtx) => {
-        applyChildComposition(agentCtx, parent.agent, {})
+        return applyChildComposition(agentCtx, parent.agent, {})
       },
     })
     try {
@@ -808,7 +808,7 @@ describe('a delegated child', () => {
       sessionId: SessionId('preset-child-switch'),
       meta: childSessionMeta(parent.agent, 1, false),
       setup: (agentCtx) => {
-        applyChildComposition(agentCtx, parent.agent, {})
+        return applyChildComposition(agentCtx, parent.agent, {})
       },
     })
     try {

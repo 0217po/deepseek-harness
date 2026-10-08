@@ -43,6 +43,7 @@ interface ControlledRun {
 class StubProvider implements SubagentProvider {
   readonly capabilities: SubagentCapabilities = {
     agentOptions: true,
+    agentPreset: false,
     outputSchema: true,
     depthLimit: true,
     toolFilter: true,
@@ -466,7 +467,7 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       await ctx.plugin(SubagentRuntime)
       const provider: SubagentProvider = {
         name: 'rejecting',
-        capabilities: { agentOptions: true, outputSchema: true, depthLimit: true, toolFilter: true, persona: false },
+        capabilities: { agentOptions: true, agentPreset: false, outputSchema: true, depthLimit: true, toolFilter: true, persona: false },
         inheritsParentContext: false,
         start: async () => ({
           id: SessionId('reject-child'),
@@ -526,7 +527,7 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       await ctx.plugin(SubagentRuntime)
       const provider: SubagentProvider = {
         name: 'bad-dispose',
-        capabilities: { agentOptions: true, outputSchema: true, depthLimit: true, toolFilter: true, persona: false },
+        capabilities: { agentOptions: true, agentPreset: false, outputSchema: true, depthLimit: true, toolFilter: true, persona: false },
         inheritsParentContext: false,
         start: async () => ({
           id: SessionId('bad-dispose-child'),
@@ -550,7 +551,7 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       await ctx.plugin(SubagentRuntime)
       const provider: SubagentProvider = {
         name: 'coercion-trap-dispose',
-        capabilities: { agentOptions: true, outputSchema: true, depthLimit: true, toolFilter: true, persona: false },
+        capabilities: { agentOptions: true, agentPreset: false, outputSchema: true, depthLimit: true, toolFilter: true, persona: false },
         inheritsParentContext: false,
         start: async () => ({
           id: SessionId('trap-child'),
@@ -768,7 +769,7 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       let aborted = false
       const provider: SubagentProvider = {
         name: 'signal-only',
-        capabilities: { agentOptions: true, outputSchema: true, depthLimit: true, toolFilter: true, persona: false },
+        capabilities: { agentOptions: true, agentPreset: false, outputSchema: true, depthLimit: true, toolFilter: true, persona: false },
         inheritsParentContext: false,
         start: async (request) => {
           let settle!: (result: SubagentResult) => void
@@ -886,7 +887,9 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       let disposals = 0
       ctx.subagents.registerProvider({
         name: 'late-publication',
-        capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+        capabilities: {
+          agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false,
+        },
         inheritsParentContext: false,
         start: async (request) => {
           requested.resolve(request)

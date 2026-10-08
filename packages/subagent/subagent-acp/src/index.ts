@@ -80,6 +80,7 @@ type ResolvedConfig = Required<Config>
 class AcpProvider implements SubagentProvider {
   readonly capabilities: SubagentCapabilities = {
     agentOptions: false,
+    agentPreset: false,
     outputSchema: false,
     depthLimit: false,
     toolFilter: false,

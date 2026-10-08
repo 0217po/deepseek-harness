@@ -278,6 +278,7 @@ describe('dsh-subagent-spawn-in-process', () => {
     const provider = ctx.subagents.getProvider('spawn')!
     expect(provider.capabilities).toEqual({
       agentOptions: true,
+      agentPreset: true,
       outputSchema: true,
       depthLimit: true,
       toolFilter: true,

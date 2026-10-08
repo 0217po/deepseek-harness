@@ -1557,6 +1557,7 @@ describe('dsh-subagent-acp', () => {
     const provider = ctx.subagents.getProvider('acp')!
     expect(provider.capabilities).toEqual({
       agentOptions: false,
+      agentPreset: false,
       outputSchema: false,
       depthLimit: false,
       toolFilter: false,

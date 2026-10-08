@@ -625,6 +625,12 @@ export class SubagentRuntime extends TypertRemoteService {
 
   /** Reject the first requested capability that the provider lacks. */
   private assertCapabilities(provider: SubagentProvider, request: SubagentStartRequest): void {
+    if (request.agentPreset !== undefined && (!provider.capabilities.agentPreset || provider.inheritsParentContext)) {
+      throw new SubagentError(
+        `subagent provider "${provider.name}" does not support independent agent preset selection`,
+        'UNSUPPORTED_CAPABILITY',
+      )
+    }
     const needs: { when: boolean; cap: keyof SubagentCapabilities }[] = [
       { when: request.agentOptions !== undefined, cap: 'agentOptions' },
       { when: request.outputSchema !== undefined, cap: 'outputSchema' },
@@ -641,6 +647,7 @@ export class SubagentRuntime extends TypertRemoteService {
       }
     }
   }
+
 }
 
 export default SubagentRuntime
