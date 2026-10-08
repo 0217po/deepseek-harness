@@ -14,7 +14,7 @@ declare module '@deepseek-ai/dsh-llm' {
   }
 }
 
-import type { FinishReason, GenerateOptions, Message } from '@deepseek-ai/dsh-llm'
+import type { FinishReason, GenerateOptions, Message, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { deadline, MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
 import type { SessionSeq } from '@deepseek-ai/dsh-session'
@@ -44,6 +44,8 @@ export interface SessionTitleLlmRequestEventData {
   readonly messages: Message[]
   /** Exact auxiliary output-token cap. */
   readonly maxTokens: number
+  /** Resolved reasoning effort when recorded; older requests can omit it. */
+  readonly reasoningEffort?: ReasoningEffortId
 }
 
 declare module '@deepseek-ai/dsh-session/types' {
@@ -64,7 +66,7 @@ export interface SessionTitleLlmConfig {
   readonly targetCjkCharacters: number
   /** Maximum UTF-8 bytes in the final JSON-framed user prompt. */
   readonly maxInputBytes: number
-  /** Auxiliary generation output-token cap. */
+  /** Output-token cap for the title request, independent of conversation requests. */
   readonly maxOutputTokens: number
   /** End-to-end auxiliary request deadline in milliseconds. */
   readonly timeoutMs: number
@@ -198,7 +200,27 @@ function systemPrompt(config: ResolvedSessionTitleLlmConfig): string {
     'Return only the title on one line, **in plain text of natural language**, with no quotes, prefix, explanation, Markdown, XML, or terminal control codes. No code is allowed.',
     'Use the language of the messages.',
     `Aim for about ${config.targetWords} words in non-CJK languages or ${config.targetCjkCharacters} CJK characters.`,
+    'If the messages give little to name, still return a short best-effort title, such as Greeting, instead of explaining.',
   ].join('\n')
+}
+
+/** Asterisk emphasis wrapping a whole line, such as `**Title**`. */
+const EMPHASIS_WRAPPER = /^(?<marker>\*{1,3})(?<inner>\S(?:.*\S)?)\k<marker>$/u
+
+/**
+ * Take the title from model output: the first non-empty line, without
+ * asterisk emphasis that wraps that whole line. Models that disregard the
+ * one-line instruction put the title first and commentary after it. A line
+ * that is entirely `*` emphasis loses the marker pair even when the model
+ * meant it literally; the inner-marker check keeps emphasis inside a longer
+ * line, and the system instruction forbids Markdown.
+ */
+function titleFromOutput(text: string): string {
+  const line = text.split(/\r?\n/u).map(item => item.trim()).find(item => item.length > 0) ?? ''
+  const groups = EMPHASIS_WRAPPER.exec(line)?.groups
+  const marker = groups?.['marker']
+  const inner = groups?.['inner']
+  return marker === undefined || inner === undefined || inner.includes(marker) ? line : inner
 }
 
 /** Frame exact messages as JSON so user text cannot break structural delimiters. */
@@ -258,12 +280,18 @@ export async function generateSessionTitleWithLlm(
   })]
   const system = systemPrompt(config)
   using callDeadline = deadline(request.signal, config.timeoutMs, SESSION_TITLE_TIMEOUT_CODE)
+  const maxTokens = config.maxOutputTokens
+  const call = await ctx.llm.prepareCall({
+    ...route,
+    maxTokens,
+  }, callDeadline.signal, (controls, model) => {
+    const effort = model.reasoning?.efforts[0]?.id
+    return { ...controls, ...effort === undefined ? {} : { reasoningEffort: effort } }
+  })
   const options: GenerateOptions = deepFreeze({
-    provider: route.provider,
-    model: route.model,
+    ...call.config,
     messages,
     system,
-    maxTokens: config.maxOutputTokens,
     sessionId: request.session.id,
     purpose: 'session-title',
     signal: callDeadline.signal,
@@ -274,11 +302,12 @@ export async function generateSessionTitleWithLlm(
     route,
     system,
     messages,
-    maxTokens: config.maxOutputTokens,
+    maxTokens,
+    ...call.config.reasoningEffort === undefined ? {} : { reasoningEffort: call.config.reasoningEffort },
   })
   callDeadline.signal.throwIfAborted()
   const assembler = new BlockAssembler()
-  for await (const chunk of ctx.llm.stream(options)) {
+  for await (const chunk of call.stream(options)) {
     callDeadline.signal.throwIfAborted()
     assembler.push(chunk)
   }
@@ -293,7 +322,7 @@ export async function generateSessionTitleWithLlm(
     .filter((block): block is Extract<(typeof blocks)[number], { type: 'text' }> => block.type === 'text')
     .map(block => block.text)
     .join(' ')
-  const title = normalizeSessionTitle(text, Number.MAX_SAFE_INTEGER)
+  const title = normalizeSessionTitle(titleFromOutput(text), Number.MAX_SAFE_INTEGER)
   if (title.length === 0) throw new Error('session-title-llm: title model produced no text')
   return {
     title,

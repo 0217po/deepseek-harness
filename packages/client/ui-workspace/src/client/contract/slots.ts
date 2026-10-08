@@ -52,6 +52,7 @@ import type { SessionActivity, WorkspaceId, WorkspaceView } from '@deepseek-ai/d
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { WorkspaceShortcutState } from '../shortcuts.ts'
+import type { StartSessionOptions } from '../navigation.ts'
 import type { createWorkspaceViewStore } from '../stores.ts'
 
 /**
@@ -235,11 +236,11 @@ export type WorkspaceBrowserInjected = {
   /** Dismiss the shortcut's fork-failure notification. */
   dismissForkError: () => void
   /**
-   * Start a New Session in a Workspace: reuse-or-create its blank session and
-   * open it; without an explicit workspace, inherit the current Session
-   * Workspace, then the recent Workspace, or clear into the New Session view.
+   * Create a fresh Session, or preserve a reusable blank with explicit draft options.
+   * Without an explicit Workspace, inherit the current Session Workspace,
+   * then the recent Workspace, or clear into the New Session view.
    */
-  startSession: (workspaceId?: WorkspaceId) => void
+  startSession: (workspaceId?: WorkspaceId, options?: StartSessionOptions) => void
   /** Open a real Session. */
   open: (sessionId: SessionId) => void
   /**

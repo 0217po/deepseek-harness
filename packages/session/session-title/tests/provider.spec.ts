@@ -1,5 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import LlmRuntime, { createUserMessage, markAgentLoopRequest } from '@deepseek-ai/dsh-llm'
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
 import SessionStore, { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
@@ -334,6 +334,7 @@ describe('SessionTitleService Provider lifecycle', () => {
 
   it('runs an all-messages revision when the next main request reuses its logged header', async () => {
     const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
@@ -355,9 +356,9 @@ describe('SessionTitleService Provider lifecycle', () => {
     session.append('turn/start', {
       turn: 1,
     })
+    session.append('step/start', { turn: 1, step: 1 })
     const first = appendHumanPrompt(session, 'First routed prompt')
     await settle()
-    session.append('step/start', { turn: 1, step: 1 })
     appendRoute(session)
     await settle()
     session.append('step/end', { turn: 1, step: 1 })
@@ -366,9 +367,9 @@ describe('SessionTitleService Provider lifecycle', () => {
     session.append('turn/start', {
       turn: 2,
     })
+    session.append('step/start', { turn: 2, step: 1 })
     const second = appendHumanPrompt(session, 'Second prompt on the same route')
     await settle()
-    session.append('step/start', { turn: 2, step: 1 })
     void ctx.llm.stream(markAgentLoopRequest(deepFreeze({
       provider: 'main-route',
       model: 'chat-model',

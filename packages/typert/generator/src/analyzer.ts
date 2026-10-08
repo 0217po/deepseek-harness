@@ -750,8 +750,8 @@ class FaceAnalyzer {
     for (const [subpath, target] of targets) {
       if (target.includes('*') || subpath === './package.json'
         || subpath === './typert' || subpath === './client/typert' || subpath === './remote'
-        // Data exports (bundle patch lists, JSON manifests) carry no TypeScript API.
-        || target.endsWith('.json') || target.endsWith('.yml') || target.endsWith('.yaml')) continue
+        // Data exports carry no TypeScript API; their owning readers validate the resources.
+        || /\.(?:json|ya?ml|svg|png|jpe?g|webp)$/iu.test(target)) continue
       const sourcePath = sourcePathForExport(registration.root, target)
       const sourceFile = this.sourceFiles.get(realPath(sourcePath))
       if (sourceFile === undefined) {
@@ -2928,7 +2928,9 @@ function classShape(node: ts.ClassDeclaration): ts.ClassDeclaration {
     (ts.canHaveModifiers(member) ? ts.getModifiers(member) : undefined)?.some(modifier =>
       modifier.kind === ts.SyntaxKind.PrivateKeyword || modifier.kind === ts.SyntaxKind.ProtectedKeyword) ?? false
   const members = node.members.flatMap((member): ts.ClassElement[] => {
-    if (nonPublic(member) || (ts.isPropertyDeclaration(member) && ts.isPrivateIdentifier(member.name))) return []
+    const name = ts.getNameOfDeclaration(member)
+    if (ts.isClassStaticBlockDeclaration(member) || nonPublic(member)
+      || (name !== undefined && ts.isPrivateIdentifier(name))) return []
     if (ts.isMethodDeclaration(member)) {
       return [ts.factory.updateMethodDeclaration(
         member,

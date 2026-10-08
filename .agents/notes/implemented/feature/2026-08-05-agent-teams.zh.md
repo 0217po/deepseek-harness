@@ -16,7 +16,7 @@ Agent Teams 的公开约定仍处于实验阶段，因此需要显式启用的�
 
 每个普通运行时 Root 都是一个隐式 Team 的 Lead，Team id 等于该 Root 的 `SessionId`。Team 没有 creation event：Lead pseudo-row 由身份直接存在，持久状态从第一条 member、message 或 task event 开始。roster 是扁平结构，最多包含配置数量、不可变且采用小写 kebab-case 的名字。每个 teammate 都是使用预留 Session id 的 continuable 直接 child；只有 Lead 可以创建或 interrupt teammate。roster 外由 provider 管理的普通 subagent 不是 Team member；普通 fork 是新的 Root，继承的 Team 记录会因 ancestor `TeamId` 被排除。
 
-实现拆分为 `@deepseek-ai/dsh-experimental-agent-team` 与 `@deepseek-ai/dsh-experimental-tool-agent-team`：前者负责 `ctx.agentTeams` 和持久语义，后者负责 scoped schema 与模型指引。每个 Team 工具都声明完整的结果 schema，并把该值渲染为紧凑 JSON，因此编译器会检查每个 `execute` 是否符合对模型的承诺，也没有结果把 token 花在缩进上。部署显式挂载两个插件，并可禁用具有相同模型可见名称的旧 continuable control。显式 delegation 策略只允许在用户要求 Agent Teams 或 teammate 时创建 Team。两个包都是 `packages/experimental/` 的公开成员；[实验性包决策](../architecture/2026-08-18-experimental-agent-teams-packages.zh.md)负责发布、依赖隔离与 promotion。
+实现拆分为 `@deepseek-ai/dsh-experimental-agent-team` 与 `@deepseek-ai/dsh-experimental-tool-agent-team`：前者负责 `ctx.agentTeams` 和持久语义，后者负责 scoped schema 与模型指引。每个 Team 工具都声明完整的结果 schema，并把该值渲染为紧凑 JSON，因此编译器会检查每个 `execute` 是否符合对模型的承诺，也没有结果把 token 花在缩进上。部署显式挂载两个插件，并可禁用具有相同模型可见名称的旧 continuable control。显式 delegation 策略只允许在用户要求 Agent Teams 或 teammate 时创建 Team。两个包都是 `packages/experimental/` 的公开成员；[实验性包参考](../../../../packages/experimental/AGENTS.md)负责发布、依赖隔离与 promotion。
 
 Lead 必须等待所需工作后才能给出最终答案。进程 teardown 仍是最终生命周期 owner，并会 drain continuation Activation；Team task owner 是持久状态，不会因 idle、interrupt 或进程退出自动释放。
 
@@ -50,9 +50,9 @@ Peer 通讯使用 Lead 日志 mailbox。投递前先追加并 flush `team/messag
 
 ## Shared checkout boundary
 
-所有 member 使用相同 cwd，并立即观察写入。策略要求 member 切分任务、记录提示性 write scope、为有序工作添加依赖，并由 Lead 检查最终 diff 和运行测试。文件系统 stale-version 拒绝后必须重新读取并 rebase 修改意图。Bash、formatter、codegen 与直接外部写入不具备等价保证。
+所有 member 创建时使用 Lead 的当前目录，并立即观察共享文件系统写入。后续目录变更仅影响各自 Session。策略要求 member 切分任务、记录提示性 write scope、为有序工作添加依赖，并由 Lead 检查最终 diff 和运行测试。文件系统 stale-version 拒绝后必须重新读取并 rebase 修改意图。Bash、formatter、codegen 与直接外部写入不具备等价保证。
 
-Worktree isolation 不是 harness runtime 行为。deployment 或 prompt 可以安排独立 worktree，但 Team 领域不会推断 branch、merge 变更或静默改变 cwd。这样保留既有 same-world subagent 与 sandbox 契约。
+Team 领域不会推断 branch、创建 worktree、merge 变更或静默改变 cwd。deployment 或调用方可以另外使用[显式工作树创建](2026-09-13-explicit-worktree-creation.zh.md)。这样保留既有 same-world subagent 与 sandbox 契约。
 
 ## Web projection
 
@@ -82,7 +82,7 @@ Web panel 读取 Lead Session 的 `agentTeam` 传输投影，因为现有投影�
 
 Package test 以逐文件 100% coverage 覆盖身份、名字与权限检查、provider 选择、预留 id 持久化冲突、child-before-Lead flush 顺序、持久 provisioning 失败与 pending-inbox JSONL 对账、target-local 并发顺序、pending／history 去重、mailbox 限额、flush 后 notification、取消在途创建与 dispatch 的有界 dispose、failed member cleanup、task CAS 与 DAG 校验、write-scope warning、wait cancel／timeout、保留 inbox 的 interrupt、普通 fork 隔离、旧 control shadowing、声明 schema 的紧凑结果渲染与 scoped registration HMR。一条 keyless 产品快照会通过 `dsh --profile headless` 加载 Agent Teams profile bundle，并为两个 teammate、依赖任务、peer 投递、等待、完成和汇总固定完整的面向模型工具列表、Team policy 与持久 workflow 投影。CLI e2e 会复用同一个确定性 adapter，并验证带持久 Team 与 child 日志的正常退出。
 
-模型可见的成员身份与可用状态遵循[工具投影决策](../simplification/2026-09-15-model-agent-availability-and-team-targets.zh.md)；服务驻留状态和持久身份仍保持区分。
+模型可见的成员身份与可用状态遵循[工具投影说明](../../../../packages/experimental/tool-agent-team/README.zh.md)；服务驻留状态和持久身份仍保持区分。
 
 ## Consequences
 

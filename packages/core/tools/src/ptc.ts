@@ -49,7 +49,7 @@ interface RunCodeFlavor {
 function runCodeFlavor(language: string): RunCodeFlavor {
   return {
     description: `Execute a ${language} program against the available tools. Takes two required arguments: `
-      + '`code`, the program to execute, and `description`, a short summary of what the program does. '
+      + '`description`, a short summary of what the program does, and `code`, the program to execute. '
       + 'Call tools as `await tools.name(args)` per the declarations in the system prompt. '
       + 'Curate the program output. Image-bearing subtool results are attached after the run.',
     codeDescription: `The ${language} program to execute, following this tool's execution instructions.`,
@@ -84,7 +84,8 @@ const RUN_CODE_FLAVORS: Record<string, RunCodeFlavor> = {
  */
 const RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION
   = 'Clear, concise description of what this program does in active voice, '
-    + '5-10 words (shown in the UI). Examples: "Count TODO markers across packages"; '
+    + '5-10 words (shown in the UI). Provide `description` before `code` in the arguments. '
+    + 'Examples: "Count TODO markers across packages"; '
     + '"Read failing test and its fixture"; "Rename config key in every cordis.yml".'
 
 const RUN_CODE_CONTROLS = {
@@ -282,6 +283,8 @@ type RunCodeOutput = { logs: string[]; result?: JsonValue; sandbox?: PtcRunSandb
  * off its public service API and flow here as closures instead.
  */
 export interface RunCodeBridgeOptions {
+  /** Captures the calling Session current directory before program creation. */
+  resolveWorkingDirectory: (exec: ToolRunContext) => Promise<string | undefined>
   /** Reads the approval channel when a program requests a wider sandbox mode. */
   peekApprover: () => ApprovalService | undefined
   /** Resolves standing Session authority only for a runtime that enforces file policy. */
@@ -302,8 +305,8 @@ export interface RunCodeBridgeOptions {
 }
 
 /**
- * Build the `run_code` {@link ToolDefinition}: required `code` and
- * `description` parameters, executed through the dispatch bridge described
+ * Build the `run_code` {@link ToolDefinition}: required `description` and
+ * `code` parameters, executed through the dispatch bridge described
  * above. The
  * registry reserves it as presentation infrastructure under non-native modes,
  * outside the filterable global/scoped capability layers.
@@ -325,12 +328,12 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
     // independent (one required string `code`).
     description: TYPESCRIPT_FLAVOR.description,
     parameters: {
-      code: { type: 'string', required: true, description: TYPESCRIPT_FLAVOR.codeDescription },
       description: {
         type: 'string',
         required: true,
         description: RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION,
       },
+      code: { type: 'string', required: true, description: TYPESCRIPT_FLAVOR.codeDescription },
       ...RUN_CODE_CONTROLS,
     },
     output: {
@@ -386,6 +389,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
         })
         policy = { ...standingPolicy, mode: approvedMode }
       }
+      const cwd = await options.resolveWorkingDirectory(exec)
       exec.signal.throwIfAborted()
 
       // The run-scoped abort: follows the outer signal in, and fires when the
@@ -578,6 +582,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
                 isError: result.isError,
                 ...result.error?.info === undefined ? {} : { error: result.error.info },
                 content: logged,
+                ...result.meta === undefined ? {} : { meta: result.meta },
               })
             })().finally(() => { logWork.delete(task) })
             logWork.add(task)
@@ -702,7 +707,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
               errorClass: { name: 'ToolCallError', memberNameProperty: 'toolName' },
             }],
             signal: runController.signal,
-            ...exec.agent?.session.header.cwd !== undefined ? { cwd: exec.agent.session.header.cwd } : {},
+            ...cwd !== undefined ? { cwd } : {},
             ...policy !== undefined ? { sandboxPolicy: policy } : {},
             ...args.timeoutMs !== undefined ? { timeoutMs: args.timeoutMs } : {},
           }))
@@ -752,7 +757,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
       const instructions = runtime?.executionInstructions
       return resolveFlavor(peekRuntime).description
         + (instructions ? ` ${instructions}` : '')
-        + (runtime === undefined ? '' : " The working directory is the Session's current directory.")
+        + (runtime === undefined ? '' : " Each program starts in the Session's current directory. Running programs keep their initial directory.")
         + escalationGuidance(runtime)
     },
   })
@@ -761,10 +766,10 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
     // Recompile through the same spec→schema projection defineTool used, so
     // the emitted schema always matches the validated specification.
     get: () => parameterSchemaSpecToJsonSchema({
-      code: { type: 'string', required: true, description: resolveFlavor(peekRuntime).codeDescription },
       description: { type: 'string', required: true, description: RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION },
+      code: { type: 'string', required: true, description: resolveFlavor(peekRuntime).codeDescription },
       ...controlParameters(peekRuntime()),
-    }) as unknown as Record<string, unknown>,
+    }),
   })
   return definition
 }

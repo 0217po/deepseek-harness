@@ -8,6 +8,8 @@ Slots 是 Web Client 的类型化 React 组合系统。[`dsh-client-ui-slots`](.
 
 `plugins.bundle.config` 以 npm 包名为 key，提供 Bundle 详情配置。`plugins.bundle.activation` 在用户显式启用后渲染可选引导，由拥有者提供关闭引导和打开该 Bundle 详情的回调。`conversation.input.activity` 提供模型选择器与发送按钮之间的单个活动控件，可展开工具栏并在卸载时释放展开状态。
 
+插件目录声明 `plugins.add.actions`，它是 root 作用域的 list，在添加插件菜单的安装项之后提供 `MenuItemButton` 行。owner 提供 `onDismiss()`，用于开始动作前关闭菜单。该 slot 遵循所属插件页面声明的生命周期。
+
 ## 声明与生命周期
 
 `SlotMap` 是编译期注册表。包通过声明合并写入 key、cardinality（基数）、scope、owner props、keyed props 与可选的 slot 级 inject face。运行时声明则是拥有该渲染位置的组件在 `children` 中给出的对应条目。
@@ -104,6 +106,8 @@ Renderer 还会根据声明的 store 创建 `useStore`，并根据声明的 loca
 
 当每个 occupant 都需要同一种能力时，slot owner 可以在 child 声明里放置 `inject` face。普通成员会原样交给所有 occupant；其 `hooks` 对象中的函数成员是 hook factory，它会收到 slot 的标准 props 与可选的逐次渲染 `hookContext`，再返回提供给 occupant 的受限 hook。`conversation.chat.node` 正是通过这种机制，为当前渲染的 node 提供 `useTurnData(key)`。
 
+Session 作用域的 `conversation.chat.reasoning-body` 链为展开的思考正文提供未修改的 `text` 和 `running`。所有条目都拒绝认领时，owner 渲染原始紧凑 Markdown；显示贡献保留查看原始思考内容的能力。
+
 一次渲染时 owner 已知的值走 owner props；单个 entry 的 callback 与私有 observable 走注册项 `inject`；由 slot owner 控制、所有 occupant 共享的能力走 slot 级 `inject`；需要跨 entry 共享或跨重新挂载保留的可变视图状态走声明的 store。React node 通过 child slot 组合，不通过注入值传递。
 
 ## 当前层级
@@ -133,6 +137,7 @@ root
 │        ├─ settings.models.footer
 │        └─ settings.plugins.tab
 ├─ main
+│  ├─ plugins.add.actions
 │  ├─ plugins.item
 │  ├─ plugins.bundle.config
 │  ├─ plugins.row.config
@@ -144,6 +149,7 @@ root
 │     │  └─ conversation.view
 │     │     ├─ conversation.chat.node
 │     │     │  ├─ conversation.chat.assistant-actions
+│     │     │  ├─ conversation.chat.reasoning-body
 │     │     │  ├─ conversation.chat.commandview
 │     │     │  ├─ conversation.chat.turnTail
 │     │     │  └─ tool.call.toolview
@@ -182,6 +188,7 @@ root
 │     │  └─ sidebar.right.tab.guide.entry
 │     ├─ sidebar.right.pane.tab.title
 │     └─ sidebar.right.tab.menu.item
+├─ shell.bottom
 ├─ shell.leading
 └─ shell.overlay
    └─ shell.quota-notice
