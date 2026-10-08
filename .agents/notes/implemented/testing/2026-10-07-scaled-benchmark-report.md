@@ -40,4 +40,4 @@ Long-Session `first`, `input`, and `streamWall` include paced replay waits and a
 
 ## Consequences
 
-Readers can see each endpoint on reviewed machines with measured defaults, and adjust the storage share, without changing any gate. The page depends on reviewed constants: cross-ISA ratings, shared vCPUs, and disk latency classes are coarse, so results are estimates rather than measurements. The memory view does not measure swap or reclaim costs. Publishing the page from CI requires an upload step in the `node 24 / benchmarks` job.
+Readers can see each endpoint on reviewed machines with measured defaults, and adjust the storage share, without changing any gate. The page depends on reviewed constants: cross-ISA ratings, shared vCPUs, and disk latency classes are coarse, so results are estimates rather than measurements. The memory view does not measure swap or reclaim costs. The `node 24 / benchmarks` job publishes the page as the `benchmark-report` artifact.
