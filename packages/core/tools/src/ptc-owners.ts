@@ -49,7 +49,6 @@ export class PtcOwners {
       agent.ctx.effect(() => async () => { owned.phase = 'disposed'; await clear() }, 'PTC retained environments')
       agent.ctx.on('permission-presets/apply', async (session, mode, next) => {
         if (session !== agent.session || policy()?.mode === mode) return next()
-        if (owned.phase !== 'ready') throw new Error('PTC environment cleanup is still in progress')
         owned.phase = 'changing'
         const retained = [...owned.providers.keys()].some(provider => provider.retainsState)
         try {

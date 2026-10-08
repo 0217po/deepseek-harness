@@ -138,3 +138,12 @@ it('keeps admission closed when Agent disposal overlaps a permission change', as
     expect(() => enter()).toThrow('cleanup is in progress')
   } finally { released.resolve(undefined); await Promise.allSettled([switching, disposing]); release.mockRestore() }
 })
+
+it('returns no reset notice for a stateless runtime', async () => {
+  const { ctx, session, enter } = await setup()
+  const retention = vi.spyOn(ctx.ptcRuntime, 'retainsState', 'get').mockReturnValue(false)
+  try {
+    await enter().finish()
+    expect(await ctx.permissionPresets.set(session, 'read-only')).toEqual([])
+  } finally { retention.mockRestore() }
+})
