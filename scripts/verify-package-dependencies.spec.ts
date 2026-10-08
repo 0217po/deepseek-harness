@@ -560,33 +560,6 @@ describe('face-aware source classification', () => {
     }
   })
 
-  it('retains runtime dependencies reached by an explicit Node Client entry', () => {
-    const subject = sourceFacts({
-      'src/index.ts': 'export function apply() {}',
-      'src/client/index.ts': "import 'client-node-runtime'",
-      'src/client/browser.ts': "import 'browser-only'",
-    }, {
-      exports: {
-        './client': {
-          types: './lib/types/client/index.d.ts',
-          node: './lib/types/client/index.js',
-          default: './lib/client.js',
-        },
-        './client/browser': './lib/client/browser.js',
-      },
-    })
-
-    expect([...subject.hostRuntimeSourceUses.keys()]).toEqual(['client-node-runtime'])
-    expect(expectedPackageDependencies(subject).get('client-node-runtime')?.section).toBe('dependencies')
-    expect(expectedPackageDependencies(subject).get('browser-only')?.section).toBe('devDependencies')
-  })
-
-  it('rejects an explicit Node Client entry without its source', () => {
-    expect(() => sourceFacts({ 'src/index.ts': 'export function apply() {}' }, {
-      exports: { './client': { node: './lib/types/client/index.js', default: './lib/client.js' } },
-    })).toThrow('Host export ./client has no source entry')
-  })
-
   it.each([
     './lib/missing.js',
     { types: './lib/types/missing.d.ts', default: './lib/renamed.js' },

@@ -224,8 +224,6 @@
     "scripts/*.client.spec.ts",
     "scripts/client-bundle-css.spec.ts",
     "packages/typert/generator/tests/fixtures/**",
-    // Compiled against ordinary generated artifacts by session-client.e2e.ts.
-    "packages/api/remotes/tests/fixtures/session-client/**",
     "scripts/client-bundle-purity.spec.ts"
   ],
   "references": [

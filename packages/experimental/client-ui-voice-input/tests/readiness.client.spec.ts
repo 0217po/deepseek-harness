@@ -40,7 +40,7 @@ it('accepts a Host snapshot and keeps preparation ownership outside observation 
   const signal = new AbortController().signal
   b.options.open(signal)
   expect(b.follow).toHaveBeenCalledWith(signal)
-  expect(b.options.ended?.(true)).toBeInstanceOf(RemoteStreamCarrierError)
+  expect(b.options.ended(true)).toBeInstanceOf(RemoteStreamCarrierError)
   b.options.carrierFailed?.(new RemoteStreamCarrierError('connection lost'))
   expect(b.mirror.state.getSnapshot()).toMatchObject({ connected: false, error: 'connection lost' })
   await b.mirror.dispose()

@@ -26,6 +26,7 @@ class DesktopAnalytics extends Service {
     if (!('dshDesktop' in globalThis)) return
     const stream = ctx.remote.$stream<boolean>({
       name: 'product analytics policy', open: signal => ctx.remote.productAnalytics.watchPolicy(signal),
+      ended: () => new Error('product analytics policy stream ended'),
       carrierFailed: () => { this.collecting = false },
     })
     ctx.effect(() => () => { this.collecting = false; return stream.dispose() })

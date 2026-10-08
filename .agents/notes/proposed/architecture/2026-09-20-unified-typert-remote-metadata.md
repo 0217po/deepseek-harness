@@ -1,14 +1,14 @@
-# Agent Note: Unified Typert/Remote metadata and passive clients
+# Agent Note: Unified Typert/Remote metadata
 
 Status: proposed
 
-English | [中文](2026-09-20-unified-typert-remote-metadata-and-passive-clients.zh.md)
+English | [中文](2026-09-20-unified-typert-remote-metadata.zh.md)
 
 ## Problem
 
 CLI help, argument parsing, and MCP tool discovery need local method descriptions, named-input parsers, tool JSON Schemas, and result metadata before connecting to a controlled Host. Browser, Node, and independent consumers also need typed invocations. Tool consumers need stricter input-object validation without changing ordinary Host dispatch. These requirements do not imply runtime TypeScript analysis, Host Service activation, or another business schema maintained by each consumer.
 
-The original #4644 [source-definition decision](../../implemented/architecture/2026-09-20-committed-remote-definitions-and-passive-clients.md) delivers this information through `emitSourceDef`, committed generated files, and `./remote-source`. Host bindings carry those definitions; source generation has its own inventory, freshness, publication, and exclusion rules. This note replaces that delivery mechanism and makes input strictness consumer-owned. The original note remains intact because its passive-client and carrier-ownership decisions still apply.
+The original #4644 source-definition decision delivered this information through `emitSourceDef`, committed generated files, and `./remote-source`. Host bindings carried those definitions; source generation had its own inventory, freshness, publication, and exclusion rules. This note replaces that delivery mechanism and makes input strictness consumer-owned.
 
 Both delivery paths derive from the same [compiler-independent model](../../implemented/architecture/2026-07-27-compiler-independent-typert-model.md). Separate Host and Client Programs require generated cross-face declarations, not committed generated source. An explicit prebuild is acceptable when exact schemas are needed; ordinary ESM artifacts can supply offline metadata without a live Host. The [targeted-call decision](../../implemented/architecture/2026-08-02-typert-remote-method-calls.md) still owns receiver lookup, Gateway dispatch, and contribution lifetimes.
 
@@ -36,7 +36,7 @@ Documentation and JSON Schema are optional. Each unsupported input variant or re
 
 ## Proposal
 
-Complete the ordinary-artifact migration in the downstream Session-client, CLI, MCP, and native-tool packages. This note remains proposed because the bounded integration does not complete that migration.
+Complete the ordinary-artifact migration in the downstream Session-client, CLI, MCP, and native-tool packages. This note remains proposed because that migration is not complete.
 
 ### Shared generation, two access modes
 
@@ -45,8 +45,6 @@ Framework consumers load ordinary metadata into their own Registry. Independent 
 Strict source startup explicitly prebuilds and loads ordinary `./typert` through Loader. Limited descriptor-free fallback still supports basic arguments, signals, cancellation, streams, JSON conversion, and unary byte attachments, but cannot recover erased fields, constraints, or tool documentation. Once a strict local descriptor has been observed, its withdrawal must refuse invocation rather than downgrade to fallback. `@Remote` accepts only `name` and `mode`; consumers choose input policy without a separate developer annotation.
 
 Host metadata readiness remains composition-owned. A Host requiring strict validation must await local registration before serving calls; `hasSeen()` does not protect an endpoint before its first registration. Returning a lazy info instance neither completes asynchronous Loader discovery nor establishes readiness. Loader validates static codec specs and callable `input`/`invoke` without calling the selector, parser factories, or projections to register a contribution.
-
-Connection owns authenticated HTTP and physical WebSockets; Gateway owns framing and dispatch. `forwardedEvents: true` explicitly opts into Host event forwarding and interaction waterfalls. Otherwise `$on()` and event-supervised `$stream()` fail promptly, while generated streaming methods remain available. Importing, registering, listing tools, or calling methods does not acquire interaction-answer ownership. Node hooks are instance-owned and disposal is awaited.
 
 ### Downstream migration targets
 
@@ -60,11 +58,11 @@ The inspected #4111 tree contains Session-client, CLI, MCP, and native-tool cons
 | Native tools | Read Host local method info; require the tool registration's `output.schema`. | Parse at the tool boundary, then call same-process controllers directly. |
 | Independent adapters | Read typed `TYPERT_REMOTE.methods` directly. | Use their chosen Remote runtime only when invoking. |
 
-Current-session selection and attachment preparation remain consumer-owned; CLI/MCP intake validates completed business arguments with the same strict input view used during selection. The downstream `follow` adapter's `activate: false` policy applies where that API exists; this branch's current `follow` has no such option. Aborting observation does not cancel accepted Session work. Native direct dispatch also does not remove unrelated business dependencies such as the downstream controller's pending-interaction access through Gateway.
+Current-session selection and attachment preparation remain consumer-owned; CLI/MCP intake validates completed business arguments with the same strict input view used during selection. The downstream `follow` adapter's `activate: false` policy applies where that API exists; this branch's current `follow` has no such option. Aborting observation does not cancel accepted Session work.
 
 ### Paired usage examples
 
-The old examples are historical comparisons of source-export consumers in the dependent changes. The new examples use ordinary artifacts. These fragments omit surrounding plugin declarations and include removed APIs; the linked consumer test owns compilation of the complete ordinary-artifact adapter. `raw`, `request`, `signal`, and an authenticated, mounted, unscoped `remote` are caller inputs, not new framework APIs.
+The old examples are historical comparisons of source-export consumers in the dependent changes. The new examples use ordinary artifacts. These fragments omit surrounding plugin declarations and include removed APIs. `raw`, `request`, `signal`, and an authenticated, mounted, unscoped `remote` are caller inputs, not new framework APIs.
 
 **Operation owner and strict Host.** Preserve the business signature; leave generated registration to ordinary Typert Loader instead of the Service constructor.
 
@@ -169,12 +167,6 @@ pnpm run build
 pnpm dsh --profile <profile-name> <profile-arguments>
 ```
 
-### Bounded reproduction on this branch
-
-The test-local [Session client](../../../../packages/api/remotes/tests/fixtures/session-client/client.ts) and [MCP adapter](../../../../packages/api/remotes/tests/fixtures/session-client/mcp.ts) extract the downstream access pattern for current `session/page` and `session/follow`. They use Registry metadata, `input({ strict: true })` for both selection and intake, current-session injection, explicit unsupported-content rejection, and ordinary invocation. They do not add future controller operations, a public package/bin, an alternate application launcher, or the complete downstream application.
-
-The [artifact test](../../../../packages/api/remotes/tests/session-client.e2e.ts) compiles only its local consumer fixture against ordinary declarations, then runs plain Node. Its [runtime fixture](../../../../packages/api/remotes/tests/fixtures/session-client/run.mjs) composes the real SessionController, live Session/query services, Gateway, and Connection over HTTP/WebSocket. This is a manually assembled bounded integration, not a Loader/profile composition or the complete CLI/MCP protocol server. The separate Loader test uses an authored artifact fixture; the strict-source Gateway test uses an authored ordinary contribution. Neither is represented as generated full-application evidence.
-
 ## Alternatives considered
 
 - **Committed source:** meets offline needs but adds a redundant delivery and maintenance path; explicit ordinary prebuild is sufficient.
@@ -182,19 +174,17 @@ The [artifact test](../../../../packages/api/remotes/tests/session-client.e2e.ts
 - **Mandatory Registry for every importer:** adds lifecycle requirements without information for standalone consumers.
 - **Fallback only:** cannot supply erased validation or tool documentation; retain it only for its supported subset.
 - **Handwritten adapter schemas or runtime TypeScript analysis:** duplicate ownership or introduce runtime compiler requirements already handled by build-time extraction.
-- **Automatic forwarded events:** conflates method calls with willingness to answer user interactions.
 
 ## Acceptance criteria
 
 - Ordinary artifacts emit one static method spec per endpoint and return lazy class instances; direct method indexes alias descriptor objects, with full stream/binary typing, separate compiler faces, and full-face augmentation retention.
 - Descriptor indexes and each input-policy view, parser, and projection are independently lazy and cached; Loader validates static specs and callable helpers without calling selectors, parsers, or projections.
 - Every input parameter emits normal and strict codecs from the same model; consumers select policy without a method annotation. Both envelopes reject extra named arguments; strict input recursively closes declared objects without closing JSON or dictionary keys or changing Host dispatch and results.
-- Registry identity, atomic registration, withdrawal, and disposal remain intact; metadata inspection and method calls stay passive.
+- Registry identity, atomic registration, withdrawal, and disposal remain intact.
 - Missing documentation or unsupported optional projection does not disable generation; selected tools reject missing requirements and still parse outputs.
 - Strict source/artifact invocation and limited fallback have separate tests; a withdrawn strict descriptor never enables fallback.
-- The bounded downstream fixture exercises offline selection, real unary/stream calls, input rejection, cancellation, and teardown with current artifacts.
 - Source static checks do not consume stale generated declarations; artifact checks declare and rebuild their inputs. No source-definition opt-in, source export, inventory, or freshness rule remains in production.
 
 ## Risks
 
-Full downstream profile composition remains follow-up work in those packages; the bounded reproduction is not evidence that every #4111 operation or CLI/MCP application has migrated. The deliberate trade-off is an explicit prebuild for full source-runtime metadata. Missing or stale artifacts require regeneration, not a validation downgrade or a second handwritten schema.
+Full downstream profile composition remains follow-up work in those packages; the generated metadata is not evidence that every #4111 operation or CLI/MCP application has migrated. The deliberate trade-off is an explicit prebuild for full source-runtime metadata. Missing or stale artifacts require regeneration, not a validation downgrade or a second handwritten schema.

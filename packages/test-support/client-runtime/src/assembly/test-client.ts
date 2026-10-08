@@ -61,7 +61,6 @@ class SharedJsdomShims {
 const sharedJsdomShims = new SharedJsdomShims()
 
 const CONNECTION_PACKAGE = '@deepseek-ai/dsh-client-connection'
-const GATEWAY_PACKAGE = '@deepseek-ai/dsh-api-gateway'
 
 /** Default readiness budget; the mock answers `$events` immediately, so a miss means a boot-time fixture is absent. */
 const DEFAULT_CONNECT_TIMEOUT_MS = 5_000
@@ -178,8 +177,7 @@ export class TestClient {
    * `installConnection`, while this path supplies the mock carrier, uses
    * default recovery timings, and captures the current page hostname once for
    * later reloads. A caller-provided Connection row remains unchanged and owns
-   * its readiness behavior. The Gateway Client row receives forwarded events,
-   * the choice a served Web page reads from its Host. The `@deepseek-ai/dsh-api-remotes` row is
+   * its readiness behavior. The `@deepseek-ai/dsh-api-remotes` row is
    * dropped from the roster: its generated Remote clients exist only in built
    * `lib/`, and the `remote.<ns>` services the roster injects (plus the
    * namespaces the mock has rules for at this point) are provided as
@@ -226,14 +224,6 @@ export class TestClient {
               ...(pageLocation === undefined ? {} : { location: pageLocation }),
             })
           },
-        })
-      }
-      const gateway = modules.get(GATEWAY_PACKAGE)
-      if (gateway !== undefined && plan.provide?.[GATEWAY_PACKAGE] === undefined) {
-        // The served Web page receives this choice from the Host Gateway row; the in-process tier has no served page.
-        modules.set(GATEWAY_PACKAGE, {
-          ...gateway,
-          apply: gatewayCtx => gateway.apply(gatewayCtx, { forwardedEvents: true }),
         })
       }
       mountPoint = resolveMountPoint(options.mount)

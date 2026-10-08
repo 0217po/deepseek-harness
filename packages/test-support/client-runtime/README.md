@@ -72,8 +72,6 @@ expect(view.getByRole('alert')).toHaveTextContent('goal/not-found')
 
 The slot tier above mounts one feature against doubles. The whole-client tier boots the real assembly: `TestClient.start(plan, mock, options)` imports every roster row's `/client` module in-process (or takes the plan's `provide` replacement), binds `{ rpc: mock.rpc }` to that client's Connection module, synthesizes the boot graph with `graphFromRoster` and hands the loaded modules to the production module system, boots through the production `bootClient`, optionally mounts `uiRenderer`, and waits for `ctx.connection.state === 'connected'`. It lives behind a deep import so slot-tier specs never load it:
 
-The assembly mounts the Gateway Client row with `forwardedEvents: true`, the choice a served Web page receives from its Host's Gateway row, so roster plugins can call `$on()` and `$stream()` before the test waits for Connection readiness.
-
 ```text
 // @vitest-environment jsdom
 import { createClientTest, webApp } from '@deepseek-ai/dsh-client-test-runtime/src/assembly/index.ts'

@@ -4,7 +4,6 @@
  * participates in method lookup, invocation, or type exposure.
  */
 
-import z from '@deepseek-ai/schemastery'
 import { Service } from '@deepseek-ai/cordis'
 import { RemoteError, isRemoteUplinkItem, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 export type { TypertGatewayFaultDetails } from '../remote-error-codes.ts'
@@ -34,7 +33,6 @@ import {
   RemoteStream,
   type RemoteStreamOptions,
 } from './remote-stream.ts'
-import { GATEWAY_CLIENT_CONFIG_GLOBAL, REMOTE_STREAM_MUX_PATH } from '../stream-protocol.ts'
 
 export { RemoteStreamCarrierError } from './stream-client.ts'
 export { RemoteJournalStream } from './journal-stream.ts'
@@ -49,6 +47,11 @@ export type { RemoteStreamItem, RemoteStreamOptions } from './remote-stream.ts'
 export { RemoteSnapshotStream } from './snapshot-stream.ts'
 export type { RemoteSnapshotStreamOptions } from './snapshot-stream.ts'
 
+interface MountToken {
+  active: boolean
+  readonly abort: AbortController
+}
+
 interface ScopedProjection {
   readonly context: string
   readonly wire: string
@@ -57,7 +60,7 @@ interface ScopedProjection {
 
 interface DirectMethod {
   readonly descriptor: InvocationDescriptor
-  readonly token: AbortController
+  readonly token: MountToken
 }
 
 interface ScopedMethod extends DirectMethod {
@@ -91,7 +94,7 @@ interface LoaderReadiness {
 /** One descriptor's mounted variants, for the group disposer to unwind. */
 interface InstalledMethod {
   readonly descriptor: InvocationDescriptor
-  readonly token: AbortController
+  readonly token: MountToken
   direct: boolean
   scoped: boolean
 }
@@ -99,11 +102,9 @@ interface InstalledMethod {
 /** Typed Remote service augmented by generated direct namespaces and Gateway stream supervision. */
 export interface ClientRemote extends TypertClientRemote {
   /**
-   * Create one independently cancellable, reconnecting logical stream. Reconnection follows
-   * Connection generations, so the service must participate in forwarded events.
+   * Create one independently cancellable, reconnecting logical stream.
    * @param options - domain-owned opener and generation-end classification.
    * @returns a single-consumer stream annotated with physical generation ids.
-   * @throws when this service does not participate in forwarded events.
    */
   $stream<Item>(options: RemoteStreamOptions<Item>): RemoteStream<Item>
   /**
@@ -132,31 +133,12 @@ declare module '@deepseek-ai/cordis' {
 /** Required Client services: the Typert registry and the existing Connection carrier. */
 export const inject = ['typert', 'connection']
 
-/** Client Remote runtime configuration. */
-export interface Config {
-  /**
-   * Receive application-forwarded Host events, including Agent-scoped approval and question
-   * requests, and run Connection generation recovery. Off by default: generated unary and
-   * stream methods work without it, while `$on()` and `$stream()` require it.
-   */
-  forwardedEvents?: boolean
-}
-
-/** Validated Client Remote runtime configuration. */
-export const Config: z<Config> = z.object({
-  forwardedEvents: z.boolean(),
-})
-
 /**
  * Install the typed Client Remote service.
  * @param ctx - Client Cordis root.
- * @param config - explicit choices override the serving Host page configuration; omitted choices
- *   otherwise leave the client passive.
  */
-export function apply(ctx: Context, config?: Config): void {
-  const page = (globalThis as Partial<Record<typeof GATEWAY_CLIENT_CONFIG_GLOBAL, Config>>)[GATEWAY_CLIENT_CONFIG_GLOBAL]
-  const resolved = Config({ forwardedEvents: config?.forwardedEvents ?? page?.forwardedEvents ?? false })
-  new ClientRemoteService(ctx, resolved)
+export function apply(ctx: Context): void {
+  new ClientRemoteService(ctx)
 }
 
 class ClientRemoteService extends Service implements ClientRemote {
@@ -164,56 +146,45 @@ class ClientRemoteService extends Service implements ClientRemote {
   private readonly connection: ConnectionHandle
   private readonly namespaces = new Map<string, RemoteNamespaceHandle>()
   private hostFacts: RemoteHostFacts | undefined
-  private readonly streams: RemoteStreamMuxClient
-  private readonly events: ClientRemoteEvents | undefined
+  private readonly streams = new RemoteStreamMuxClient()
+  private readonly events: ClientRemoteEvents
   private mutations = Promise.resolve()
-  private readonly invocations = new Map<Promise<RemoteResult<unknown>>, AbortController>()
-  private disposed = false
 
-  constructor(ctx: Context, config: Config) {
+  constructor(ctx: Context) {
     super(ctx, 'remote')
     this.ownerCtx = ctx
     const connection = ctx.get('connection') as ConnectionHandle
     this.connection = connection
-    this.streams = new RemoteStreamMuxClient(() => connection.openWebSocket(REMOTE_STREAM_MUX_PATH))
+    this.events = new ClientRemoteEvents(
+      ctx,
+      connection,
+      (endpoint, payload, signal) => this.openRemoteStream(endpoint, payload, signal),
+    )
+    if (connection.rpc.open === undefined) this.streams.start()
+    let disposed = false
     let loop: ReturnType<ConnectionHandle['start']> | undefined
-    if (config.forwardedEvents === true) {
-      this.events = new ClientRemoteEvents(
-        ctx,
-        connection,
-        (endpoint, payload, signal) => this.openRemoteStream(endpoint, payload, signal),
-      )
-      this.events.start()
+    const start = (): void => {
+      if (disposed) return
       if (connection.rpc.open === undefined) this.streams.start()
-      const start = (): void => {
-        if (this.disposed) return
-        if (connection.rpc.open === undefined) this.streams.start()
-        loop = connection.start({
-          onConnected: () => { this.ownerCtx.emit('connection/reset') },
-          onReconnectRequested: () => {
-            if (connection.rpc.open === undefined) this.streams.reconnect()
-          },
-        })
-      }
-      const loader = ctx.get('loader') as LoaderReadiness | undefined
-      if (loader === undefined) start()
-      else void loader.await().then(start, () => {})
+      loop = connection.start({
+        onConnected: () => { this.ownerCtx.emit('connection/reset') },
+        onReconnectRequested: () => {
+          if (connection.rpc.open === undefined) this.streams.reconnect()
+        },
+      })
     }
+    const loader = ctx.get('loader') as LoaderReadiness | undefined
+    if (loader === undefined) start()
+    else void loader.await().then(start, () => {})
     ctx.effect(() => async () => {
-      this.disposed = true
+      disposed = true
       loop?.stop()
-      const pending = [...this.invocations]
-      for (const [, token] of pending) token.abort()
-      await Promise.allSettled(pending.map(([invocation]) => invocation))
-      await this.events?.dispose()
+      await this.events.dispose()
       await this.streams.close()
     }, 'api-gateway.client.transport')
   }
 
   $stream<Item>(options: RemoteStreamOptions<Item>): RemoteStream<Item> {
-    if (this.events === undefined) {
-      throw new Error(`client api: ${options.name} needs forwardedEvents; passive clients call generated stream methods directly`)
-    }
     return new RemoteStream(this.connection, options)
   }
 
@@ -242,9 +213,6 @@ class ClientRemoteService extends Service implements ClientRemote {
     event: Event,
     listener: TypertClientEventListener<Event>,
   ): () => void {
-    if (this.events === undefined) {
-      throw new Error(`client api: $on(${JSON.stringify(event)}) needs forwardedEvents; this client does not receive forwarded Host events`)
-    }
     return this.events.subscribe(this.ctx, event, listener)
   }
 
@@ -259,7 +227,6 @@ class ClientRemoteService extends Service implements ClientRemote {
     const connection = this.ownerCtx.get('connection') as ConnectionHandle | undefined
     if (connection === undefined) throw new Error(noConnection)
     const local = connection.rpc.open?.('/api', endpoint, payload, signal, uplink)
-    if (local === undefined && this.events?.started !== true) this.streams.start()
     return local === undefined
       ? this.streams.open(endpoint, payload, signal, uplink)
       : normalizeConnectionStream(local)
@@ -367,15 +334,13 @@ class ClientRemoteService extends Service implements ClientRemote {
     const handle = namespace
     return async () => {
       for (const method of [...installed].reverse()) {
-        // Transport disposal aborts pending tokens before group cleanup.
-        if (method.token.signal.aborted) continue
-        method.token.abort()
+        /* v8 ignore next -- Cordis effect disposers are idempotent and invoke this cleanup at most once. */
+        if (!method.token.active) continue
+        method.token.active = false
+        method.token.abort.abort()
         if (method.scoped) handle.service.remove('scoped', method.descriptor.method, method.token)
         if (method.direct) handle.service.remove('direct', method.descriptor.method, method.token)
       }
-      const tokens = new Set(installed.map(method => method.token))
-      await Promise.allSettled([...this.invocations]
-        .filter(([, token]) => tokens.has(token)).map(([invocation]) => invocation))
       await this.disposeNamespace(name, handle)
     }
   }
@@ -452,7 +417,7 @@ class ClientRemoteService extends Service implements ClientRemote {
   private invokeSelected(
     descriptor: InvocationDescriptor,
     projection: ScopedProjection | undefined,
-    token: AbortController,
+    token: MountToken,
     callerCtx: Context,
     values: readonly unknown[],
     boundIdentity?: BoundContextIdentity,
@@ -460,23 +425,19 @@ class ClientRemoteService extends Service implements ClientRemote {
     if (descriptor.mode !== undefined) {
       return this.invokeStream(descriptor, projection, token, callerCtx, values, boundIdentity)
     }
-    const invocation = this.invoke(descriptor, projection, token, callerCtx, values, boundIdentity)
-    this.invocations.set(invocation, token)
-    const settled = (): void => { this.invocations.delete(invocation) }
-    void invocation.then(settled, settled)
-    return invocation
+    return this.invoke(descriptor, projection, token, callerCtx, values, boundIdentity)
   }
 
   private async invoke(
     descriptor: InvocationDescriptor,
     projection: ScopedProjection | undefined,
-    token: AbortController,
+    token: MountToken,
     callerCtx: Context,
     values: readonly unknown[],
     boundIdentity?: BoundContextIdentity,
   ): Promise<RemoteResult<unknown>> {
     const endpoint = endpointOf(descriptor)
-    if (this.disposed || token.signal.aborted) return withdrawn(endpoint)
+    if (!token.active) return withdrawn(endpoint)
     const prepared = this.prepareInvocation(descriptor, projection, token, callerCtx, values, boundIdentity)
     const connection = this.ownerCtx.get('connection') as ConnectionHandle | undefined
     if (connection === undefined) throw new Error(`client api: ${endpoint} has no active Connection`)
@@ -503,13 +464,13 @@ class ClientRemoteService extends Service implements ClientRemote {
   private invokeStream(
     descriptor: InvocationDescriptor,
     projection: ScopedProjection | undefined,
-    token: AbortController,
+    token: MountToken,
     callerCtx: Context,
     values: readonly unknown[],
     boundIdentity?: BoundContextIdentity,
   ): RemoteStreamHandle<unknown, unknown> {
     const endpoint = endpointOf(descriptor)
-    if (this.disposed || token.signal.aborted) throw new Error(withdrawn(endpoint).error.message)
+    if (!token.active) throw new Error(withdrawn(endpoint).error.message)
     const prepared = this.prepareInvocation(descriptor, projection, token, callerCtx, values, boundIdentity)
     const generation = new AbortController()
     const uplink = new ClientUplinkQueue(endpoint)
@@ -525,7 +486,7 @@ class ClientRemoteService extends Service implements ClientRemote {
   private prepareInvocation(
     descriptor: InvocationDescriptor,
     projection: ScopedProjection | undefined,
-    token: AbortController,
+    token: MountToken,
     callerCtx: Context,
     values: readonly unknown[],
     boundIdentity?: BoundContextIdentity,
@@ -566,8 +527,8 @@ class ClientRemoteService extends Service implements ClientRemote {
     })
     const callerSignal = hasCallerSignal ? values[expected] as AbortSignal | undefined : undefined
     const signal = callerSignal === undefined
-      ? token.signal
-      : AbortSignal.any([token.signal, callerSignal])
+      ? token.abort.signal
+      : AbortSignal.any([token.abort.signal, callerSignal])
     return { endpoint, args, signal }
   }
 }
@@ -590,7 +551,7 @@ class ClientStreamHandle implements RemoteStreamHandle<unknown, unknown> {
     downlink: AsyncIterable<unknown>,
     private readonly uplink: ClientUplinkQueue,
     private readonly generation: AbortController,
-    private readonly token: AbortController,
+    private readonly token: MountToken,
   ) {
     this.downlink = downlink[Symbol.asyncIterator]()
     // The carrier opens the logical stream on the first pull; pulling now puts
@@ -640,7 +601,7 @@ class ClientStreamHandle implements RemoteStreamHandle<unknown, unknown> {
         const next = await (this.primed ?? this.downlink.next())
         this.primed = undefined
         if (this.disposed || next.done === true) return
-        if (this.token.signal.aborted) throw new Error(withdrawn(this.endpoint).error.message)
+        if (!mountActive(this.token)) throw new Error(withdrawn(this.endpoint).error.message)
         yield next.value
       }
     } catch (error) {
@@ -695,11 +656,11 @@ class RemoteNamespaceService extends Service {
     return this.methods.get(method)?.[kind] !== undefined
   }
 
-  installDirect(descriptor: InvocationDescriptor, token: AbortController): void {
+  installDirect(descriptor: InvocationDescriptor, token: MountToken): void {
     this.install(descriptor.method, 'direct', { descriptor, token })
   }
 
-  installScoped(descriptor: InvocationDescriptor, projection: ScopedProjection, token: AbortController): void {
+  installScoped(descriptor: InvocationDescriptor, projection: ScopedProjection, token: MountToken): void {
     this.install(descriptor.method, 'scoped', { descriptor, projection, token })
   }
 
@@ -730,7 +691,7 @@ class RemoteNamespaceService extends Service {
     else record.scoped = value as ScopedMethod
   }
 
-  remove(kind: 'direct' | 'scoped', method: string, token: AbortController): void {
+  remove(kind: 'direct' | 'scoped', method: string, token: MountToken): void {
     const record = this.methods.get(method)
     const current = record?.[kind]
     /* v8 ignore next -- duplicate live variants are rejected before installation, so no newer token can replace this one. */
@@ -759,7 +720,7 @@ function installMethods(
     for (const descriptor of descriptors) {
       const method: InstalledMethod = {
         descriptor,
-        token: new AbortController(),
+        token: { active: true, abort: new AbortController() },
         direct: false,
         scoped: false,
       }
@@ -776,7 +737,8 @@ function installMethods(
     }
   } catch (error) {
     for (const method of [...installed].reverse()) {
-      method.token.abort()
+      method.token.active = false
+      method.token.abort.abort()
       if (method.scoped) service.remove('scoped', method.descriptor.method, method.token)
       if (method.direct) service.remove('direct', method.descriptor.method, method.token)
     }
@@ -795,8 +757,8 @@ function endpointOf(descriptor: Pick<InvocationDescriptor, 'namespace' | 'method
   return `${descriptor.namespace}/${descriptor.method}`
 }
 
-function mountActive(token: AbortController): boolean {
-  return !token.signal.aborted
+function mountActive(token: MountToken): boolean {
+  return token.active
 }
 
 function scopedProjection(descriptor: InvocationDescriptor): ScopedProjection | undefined {

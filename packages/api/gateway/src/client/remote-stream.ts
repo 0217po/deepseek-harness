@@ -22,12 +22,8 @@ export interface RemoteStreamOptions<Item> {
   readonly name: string
   /** Open one physical generation of the logical stream. */
   readonly open: (signal: AbortSignal) => AsyncIterable<Item>
-  /**
-   * Classify a normal generation end after or before its opening item was accepted. Omitted: an
-   * end after acceptance is retryable like a carrier loss (a Host reload ends every stream), and an
-   * end before acceptance is a terminal failure.
-   */
-  readonly ended?: (accepted: boolean) => Error
+  /** Classify a normal generation end after or before its opening item was accepted. */
+  readonly ended: (accepted: boolean) => Error
   /** Observe a retryable carrier loss before the supervisor waits or reopens. */
   readonly carrierFailed?: (error: RemoteStreamCarrierError) => void
 }
@@ -47,7 +43,6 @@ export class RemoteStream<Item> implements AsyncIterable<RemoteStreamItem<Item>>
   private closing: Promise<void> | undefined
   private revision = 0
   private taken = false
-  private readonly ended: (accepted: boolean) => Error
 
   /**
    * @param connection - observable Host generation source used to pace retries.
@@ -56,11 +51,7 @@ export class RemoteStream<Item> implements AsyncIterable<RemoteStreamItem<Item>>
   constructor(
     private readonly connection: Pick<ConnectionHandle, 'generation'>,
     private readonly options: RemoteStreamOptions<Item>,
-  ) {
-    this.ended = options.ended ?? (accepted => accepted
-      ? new RemoteStreamCarrierError(`${options.name} ended without a terminal result`)
-      : new Error(`${options.name} ended before its opening item`))
-  }
+  ) {}
 
   /** Cancellation lifetime shared by the stream and sibling page requests. */
   get signal(): AbortSignal {
@@ -134,7 +125,7 @@ export class RemoteStream<Item> implements AsyncIterable<RemoteStreamItem<Item>>
           }
           if (isAborted(this.lifetime.signal)) return
           if (revision !== this.revision) continue
-          throw this.ended(accepted)
+          throw this.options.ended(accepted)
         } catch (error) {
           if (isAborted(this.lifetime.signal)) return
           if (revision !== this.revision) continue

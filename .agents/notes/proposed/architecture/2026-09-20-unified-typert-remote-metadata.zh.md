@@ -1,14 +1,14 @@
-# Agent Note: 统一 Typert/Remote 元数据与被动客户端
+# Agent Note: 统一 Typert/Remote 元数据
 
 Status: proposed
 
-[English](2026-09-20-unified-typert-remote-metadata-and-passive-clients.md) | 中文
+[English](2026-09-20-unified-typert-remote-metadata.md) | 中文
 
 ## Problem
 
 CLI 帮助、参数解析和 MCP 工具发现需要在连接受控 Host 前取得本地方法说明、具名输入解析器、工具 JSON Schema 和结果元数据。Browser、Node 与独立消费方还需要类型化调用。工具消费方需要更严格的输入对象校验，但不能改变普通 Host 分发。这些需求不意味着运行时 TypeScript 分析、Host Service 激活，或每个消费方另行维护业务 schema。
 
-#4644 原有的[源码定义决策](../../implemented/architecture/2026-09-20-committed-remote-definitions-and-passive-clients.zh.md)通过 `emitSourceDef`、提交的生成文件和 `./remote-source` 交付这些信息。Host 绑定携带定义；源码生成另有清单、新鲜度、发布和排除规则。本 note 替代该交付机制，并将输入严格性改为由消费方选择。原 note 保持不变，因为其中的被动客户端与载体所有权决策仍然适用。
+#4644 原有的源码定义决策通过 `emitSourceDef`、提交的生成文件和 `./remote-source` 交付这些信息；Host 绑定携带定义，源码生成另有清单、新鲜度、发布和排除规则。本 note 替代该交付机制，并将输入严格性改为由消费方选择。
 
 两种交付路径均来自同一个[编译器无关模型](../../implemented/architecture/2026-07-27-compiler-independent-typert-model.zh.md)。独立的 Host 与 Client Program 要求生成跨编译面声明，而非提交生成源码。需要精确 schema 时，显式预构建是可接受的；普通 ESM 产物无需运行中的 Host 即可提供离线元数据。[定向调用决策](../../implemented/architecture/2026-08-02-typert-remote-method-calls.zh.md)仍负责接收者查找、Gateway 分发和贡献生命周期。
 
@@ -36,7 +36,7 @@ Registry 查询返回基础描述符。纯叶入口或协议根入口的 `isType
 
 ## Proposal
 
-在下游 Session-client、CLI、MCP 和原生工具包中完成普通产物迁移。本 note 保持 proposed，因为有限集成并未完成该迁移。
+在下游 Session-client、CLI、MCP 和原生工具包中完成普通产物迁移。本 note 保持 proposed，因为该迁移尚未完成。
 
 ### 共享生成，两种访问方式
 
@@ -45,8 +45,6 @@ Registry 查询返回基础描述符。纯叶入口或协议根入口的 `isType
 严格源码启动显式预构建，并通过 Loader 加载普通 `./typert`。有限的无 descriptor fallback 仍支持基本参数、signal、取消、流式调用、JSON 转换和一元字节附件，但无法恢复被擦除的字段、约束或工具文档。一旦观察到严格的本地 descriptor，撤销后必须拒绝调用，而不是降级到 fallback。`@Remote` 只接受 `name` 和 `mode`；消费方选择输入策略，无需另加开发者注解。
 
 Host 元数据就绪仍由组合负责。要求严格校验的 Host 必须等待本地注册完成后再接受调用；`hasSeen()` 不会保护首次注册之前的端点。返回惰性 info 实例既不完成异步 Loader 发现，也不建立就绪保证。Loader 校验静态 codec spec 及可调用的 `input`/`invoke`，注册贡献时不调用选择器、解析器 factory 或投影。
-
-Connection 拥有认证 HTTP 和物理 WebSocket；Gateway 拥有帧和分发。`forwardedEvents: true` 显式选择 Host 事件转发和交互 waterfall（瀑布式事件）。否则 `$on()` 和由事件监督的 `$stream()` 立即失败，而生成的流式方法仍然可用。导入、注册、列举工具或调用方法不会取得交互回答所有权。Node 钩子由实例拥有，释放必须等待完成。
 
 ### 下游迁移目标
 
@@ -60,11 +58,11 @@ Connection 拥有认证 HTTP 和物理 WebSocket；Gateway 拥有帧和分发。
 | 原生工具 | 读取 Host 本地方法信息；要求工具注册的 `output.schema`。 | 在工具边界解析，然后直接调用同进程 controller。 |
 | 独立适配器 | 直接读取类型化 `TYPERT_REMOTE.methods`。 | 仅调用时使用其选择的 Remote 运行时。 |
 
-当前 Session 选择和附件准备仍由消费方拥有；CLI/MCP 输入接收使用选择时的同一严格输入视图验证补全后的业务参数。下游 `follow` 适配器的 `activate: false` 策略只适用于具有该 API 的版本；当前分支的 `follow` 没有此选项。中止观察不等于取消已接受的 Session 工作。原生直接分发也不会移除无关的业务依赖，例如下游 controller 通过 Gateway 访问待处理交互。
+当前 Session 选择和附件准备仍由消费方拥有；CLI/MCP 输入接收使用选择时的同一严格输入视图验证补全后的业务参数。下游 `follow` 适配器的 `activate: false` 策略只适用于具有该 API 的版本；当前分支的 `follow` 没有此选项。中止观察不等于取消已接受的 Session 工作。
 
 ### 新旧接入示例
 
-旧示例是依赖改动中源码导出消费方的历史对照。新示例使用普通产物。这些片段省略外围插件声明，且包含已移除的 API；下方链接的消费方测试负责完整普通产物适配器的编译。`raw`、`request`、`signal` 和已认证、已挂载、无作用域的 `remote` 是调用方输入，不是新增框架 API。
+旧示例是依赖改动中源码导出消费方的历史对照。新示例使用普通产物。这些片段省略外围插件声明，且包含已移除的 API。`raw`、`request`、`signal` 和已认证、已挂载、无作用域的 `remote` 是调用方输入，不是新增框架 API。
 
 **操作拥有者与严格 Host。** 保留业务签名；将生成定义注册交给普通 Typert Loader，而非 Service 构造函数。
 
@@ -169,12 +167,6 @@ pnpm run build
 pnpm dsh --profile <profile-name> <profile-arguments>
 ```
 
-### 当前分支上的有限复现
-
-测试专用 [Session client](../../../../packages/api/remotes/tests/fixtures/session-client/client.ts) 和 [MCP 适配器](../../../../packages/api/remotes/tests/fixtures/session-client/mcp.ts)为当前 `session/page` 与 `session/follow` 提取下游访问方式。它们使用 Registry 元数据，以 `input({ strict: true })` 同时用于选择与输入接收，并保留当前 Session 注入、显式拒绝不支持的 content 和普通调用。不添加未来 controller 操作、公开 package/bin、另一套应用启动器或完整下游应用。
-
-[产物测试](../../../../packages/api/remotes/tests/session-client.e2e.ts)仅将本地消费方 fixture 对普通声明编译，再使用普通 Node 运行。[运行时 fixture](../../../../packages/api/remotes/tests/fixtures/session-client/run.mjs)将真实 SessionController、活 Session/query 服务、Gateway 和 Connection 通过 HTTP/WebSocket 组合。这是手动组装的有限集成，不是 Loader/profile 组合或完整 CLI/MCP 协议服务器。独立的 Loader 测试使用手写产物 fixture；严格源码 Gateway 测试使用手写普通 contribution。两者都不被表述为生成的完整应用验证。
-
 ## Alternatives considered
 
 - **提交源码：** 满足离线需求，但增加冗余交付和维护路径；显式普通预构建已经足够。
@@ -182,19 +174,17 @@ pnpm dsh --profile <profile-name> <profile-arguments>
 - **所有导入方强制使用 Registry：** 为独立消费方增加生命周期要求，却不增加信息。
 - **仅用 fallback：** 无法提供被擦除的验证或工具文档；仅为受支持子集保留。
 - **手写适配器 schema 或运行时 TypeScript 分析：** 重复承担所有权，或引入构建期提取已解决的运行时编译器要求。
-- **自动转发事件：** 将方法调用与愿意回答用户交互混为一谈。
 
 ## Acceptance criteria
 
 - 普通产物为每个端点生成一份静态方法 spec，并返回惰性类实例；直接方法索引引用描述符对象，保留完整流式/二进制类型、独立编译面及完整编译面的声明合并。
 - 描述符索引与每种输入策略的视图、解析器和投影都独立惰性求值并缓存；Loader 校验静态 spec 及可调用辅助能力，不调用选择器、解析器或投影。
 - 每个输入参数从同一模型生成普通与严格 codec；消费方无需方法注解即可选择策略。两种封装都拒绝额外具名参数；严格输入递归关闭已声明对象，但不关闭 JSON 或字典键，也不改变 Host 分发和结果。
-- Registry 身份、原子注册、撤销和释放保持不变；元数据检视和方法调用保持被动。
+- Registry 身份、原子注册、撤销和释放保持不变。
 - 缺少文档或不支持可选投影不阻止生成；选中的工具拒绝缺少必需信息的条目，并仍然解析输出。
 - 严格源码/产物调用与有限 fallback 分别测试；撤销严格 descriptor 绝不启用 fallback。
-- 有限下游 fixture 使用当前产物覆盖离线选择、真实一元/流式调用、输入拒绝、取消和释放。
 - 源码静态检查不消费过期生成声明；产物检查声明并重建输入。生产代码不保留源码定义 opt-in、源码导出、清单或新鲜度规则。
 
 ## Risks
 
-完整下游 profile 组合仍需在相应 package 中继续完成；有限复现不代表每个 #4111 操作或 CLI/MCP 应用都已迁移。明确接受的取舍是完整源码运行时元数据需要显式预构建。缺失或过期产物要求重新生成，而不是降低验证或另建一套手写 schema。
+完整下游 profile 组合仍需在相应 package 中继续完成；生成的元数据不代表每个 #4111 操作或 CLI/MCP 应用都已迁移。明确接受的取舍是完整源码运行时元数据需要显式预构建。缺失或过期产物要求重新生成，而不是降低验证或另建一套手写 schema。

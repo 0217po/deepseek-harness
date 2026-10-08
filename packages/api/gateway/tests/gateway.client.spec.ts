@@ -1,6 +1,5 @@
 import { queryObjects } from 'node:v8'
 import { RemoteError, typertOwnedValue } from '@deepseek-ai/dsh-typert-protocol'
-import type { ConnectionWebSocketEventMap } from '@deepseek-ai/dsh-client-connection/client'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { Fiber } from '@deepseek-ai/cordis'
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
@@ -26,7 +25,7 @@ import type {
 } from '@deepseek-ai/dsh-typert-protocol'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import type { ClientRemote } from '../src/client/index.ts'
-import { apply, Config, inject, isRemoteFailure, RemoteStream } from '../src/client/index.ts'
+import { apply, inject, isRemoteFailure, RemoteStream } from '../src/client/index.ts'
 import {
   ClientUplinkQueue,
   RemoteStreamCarrierError,
@@ -256,27 +255,6 @@ function attachDescriptor(): InvocationDescriptor {
 type WebSocketGlobal = { WebSocket?: typeof WebSocket }
 
 class FakeWebSocket extends EventTarget {
-  override addEventListener<E extends keyof ConnectionWebSocketEventMap>(
-    type: E, listener: (event: ConnectionWebSocketEventMap[E]) => void, options?: { readonly once?: boolean },
-  ): void
-  override addEventListener(
-    type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | AddEventListenerOptions,
-  ): void
-  override addEventListener(type: string, listener: unknown, options?: boolean | AddEventListenerOptions): void {
-    // This fixture dispatches MessageEvent for messages and Event for other socket events.
-    super.addEventListener(type, listener as EventListenerOrEventListenerObject | null, options)
-  }
-
-  override removeEventListener<E extends keyof ConnectionWebSocketEventMap>(
-    type: E, listener: (event: ConnectionWebSocketEventMap[E]) => void,
-  ): void
-  override removeEventListener(
-    type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | EventListenerOptions,
-  ): void
-  override removeEventListener(type: string, listener: unknown, options?: boolean | EventListenerOptions): void {
-    super.removeEventListener(type, listener as EventListenerOrEventListenerObject | null, options)
-  }
-
   static readonly CONNECTING = 0
   static readonly OPEN = 1
   static readonly CLOSING = 2
@@ -370,16 +348,11 @@ async function benchFiber(
   const generation = new GenerationHarness()
   const start = vi.fn<ConnectionHandle['start']>(() => ({ stop: () => {} }))
   ctx.provide('connection', {
-    isLoopback: false,
-    generation: { getSnapshot: () => undefined, subscribe: () => () => {} },
-    state: { getSnapshot: () => undefined, subscribe: () => () => {} },
-    reconnect: () => { throw new Error('fixture reconnect is not driven here') },
     rpc,
     registerGenerationSource: generation.register,
-    openWebSocket: (path: string) => new FakeWebSocket(`wss://harness.example${path}`),
     start,
-  })
-  const client = ctx.plugin({ inject, apply, Config }, { forwardedEvents: true })
+  } as unknown as ConnectionHandle)
+  const client = ctx.plugin({ inject, apply })
   await client
   return { ctx, client, generation, start }
 }
@@ -478,17 +451,12 @@ async function loaderReadinessBench(
   const start = vi.fn<ConnectionHandle['start']>(() => ({ stop }))
   const call = vi.fn<ConnectionHandle['rpc']['call']>()
   ctx.provide('connection', {
-    isLoopback: false,
-    generation: { getSnapshot: () => undefined, subscribe: () => () => {} },
-    state: { getSnapshot: () => undefined, subscribe: () => () => {} },
-    reconnect: () => { throw new Error('fixture reconnect is not driven here') },
     rpc: carrier === 'web' ? { call } : { call, open: () => unexpectedInProcessStream() },
     registerGenerationSource: generation.register,
-    openWebSocket: (path: string) => new FakeWebSocket(`wss://harness.example${path}`),
     start,
-  })
+  } as unknown as ConnectionHandle)
   ctx.provide('loader', { await: () => readiness })
-  const client = ctx.plugin({ inject, apply, Config }, { forwardedEvents: true })
+  const client = ctx.plugin({ inject, apply })
   await client
   return { client, start, stop }
 }
@@ -630,7 +598,7 @@ describe('Client Remote transport readiness', () => {
       start: () => ({ stop: () => {} }),
     } as unknown as ConnectionHandle
     const withdraw = ctx.provide('connection', handle)
-    const client = ctx.plugin({ inject, apply, Config }, { forwardedEvents: true })
+    const client = ctx.plugin({ inject, apply })
     await client
     const remote = ctx.remote
 
@@ -681,7 +649,7 @@ describe('Client Remote transport readiness', () => {
       try {
         await ctx.plugin(TypertRegistry)
         await ctx.plugin({ inject: [], apply: applyConnection })
-        await ctx.plugin({ inject, apply, Config }, { forwardedEvents: true })
+        await ctx.plugin({ inject, apply })
         await vi.advanceTimersByTimeAsync(0)
         const connection = ctx.get('connection') as ConnectionHandle
         expect(FakeWebSocket.sockets).toHaveLength(1)
@@ -1271,10 +1239,8 @@ describe('Client Typert API', () => {
     const dispose = await ctx.remote.$mount({ package: '@fixture/probe', descriptors: [first, second] })
     const invocation = ctx.remote.probe.create('agent-1', { objective: 'ship' })
     await vi.waitFor(() => { expect(call).toHaveBeenCalledTimes(1) })
-    const disposal = dispose()
-    await vi.waitFor(() => { expect(call.mock.calls[0]?.[3]?.aborted).toBe(true) })
+    await dispose()
     resolveCall({ ok: true, value: { ref: 'goal-1' } })
-    await disposal
 
     await expect(invocation).resolves.toMatchObject({
       ok: false,
@@ -2133,7 +2099,7 @@ describe('Client Typert API', () => {
     try {
       await ctx.plugin(TypertRegistry)
       await ctx.plugin({ inject: [], apply: applyConnection })
-      await ctx.plugin({ inject, apply, Config }, { forwardedEvents: true })
+      await ctx.plugin({ inject, apply })
       const connection = ctx.get('connection') as ConnectionHandle | undefined
       if (connection === undefined) throw new Error('injected Connection service is unavailable')
 
@@ -2841,7 +2807,7 @@ describe('Client Typert API', () => {
 describe('Remote stream client carrier lifecycle', () => {
   it('does not pull another uplink item when sending ends the stream', async () => {
     await withFakeWebSocket('https://harness.example', async () => {
-      const client = new RemoteStreamMuxClient(() => new FakeWebSocket('wss://harness.example/api/remote.mux'))
+      const client = new RemoteStreamMuxClient()
       client.start()
       const socket = FakeWebSocket.sockets[0]!
       const send = socket.send.bind(socket)
@@ -2888,7 +2854,7 @@ describe('Remote stream client carrier lifecycle', () => {
           },
         }),
       }
-      const client = new RemoteStreamMuxClient(() => new FakeWebSocket('wss://harness.example/api/remote.mux'))
+      const client = new RemoteStreamMuxClient()
       client.start()
       const iterator = client.open('probe/attach', {}, new AbortController().signal, uplink)[Symbol.asyncIterator]()
       const first = iterator.next()
@@ -2914,9 +2880,10 @@ describe('Remote stream client carrier lifecycle', () => {
     })
   })
 
-  it('uses the selected physical carrier independently of the document origin', async () => {
+  it('connects to the shell-owned Host while the document uses a local asset origin', async () => {
     await withFakeWebSocket('dsh-app://app', async () => {
-      const client = new RemoteStreamMuxClient(() => new FakeWebSocket('ws://127.0.0.1:43210/api/remote.mux'))
+      vi.stubGlobal('__DSH_TRANSPORT__', { streamBaseUrl: 'http://127.0.0.1:43210' })
+      const client = new RemoteStreamMuxClient()
       try {
         client.start()
         expect(FakeWebSocket.sockets[0]!.url).toBe('ws://127.0.0.1:43210/api/remote.mux')
@@ -2929,7 +2896,7 @@ describe('Remote stream client carrier lifecycle', () => {
 
   it('fails the downlink and cancels when an uplink iterable throws, and swallows a rejecting uplink return()', async () => {
     await withFakeWebSocket('https://harness.example', async () => {
-      const client = new RemoteStreamMuxClient(() => new FakeWebSocket('wss://harness.example/api/remote.mux'))
+      const client = new RemoteStreamMuxClient()
       client.start()
       const socket = FakeWebSocket.sockets[0]!
       const exploding = (async function* (): AsyncGenerator<string> {
@@ -2962,7 +2929,7 @@ describe('Remote stream client carrier lifecycle', () => {
   })
 
   it('requires the transport owner to start the physical carrier', async () => {
-    const client = new RemoteStreamMuxClient(() => new FakeWebSocket('wss://harness.example/api/remote.mux'))
+    const client = new RemoteStreamMuxClient()
     await expect(client.open('feed/follow', {}, new AbortController().signal)
       [Symbol.asyncIterator]().next()).rejects.toThrow('Remote stream client not started')
     await client.close()
@@ -2971,7 +2938,7 @@ describe('Remote stream client carrier lifecycle', () => {
   it('connects without a logical stream, waits for owner-driven retries, and stops permanently', async () => {
     await withFakeWebSocket('https://harness.example', async () => {
       FakeWebSocket.autoOpen = false
-      const client = new RemoteStreamMuxClient(() => new FakeWebSocket('wss://harness.example/api/remote.mux'))
+      const client = new RemoteStreamMuxClient()
       client.start()
       client.start()
       expect(FakeWebSocket.sockets).toHaveLength(1)
@@ -3006,7 +2973,7 @@ describe('Remote stream client carrier lifecycle', () => {
       expect(FakeWebSocket.sockets).toHaveLength(3)
       expect(final.closedWith).toContainEqual({ code: 1000, reason: 'disposed' })
 
-      const stopping = new RemoteStreamMuxClient(() => new FakeWebSocket('wss://harness.example/api/remote.mux'))
+      const stopping = new RemoteStreamMuxClient()
       stopping.start()
       const racing = FakeWebSocket.sockets[3]!
       racing.open()
@@ -3018,7 +2985,7 @@ describe('Remote stream client carrier lifecycle', () => {
 
   it('mints a new wire stream id when the same endpoint opens on a replacement socket', async () => {
     await withFakeWebSocket('https://harness.example', async () => {
-      const client = new RemoteStreamMuxClient(() => new FakeWebSocket('wss://harness.example/api/remote.mux'))
+      const client = new RemoteStreamMuxClient()
       client.start()
       const first = client.open('feed/follow', { label: 'same' }, new AbortController().signal)
         [Symbol.asyncIterator]()
@@ -3047,7 +3014,7 @@ describe('Remote stream client carrier lifecycle', () => {
   it('replaces an in-flight candidate and an open socket on reconnect', async () => {
     await withFakeWebSocket('https://harness.example', async () => {
       FakeWebSocket.autoOpen = false
-      const client = new RemoteStreamMuxClient(() => new FakeWebSocket('wss://harness.example/api/remote.mux'))
+      const client = new RemoteStreamMuxClient()
       client.start()
       const candidate = FakeWebSocket.sockets[0]!
 
@@ -3080,7 +3047,7 @@ describe('Remote stream client carrier lifecycle', () => {
   it('coalesces repeated candidate replacements and drops one queued after close', async () => {
     await withFakeWebSocket('https://harness.example', async () => {
       FakeWebSocket.autoOpen = false
-      const client = new RemoteStreamMuxClient(() => new FakeWebSocket('wss://harness.example/api/remote.mux'))
+      const client = new RemoteStreamMuxClient()
       client.start()
       const first = FakeWebSocket.sockets[0]!
 
@@ -3096,10 +3063,10 @@ describe('Remote stream client carrier lifecycle', () => {
     })
   })
 
-  it('shares an in-flight physical connection', async () => {
+  it('shares an in-flight connection and resolves the mux route against the document base', async () => {
     await withFakeWebSocket('https://harness.example/mounted/app/', async () => {
       FakeWebSocket.autoOpen = false
-      const client = new RemoteStreamMuxClient(() => new FakeWebSocket('wss://harness.example/api/remote.mux'))
+      const client = new RemoteStreamMuxClient()
       client.start()
       const first = client.open('feed/follow', { label: 'first' }, new AbortController().signal)
         [Symbol.asyncIterator]()
@@ -3109,6 +3076,7 @@ describe('Remote stream client carrier lifecycle', () => {
       const secondPending = second.next()
       expect(FakeWebSocket.sockets).toHaveLength(1)
       const socket = FakeWebSocket.sockets[0]!
+      expect(socket.url).toBe('wss://harness.example/mounted/app/api/remote.mux')
 
       socket.open()
       await vi.waitFor(() => { expect(socket.sent).toHaveLength(2) })
@@ -3124,7 +3092,7 @@ describe('Remote stream client carrier lifecycle', () => {
   it('fails waiters with one socket attempt and lets the owner start the next attempt', async () => {
     await withFakeWebSocket('http://harness.example/', async () => {
       FakeWebSocket.autoOpen = false
-      const closedClient = new RemoteStreamMuxClient(() => new FakeWebSocket('wss://harness.example/api/remote.mux'))
+      const closedClient = new RemoteStreamMuxClient()
       closedClient.start()
       const closed = closedClient.open('feed/follow', {}, new AbortController().signal)
         [Symbol.asyncIterator]().next()
@@ -3143,26 +3111,27 @@ describe('Remote stream client carrier lifecycle', () => {
       await expect(replacementStream).resolves.toEqual({ done: true, value: undefined })
       await closedClient.close()
 
-      const disposedClient = new RemoteStreamMuxClient(() => new FakeWebSocket('wss://harness.example/api/remote.mux'))
+      const disposedClient = new RemoteStreamMuxClient()
       disposedClient.start()
       const disposed = disposedClient.open('feed/follow', {}, new AbortController().signal)
         [Symbol.asyncIterator]().next()
       await disposedClient.close()
       await expect(disposed).rejects.toThrow('Remote stream client disposed')
 
-      const abortedClient = new RemoteStreamMuxClient(() => new FakeWebSocket('wss://harness.example/api/remote.mux'))
+      const abortedClient = new RemoteStreamMuxClient()
       abortedClient.start()
       const abort = new AbortController()
       const aborted = abortedClient.open('feed/follow', {}, abort.signal)[Symbol.asyncIterator]().next()
       abort.abort('cancelled while connecting')
       await expect(aborted).rejects.toBe('cancelled while connecting')
       await abortedClient.close()
+      expect(FakeWebSocket.sockets[3]?.url).toBe('ws://harness.example/api/remote.mux')
     })
   })
 
   it('fails active streams on an invalid frame and ignores later frames', async () => {
     await withFakeWebSocket('https://harness.example', async () => {
-      const client = new RemoteStreamMuxClient(() => new FakeWebSocket('wss://harness.example/api/remote.mux'))
+      const client = new RemoteStreamMuxClient()
       client.start()
       const stream = client.open('feed/follow', {}, new AbortController().signal)[Symbol.asyncIterator]()
       const pending = stream.next()
@@ -3184,7 +3153,7 @@ describe('Remote stream client carrier lifecycle', () => {
 
   it('completes a stream and drops a frame racing with cancellation', async () => {
     await withFakeWebSocket('https://harness.example', async () => {
-      const client = new RemoteStreamMuxClient(() => new FakeWebSocket('wss://harness.example/api/remote.mux'))
+      const client = new RemoteStreamMuxClient()
       client.start()
       const completed = client.open('feed/follow', {}, new AbortController().signal)
         [Symbol.asyncIterator]()
@@ -3209,7 +3178,7 @@ describe('Remote stream client carrier lifecycle', () => {
 
   it('contains non-Error cancellation reasons and late socket close events', async () => {
     await withFakeWebSocket('http://harness.example', async () => {
-      const cancelledClient = new RemoteStreamMuxClient(() => new FakeWebSocket('wss://harness.example/api/remote.mux'))
+      const cancelledClient = new RemoteStreamMuxClient()
       cancelledClient.start()
       const abort = new AbortController()
       const cancelled = cancelledClient.open('feed/follow', {}, abort.signal)[Symbol.asyncIterator]().next()
@@ -3219,7 +3188,7 @@ describe('Remote stream client carrier lifecycle', () => {
       await cancelledClient.close()
 
       FakeWebSocket.dispatchClose = false
-      const disposedClient = new RemoteStreamMuxClient(() => new FakeWebSocket('wss://harness.example/api/remote.mux'))
+      const disposedClient = new RemoteStreamMuxClient()
       disposedClient.start()
       const disposed = disposedClient.open('feed/follow', {}, new AbortController().signal)
         [Symbol.asyncIterator]().next()
@@ -3342,15 +3311,12 @@ describe('Remote result decoders', () => {
       const abort = new AbortController()
       const pending = ctx.remote.probe.bytes(abort.signal)
       expect(call).toHaveBeenCalledOnce()
-      // Unmounting waits for the in-flight call, so the late result settles it before disposal completes.
-      const disposal = action === 'cancel' ? undefined : dispose()
       if (action === 'cancel') abort.abort()
-      else await vi.waitFor(() => { expect(call.mock.calls[0]?.[3]?.aborted).toBe(true) })
+      else await dispose()
       response.resolve({ ok: true, value: { data: new Uint8Array([7]), offset: 0 } })
       expect(await pending).toMatchObject({
         ok: false, error: { code: action === 'cancel' ? 'gateway/cancelled' : 'gateway/internal' },
       })
-      await disposal
     } finally {
       await client.dispose()
     }

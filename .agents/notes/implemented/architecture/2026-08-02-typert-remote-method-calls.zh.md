@@ -91,7 +91,7 @@ Decorator 表达 Remote 参与、可选导出名称和流式投递；`@Remote` �
 
 SRC 模式下，decorator 把方法名和调用模式记录在 Service prototype 上的带版本描述符中。描述符使用稳定的字符串属性名，因此 `remoteMethods()` 可以读取 `dsh-typert-protocol` 另一个已安装副本生成的标记；它不会向 Service 实例、constructor 或方法函数写入任何内容。
 
-普通产物从每个端点唯一的静态方法 spec 构造惰性 Remote info 实例。其直接 `TypertRemoteMethod` 对象保留描述符字段，并增加具名 `input(options?)` 和 `invoke`。消费方通过 `input({ strict: true })` 选择配套的严格解析与投影；`input()` 保留普通处理。Host 参数 codec 与唯一的普通 `result` codec 保持不变。既有 Registry 查询保留这些对象，`TYPERT_REMOTE.methods` 则提供精确静态类型。严格源码启动预构建并加载普通 Typert 产物；fallback 无法恢复被擦除的 schema。[统一元数据 note](../../proposed/architecture/2026-09-20-unified-typert-remote-metadata-and-passive-clients.zh.md)记录该交付机制及尚未完成的消费方适配。转发事件参与仍是显式的组合选择。
+普通产物从每个端点唯一的静态方法 spec 构造惰性 Remote info 实例。其直接 `TypertRemoteMethod` 对象保留描述符字段，并增加具名 `input(options?)` 和 `invoke`。消费方通过 `input({ strict: true })` 选择配套的严格解析与投影；`input()` 保留普通处理。Host 参数 codec 与唯一的普通 `result` codec 保持不变。既有 Registry 查询保留这些对象，`TYPERT_REMOTE.methods` 则提供精确静态类型。严格源码启动预构建并加载普通 Typert 产物；fallback 无法恢复被擦除的 schema。[统一元数据 note](../../proposed/architecture/2026-09-20-unified-typert-remote-metadata.zh.md)记录该交付机制及尚未完成的消费方适配。
 
 LIB 的严格方法发现、类型解析和 descriptor 生成由 Typert compiler 完成。它接受 `TypertRemoteService` 直接 `super()` 调用中的字面量 service key，或显式 binding 回退；生成过程不改写业务源码，也不注入隐藏注册元数据。
 

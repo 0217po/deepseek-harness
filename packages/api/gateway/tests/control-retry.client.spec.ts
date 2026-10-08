@@ -97,25 +97,6 @@ describe('RemoteStream', () => {
     await stream.dispose()
   })
 
-  it('reopens after an accepted generation ends normally and fails one that ends before its opening item', async () => {
-    const source = hostSource(true)
-    const reopened = new RemoteStream(source.connection, { name: 'default stream', open: scripted([
-      { values: ['first'] },
-      { values: ['second'], hold: true },
-    ]) })
-    const iterator = reopened[Symbol.asyncIterator]()
-    const first = await iterator.next()
-    if (first.done) throw new Error('fixture generation ended early')
-    first.value.accept()
-    expect(await iterator.next()).toMatchObject({ done: false, value: { generation: 2, value: 'second' } })
-    await reopened.dispose()
-
-    const bare = new RemoteStream(source.connection, { name: 'default stream', open: scripted([{ values: [] }]) })
-    await expect(bare[Symbol.asyncIterator]().next()).rejects.toMatchObject({
-      isDSHRemoteError: true, code: 'gateway/internal', message: 'default stream ended before its opening item',
-    })
-  })
-
   it('permits one isolated retry while the Host remains available', async () => {
     const source = hostSource(true)
     const first = new RemoteStreamCarrierError('first carrier failure')
