@@ -6,8 +6,8 @@ import type { LaunchConfig } from './launch.ts'
 
 /** Deployment-varying runtime bounds and launch choices. */
 export interface Config extends LaunchConfig {
-  /** per-call starts fresh confined processes; in-memory retains an unsandboxed REPL per owner. */
-  executionMode?: 'per-call' | 'in-memory'
+  /** per-call starts fresh processes; persistent-in-memory retains a REPL per owner under the same file policy. */
+  executionMode?: 'per-call' | 'persistent-in-memory'
   /** Default elapsed deadline, including nested tool and approval waits. */
   timeoutMs?: number
   /** Maximum numeric elapsed budget accepted by resolve. */
@@ -28,7 +28,7 @@ export interface Config extends LaunchConfig {
 export type ResolvedConfig = Required<Omit<Config, 'bootstrapPath'>> & Pick<Config, 'bootstrapPath'>
 /** Loader defaults for the Node PTC provider. */
 export const NodeConfig: z<Config> = z.object({
-  executionMode: z.union([z.const('per-call'), z.const('in-memory')]).default('per-call'),
+  executionMode: z.union([z.const('per-call'), z.const('persistent-in-memory')]).default('per-call'),
   timeoutMs: z.number().default(120_000),
   maxTimeoutMs: z.number().default(600_000),
   maxOutputBytes: z.number().default(67_108_864),

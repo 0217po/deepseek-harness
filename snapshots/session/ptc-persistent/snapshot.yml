@@ -8,6 +8,6 @@ header:
   pin: true
 replay:
   override: true
-permission: danger-full-access
+permission: workspace-write
 workspace:
   final: true

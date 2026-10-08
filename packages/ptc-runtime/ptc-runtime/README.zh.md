@@ -44,7 +44,7 @@ const result = await ctx.ptcRuntime.run(spec)
 
 后端以 `language` 与 `isolation` 提供诊断描述符；两者都不授予权限或证明约束。[`dsh-ptc-runtime-node`](../ptc-runtime-node/README.zh.md) 在全新的受管 Node 进程中按已解析沙箱策略执行可擦除 TypeScript。私有的 [`dsh-experimental-ptc-runtime-python`](../../experimental/ptc-runtime-python/README.zh.md) 提供方在全新 CPython 子进程中执行 Python，不提供文件约束。`sandboxMode` 声明提供方的部署文件策略模式；不支持该能力时则缺省。
 
-使用可选的[Node 内存保留模式](../ptc-runtime-node/README.zh.md#persistent-repl)时，跨调用传入同一个 `stateOwner` 对象，并在所有者结束时等待 `release(owner)`。不同对象不会共享环境；省略所有者时使用临时环境。无状态提供方忽略所有权。同一保留环境的调用不能重叠。
+使用可选的[Node 内存保留模式](../ptc-runtime-node/README.zh.md#persistent-repl)时，跨调用传入同一个 `stateOwner` 对象，并在所有者结束时等待 `release(owner)`。不同对象不会共享环境；省略所有者时使用临时环境。`retainsState` 标明提供方是否保留程序内存；无状态提供方忽略所有权。同一保留环境的调用不能重叠。
 
 ### 可移植地命名绑定
 

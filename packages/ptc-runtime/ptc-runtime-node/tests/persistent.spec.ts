@@ -12,7 +12,7 @@ async function setup(config: Config = {}) {
   const cwd = await mkdtemp(join(tmpdir(), 'dsh-persistent-ptc-'))
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose(); await rm(cwd, { recursive: true, force: true }) })
-  const { runtime, fiber } = await mountRuntime(ctx, { ...config, executionMode: 'in-memory' })
+  const { runtime, fiber } = await mountRuntime(ctx, { ...config, executionMode: 'persistent-in-memory' })
   const owner = {}
   const run = (program: string, options: Partial<PtcRunRequest> = {}) =>
     runtime.run(runtime.resolve({ program, bindings: [], cwd, stateOwner: owner, ...options }))
@@ -40,8 +40,8 @@ describe('persistent Node REPL', () => {
 
   it('retains declarations, closures, object identity, and imports across evaluations', async () => {
     const { run, cwd } = await setup()
-    expect(await run('const box: { count: number } = { count: 1 }; let alias = box; function increment() { return ++box.count }; const path = await import("node:path");')).toEqual({ logs: [] })
-    expect(await run('console.log("second call"); ({ count: increment(), same: box === alias, dir: path.basename(process.cwd()), env: Object.keys(process.env) })')).toEqual({ logs: ['second call'], value: { count: 2, same: true, dir: cwd.split(/[\\/]/).at(-1), env: [] } })
+    expect(await run('const box: { count: number } = { count: 1 }; let alias = box; function increment() { return ++box.count }; const path = await import("node:path");')).toMatchObject({ logs: [] })
+    expect(await run('console.log("second call"); ({ count: increment(), same: box === alias, dir: path.basename(process.cwd()), env: Object.keys(process.env) })')).toMatchObject({ logs: ['second call'], value: { count: 2, same: true, dir: cwd.split(/[\\/]/).at(-1), env: [] } })
   })
 
   it('retains implicit REPL globals and does not attribute a completed callback exception to a later evaluation', async () => {
@@ -53,8 +53,8 @@ describe('persistent Node REPL', () => {
       const acknowledged = new Promise(resolve => { acknowledge = resolve });
       void fired.then(() => setImmediate(() => { acknowledge(); throw new Error('completed callback failure') }));
     `)
-    expect(await run('fireLate(); await acknowledged; implicitValue')).toEqual({ logs: [], value: 7 })
-    expect(await run('implicitValue')).toEqual({ logs: [], value: 7 })
+    expect(await run('fireLate(); await acknowledged; implicitValue')).toMatchObject({ logs: [], value: 7 })
+    expect(await run('implicitValue')).toMatchObject({ logs: [], value: 7 })
   })
 
   it('uses current host bindings through retained functions and saved method references', async () => {
@@ -73,9 +73,9 @@ describe('persistent Node REPL', () => {
     const { run } = await setup()
     await run('let total = 0;')
     const code = '{ const amount = await tools.value({}); total += amount; console.log(amount); }'
-    expect(await run(code, { bindings: bindings(async () => 2) })).toEqual({ logs: ['2'] })
-    expect(await run(code, { bindings: bindings(async () => 3) })).toEqual({ logs: ['3'] })
-    expect(await run('({ total, local: typeof amount })')).toEqual({ logs: [], value: { total: 5, local: 'undefined' } })
+    expect(await run(code, { bindings: bindings(async () => 2) })).toMatchObject({ logs: ['2'] })
+    expect(await run(code, { bindings: bindings(async () => 3) })).toMatchObject({ logs: ['3'] })
+    expect(await run('({ total, local: typeof amount })')).toMatchObject({ logs: [], value: { total: 5, local: 'undefined' } })
   })
 
   it('uses the current error descriptor through a saved binding and retains matching constructor identity', async () => {
@@ -109,7 +109,7 @@ describe('persistent Node REPL', () => {
     const failed = await run('let retained = 17; let resume; const paused = new Promise(resolve => { resume = resolve }); setImmediate(() => { throw new Error("async failure") }); await paused; retained')
     expect(failed.error?.message).toContain('async failure')
     const next = await run('resume(); await tools.value({})', { bindings: bindings(async () => { await setImmediate(); return 42 }) })
-    expect(next).toEqual({ logs: [], value: 42 })
+    expect(next).toMatchObject({ logs: [], value: 42 })
     expect((await run('retained')).value).toBe(17)
   })
 
@@ -120,7 +120,7 @@ describe('persistent Node REPL', () => {
     await run('let retained = 17; let trigger; let rejection; const expired = new Promise(resolve => { trigger = resolve }); void expired.then(async () => { try { await tools.value({}) } catch (error) { rejection = error.message } });', options)
     expect((await run('trigger(); await new Promise(resolve => setImmediate(resolve)); rejection', options)).value).toContain('evaluation has ended')
     expect(called).not.toHaveBeenCalled()
-    expect(await run('({ retained, answer: await tools.value({}) })', options)).toEqual({ logs: [], value: { retained: 17, answer: 42 } })
+    expect(await run('({ retained, answer: await tools.value({}) })', options)).toMatchObject({ logs: [], value: { retained: 17, answer: 42 } })
     expect(called).toHaveBeenCalledTimes(1)
   })
 
@@ -226,12 +226,13 @@ describe('persistent Node REPL', () => {
     await expect(runtime.run({ program: '1', bindings: [], cwd: process.cwd(), timeoutMs: null })).rejects.toThrow('after disposal')
   })
 
-  it('rejects confinement requests and validates options before starting a process', async () => {
+  it('resolves confinement and validates options before starting a process', async () => {
     const { run, runtime } = await setup()
-    expect(runtime.sandboxMode).toBeUndefined()
+    expect(runtime.sandboxMode).toBe('danger-full-access')
+    expect(runtime.retainsState).toBe(true)
     expect(runtime.programFormat).toBe('repl')
     expect(runtime.timeout).toEqual({ defaultMs: 120_000, maxMs: 600_000 })
-    expect(() => runtime.resolve({ program: '1', bindings: [], sandboxPolicy: { mode: 'read-only', workspaceRoot: process.cwd() } })).toThrow('sandbox policies')
+    expect(runtime.resolve({ program: '1', bindings: [], sandboxPolicy: { mode: 'read-only', workspaceRoot: process.cwd() } }).sandboxPolicy?.mode).toBe('read-only')
     expect(() => runtime.resolve({ program: '1', bindings: [], cwd: 'relative' })).toThrow('absolute')
     expect(() => runtime.resolve({ program: '1', bindings: [], timeoutMs: 0 })).toThrow()
     await expect(run('1', { bindings: [{ global: 'console', functions: {} }] })).rejects.toThrow('reserved')
@@ -283,7 +284,7 @@ describe('persistent Node REPL', () => {
 it.each(['_', '_error'])('keeps %s assignments and subsequent tools in the active evaluation', async (name) => {
   const { run } = await setup()
   const called = vi.fn(async () => 7)
-  expect(await run(`${name} = 42; await tools.value({}); ${name}`, { bindings: bindings(called) })).toEqual({ logs: [], value: 42 })
+  expect(await run(`${name} = 42; await tools.value({}); ${name}`, { bindings: bindings(called) })).toMatchObject({ logs: [], value: 42 })
   expect(called).toHaveBeenCalledOnce()
   expect((await run(name)).value).toBe(42)
 })

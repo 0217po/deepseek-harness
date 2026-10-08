@@ -148,7 +148,7 @@ export async function createWebhookSession(
     await workspace.attachSession(sessionId)
     attached = true
     signal.throwIfAborted()
-    ctx.permissionPresets.set(handle.agent.session, resolved.permissionPreset)
+    await ctx.permissionPresets.set(handle.agent.session, resolved.permissionPreset)
     ctx.sessionTitle.rename(handle.agent.session, resolved.title)
     handle.agent.followup(createUserMessage({
       content: [{ type: 'text', text: resolved.prompt }],

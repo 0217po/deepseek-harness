@@ -124,6 +124,9 @@ export abstract class PtcRuntime extends Service {
   /** Source evaluation form, independent of whether the provider retains state for an owner. */
   get programFormat(): 'function-body' | 'repl' { return 'function-body' }
 
+  /** Whether calls with the same state owner can reuse program memory. */
+  get retainsState(): boolean { return false }
+
   /**
    * Release an owner's retained environment and await its execution resources.
    * Stateless providers have no retained resources to release.

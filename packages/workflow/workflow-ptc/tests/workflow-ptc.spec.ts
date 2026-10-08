@@ -136,7 +136,7 @@ interface SetupOptions {
 async function setup(options?: SetupOptions) {
   const ctx = new Context()
   await ctx.plugin(SessionProjectionRegistry)
-  await mountPtcRuntime(ctx, 'danger-full-access', options?.persistent ? 'in-memory' : 'per-call')
+  await mountPtcRuntime(ctx, 'danger-full-access', options?.persistent ? 'persistent-in-memory' : 'per-call')
   provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
   const provider = new StubProvider(

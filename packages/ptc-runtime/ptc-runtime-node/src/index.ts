@@ -30,7 +30,7 @@ const STRIP_SUFFIX = '\n}'
 function messageOf(error: unknown): string { return error instanceof Error ? error.message : String(error) }
 function record(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 
-/** Node provider; per-call execution uses file policy, while in-memory execution has full host access. */
+/** Node execution under file policy, with optional owner-scoped retained memory. */
 export class NodePtcRuntime extends PtcRuntime {
   static inject = ['fs', 'subprocess', 'sandbox', 'sandboxPolicy']
   static Config = NodeConfig
@@ -51,7 +51,7 @@ export class NodePtcRuntime extends PtcRuntime {
     super(ctx)
     this.config = { ...config, nodeExecutable: config.nodeExecutable ?? process.execPath } as ResolvedConfig
     validateConfig(this.config)
-    if (this.config.executionMode === 'in-memory') {
+    if (this.config.executionMode === 'persistent-in-memory') {
       this.inMemory = new InMemoryExecution(ctx, this.config)
       return
     }
@@ -63,7 +63,9 @@ export class NodePtcRuntime extends PtcRuntime {
     }, 'Node ptc-runtime cleanup')
   }
 
-  override get sandboxMode(): SandboxMode | undefined { return this.inMemory ? undefined : this.ctx.sandboxPolicy.defaultMode }
+  override get retainsState(): boolean { return this.inMemory !== undefined }
+
+  override get sandboxMode(): SandboxMode | undefined { return this.ctx.sandboxPolicy.defaultMode }
 
   override release(owner: object): Promise<void> {
     return this.inMemory ? this.inMemory.release(owner) : super.release(owner)

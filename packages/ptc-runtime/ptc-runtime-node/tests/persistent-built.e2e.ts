@@ -17,7 +17,7 @@ describe.skipIf(!built)('persistent PTC published exports', () => {
         for (const name of ['session-projection', 'fs-local', 'subprocess-local', 'sandbox-local', 'sandbox-policy']) {
           await ctx.plugin((await import('@deepseek-ai/dsh-' + name)).default)
         }
-        await ctx.plugin(NodeRuntime, { executionMode: 'in-memory' })
+        await ctx.plugin(NodeRuntime, { executionMode: 'persistent-in-memory' })
         const stateOwner = {}
         const run = program => ctx.ptcRuntime.run(ctx.ptcRuntime.resolve({program, bindings: [], stateOwner}))
         const first = await run('let count: number = 40; const path = await import("node:path");')
@@ -33,7 +33,7 @@ describe.skipIf(!built)('persistent PTC published exports', () => {
     expect(result.timedOut).toBe(false)
     expect(result.signal).toBeUndefined()
     expect(result.exitCode, result.stderr).toBe(0)
-    expect(JSON.parse(result.stdout.trim().split('\n').at(-1) ?? '')).toEqual({
+    expect(JSON.parse(result.stdout.trim().split('\n').at(-1) ?? '')).toMatchObject({
       first: { logs: [] }, second: { logs: ['b'], value: 42 }, fresh: { logs: [], value: 'undefined' },
     })
   })

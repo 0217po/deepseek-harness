@@ -1642,9 +1642,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when `name` is neither a configured preset, live `auto`, nor `custom`.'],
       },
       {
-        signature: 'set(session: Session, name: string): void',
+        signature: 'set(session: Session, name: string): Promise<string[]>',
         description: 'Record a changed preset, then update each changed knob through its own setter. Selecting the effective preset again appends nothing.',
-        parameters: [{ name: 'session', description: 'the session the switch belongs to.' }, { name: 'name', description: 'the preset to switch to; unknown names throw.' }],
+        parameters: [{ name: 'session', description: 'the session the switch belongs to.' }, { name: 'name', description: 'the preset to switch to; unknown names reject.' }],
+        returns: 'Notices after old execution resources are released and the new preset is recorded.',
       },
     ],
   },
@@ -4258,6 +4259,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Waterfall around every streaming model call (retry, replay, routing).',
     description: 'Waterfall around every streaming model call (retry, replay, routing). Bound to the LlmRuntime; call `next()` to reach the resolved adapter\'s stream, or yield your own chunks to short-circuit.',
     parameters: [{ name: 'options', description: 'the full request. A LOOP-built request carries the process-local {@link markAgentLoopRequest} identity and arrives deep-frozen (mutation throws): its content is a pure function of the session log (the reconstructability Agent Note), so listeners read it, never rewrite it. Hand-built calls do not carry that marker; callers own their request inputs and must keep them unchanged until the stream settles.' }],
+  },
+  {
+    name: 'permission-presets/apply',
+    mode: 'waterfall',
+    signature: '\'permission-presets/apply\'(session: Session, sandboxMode: SandboxMode, next: () => Promise<string[]>): Promise<string[]>',
+    summary: 'Wrap a permission change while resources using the old policy are released.',
+    description: 'Wrap a permission change while resources using the old policy are released. A rejection prevents the preset and its policy events from being recorded.',
+    parameters: [{ name: 'next', description: 'Commit the validated preset and return change notices.' }, { name: 'session', description: 'Session receiving the new preset.' }, { name: 'sandboxMode', description: 'File policy selected by the preset.' }],
   },
   {
     name: 'permission-presets/catalog-changed',

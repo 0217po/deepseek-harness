@@ -14,7 +14,7 @@ const NO_INITIAL_FRAME = Symbol('no initial frame')
 async function setup(config: Config = {}) {
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose() })
-  const { runtime, fiber } = await mountRuntime(ctx, { ...config, executionMode: 'in-memory' })
+  const { runtime, fiber } = await mountRuntime(ctx, { ...config, executionMode: 'persistent-in-memory' })
   const control = new Duplex({
     read() {},
     write(chunk: Buffer, _encoding, callback) {

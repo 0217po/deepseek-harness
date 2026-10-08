@@ -2278,7 +2278,7 @@ export interface Config {
 
 - `inject`: `shell` · `approval` · `sessions` · `sessionProjections`
 - `refs`: [`ApprovalPolicy`](subsystems/approval.zh.md) · [`SandboxMode`](subsystems/sandbox.zh.md) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/interaction/permission-presets/src/index.ts:159`](../packages/interaction/permission-presets/src/index.ts)
+- `source`: [`packages/interaction/permission-presets/src/index.ts:172`](../packages/interaction/permission-presets/src/index.ts)
 
 ```ts config-catalog
 /** The {@link PermissionPresetService} config: preset table and composition default. */
@@ -2421,8 +2421,8 @@ export interface Config {
 ```ts config-catalog
 /** Deployment-varying runtime bounds and launch choices. */
 export interface Config extends LaunchConfig {
-  /** per-call starts fresh confined processes; in-memory retains an unsandboxed REPL per owner. */
-  executionMode?: 'per-call' | 'in-memory'
+  /** per-call starts fresh processes; persistent-in-memory retains a REPL per owner under the same file policy. */
+  executionMode?: 'per-call' | 'persistent-in-memory'
   /** Default elapsed deadline, including nested tool and approval waits. */
   timeoutMs?: number
   /** Maximum numeric elapsed budget accepted by resolve. */
@@ -2443,7 +2443,7 @@ export interface Config extends LaunchConfig {
 export interface LaunchConfig {
   /** Executable in the subprocess world; defaults to the current Node executable. */
   nodeExecutable?: string
-  /** Absolute preinstalled bootstrap matching executionMode: process.js for per-call, persistent-process.js for in-memory. */
+  /** Absolute preinstalled bootstrap matching executionMode: process.js for per-call, persistent-process.js for persistent-in-memory. */
   bootstrapPath?: string
 }
 ```

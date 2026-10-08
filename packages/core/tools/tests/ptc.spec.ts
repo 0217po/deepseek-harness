@@ -2437,6 +2437,8 @@ describe('per-program execution controls', () => {
       expect(completed.isError).toBe(false)
       expect(requests.map(req => req.toolName)).toEqual([RUN_CODE_NAME, 'echo'])
       expect(runtime.lastRequest?.timeoutMs).toBe(1234)
+      expect(runtime.lastRequest?.stateOwner).not.toBe(agent)
+      expect(runtime.lastRequest?.stateOwner).toBeDefined()
       expect(ctx.sandboxPolicy.resolve({ session: agent.session }).mode).toBe('read-only')
     } finally { answer.resolve('cancelled'); await result; await ctx.fiber.dispose() }
   })
@@ -2451,7 +2453,7 @@ describe('PTC state ownership', () => {
     const format = vi.spyOn(runtime, 'programFormat', 'get').mockReturnValue(programFormat)
     const release = vi.spyOn(runtime, 'release')
     try {
-      expect(ctx.tools.schemas().find(tool => tool.name === 'run_code')?.description).not.toContain('in-memory')
+      expect(ctx.tools.schemas().find(tool => tool.name === 'run_code')?.description).not.toContain('persistent-in-memory')
       expect((await runCode(ctx, 'let value = 1', { agent })).isError).toBe(false)
       expect((await runCode(ctx, 'value', { agent })).isError).toBe(false)
       expect(runtime.lastRequest?.stateOwner).toBe(agent)
@@ -2469,7 +2471,7 @@ describe('PTC state ownership', () => {
     try {
       const description = ctx.tools.schemas().find(tool => tool.name === 'run_code')?.description
       expect(description).toContain('Each call evaluates Python expressions in a fresh environment.')
-      expect(description).not.toContain('in-memory')
+      expect(description).not.toContain('persistent-in-memory')
       expect(description).not.toContain('TypeScript')
     } finally { format.mockRestore(); instructions.mockRestore(); await ctx.fiber.dispose() }
   })

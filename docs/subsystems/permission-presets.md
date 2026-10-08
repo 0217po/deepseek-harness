@@ -70,7 +70,7 @@ interface PresetOption {
 
 ## Switching and the `permission/preset` event
 
-`set(session, name)` resolves the preset (unknown names throw), runs Auto admission when applicable, appends a log-only `permission/preset` event unless `name` is already the effective preset, then writes each knob through its own setter — `setSandboxMode` from [dsh-sandbox-policy](../../packages/sandbox/sandbox-policy) and `setApprovalPolicy` from [dsh-user-approval](../../packages/interaction/user-approval) — only when that knob's effective value changes. The selection event precedes the knob events in the same turn, and re-selecting the effective preset appends nothing.
+`set(session, name)` resolves the preset (unknown names throw), runs Auto admission when applicable, appends a log-only `permission/preset` event unless `name` is already the effective preset, then writes each knob through its own setter — `setSandboxMode` from [dsh-sandbox-policy](../../packages/sandbox/sandbox-policy) and `setApprovalPolicy` from [dsh-user-approval](../../packages/interaction/user-approval) — only when that knob's effective value changes. The selection event precedes the knob events in the same turn, and re-selecting the effective preset appends nothing. Callers await completion and receive resource-reset notices; the `permission-presets/apply` waterfall releases retained PTC environments before any preset event is committed.
 
 `permission/preset` is durable, log-only user intent: it stays out of the model transcript (the knob events own the model-visible consequences through their consumers), and it exists so `current()` can preserve which preset the user chose when two presets share a bundle. The `permissions` projection folds that selection with both knob events and retains the `session/end-seed` boundary used to distinguish a restored empty seed from a fresh session; replay needs no catch-up state or raw-log rescan. A restored `auto` selection requires the live Auto registration before Agent publication. The complete event declaration is in the [persistence log event catalog](../persistence-catalog.md); the method signatures are in the generated [service catalog](#ctxpermissionpresets--permissionpresetservice).
 
@@ -135,9 +135,10 @@ optionOf(name: string): PresetOption
  * Record a changed preset, then update each changed knob through its own
  * setter. Selecting the effective preset again appends nothing.
  * @param session - the session the switch belongs to.
- * @param name - the preset to switch to; unknown names throw.
+ * @param name - the preset to switch to; unknown names reject.
+ * @returns Notices after old execution resources are released and the new preset is recorded.
  */
-set(session: Session, name: string): void
+set(session: Session, name: string): Promise<string[]>
 ```
 
 Types: [Session](session.md)
@@ -147,6 +148,29 @@ Source: [`packages/interaction/permission-presets/src/index.ts`](../../packages/
 <a id="permission-presets-events"></a>
 
 ### `permission-presets/*` events
+
+<a id="permission-presetsapply--waterfall"></a>
+
+#### `permission-presets/apply` — waterfall
+
+Wrap a permission change while resources using the old policy are released. A rejection prevents the preset and its policy events from being recorded.
+
+```ts cordis-catalog
+/**
+ * Wrap a permission change while resources using the old policy are released.
+ * A rejection prevents the preset and its policy events from being recorded.
+ * @param next - Commit the validated preset and return change notices.
+ * @param session - Session receiving the new preset.
+ * @param sandboxMode - File policy selected by the preset.
+ * @returns Notices describing resources invalidated by the change.
+ * @mode waterfall
+ */
+'permission-presets/apply'(session: Session, sandboxMode: SandboxMode, next: () => Promise<string[]>): Promise<string[]>
+```
+
+Types: [SandboxMode](sandbox.md) · [Session](session.md)
+
+Source: [`packages/interaction/permission-presets/src/index.ts`](../../packages/interaction/permission-presets/src/index.ts)
 
 <a id="permission-presetscatalog-changed--emit"></a>
 

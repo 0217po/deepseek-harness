@@ -54,4 +54,4 @@
 
 - id: ptc-runtime
   config:
-    executionMode: in-memory
+    executionMode: persistent-in-memory

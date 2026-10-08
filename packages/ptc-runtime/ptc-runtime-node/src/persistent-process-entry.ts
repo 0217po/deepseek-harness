@@ -1,4 +1,4 @@
-/** Private built entry for the unsandboxed persistent Node REPL. */
+/** Private built entry for the persistent Node REPL. */
 import { openInheritedControlChannel } from '@deepseek-ai/dsh-subprocess/control'
 import { runPersistentMain } from './persistent-process.ts'
 

@@ -9,7 +9,7 @@ import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import PtcWorkflowEngine from '../src/index.ts'
 import { fakeParent, mountPtcRuntime } from './setup.ts'
 
-async function setup(mode: SandboxMode, executionMode: 'per-call' | 'in-memory' = 'per-call') {
+async function setup(mode: SandboxMode, executionMode: 'per-call' | 'persistent-in-memory' = 'per-call') {
   const ctx = new Context()
   const files = await mountPtcRuntime(ctx, mode, executionMode)
   provideWorkingDirectoryFixture(ctx)
@@ -38,8 +38,9 @@ it('runs the default workflow config through the source PTC runtime', async () =
   } finally { await run.dispose() }
 })
 
-it.each(['read-only', 'workspace-write'] as const)('enforces the Session file policy %s for direct Node writes', async (mode) => {
-  const { ctx, parent, root, cwd } = await setup(mode)
+it.each(['per-call', 'persistent-in-memory'] as const)('enforces workspace writes in %s workflows', async (executionMode) => {
+  const mode = 'workspace-write'
+  const { ctx, parent, root, cwd } = await setup(mode, executionMode)
   const outside = join(root, 'outside.txt')
   const inside = join(cwd, 'inside.txt')
   await writeFile(outside, 'unchanged')
@@ -59,22 +60,5 @@ return 42`,
     expect(await readFile(outside, 'utf8')).toBe('unchanged')
     if (mode === 'workspace-write') expect(await readFile(inside, 'utf8')).toBe('inside')
     else await expect(readFile(inside, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
-  } finally { await run.dispose() }
-})
-
-it.each(['read-only', 'workspace-write'] as const)('refuses an in-memory workflow when the Session requires %s', async (mode) => {
-  const { ctx, parent, cwd } = await setup(mode, 'in-memory')
-  const target = join(cwd, 'unconfined.txt')
-  const run = ctx.workflowEngine.start({
-    script: 'const proc = log.constructor(\'return process\')(); proc.getBuiltinModule(\'node:fs\').writeFileSync(args.target, \'changed\'); return 42;',
-    args: { target },
-    meta: { name: 'unsupported-confinement', description: 'preserve requested file policy' },
-    parent,
-  })
-  try {
-    const result = await run.result
-    expect(result.stopReason).toBe('error')
-    expect(result.error).toContain(`workflow runtime cannot enforce the ${mode} file policy`)
-    await expect(readFile(target)).rejects.toMatchObject({ code: 'ENOENT' })
   } finally { await run.dispose() }
 })

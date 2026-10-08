@@ -39,6 +39,19 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     permissionPresets: PermissionPresetService
   }
+
+  interface Events {
+    /**
+     * Wrap a permission change while resources using the old policy are released.
+     * A rejection prevents the preset and its policy events from being recorded.
+     * @param next - Commit the validated preset and return change notices.
+     * @param session - Session receiving the new preset.
+     * @param sandboxMode - File policy selected by the preset.
+     * @returns Notices describing resources invalidated by the change.
+     * @mode waterfall
+     */
+    'permission-presets/apply'(session: Session, sandboxMode: SandboxMode, next: () => Promise<string[]>): Promise<string[]>
+  }
 }
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
@@ -201,6 +214,7 @@ export class PermissionPresetService extends TypertRemoteService {
   static inject = ['shell', 'approval', 'sessions', 'sessionProjections']
 
   private readonly presets: Record<string, PresetSpec>
+  private readonly changing = new WeakSet<Session>()
   private autoAdmit: (() => void) | undefined
   private defaultSettings: () => PermissionSettings
 
@@ -261,7 +275,7 @@ export class PermissionPresetService extends TypertRemoteService {
         // No settlement text labels its value with this command's own name: a
         // surface that renders `name · text` (the web command row) would
         // otherwise read `permission · Permission preset: workspace-write.`
-        handler: ({ agent, rawInput }) => {
+        handler: async ({ agent, rawInput }) => {
           const name = rawInput.trim()
           if (name === '') {
             return { kind: 'success', text: `current preset ${this.current(agent.session)} (available: ${this.names.join(', ')})` }
@@ -269,8 +283,8 @@ export class PermissionPresetService extends TypertRemoteService {
           if (!this.names.includes(name)) {
             return { kind: 'error', text: `unknown preset "${name}" (available: ${this.names.join(', ')})` }
           }
-          this.apply(agent.session, name, (policy) => { this.ctx.approval.setPolicy(agent, policy) })
-          return { kind: 'success', text: `preset ${name}` }
+          const notices = await this.apply(agent.session, name, (policy) => { this.ctx.approval.setPolicy(agent, policy) })
+          return { kind: 'success', text: [`preset ${name}`, ...notices].join('\n') }
         },
       })
     })
@@ -393,28 +407,29 @@ export class PermissionPresetService extends TypertRemoteService {
    * Record a changed preset, then update each changed knob through its own
    * setter. Selecting the effective preset again appends nothing.
    * @param session - the session the switch belongs to.
-   * @param name - the preset to switch to; unknown names throw.
+   * @param name - the preset to switch to; unknown names reject.
+   * @returns Notices after old execution resources are released and the new preset is recorded.
    */
-  set(session: Session, name: string): void {
-    this.apply(session, name, (policy) => { setApprovalPolicy(session, policy) })
+  set(session: Session, name: string): Promise<string[]> {
+    return this.apply(session, name, (policy) => { setApprovalPolicy(session, policy) })
   }
 
   /** Apply one preset through its durable identity and canonical knob setters. */
-  private apply(session: Session, name: string, setApproval: (policy: ApprovalPolicy) => void): void {
+  private async apply(session: Session, name: string, setApproval: (policy: ApprovalPolicy) => void): Promise<string[]> {
     const spec = this.resolve(name)
     if (name === AUTO_PRESET) this.autoAdmit?.()
     const current = this.current(session)
     const knobs = this.permissionState(session)
-    const updateKnobs = (): void => {
-      if (spec.sandbox !== (knobs.sandbox ?? this.ctx.shell.sandboxMode)) {
-        setSandboxMode(session, spec.sandbox)
-      }
-      if (spec.approval !== (knobs.approval ?? this.ctx.approval.config.policy ?? 'ask')) {
-        setApproval(spec.approval)
-      }
-    }
-    if (current !== name) session.append('permission/preset', { preset: name })
-    updateKnobs()
+    if (this.changing.has(session)) throw new Error('permission: another preset change is still in progress')
+    this.changing.add(session)
+    try {
+      return await this.ctx.waterfall('permission-presets/apply', session, spec.sandbox, async () => {
+        if (current !== name) session.append('permission/preset', { preset: name })
+        if (spec.sandbox !== (knobs.sandbox ?? this.ctx.shell.sandboxMode)) setSandboxMode(session, spec.sandbox)
+        if (spec.approval !== (knobs.approval ?? this.ctx.approval.config.policy ?? 'ask')) setApproval(spec.approval)
+        return []
+      })
+    } finally { this.changing.delete(session) }
   }
 
   /**
