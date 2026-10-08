@@ -31,7 +31,7 @@ export const inject = ['terminals', 'tools', 'systemPrompt', 'workingDirectory']
 
 /** Default cap for one complete model-facing terminal result. */
 export const DEFAULT_MAX_RESULT_BYTES = 256 * 1024
-/** Smallest cap that preserves every counter-backed PTY and job id in its creation acknowledgement. */
+/** Smallest cap that preserves registry-issued PTY and job ids in creation acknowledgements. */
 export const MIN_MAX_RESULT_BYTES = 64
 
 /** Model-facing terminal tool configuration. */
@@ -145,6 +145,13 @@ function sendDetail(result: TerminalSendResult): string {
     : `session exited: ${result.sessionStatus.exitCode ?? result.sessionStatus.signal ?? 'unknown'}`
 }
 
+function renderBackgroundJobId(jobId: string, maxBytes: number): string {
+  const acknowledgement = `started background job ${jobId}`
+  return Buffer.byteLength(acknowledgement) <= maxBytes
+    ? acknowledgement
+    : `started job ${jobId}`
+}
+
 /** Register all terminal tools and the minimal usage guidance. */
 export function apply(ctx: Context, config: Config = {}): void {
   const enableRunInBackground = config.enableRunInBackground ?? true
@@ -236,7 +243,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       render: (_args, value) => [{
         type: 'text',
         text: value.kind === 'background'
-          ? `started background job ${value.jobId}`
+          ? renderBackgroundJobId(value.jobId, maxResultBytes)
           : renderSend(value, maxResultBytes),
       }],
       presentationMeta: (_args, value) => value.kind === 'foreground'
