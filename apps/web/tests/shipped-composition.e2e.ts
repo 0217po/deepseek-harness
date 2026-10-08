@@ -708,9 +708,8 @@ it('lets a preset producer reach the background-job registry', async () => {
       agent: handle.agent,
     })
     expect(listed.isError).toBe(false)
-    expect(listed.content).toEqual([
-      { type: 'text', text: expect.stringContaining(`${jobId} [bash]`) as unknown as string },
-    ])
+    expect(listed.content).toHaveLength(1)
+    expect(listed.content[0]?.type === 'text' ? listed.content[0].text : '').toContain(`${jobId} [bash]`)
 
     // The full round trip: the output a host-plane producer wrote is collected
     // through a preset-plane control, which is the linkage the realm severed.

@@ -98,7 +98,6 @@
   },
   "apps/web/tests/shipped-composition.e2e.ts": {
     "5bb6193769cfbb9fc09abd705fed714917784de269546fde14ac1171fb00644b": 1,
-    "b2def0b3b454c0ec221ad44faa663f941032cc45334ac72eec66a0f556890234": 1,
     "c0a4d4dd9b52881eb8190c56fb8ea5a25a70590b78b1e4a0996defab767699f0": 1
   },
   "apps/web/tests/smoke-real.e2e.ts": {
