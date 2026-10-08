@@ -415,15 +415,24 @@ describe('Typert Remote streams', () => {
   })
 
   it('validates the WebSocket heartbeat timer range and the stream inbox bound', () => {
-    expect(TypertGatewayService.Config({})).toEqual({ websocketHeartbeatIntervalMs: 2_000, streamInboxBytes: 262_144 })
-    expect(TypertGatewayService.Config({ websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS, streamInboxBytes: 1 }))
-      .toEqual({ websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS, streamInboxBytes: 1 })
+    expect(TypertGatewayService.Config({})).toEqual({
+      websocketHeartbeatIntervalMs: 2_000, streamInboxBytes: 262_144, forwardedEvents: false,
+    })
+    expect(TypertGatewayService.Config({ websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS, streamInboxBytes: 1, forwardedEvents: true }))
+      .toEqual({ websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS, streamInboxBytes: 1, forwardedEvents: true })
     for (const websocketHeartbeatIntervalMs of [0, 1.5, MAX_TIMER_DELAY_MS + 1]) {
       expect(() => TypertGatewayService.Config({ websocketHeartbeatIntervalMs })).toThrow()
     }
     for (const streamInboxBytes of [0, 1.5]) {
       expect(() => TypertGatewayService.Config({ streamInboxBytes })).toThrow()
     }
+  })
+
+  it.each([false, true])('publishes the served-page forwarded-event choice %s', async (forwardedEvents) => {
+    const { ctx } = await setup(true, TypertGatewayService.Config({ forwardedEvents }))
+    expect(ctx.webServer.collectIndexInjections()).toContainEqual({
+      kind: 'global', name: '__DSH_GATEWAY_CLIENT__', value: { forwardedEvents },
+    })
   })
 
   it('opens decoded carrier payloads through the in-process wire adapter', async () => {

@@ -119,9 +119,6 @@ export function createSessionControlStream(
   const stream = remote.$stream<SessionControlFrame>({
     name: 'session control stream',
     open: signal => remote.session.control(signal),
-    ended: accepted => accepted
-      ? new RemoteStreamCarrierError('session control stream ended without a terminal result')
-      : new Error('session control stream ended before its opening snapshot'),
     ...(options.carrierFailed === undefined ? {} : { carrierFailed: options.carrierFailed }),
   })
   return new RemoteSnapshotStream(stream, {

@@ -6,6 +6,9 @@ import { isRemoteJsonValue } from '@deepseek-ai/dsh-typert-protocol'
 /** Exact WebSocket route carrying every Typert Remote stream. */
 export const REMOTE_STREAM_MUX_PATH = '/api/remote.mux'
 
+/** Page global through which the serving Host supplies the Gateway Client's Config to browser pages. */
+export const GATEWAY_CLIENT_CONFIG_GLOBAL = '__DSH_GATEWAY_CLIENT__'
+
 /** Gateway-internal logical stream carrying application-selected Cordis events. */
 export const REMOTE_EVENT_STREAM_ENDPOINT = '$events'
 

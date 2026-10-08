@@ -46,6 +46,7 @@ import {
   rejectRemoteStreamUpgrade,
 } from './stream-server.ts'
 import {
+  GATEWAY_CLIENT_CONFIG_GLOBAL,
   REMOTE_EVENT_STREAM_ENDPOINT,
   REMOTE_EVENT_STREAM_READY,
   REMOTE_EVENT_RESULT_ENDPOINT,
@@ -149,11 +150,17 @@ export interface Config {
   readonly websocketHeartbeatIntervalMs?: number
   /** Buffered uplink frame bytes one logical stream may hold before it fails with `gateway/uplink-overflow`. @default 262144 */
   readonly streamInboxBytes?: number
+  /**
+   * Served pages receive forwarded Host events, including Agent-scoped approval and question
+   * requests; their Gateway Client then answers or delegates those requests. @default false
+   */
+  readonly forwardedEvents?: boolean
 }
 
 interface ResolvedConfig extends Config {
   readonly websocketHeartbeatIntervalMs: number
   readonly streamInboxBytes: number
+  readonly forwardedEvents: boolean
 }
 
 /**
@@ -203,6 +210,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
     websocketHeartbeatIntervalMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS)
       .default(DEFAULT_WEBSOCKET_HEARTBEAT_INTERVAL_MS),
     streamInboxBytes: z.number().step(1).min(1).default(DEFAULT_STREAM_INBOX_BYTES),
+    forwardedEvents: z.boolean().default(false),
   })
 
   /** Carrier adapter shared by the WebSocket mux and local Host transports. */
@@ -239,6 +247,9 @@ export class TypertGatewayService extends Service implements TypertGateway {
       )
     })
     ctx.inject(['connection', 'webServer'], (webCtx) => {
+      webCtx.on('webserver/index-inject', (table) => {
+        table.push({ kind: 'global', name: GATEWAY_CLIENT_CONFIG_GLOBAL, value: { forwardedEvents: resolved.forwardedEvents } })
+      })
       const listen = (): void => {
         const mux = new RemoteStreamMuxServer(
           (endpoint, payload, uplink, peer, control, window) =>

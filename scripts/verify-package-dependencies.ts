@@ -362,11 +362,16 @@ function hostSourceEntries(root: string, pkg: WorkspacePackageManifest): string[
   const exports = pkg.manifest.exports
   if (exports === null || typeof exports !== 'object') return [...entries]
   for (const [subpath, declaration] of Object.entries(exports as Record<string, unknown>)) {
-    if (subpath === '.' || subpath === './package.json' || /^\.\/(?:client|src)(?:\/|$)/.test(subpath)) continue
+    if (subpath === '.' || subpath === './package.json' || /^\.\/src(?:\/|$)/.test(subpath)) continue
+    let runtimeDeclaration = declaration
+    if (/^\.\/client(?:\/|$)/.test(subpath)) {
+      if (declaration === null || typeof declaration !== 'object' || !('node' in declaration)) continue
+      runtimeDeclaration = declaration.node
+    }
     const types = declaration !== null && typeof declaration === 'object' && 'types' in declaration
       ? declaration.types
       : undefined
-    for (const runtime of nodeExportTargets(declaration)) {
+    for (const runtime of nodeExportTargets(runtimeDeclaration)) {
       const generatedFace = subpath === './typert' ? 'host' : subpath === './remote' ? 'remote-client' : undefined
       if (generatedFace !== undefined
         && runtime === `./lib/typert.${generatedFace}.js`

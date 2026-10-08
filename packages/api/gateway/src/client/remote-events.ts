@@ -62,7 +62,7 @@ const REMOTE_EVENT_NEXT = Symbol('api-gateway.remote-event.next')
 /** Own Cordis registrations, generation pumping, waterfall dispatch, and HTTP replies. */
 export class ClientRemoteEvents {
   private readonly eventPrefix = `internal/api-gateway/remote-event/${randomUUID()}/`
-  private readonly unregisterGeneration: () => void
+  private unregisterGeneration: (() => void) | undefined
   private activeGeneration: Promise<void> | undefined
 
   /**
@@ -74,8 +74,16 @@ export class ClientRemoteEvents {
     private readonly ownerCtx: Context,
     private readonly connection: ConnectionHandle,
     private readonly openStream: RemoteEventStreamOpener,
-  ) {
-    this.unregisterGeneration = connection.registerGenerationSource(this.runGeneration)
+  ) {}
+
+  /** Whether this client participates in forwarded-event delivery. */
+  get started(): boolean {
+    return this.unregisterGeneration !== undefined
+  }
+
+  /** Register the generation source; the owning service calls this once when `forwardedEvents` is on. */
+  start(): void {
+    this.unregisterGeneration = this.connection.registerGenerationSource(this.runGeneration)
   }
 
   /**
@@ -99,7 +107,7 @@ export class ClientRemoteEvents {
 
   /** Withdraw the generation source and wait for active listener work to quiesce. */
   async dispose(): Promise<void> {
-    this.unregisterGeneration()
+    this.unregisterGeneration?.()
     await Promise.allSettled([this.activeGeneration])
   }
 

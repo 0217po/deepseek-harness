@@ -16,6 +16,7 @@ import { afterEach, beforeEach, vi } from 'vitest'
 import { bootInjections, orderByModuleGraph } from '@deepseek-ai/dsh-client-modules'
 import type { ClientModuleLoaderTarget, WebBootEntry, WebBootGraph } from '@deepseek-ai/dsh-client-modules/client'
 import type { RemoteMock } from '@deepseek-ai/dsh-remote-mock'
+import { GATEWAY_CLIENT_CONFIG_GLOBAL } from '@deepseek-ai/dsh-api-gateway/stream-protocol'
 import { AppWebEntry } from '@deepseek-ai/dsh-client-web'
 import {
   createAssembledRemote, type AssembledRemote, type AssembledRemoteOptions,
@@ -281,6 +282,8 @@ export function mountAssembledApp(options: AssembledBootOptions = {}): Assembled
   const remote = createAssembledRemote(options.remote)
   mountedRemote = remote.mock
   win.__DSH_TRANSPORT__ = { rpc: remote.mock.rpc }
+  // The fixture supplies the Web Host's explicit forwarded-event opt-in.
+  vi.stubGlobal(GATEWAY_CLIENT_CONFIG_GLOBAL, { forwardedEvents: true })
   history.replaceState(null, '', '/')
   const root = document.createElement('div')
   root.id = 'root'

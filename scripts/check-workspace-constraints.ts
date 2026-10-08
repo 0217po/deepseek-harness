@@ -289,7 +289,7 @@ export function expectedDshPackageFiles(manifest: PackageManifest): readonly str
     // browser-safe source channels rehomed off src so plain Node can import
     // them without type stripping) publish the emitted JS alongside the
     // declarations.
-    ...usesEmittedTreeDefaults(manifest) ? ['lib/types/**/*.js'] : [],
+    ...usesEmittedTreeRuntime(manifest) ? ['lib/types/**/*.js'] : [],
     'lib/types/**/*.d.ts',
     ...hasExportPair(manifest, './typert', './lib/typert.host.d.ts', './lib/typert.host.js')
       ? ['lib/typert.host.js', 'lib/typert.host.d.ts']
@@ -331,10 +331,13 @@ function exportDefault(manifest: PackageManifest, subpath: string): string | und
   return typeof target === 'string' ? target : undefined
 }
 
-/** Whether any export's runtime default points into the tsc-emitted lib/types tree. */
-function usesEmittedTreeDefaults(manifest: PackageManifest): boolean {
-  return Object.keys(manifest.exports ?? {}).some(subpath =>
-    exportDefault(manifest, subpath)?.startsWith('./lib/types/') === true)
+/** Whether an export's default or explicit Node runtime uses the tsc-emitted tree. */
+function usesEmittedTreeRuntime(manifest: PackageManifest): boolean {
+  return Object.entries(manifest.exports ?? {}).some(([subpath, entry]) => {
+    const node = exportFields(entry)?.node
+    return exportDefault(manifest, subpath)?.startsWith('./lib/types/') === true
+      || typeof node === 'string' && node.startsWith('./lib/types/')
+  })
 }
 
 /** Experimental manifest requirements, including explicit private exceptions. */

@@ -25,6 +25,7 @@ async function mount(): Promise<{ ctx: Context; observeCalls: unknown[]; rowsCal
     generation: { getSnapshot: () => ({ id: 1, host: { home: '/home/fixture' } }), subscribe: () => () => {} },
     state: { getSnapshot: () => 'connected' as const, subscribe: () => () => {} },
     rpc: { call: () => Promise.reject(new Error('unexpected generic RPC call')) },
+    openWebSocket: () => { throw new Error('unexpected WebSocket open') },
     reconnect: () => {},
     registerGenerationSource: () => () => {},
     start: () => ({ stop: () => {} }),

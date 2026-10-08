@@ -12,6 +12,7 @@ import { createWebConnectionRpc, type RpcFetch, type RpcStreamOpen } from './rpc
 import { isLoopbackHostname } from '../loopback-hostname.ts'
 import type { ClientConnectionRpc } from '../rpc.ts'
 import { resolveConnectionConfig } from '../recovery-config.ts'
+import { ConnectionSockets, type ConnectionWebSocket, type ConnectionWebSocketFactory } from './socket.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
@@ -50,6 +51,7 @@ export type {
   ClientConnectionRpc, ConnectionRpcFailure, ConnectionRpcResult,
 } from '../rpc.ts'
 export type { RpcFetch } from './rpc.ts'
+export type { ConnectionWebSocket, ConnectionWebSocketEventMap, ConnectionWebSocketFactory } from './socket.ts'
 
 /** Observable identity and Host facts for the active connection generation. */
 export interface ConnectionGenerationState {
@@ -104,6 +106,8 @@ export interface ClientTransportHooks {
   ownsHost?: boolean
   /** HTTP origin of a shell-owned Host when its WebSocket uses a different page origin. */
   streamBaseUrl?: string
+  /** Physical socket factory, including shell-owned authentication; Connection owns socket disposal. */
+  webSocket?: ConnectionWebSocketFactory
 }
 
 /** Page global carrying {@link ClientTransportHooks}; absent in the served web app. */
@@ -144,6 +148,12 @@ export interface ConnectionHandle {
   readonly state: ConnectionStateSource
   /** Generic logical RPC channels over the same Connection transport. */
   readonly rpc: ClientConnectionRpc
+  /**
+   * Open a physical WebSocket on this Connection's selected Host or document mount.
+   * @param path - absolute logical channel path.
+   * @returns a socket owned until its close event; the consumer owns framing and retries.
+   */
+  openWebSocket(path: string): ConnectionWebSocket
   /** Reset retry progression and replace the current attempt immediately. */
   reconnect(): void
   /**
@@ -207,6 +217,7 @@ export function installConnection(ctx: Context, options: ConnectionInstallOption
   const transport = options.transport
   const recovery = options.recovery ?? {}
   const rpc = transport?.rpc ?? createWebConnectionRpc(transport?.fetch, transport?.openStream)
+  const sockets = new ConnectionSockets(transport?.webSocket, transport?.streamBaseUrl)
   let generationSource: ConnectionGenerationSource | undefined
   let owner: ConnectionOwner | undefined
   let generationId = 0
@@ -261,6 +272,7 @@ export function installConnection(ctx: Context, options: ConnectionInstallOption
       },
     },
     rpc,
+    openWebSocket: path => sockets.open(path),
     reconnect() {
       owner?.controller.reconnect()
     },
@@ -307,6 +319,10 @@ export function installConnection(ctx: Context, options: ConnectionInstallOption
       }
     },
   }
+  ctx.effect(() => async () => {
+    if (owner !== undefined) releaseOwner(owner)
+    await sockets.dispose()
+  }, 'client-connection: physical carriers')
   ctx.provide('connection', handle)
 }
 

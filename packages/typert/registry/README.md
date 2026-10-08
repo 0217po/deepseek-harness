@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the registry in any Host or Client composition that stores or consumes generated Typert artifacts; it provides `ctx.typert`. There is no configuration.
+Mount the registry in any Host or Client composition that stores or consumes generated Typert artifacts; it provides `ctx.typert`. There is no configuration. Node resolves `/client` to ordinary ESM for programmatic Cordis composition; browsers retain the Client bundle, and both use the same registry implementation.
 
 ### Minimal setup
 
@@ -39,9 +39,13 @@ Load the registry plugin; the Client face is installed the same way by the Clien
 
 Consumers read schemas with `get(key)`, `resolve(key)`, or `list(filter?)` and package reflection with `getPackage(name, face?)` or `listPackages(filter?)`. The first schema read materializes one process-realm instance; later reads reuse it. `resolve()` distinguishes a malformed key, an absent package, and a registered package that contributes no schema under that name, each with its own error. `toJSONSchema(key)` projects the materialized Zod schema to JSON Schema without caching the projection.
 
+Invocation information is available through existing `ctx.typert.local.get/list` and `ctx.typert.remotes.get/list` queries. They return the registered descriptor objects, including generated direct methods with `input`, `result`, and `invoke`; there is no separate metadata store or RPC API. Use `isTypertRemoteMethod(descriptor)` from `@deepseek-ai/dsh-typert-protocol/remote-info` to narrow the base descriptor. This guard exposes inputs as `object` and outputs as `unknown`, not endpoint-dependent generics. The [ordinary generated `TYPERT_REMOTE.methods` index](<../generator/README.md#ordinary-remote-metadata>) supplies precise per-method static types and aliases those same descriptors within its artifact instance.
+
 ### Registering a contribution
 
 Generated artifacts register through the [loader](../loader/README.md) in Loader compositions; any other owner calls `ctx.typert.register(contribution)` directly and receives the exact disposer that withdraws it. Duplicate package-face identities, schema keys, invocation ids, or endpoints reject the whole batch before anything is committed.
+
+Harness offline integrations register an ordinary `TYPERT_REMOTE` contribution with `ctx.typert.remotes.register(contribution)` in their profile Context. `$mount(contribution)` already performs that registration, so registering and mounting the same contribution in the same registry duplicates it and fails. Keep offline metadata ownership separate from the live connection-and-mount Context. Independent offline consumers may instead read `TYPERT_REMOTE.methods` without any Registry. Registry state belongs to its Context and process, is not shared across processes, and neither registration nor querying opens a connection.
 
 ### Lookup and Context providers
 

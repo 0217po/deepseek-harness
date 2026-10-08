@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在存储或消费生成 Typert 产物的任何 Host 或 Client 组合中挂载本注册表；它提供 `ctx.typert`。没有配置。
+在存储或消费生成 Typert 产物的任何 Host 或 Client 组合中挂载本注册表；它提供 `ctx.typert`。没有配置。Node 将 `/client` 解析为普通 ESM，供程序化 Cordis 组合使用；浏览器仍使用 Client bundle，两者使用相同的注册表实现。
 
 ### 最小设置
 
@@ -39,9 +39,13 @@ kind: "package-reference"
 
 消费方用 `get(key)`、`resolve(key)` 或 `list(filter?)` 读取 schema，用 `getPackage(name, face?)` 或 `listPackages(filter?)` 读取包反射。首次读取会物化一个进程 realm 内的 schema 实例，后续读取复用该实例。`resolve()` 能区分格式错误的键、未注册的包，以及已注册但未以该名称提供 schema 的包，各自给出不同的错误。`toJSONSchema(key)` 把已物化的 Zod schema 投影为 JSON Schema，但不缓存该投影。
 
+调用信息可通过现有的 `ctx.typert.local.get/list` 与 `ctx.typert.remotes.get/list` 查询读取。它们返回已注册的描述符对象，包括带有 `input`、`result` 和 `invoke` 的生成直接方法；不存在独立的元数据存储或 RPC API。使用 `@deepseek-ai/dsh-typert-protocol/remote-info` 提供的 `isTypertRemoteMethod(descriptor)` 收窄基础描述符。该守卫将输入暴露为 `object`、输出暴露为 `unknown`，不提供依赖端点的泛型。[普通生成产物的 `TYPERT_REMOTE.methods` 索引](<../generator/README.zh.md#ordinary-remote-metadata>)提供精确的各方法静态类型，并在该产物实例内引用同一批描述符。
+
 ### 注册贡献
 
 生成产物在 Loader 组合中通过 [loader](../loader/README.zh.md) 注册；其他所有者直接调用 `ctx.typert.register(contribution)`，并获得撤销它的同一资源释放函数。重复的包与 face 组合键、schema 键、调用 id 或端点会在提交任何内容之前拒绝整个批次。
+
+Harness 离线集成在各自的 profile Context 中通过 `ctx.typert.remotes.register(contribution)` 注册普通 `TYPERT_REMOTE` 贡献。`$mount(contribution)` 已执行该注册，因此在同一个注册表中先注册再挂载同一贡献会因重复而失败。离线元数据所有权应与建立实际连接及挂载的 Context 分离。独立离线消费方也可以直接读取 `TYPERT_REMOTE.methods`，无需任何 Registry。注册表状态归所属 Context 与进程所有，不跨进程共享；注册和查询都不会打开连接。
 
 ### Lookup 与 Context 提供方
 

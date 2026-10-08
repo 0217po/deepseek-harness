@@ -82,9 +82,6 @@ export function createWorkspaceStateStream(
   const stream = remote.$stream<WorkspaceFollowFrame>({
     name: 'Workspace state stream',
     open: signal => remote.workspace.follow(signal),
-    ended: accepted => accepted
-      ? new RemoteStreamCarrierError('Workspace state stream ended without a terminal result')
-      : new Error('Workspace state stream ended before its opening snapshot'),
     ...(options.carrierFailed === undefined ? {} : { carrierFailed: options.carrierFailed }),
   })
   return new RemoteSnapshotStream<WorkspaceBaselineFrame, WorkspaceFollowIncrement>(stream, {

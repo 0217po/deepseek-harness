@@ -94,7 +94,8 @@ it('fails closed on stream loss and accepts a fresh policy after reconnection', 
   vi.stubGlobal('dshDesktop', {})
   const b = await setup()
   b.options().open(new AbortController().signal)
-  expect(b.options().ended(true).message).toContain('policy stream ended')
+  // A Host reload ends the policy stream after its baseline; the supervisor default reopens it.
+  expect(b.options().ended).toBeUndefined()
   b.options().carrierFailed?.(new Error('offline'))
   expect(b.ctx.productAnalytics.enabled).toBe(false)
   await b.policy(true)

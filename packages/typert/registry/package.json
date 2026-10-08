@@ -20,6 +20,7 @@
     },
     "./client": {
       "types": "./lib/types/client/index.d.ts",
+      "node": "./lib/types/client/index.js",
       "default": "./lib/client.js"
     },
     "./types": {

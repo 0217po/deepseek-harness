@@ -122,16 +122,19 @@ export interface InvocationParameterModel {
   /** Authored as an optional parameter, so consumers may omit the wire field. */
   readonly optional?: true
   readonly boundary: RemoteBoundaryModel
+  readonly description?: string
 }
 
 /** One strictly analyzed Host method exported through Typert Gateway. */
-export interface InvocationModel {
+export interface InvocationModel extends DocumentationModel {
   readonly id: string
   readonly service: string
   readonly namespace: string
   readonly method: string
   readonly implementation?: string
   readonly mode?: 'stream'
+  /** Reject unknown fields in declared request objects, independently of consumer selection. */
+  readonly rejectUnknownFields?: true
   readonly invocation:
     | { readonly kind: 'direct' }
     | {
@@ -352,7 +355,7 @@ export interface TemplateSpanModel {
 }
 
 /** Compiler-independent TypeScript type expression. */
-export type TypeNodeModel =
+export type TypeNodeModel = (
   | { readonly id: TypeNodeId; readonly kind: 'keyword'; readonly name: KeywordTypeName }
   | { readonly id: TypeNodeId; readonly kind: 'literal'; readonly value: string | number | bigint | boolean | null; readonly text: string }
   | { readonly id: TypeNodeId; readonly kind: 'parenthesized'; readonly type: TypeNodeId }
@@ -390,6 +393,10 @@ export type TypeNodeModel =
   }
   | { readonly id: TypeNodeId; readonly kind: 'predicate'; readonly asserts: boolean; readonly parameter: string; readonly type?: TypeNodeId }
   | { readonly id: TypeNodeId; readonly kind: 'this' }
+) & {
+  /** Canonical lossless JsonValue, represented without recursive tool-schema references. */
+  readonly json?: true
+}
 
 /**
  * Return the direct type-expression edges owned by one node.

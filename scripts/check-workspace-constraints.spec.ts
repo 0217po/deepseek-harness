@@ -314,6 +314,15 @@ describe('package payload constraints', () => {
       .toEqual([expect.stringContaining('package.json files must be')])
   })
 
+  it('publishes emitted JavaScript for an explicit Node Client entry', () => {
+    const client = { types: './lib/types/client/index.d.ts', default: './lib/client.js' }
+    expect(expectedDshPackageFiles({ exports: { './client': client } }))
+      .not.toContain('lib/types/**/*.js')
+    expect(expectedDshPackageFiles({ exports: {
+      './client': { ...client, node: './lib/types/client/index.js' },
+    } })).toContain('lib/types/**/*.js')
+  })
+
   it.each([
     { exports: { './locale/*.json': './locale/*.json' }, resources: ['locale/*.json'] },
     { exports: { './search/locale/*.json': './resources/search/*.json' }, resources: ['resources/search/*.json'] },

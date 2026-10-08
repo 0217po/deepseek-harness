@@ -673,6 +673,14 @@ interface FaceAnalyzerOptions {
   readonly crossFaceLinks: Map<string, CrossFaceLink>
 }
 
+/** Direct `@Remote` choices read from one decorator. */
+interface DirectRemoteMarker {
+  readonly kind: 'direct'
+  readonly exportName?: string
+  readonly mode?: 'stream'
+  readonly rejectUnknownFields?: true
+}
+
 class FaceAnalyzer {
   private readonly root: string
   private readonly face: TypertFace
@@ -1128,7 +1136,7 @@ class FaceAnalyzer {
     binding: GatewayBinding,
     method: ts.MethodDeclaration,
     invocation:
-      | { readonly kind: 'direct'; readonly exportName?: string; readonly mode?: 'stream' }
+      | DirectRemoteMarker
       | { readonly kind: 'context'; readonly context: string; readonly exportName?: string },
   ): InvocationModel {
     if (visibilityOf(method) !== 'public' || hasModifier(method, ts.SyntaxKind.StaticKeyword)) {
@@ -1143,6 +1151,7 @@ class FaceAnalyzer {
     if ((method.typeParameters?.length ?? 0) > 0) {
       this.fail(method, 'generic Remote methods are not supported')
     }
+    const documentation = documentationOf(method)
     const methodName = method.name.text
     const exportedMethod = invocation.exportName ?? methodName
 
@@ -1212,7 +1221,8 @@ class FaceAnalyzer {
       }
       if (wires.has(modeled.wire)) this.fail(parameter, `duplicate Remote wire field ${modeled.wire}`)
       wires.add(modeled.wire)
-      parameters.push(modeled)
+      const description = documentation.tags.find(tag => tag.name === 'param' && tag.argument === modeled.name)?.comment?.replace(/^[-—–]\s*/, '')
+      parameters.push({ ...modeled, ...(description === undefined ? {} : { description }) })
     }
 
     let receiver: InvocationModel['invocation'] = { kind: 'direct' }
@@ -1271,6 +1281,8 @@ class FaceAnalyzer {
         ),
       }
     return {
+      ...documentation,
+      ...(invocation.kind === 'direct' && invocation.rejectUnknownFields ? { rejectUnknownFields: true as const } : {}),
       id: `${registration.name}#${binding.namespace}/${exportedMethod}`,
       service: binding.service,
       namespace: binding.namespace,
@@ -1382,11 +1394,11 @@ class FaceAnalyzer {
   private remoteMarker(
     member: ts.ClassElement,
   ):
-    | { readonly kind: 'direct'; readonly exportName?: string; readonly mode?: 'stream' }
+    | DirectRemoteMarker
     | { readonly kind: 'context'; readonly context: string; readonly exportName?: string }
     | undefined {
     let found:
-      | { readonly kind: 'direct'; readonly exportName?: string; readonly mode?: 'stream' }
+      | DirectRemoteMarker
       | { readonly kind: 'context'; readonly context: string; readonly exportName?: string }
       | undefined
     for (const decorator of ts.canHaveDecorators(member) ? ts.getDecorators(member) ?? [] : []) {
@@ -1406,16 +1418,22 @@ class FaceAnalyzer {
           }
           marker = { kind: 'direct', exportName }
         } else {
-          if (!ts.isObjectLiteralExpression(argument) || argument.properties.length !== 1) {
-            this.fail(argument, 'Remote() options must contain exactly mode: "stream"')
+          if (!ts.isObjectLiteralExpression(argument) || argument.properties.length === 0) {
+            this.fail(argument, 'Remote() options require name, mode: "stream", or rejectUnknownFields: true')
           }
-          const [property] = argument.properties
-          if (property === undefined) this.fail(argument, 'Remote() options must contain exactly mode: "stream"')
-          const mode = ts.isPropertyAssignment(property) && memberName(property.name) === 'mode'
-            ? stringLiteralValue(property.initializer)
-            : undefined
-          if (mode !== 'stream') this.fail(property, 'Remote() options must contain exactly mode: "stream"')
-          marker = { kind: 'direct', mode }
+          marker = { kind: 'direct' }
+          for (const property of argument.properties) {
+            if (!ts.isPropertyAssignment(property)) this.fail(property, 'Remote() options must use named values')
+            const name = memberName(property.name)
+            if (name === 'rejectUnknownFields' && property.initializer.kind === ts.SyntaxKind.TrueKeyword) {
+              marker = { ...marker, rejectUnknownFields: true }
+            } else if (name === 'mode' && stringLiteralValue(property.initializer) === 'stream') marker = { ...marker, mode: 'stream' }
+            else if (name === 'name') {
+              const value = stringLiteralValue(property.initializer)
+              if (value === undefined || !isRemoteSegment(value)) this.fail(property, 'Remote() name must be an endpoint segment')
+              marker = { ...marker, exportName: value }
+            } else this.fail(property, 'Remote() options require name, mode: "stream", or rejectUnknownFields: true')
+          }
         }
       } else if (ts.isCallExpression(expression)
         && this.isTypeMetaSymbol(expression.expression, 'RemoteScope')) {
@@ -1682,6 +1700,12 @@ class FaceAnalyzer {
           completed.set(type, id)
           return id
         }
+        const alias = type.aliasSymbol
+        const aliasDeclaration = alias === undefined ? undefined : preferredDeclaration(this.resolveSymbol(alias))
+        if (alias?.name === 'JsonValue' && aliasDeclaration !== undefined
+          && this.registrationForFile(aliasDeclaration.getSourceFile().fileName)?.name === '@deepseek-ai/dsh-util-values') {
+          return add({ kind: 'keyword', name: 'unknown', json: true })
+        }
         const flags = type.flags
         if (this.isRemoteByteArray(type)) {
           return add({ kind: 'reference', name: 'Uint8Array', target: { kind: 'standard', name: 'Uint8Array' }, arguments: [] })
@@ -1714,9 +1738,22 @@ class FaceAnalyzer {
           const value = (type as ts.Type & { readonly intrinsicName?: string }).intrinsicName === 'true'
           return add({ kind: 'literal', value, text: String(value) })
         }
-        if (type.isUnionOrIntersection()) {
+        if (type.isIntersection()) {
+          const material = type.types.filter(member => !this.isRemotePhantomConstraint(member))
+          if (material.length === 1) {
+            const projected = convert(material[0] as ts.Type)
+            const { id: _projectedId, ...value } = this.nodes.get(projected) as TypeNodeModel
+            return add(value)
+          }
+          // Object intersections contribute one request object; closing each operand
+          // separately would reject fields declared by its sibling operands.
+          if (!material.every(member => (member.flags & ts.TypeFlags.Object) !== 0
+            && !this.checker.isArrayType(member) && !this.checker.isTupleType(member))) {
+            return add({ kind: 'intersection', types: material.map(convert) })
+          }
+        } else if (type.isUnion()) {
           return add({
-            kind: (flags & ts.TypeFlags.Union) !== 0 ? 'union' : 'intersection',
+            kind: 'union',
             types: type.types.map(convert),
           })
         }
@@ -1761,7 +1798,7 @@ class FaceAnalyzer {
           const propertyType = this.checker.getTypeOfSymbolAtLocation(property, declaration ?? authoredType)
           const symbolKey = property.getName()
           members.push({
-            ...EMPTY_DOCUMENTATION,
+            ...(declaration === undefined ? EMPTY_DOCUMENTATION : documentationOf(declaration)),
             id: `${id}#${symbolKey}`,
             name: symbolKey,
             ...(symbolKey.startsWith('__@') ? { computed: 'symbol' as const } : {}),

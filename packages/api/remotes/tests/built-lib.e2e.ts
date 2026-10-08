@@ -175,7 +175,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
           '@deepseek-ai/dsh-api-remotes',
         ]) {
           const plugin = instantiate(id)
-          await client.plugin({ inject: plugin.inject, apply: plugin.apply })
+          await client.plugin({ inject: plugin.inject, apply: plugin.apply, Config: plugin.Config })
         }
         client.typert.contexts.registerClient('agent', {
           identity: candidate => candidate.builtAgentId,

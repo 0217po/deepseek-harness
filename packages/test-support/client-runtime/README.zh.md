@@ -72,6 +72,8 @@ expect(view.getByRole('alert')).toHaveTextContent('goal/not-found')
 
 上面的 slot 档把一个功能挂在替身上。整体档起真实装配：`TestClient.start(plan, mock, options)` 进程内 import 每个 roster 行的 `/client` 模块（或取计划里的 `provide` 替换），把 `{ rpc: mock.rpc }` 绑定到该客户端的 Connection 模块，用 `graphFromRoster` 合成启动图并把已加载模块交给生产模块系统，经生产 `bootClient` 启动，按需挂载 `uiRenderer`，再等 `ctx.connection.state === 'connected'`。它藏在深 import 后面，slot 档测试永不加载它：
 
+装配以 `forwardedEvents: true` 挂载 Gateway Client 行，即已服务的 Web 页面从其 Host 的 Gateway 行获得的选择，因此 roster 插件可以在测试等待 Connection 就绪之前调用 `$on()` 与 `$stream()`。
+
 ```text
 // @vitest-environment jsdom
 import { createClientTest, webApp } from '@deepseek-ai/dsh-client-test-runtime/src/assembly/index.ts'
