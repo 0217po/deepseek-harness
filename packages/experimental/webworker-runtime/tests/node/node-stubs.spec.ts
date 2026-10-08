@@ -168,8 +168,6 @@ describe('node:os', () => {
 
   it('reports no per-core facts and no network interfaces', () => {
     expect(os.cpus()).toEqual([])
-    // The worker webserver binds the loopback literal, so a LAN address is never
-    // derived — and an empty record keeps it out of the trust snapshot.
     expect(os.networkInterfaces()).toEqual({})
     expect(os.availableParallelism()).toBeGreaterThanOrEqual(1)
   })

@@ -14,13 +14,13 @@ The Web Host runs tool-capable Sessions with the current operating-system user's
 
 Each Host process generates a random launch token, retained by the root application context across Connection hot reloads. `dsh-web-app` prints and opens the normal root URL with that token in the query once per process. `frontend-static` asks Connection to authorize index responses: only `GET /?token=...` exchanges the process token for a cookie, then redirects to clean `./`; the token is not accepted on API paths or in an Authorization header. An obsolete token paired with a valid cookie redirects to clean `./`. Missing and invalid credentials receive one minimal 401 response. Static non-index assets remain public.
 
-The cookie is a signed, authority-bound bearer. Its deterministic name and signed payload both include the normalized hostname plus port, so one Harness home can run independent Web ports without cookie collisions. The payload carries safe-integer issue and expiry times under an absolute lifetime; `cookieMaxAgeDays` defaults to 30. The cookie is host-only, `Path=/`, `HttpOnly`, and `SameSite=Strict`. It omits `Secure` because the shipped server uses loopback HTTP. There is no logout operation.
+The cookie is a signed, authority-bound bearer. Its deterministic name and signed payload both include the normalized hostname plus port, so one Harness home can run independent Web ports without cookie collisions. The payload carries safe-integer issue and expiry times under an absolute lifetime; `cookieMaxAgeDays` defaults to 30. The cookie is host-only, `Path=/`, `HttpOnly`, and `SameSite=Strict`. The HTTP listener omits `Secure`. There is no logout operation.
 
 The HMAC secret is a versioned `grant` record at `client-connection/browser-session` in `ctx.credentials`; the local provider stores it in `$DSH_HOME/.credentials.yaml`. Connection loads or creates the record during activation and retains the secret for synchronous request verification. An active Connection continues using its loaded secret if the durable record changes; the next activation loads the replacement or creates a missing record, so deleting the record and restarting the process revokes every existing cookie. Invalid owner payloads fail loud instead of being replaced. The launch token itself is never persisted and changes on every process start, while an unexpired cookie remains valid across restarts on the same authority.
 
 The in-page Web Worker preview exposes no network socket. Its page-owned `postMessage` tunnel enters the real route first, then retries a 401 or 403 through the worker-local fetch handler. This keeps Connection interceptors while limiting the authentication bypass to the page that created the Host worker.
 
-The shipped CLI continues to reject `--host 0.0.0.0`. Authentication does not imply supported network deployment, TLS, forwarding-header interpretation, or proxy configuration.
+The shipped CLI accepts concrete local bind addresses but rejects wildcard addresses such as `--host 0.0.0.0`. Authentication does not configure TLS, forwarding-header interpretation, or proxies.
 
 ## Verification
 
