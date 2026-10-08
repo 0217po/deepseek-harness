@@ -181,7 +181,7 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       expect(result.stopReason).toBe('completed')
       expect(result.value).toBe('stub reply')
       expect(execute.mock.calls[0]?.[0].stateOwner).toBeUndefined()
-      expect(execute.mock.calls[0]?.[0].sandboxPolicy).toBeUndefined()
+      expect(execute.mock.calls[0]?.[0].sandboxPolicy?.mode).toBe('danger-full-access')
     })
 
     it('captures args at start and isolates subsequent caller and script mutations', async () => {

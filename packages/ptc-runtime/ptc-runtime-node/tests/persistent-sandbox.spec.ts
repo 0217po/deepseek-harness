@@ -20,9 +20,9 @@ async function setup(mode: 'read-only' | 'workspace-write' = 'read-only') {
 
 it('retains variables under read-only confinement and denies writes across calls', async () => {
   const { cwd, run } = await setup()
-  expect((await run('var fs = await import("node:fs/promises"); var count = 1;')).error).toBeUndefined()
+  expect((await run('const fsp = await import("node:fs/promises"); var count = 1;')).error).toBeUndefined()
   expect((await run('++count')).value).toBe(2)
-  const result = await run('await fs.writeFile("denied.txt", String(count))')
+  const result = await run('await fsp.writeFile("denied.txt", String(count))')
   expect(result.sandbox).toMatchObject({ mode: 'read-only', denied: true })
   await expect(readFile(join(cwd, 'denied.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
   expect((await run('count')).value).toBe(2)
@@ -30,8 +30,8 @@ it('retains variables under read-only confinement and denies writes across calls
 
 it('retains workspace write access while refusing a sibling path', async () => {
   const { root, cwd, run } = await setup('workspace-write')
-  expect((await run('var fs = await import("node:fs/promises"); await fs.writeFile("inside.txt", "allowed")')).error).toBeUndefined()
-  const result = await run(`await fs.writeFile(${JSON.stringify(join(root, 'outside.txt'))}, "denied")`)
+  expect((await run('const fsp = await import("node:fs/promises"); await fsp.writeFile("inside.txt", "allowed")')).error).toBeUndefined()
+  const result = await run(`await fsp.writeFile(${JSON.stringify(join(root, 'outside.txt'))}, "denied")`)
   expect(result.sandbox).toMatchObject({ mode: 'workspace-write', denied: true })
   expect(await readFile(join(cwd, 'inside.txt'), 'utf8')).toBe('allowed')
   await expect(readFile(join(root, 'outside.txt'))).rejects.toMatchObject({ code: 'ENOENT' })

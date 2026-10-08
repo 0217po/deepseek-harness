@@ -187,11 +187,11 @@ describe('persistent PTC host protocol', () => {
       h.stderr.write('stderr')
       h.emit(frame({ type: 'done' }))
     })
-    expect(await h.start()).toEqual({ logs: ['stdout', 'stderr'] })
+    expect(await h.start()).toMatchObject({ logs: ['stdout', 'stderr'] })
     h.stdout.write('idle stdout')
     h.stderr.write('idle stderr')
     h.onBoot(() => { h.emit(frame({ type: 'done' }, 2)) })
-    expect(await h.start(request, NO_INITIAL_FRAME)).toEqual({ logs: [] })
+    expect(await h.start(request, NO_INITIAL_FRAME)).toMatchObject({ logs: [] })
     expect(h.terminate).not.toHaveBeenCalled()
   })
 
@@ -284,7 +284,7 @@ describe('persistent PTC host protocol', () => {
   ])('bounds cleanup failure after parse diagnostics overflow a $maxOutputBytes-byte budget', async ({ maxOutputBytes, kind }) => {
     const h = await setup({ maxOutputBytes })
     h.onBoot(() => { h.emit(frame({ type: 'done' })) })
-    expect(await h.start()).toEqual({ logs: [] })
+    expect(await h.start()).toMatchObject({ logs: [] })
     h.waitForExit.mockRejectedValue(new Error('x'))
     const result = await h.runtime.run(h.runtime.resolve({ ...request, program: 'return 1' }))
     expect(result.error?.kind).toBe(kind)
@@ -293,7 +293,7 @@ describe('persistent PTC host protocol', () => {
     expect(bytes).toBeLessThanOrEqual(maxOutputBytes)
     expect(h.terminate).toHaveBeenCalledTimes(1)
     expect(h.waitForExit).toHaveBeenCalledTimes(1)
-    await h.runtime.release(request.stateOwner!)
+    await expect(h.runtime.release(request.stateOwner!)).rejects.toThrow('x')
   })
 
   it('rejects invalid resolved inputs and deployment bounds', async () => {
@@ -397,7 +397,7 @@ it('logs an idle process failure with its bounded stderr tail', async () => {
   } finally { reported.mockRestore() }
 })
 
-it('reports a release failure once and removes the failed environment from provider cleanup', async () => {
+it('keeps an owner unavailable after release cleanup fails', async () => {
   const h = await setup()
   h.onBoot(() => { h.emit(frame({ type: 'done' })) })
   await h.start()
@@ -406,9 +406,10 @@ it('reports a release failure once and removes the failed environment from provi
   await expect(h.runtime.release(request.stateOwner!)).rejects.toBe(failure)
   const reported = vi.spyOn(h.fiber.ctx.logger, 'error').mockImplementation(() => {})
   try {
-    await h.runtime.release(request.stateOwner!)
+    await expect(h.runtime.release(request.stateOwner!)).rejects.toBe(failure)
+    await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('concurrent runs')
     await h.fiber.dispose()
-    expect(reported).not.toHaveBeenCalled()
+    expect(reported).toHaveBeenCalled()
     expect(h.waitForExit).toHaveBeenCalledOnce()
   } finally { reported.mockRestore() }
 })

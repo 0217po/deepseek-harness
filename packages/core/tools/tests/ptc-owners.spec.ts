@@ -26,7 +26,11 @@ async function setup() {
   await ctx.plugin(SandboxPolicy, { mode: 'workspace-write' })
   await ctx.plugin(Approval)
   ctx.provide('shell', { sandboxMode: 'workspace-write' })
-  await ctx.plugin(PermissionPresets, {})
+  await ctx.plugin(PermissionPresets, { presets: {
+    'read-only': { sandbox: 'read-only', approval: 'ask' },
+    'workspace-write': { sandbox: 'workspace-write', approval: 'ask' },
+    'danger-full-access': { sandbox: 'danger-full-access', approval: 'never' },
+  } })
   await ctx.plugin(Runtime)
   const session = ctx.sessions.create(SessionId('ptc-permission-owner'))
   const agent = { ctx, session } as Agent

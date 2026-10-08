@@ -37,7 +37,7 @@ interface Evaluation {
 
 /** One managed process; all mutable program state belongs to this process alone. */
 class Kernel {
-  private confined?: ConfinedArgv
+  private confined: ConfinedArgv | undefined
   private handle?: SubprocessHandle
   private channel?: JsonChannel
   private active: Evaluation | undefined

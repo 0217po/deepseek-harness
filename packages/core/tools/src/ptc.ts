@@ -369,7 +369,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
       const runtime = requireRuntime()
       const admission = stateOwners.enter(exec.agent, runtime, exec.signal, args.sandbox_permissions !== undefined,
         () => runtime.sandboxMode === undefined ? undefined : options.resolveSandboxPolicy(exec))
-      exec = { ...exec, signal: admission.signal }
+      const callSignal = admission.signal
       try {
         validateEscalationArgs(args.sandbox_permissions, args.justification)
         if (args.timeoutMs !== undefined && runtime.timeout === undefined) {
@@ -389,20 +389,20 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
             subject: 'program',
           }, {
             approver: options.peekApprover(), agent: exec.agent, callId: exec.callId,
-            toolName: RUN_CODE_NAME, signal: exec.signal,
+            toolName: RUN_CODE_NAME, signal: callSignal,
           })
           policy = { ...standingPolicy, mode: approvedMode }
         }
-        const cwd = await options.resolveWorkingDirectory(exec)
-        exec.signal.throwIfAborted()
+        const cwd = await options.resolveWorkingDirectory({ ...exec, signal: callSignal })
+        callSignal.throwIfAborted()
 
         // The run-scoped abort: follows the outer signal in, and fires when the
         // run settles for ANY reason, so an in-flight sub-dispatch is aborted
         // (its executor kills on this signal) instead of orphaned, and
         // queued-unstarted dispatches are abandoned.
         const runController = new AbortController()
-        const onOuterAbort = (): void => { runController.abort(exec.signal.reason) }
-        exec.signal.addEventListener('abort', onOuterAbort, { once: true })
+        const onOuterAbort = (): void => { runController.abort(callSignal.reason) }
+        callSignal.addEventListener('abort', onOuterAbort, { once: true })
 
         let dispatches = 0
         // The per-run scheduler uses the registry's staged interface and follows
@@ -719,7 +719,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
             ...result.value !== undefined ? { result: result.value } : {},
           }
         } finally {
-          exec.signal.removeEventListener('abort', onOuterAbort)
+          callSignal.removeEventListener('abort', onOuterAbort)
         }
       } finally { await admission.finish() }
     },
