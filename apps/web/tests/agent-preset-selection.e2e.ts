@@ -455,8 +455,9 @@ it.each([false, true])('starts Creator from Plugins with Coding Tools=%s without
 
     await page.getByRole('navigation', { name: 'Global panels' }).getByRole('button', { name: 'Plugins', exact: true }).click()
     await page.getByRole('button', { name: 'Choose how to add a plugin', exact: true }).click()
+    // The Creator entry reuses the draft's blank Session and names its preset in the creation request.
     await Promise.all([
-      page.waitForResponse('**/api/agentPresets/select'),
+      page.waitForResponse('**/api/session/create'),
       page.getByRole('menuitem', { name: /^Let the agent create a plugin/ }).click(),
     ])
     const picker = page.getByTitle('Choose the agent preset for your new task', { exact: true }).filter({ hasText: 'Creator mode' })
