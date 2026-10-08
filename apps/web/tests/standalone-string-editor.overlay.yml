@@ -1,0 +1,4 @@
+- preset: preset-ptc
+  insert:
+    - id: optional-tool-str-replace-editor
+      name: '@deepseek-ai/dsh-tool-str-replace-editor'

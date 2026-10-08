@@ -40,7 +40,7 @@ export interface SessionSummary {
   /**
    * New Session presentation and reuse eligibility, derived from the Host
    * summary, `sessionListMetadata`, and client acceptance/running observations.
-   * New Session reuses a blank one targeting the same workspace. Filtering
+   * Workspace reconnection may reuse a blank in the same workspace. Filtering
    * stays with the consumer: the store carries every row, while the Workspace
    * browser shows only the selected blank entry.
    */
@@ -633,6 +633,7 @@ export class ClientSessions implements ISessions {
     }
     for (const [parentId, projection] of Object.entries(projectionsBySession)) {
       for (const child of projection.values.subagentCatalog ?? []) {
+        if (child.mode === 'external') continue
         const childId = child.id
         const summary = byId[childId]
         const projectionValues = summary?.projectionValues ?? this.manager.projectionValues(childId)

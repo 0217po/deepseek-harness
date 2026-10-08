@@ -53,7 +53,7 @@ A fixed Overview above the ledger projects real record start/duration timing fro
 
 The view is a pure projection: Trajectory-owned Definitions assemble business records from the shared Session window — including durable cancellation-finalized prefixes, chunk-only interruption fallbacks, and interrupted Tool records — so Trajectory neither reads nor changes the Chat conversation snapshot. Its steering classifier retains only next-step Inbox IDs through persistent splice state and shares each current claimed batch across later Contexts.
 
-Native and nested PTC Tool results retain their raw structured error details. Failed records show the error code in the ledger and the error name and code in the inspector.
+Native and nested PTC Tool results retain their raw structured error details and presentation metadata. Failed records show the error code in the ledger and the error name and code in the inspector.
 
 Tool records begin at durable tool/call events and retain complete argument text with a lazy `args` view, reused by paired results. Chat's transient preparing stage does not create Trajectory tool rows or alter historical tool timing.
 
@@ -112,5 +112,3 @@ These limits define what the view can show while work is in flight; they are cur
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. It is a pure-consumer plugin: it emits no Cordis events and owns no mutable cross-plugin state; its view-slot registration is a plain effect whose disposal the slot ledger's own specs and this package's behavior specs observe directly.

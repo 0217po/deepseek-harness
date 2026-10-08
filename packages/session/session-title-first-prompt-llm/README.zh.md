@@ -73,7 +73,7 @@ kind: "package-reference"
 当提供方约定不够用时阅读以下页面。它们从共享策略逐步进入替代节奏与它所插入的服务。
 
 - [共享 LLM 标题策略](../session-title-llm/README.zh.md)——此提供方使用的生成辅助模块。
-- [全消息标题提供方](../session-title-all-prompts-llm/README.zh.md)——在每条新提示词后重新生成标题的节奏。
+- [全消息标题提供方](../../experimental/session-title-all-prompts-llm/README.zh.md)——在每条新提示词后重新生成标题的节奏。
 - [会话标题服务](../session-title/README.zh.md)——回退行为、重命名、刷新与提供方注册。
 - [会话包映射](../README.zh.md)——相邻的持久化、投影、标题与遥测包。
 
@@ -115,5 +115,3 @@ kind: "package-reference"
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。这个轻量提供方将请求与结果校验委托给共享标题服务和 LLM 辅助模块，不保留独立的可变状态。

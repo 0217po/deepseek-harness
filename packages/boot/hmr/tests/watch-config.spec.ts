@@ -14,7 +14,9 @@ import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { FSWatcher, type ChokidarOptions } from 'chokidar'
 
-const configWatch = vi.hoisted(() => ({ create: undefined as ((options?: ChokidarOptions) => FSWatcher) | undefined }))
+const configWatch = vi.hoisted(() => ({
+  create: undefined as ((paths: string | string[], options?: ChokidarOptions) => FSWatcher) | undefined,
+}))
 vi.mock('node:fs', async (importOriginal) => {
   const native = await importOriginal<typeof import('node:fs')>()
   return { ...native, realpathSync: vi.fn(native.realpathSync) }
@@ -26,7 +28,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 vi.mock('chokidar', async (importOriginal) => {
   const native = await importOriginal<typeof import('chokidar')>()
   return { ...native, watch: (paths: string | string[], options?: ChokidarOptions) =>
-    configWatch.create === undefined ? native.watch(paths, options) : configWatch.create(options) }
+    configWatch.create === undefined ? native.watch(paths, options) : configWatch.create(paths, options) }
 })
 
 /** Every per-test tree root, removed once the booted watcher has been disposed. */
@@ -81,9 +83,13 @@ describe('HMR exact config paths', () => {
     for (const root of hmrRoots.splice(0)) rmSync(root, { recursive: true, force: true })
   })
 
-  it.each([false, true])('excludes sibling files while observing config replacement (missing parents: %s)', { timeout: 20_000 }, async (missingParents) => {
-    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-hmr-config-scope-')))
-    onTestFinished(() => { rmSync(dir, { recursive: true, force: true }) })
+  it.for([false, true])('excludes siblings while observing config replacement through an alias (missing parents: %s)', async (missingParents, test) => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-hmr-config-scope-'))
+    onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
+    const target = join(root, 'target')
+    const dir = join(root, 'alias')
+    mkdirSync(target)
+    symlinkSync(target, dir, process.platform === 'win32' ? 'junction' : 'dir')
     const filename = join(dir, ...(missingParents ? ['later', 'nested'] : []), 'package.json')
     writeFileSync(join(dir, 'package.json.lock'), 'held')
     mkdirSync(join(dir, 'unrelated'))
@@ -94,9 +100,9 @@ describe('HMR exact config paths', () => {
     let watcher!: FSWatcher
     const previousFactory = configWatch.create
     onTestFinished(() => { configWatch.create = previousFactory })
-    configWatch.create = (options) => {
+    configWatch.create = (paths, options) => {
       watcher = new FSWatcher(options)
-      return watcher.add(dir)
+      return watcher.add(paths)
     }
     const observed: string[] = []
     await watchConfig(ctx, filename, {}, () => { observed.push(readFileSync(filename, 'utf8')) })
@@ -105,9 +111,9 @@ describe('HMR exact config paths', () => {
     expect(watchedEntries()).not.toContain('unrelated')
     ensureNativeWatchLive(dir)
     await writeFileAtomic(filename, 'created', { mode: 0o600 })
-    await vi.waitFor(() => { expect(observed).toContain('created') }, { timeout: 8_000 })
+    await eventually(() => observed.includes('created'), 'created config was not observed', test.task.timeout)
     await writeFileAtomic(filename, 'replaced', { mode: 0o600 })
-    await vi.waitFor(() => { expect(observed).toContain('replaced') }, { timeout: 8_000 })
+    await eventually(() => observed.includes('replaced'), 'replaced config was not observed', test.task.timeout)
     expect(watchedEntries()).toContain('package.json')
     expect(watchedEntries()).not.toContain('package.json.lock')
     expect(watchedEntries()).not.toContain('unrelated')
@@ -285,7 +291,7 @@ describe('HMR exact config paths', () => {
     let watcher!: FSWatcher
     const previousFactory = configWatch.create
     onTestFinished(() => { configWatch.create = previousFactory })
-    configWatch.create = (options) => {
+    configWatch.create = (_paths, options) => {
       watcher = new FSWatcher(options)
       // Use Chokidar's real normalization with deterministic event delivery.
       Reflect.set(watcher, '_readyEmitted', true)
@@ -352,6 +358,27 @@ describe('HMR exact config paths', () => {
     onTestFinished(() => { warn.mockRestore() })
     watcher.emit('error', failure)
     expect(warn).toHaveBeenCalledWith(failure)
+  })
+
+  it('absorbs a watcher error emitted after close removed its listeners', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-patch-close-error-'))
+    hmrRoots.push(dir)
+    const filename = join(dir, 'plugins.yml')
+    const ctx = await bootHmr(dir)
+    onTestFinished(() => ctx.fiber.dispose())
+    const watcher = new FSWatcher()
+    const previousFactory = configWatch.create
+    onTestFinished(() => { configWatch.create = previousFactory })
+    configWatch.create = () => { queueMicrotask(() => { watcher.emit('ready') }); return watcher }
+    const dispose = await watchConfig(ctx, filename, {}, () => {})
+    await dispose()
+    expect(watcher.listenerCount('error')).toBe(1)
+
+    // Mirror the real close(): it drops every listener before a pending write-settle poll fires.
+    expect(() => watcher.emit('error', Object.assign(
+      new Error("EPERM: operation not permitted, stat 'C:\\Temp\\dsh\\.credentials.yaml'"),
+      { code: 'EPERM', syscall: 'stat' },
+    ))).not.toThrow()
   })
 
   it('closes a ready watcher when its context has already been disposed', async () => {
