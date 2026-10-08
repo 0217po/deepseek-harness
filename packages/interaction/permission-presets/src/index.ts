@@ -423,11 +423,11 @@ export class PermissionPresetService extends TypertRemoteService {
     if (this.changing.has(session)) throw new Error('permission: another preset change is still in progress')
     this.changing.add(session)
     try {
-      return await this.ctx.waterfall('permission-presets/apply', session, spec.sandbox, async () => {
+      return await this.ctx.waterfall('permission-presets/apply', session, spec.sandbox, () => {
         if (current !== name) session.append('permission/preset', { preset: name })
         if (spec.sandbox !== (knobs.sandbox ?? this.ctx.shell.sandboxMode)) setSandboxMode(session, spec.sandbox)
         if (spec.approval !== (knobs.approval ?? this.ctx.approval.config.policy ?? 'ask')) setApproval(spec.approval)
-        return []
+        return Promise.resolve([])
       })
     } finally { this.changing.delete(session) }
   }

@@ -9,7 +9,7 @@ import type {} from '@deepseek-ai/dsh-permission-presets'
 interface OwnerState {
   providers: Map<PtcRuntime, Set<object>>
   controllers: Set<AbortController>
-  changing: boolean
+  phase: 'ready' | 'changing' | 'disposed'
 }
 
 /** Keeps admission closed until permission changes and resource disposal settle. */
@@ -28,15 +28,16 @@ export class PtcOwners {
   enter(
     agent: Agent | undefined, runtime: PtcRuntime, signal: AbortSignal, temporary: boolean,
     policy: () => SandboxExecutionPolicy | undefined,
-  ) {
+  ): { owner: object | undefined; signal: AbortSignal; finish: () => Promise<void> } {
     if (agent === undefined) {
       return { owner: undefined, signal, finish: async () => {} }
     }
     let state = this.agents.get(agent)
     if (state === undefined) {
-      state = { providers: new Map(), controllers: new Set(), changing: false }
+      state = { providers: new Map(), controllers: new Set(), phase: 'ready' }
       this.agents.set(agent, state)
       const owned = state
+      const isDisposed = (): boolean => owned.phase === 'disposed'
       const clear = async (): Promise<void> => {
         for (const controller of owned.controllers) controller.abort(new Error('PTC environment cleared for a permission change or Agent disposal'))
         const results = await Promise.allSettled([...owned.providers].flatMap(([provider, owners]) =>
@@ -45,17 +46,20 @@ export class PtcOwners {
         if (failure?.status === 'rejected') throw failure.reason
         owned.providers.clear()
       }
-      agent.ctx.effect(() => async () => { owned.changing = true; await clear() }, 'PTC retained environments')
+      agent.ctx.effect(() => async () => { owned.phase = 'disposed'; await clear() }, 'PTC retained environments')
       agent.ctx.on('permission-presets/apply', async (session, mode, next) => {
         if (session !== agent.session || policy()?.mode === mode) return next()
-        if (owned.changing) throw new Error('PTC environment cleanup is still in progress')
-        owned.changing = true
+        if (owned.phase !== 'ready') throw new Error('PTC environment cleanup is still in progress')
+        owned.phase = 'changing'
         const retained = [...owned.providers.keys()].some(provider => provider.retainsState)
         try {
           await clear()
+          if (isDisposed()) throw new Error('PTC Agent was disposed during the permission change')
           const notices = await next()
           return retained ? [...notices, 'PTC variables were cleared after the sandbox mode changed. Recreate variables before using them.'] : notices
-        } finally { owned.changing = false }
+        } finally {
+          if (!isDisposed()) owned.phase = 'ready'
+        }
       }, { global: true })
       agent.ctx.on('internal/dispatch', (_mode, name, args) => {
         if (name !== 'session/event') return
@@ -66,7 +70,7 @@ export class PtcOwners {
         }
       }, { global: true })
     }
-    if (state.changing) throw new Error('PTC cannot start while its permission or lifecycle cleanup is in progress')
+    if (state.phase !== 'ready') throw new Error('PTC cannot start while its permission or lifecycle cleanup is in progress')
     let provider = runtime
     for (;;) {
       const original = (provider as PtcRuntime & { [symbols.original]?: PtcRuntime })[symbols.original]

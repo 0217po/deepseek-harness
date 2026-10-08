@@ -1407,15 +1407,13 @@ describe('cancellation and integration teardown', () => {
     let observedPreset: string | undefined
     let selectionFailure: unknown
     let competingCall: ReturnType<typeof ctx.tools.execute> | undefined
-    ctx.on('session/event', async (session, event) => {
+    let selectionAttempt: Promise<void> | undefined
+    ctx.on('session/event', (session, event) => {
       if (session !== first.session || event.type !== 'permission/preset'
         || event.data.preset !== 'danger-full-access') return
       observedPreset = ctx.permissionPresets.current(second.session)
-      try {
-        await ctx.permissionPresets.set(second.session, AUTO_PRESET)
-      } catch (error) {
-        selectionFailure = error
-      }
+      selectionAttempt = ctx.permissionPresets.set(second.session, AUTO_PRESET)
+        .then(() => {}, (error: unknown) => { selectionFailure = error })
       competingCall = ctx.tools.execute({
         signal: new AbortController().signal,
         callId,
@@ -1426,6 +1424,7 @@ describe('cancellation and integration teardown', () => {
     })
 
     await auto.dispose()
+    await selectionAttempt
 
     expect(observedPreset).toBe(AUTO_PRESET)
     expect(selectionFailure).toEqual(new Error('auto-review: integration is closing'))

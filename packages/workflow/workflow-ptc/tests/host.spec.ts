@@ -68,7 +68,9 @@ describe('workflow host callback validation', () => {
     const execute = vi.spyOn(runtime, 'run')
     const run = start()
     try {
-      expect(await run.result).toMatchObject({ stopReason: 'error', error: expect.stringContaining('selected directory is unavailable') })
+      const result = await run.result
+      expect(result.stopReason).toBe('error')
+      expect(result.error).toContain('selected directory is unavailable')
       expect(execute).not.toHaveBeenCalled()
     } finally {
       await run.dispose()

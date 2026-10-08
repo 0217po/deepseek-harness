@@ -172,6 +172,7 @@ class Kernel {
     const argv = [executable, `--max-old-space-size=${this.config.maxOldGenerationSizeMb}`, ...bootstrapArgs(this.ctx.fs, this.config, this.config.maxMessageBytes, true)]
     const policy = this.policy
     this.confined = policy.mode === 'danger-full-access' ? undefined : await this.ctx.sandbox.confine(argv, { ...policy, mode: policy.mode }, this.controller.signal)
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- Cancellation can close the kernel during confinement.
     if (this.closed) return
     const env: NodeJS.ProcessEnv = Object.fromEntries(Object.keys(process.env)
       .filter(key => !STARTUP_ENVIRONMENT_NAMES.has(key.toUpperCase()) && key.toUpperCase() !== 'ELECTRON_RUN_AS_NODE')

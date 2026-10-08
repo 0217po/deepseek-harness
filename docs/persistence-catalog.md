@@ -683,7 +683,7 @@ Source: [`packages/api/session-controller/src/types.ts:40`](../packages/api/sess
 'permission/preset': { preset: string }
 ```
 
-Source: [`packages/interaction/permission-presets/src/index.ts:59`](../packages/interaction/permission-presets/src/index.ts)
+Source: [`packages/interaction/permission-presets/src/index.ts:72`](../packages/interaction/permission-presets/src/index.ts)
 
 ### `plan/*`
 
@@ -6747,7 +6747,7 @@ Sources: [`packages/session/session-title/src/types.ts:30`](../packages/session/
 
 SHA-256: `dba54c09c6e7aafc9acbed7792ecc920d99f92d0784aeeed10af55f7fe0bc8cd`
 
-Sources: [`packages/core/tools/src/ptc.ts:15`](../packages/core/tools/src/ptc.ts)
+Sources: [`packages/core/tools/src/ptc.ts:14`](../packages/core/tools/src/ptc.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -7575,7 +7575,7 @@ Sources: [`packages/interaction/user-approval/src/index.ts:40`](../packages/inte
 
 SHA-256: `8a9c990773f798eac10ca8878e6bcc531ee080bc589cac956730e462cc6a09ad`
 
-Sources: [`packages/interaction/permission-presets/src/index.ts:59`](../packages/interaction/permission-presets/src/index.ts)
+Sources: [`packages/interaction/permission-presets/src/index.ts:72`](../packages/interaction/permission-presets/src/index.ts)
 
 | Property | Presence | Type |
 |---|---|---|

@@ -35,7 +35,8 @@ async function setup() {
   const session = ctx.sessions.create(SessionId('ptc-permission-owner'))
   const agent = { ctx, session } as Agent
   const owners = new PtcOwners()
-  const enter = (temporary = false) => owners.enter(agent, ctx.ptcRuntime, new AbortController().signal, temporary,
+  const runtime = ctx.ptcRuntime
+  const enter = (temporary = false) => owners.enter(agent, runtime, new AbortController().signal, temporary,
     () => ctx.sandboxPolicy.resolve({ session }))
   return { ctx, session, agent, enter }
 }
@@ -68,7 +69,7 @@ it('keeps permission events unchanged when cleanup fails and rejects raw mode wr
   const { ctx, session, enter } = await setup()
   await enter().finish()
   const before = session.snapshotEvents()
-  expect(() => setSandboxMode(session, 'read-only')).toThrow('release retained PTC')
+  expect(() => { setSandboxMode(session, 'read-only') }).toThrow('release retained PTC')
   const release = vi.spyOn(ctx.ptcRuntime, 'release').mockRejectedValue(new Error('cleanup failed'))
   try {
     await expect(ctx.permissionPresets.set(session, 'read-only')).rejects.toThrow('cleanup failed')
@@ -111,4 +112,29 @@ it('cancels admitted programs while switching permissions', async () => {
   await ctx.permissionPresets.set(session, 'read-only')
   expect(call.signal.aborted).toBe(true)
   await call.finish()
+})
+
+it('keeps admission closed when Agent disposal overlaps a permission change', async () => {
+  const { ctx, session, enter } = await setup()
+  await enter().finish()
+  const entered = Promise.withResolvers<undefined>()
+  const disposingEntered = Promise.withResolvers<undefined>()
+  const released = Promise.withResolvers<undefined>()
+  let calls = 0
+  const release = vi.spyOn(ctx.ptcRuntime, 'release').mockImplementation(async () => {
+    if (++calls === 1) entered.resolve(undefined)
+    else disposingEntered.resolve(undefined)
+    await released.promise
+  })
+  const switching = ctx.permissionPresets.set(session, 'read-only')
+  const rejected = expect(switching).rejects.toThrow('disposed during the permission change')
+  await entered.promise
+  const disposing = ctx.fiber.dispose()
+  try {
+    await disposingEntered.promise
+    released.resolve(undefined)
+    await rejected
+    await disposing
+    expect(() => enter()).toThrow('cleanup is in progress')
+  } finally { released.resolve(undefined); await Promise.allSettled([switching, disposing]); release.mockRestore() }
 })
