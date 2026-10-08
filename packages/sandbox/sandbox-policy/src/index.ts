@@ -317,7 +317,7 @@ export class SandboxPolicyService extends Service {
       executions?.delete(execution)
       if (executions?.size === 0) this.executions.delete(sessionId)
       done.resolve(undefined)
-      release()
+      await release()
     }
   }
 
