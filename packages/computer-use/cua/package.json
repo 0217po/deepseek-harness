@@ -63,6 +63,7 @@
     "@deepseek-ai/dsh-atomic-write": "workspace:*"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-working-directory": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/cordis-plugin-include": "workspace:~",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",

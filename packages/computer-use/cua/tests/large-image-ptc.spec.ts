@@ -25,6 +25,7 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubprocessLocal from '@deepseek-ai/dsh-subprocess-local'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 import sharp from 'sharp'
 import { expect, it, onTestFinished } from 'vitest'
 import * as NativeProvider from '../src/index.ts'
@@ -77,11 +78,11 @@ createInterface({ input: process.stdin }).on('line', line => {
     systemPrompt: SystemPrompt, tools: ToolRuntime, agents: AgentRegistry, agentLoop: AgentLoop,
     attachments: LocalAttachmentStore, fs: FileSystem, subprocess: SubprocessLocal,
     sandbox: Sandbox, sandboxPolicy: SandboxPolicy, ptc: NodePtcRuntime,
-    computerUse: ComputerUseRegistry, cua: NativeProvider,
+    computerUse: ComputerUseRegistry, cua: NativeProvider, workingDirectory: WorkingDirectory,
   }
   const configPath = join(root, 'cordis.yml')
   const configs: Record<string, object> = {
-    tools: { mode: 'ptc' }, attachments: { dshHome: join(root, 'home') },
+    tools: { mode: 'ptc' }, attachments: { dshHome: join(root, 'home') }, workingDirectory: { defaultDirectory: root },
     fs: { cwd: root }, sandboxPolicy: { mode: 'danger-full-access', workspaceRoot: root }, cua: { helperPath, allowedApps: [{ 'id': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'name': 'Fixture', 'executablePath': '/fixture/app' }] },
   }
   await writeFile(configPath, Object.keys(modules).flatMap(name => [

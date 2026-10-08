@@ -6755,6 +6755,9 @@ importers:
       '@deepseek-ai/dsh-user-questions':
         specifier: workspace:*
         version: link:../../interaction/user-questions
+      '@deepseek-ai/dsh-working-directory':
+        specifier: workspace:*
+        version: link:../../session/working-directory
       sharp:
         specifier: ^0.35.3
         version: 0.35.5(@types/node@22.20.1)
