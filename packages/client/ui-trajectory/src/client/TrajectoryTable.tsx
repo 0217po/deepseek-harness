@@ -726,6 +726,7 @@ function collapseAssistantRecords(
 function stateOf(record: TableRecord): RecordState {
   if (record.cell.isError) return 'error'
   if (record.cell.kind === 'compacted' && record.cell.timeSeconds === null) return 'running'
+  if (record.cell.assistantMetrics?.completedTime === null) return 'running'
   if (
     (record.cell.kind === 'tool' || record.cell.kind === 'subtool')
     && record.cell.outputDetail === undefined

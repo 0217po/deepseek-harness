@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-app-boot'
+import { ON_DEMAND_BUNDLES, OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-app-boot'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { join } from 'node:path'
 import {
@@ -89,10 +89,10 @@ describe('web e2e: plugin configuration pages', () => {
 
     // Every page the shipped web composition exposes: the shell executor, the
     // agent loop, subagent selection, and the DeepSeek search provider, after
-    // the official bundles the installation ships switched off.
+    // the shipped optional bundles and offline on-demand catalog.
     await panel.getByRole('button', { name: '查看 网页搜索', exact: true }).waitFor({ timeout: 20_000 })
     const official = panel.locator('[data-plugin-group="official"]')
-    expect(await official.locator('[data-plugin-package]').count()).toBe(OPTIONAL_BUNDLES.length)
+    expect(await official.locator('[data-plugin-package]').count()).toBe(OPTIONAL_BUNDLES.length + ON_DEMAND_BUNDLES.length)
     expect(await official.locator('[data-plugin-item]').count()).toBe(4)
     for (const title of ['终端', 'Agent 循环', '子智能体', '网页搜索']) {
       expect(await official.getByRole('button', { name: `查看 ${title}`, exact: true }).count()).toBe(1)

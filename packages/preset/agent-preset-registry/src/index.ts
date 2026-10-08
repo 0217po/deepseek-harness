@@ -32,6 +32,7 @@ interface Generation {
   scope: Scope
   key: ScopeKey
   mount: PresetMount
+  definitionEntryId?: string
   users: number
   retired: boolean
 }
@@ -108,7 +109,9 @@ export class AgentPresetRegistry extends TypertRemoteService {
       if (problem !== undefined) throw new Error(problem)
       const context = scope.ctx.extend({ baseUrl: record.context.baseUrl })
       const mount = await mountPreset(context, record.config.id, record.config.plugins)
-      const generation: Generation = { scope, key, mount, users: 0, retired: false }
+      const definitionEntryId = record.context.fiber.entry?.options.id
+      const generation: Generation = { scope, key, mount, users: 0, retired: false,
+        ...definitionEntryId === undefined ? {} : { definitionEntryId } }
       context.effect(() => {
         this.generations.set(key, generation)
         return () => { this.generations.delete(key) }
@@ -159,26 +162,29 @@ export class AgentPresetRegistry extends TypertRemoteService {
 
   /** Inspect retained revisions, or the exact revision an Agent joined.
    * @param ctx - optional Agent context; omission includes all retained revisions.
-   * @returns detached module references and isolation diagnostics; no match returns an empty list.
+   * @returns detached definition and module row identities, resolution bases, and isolation diagnostics; no match returns an empty list.
    */
   inspectCompositions(ctx?: Context): AgentPresetInspection[] {
     const joined = ctx === undefined ? undefined : this.generationFor(ctx)
     const generations = ctx === undefined ? [...this.generations.values()] : joined === undefined ? [] : [joined]
-    return generations.map(({ mount }) => ({
+    return generations.map(({ mount, definitionEntryId }) => ({
       id: mount.presetId,
+      ...definitionEntryId === undefined ? {} : { definitionEntryId },
       modules: activeCompositionModules(mount.tree),
       leakedServices: leakedServices(this.owner, mount.fiber),
     }))
   }
 
   /** Read every declared preset, including activation failures.
-   * @returns Display metadata and loading diagnostics.
+   * @returns Display metadata, declaring Loader row identities, and loading diagnostics.
    */
   async list(): Promise<AgentPreset[]> {
     const rows = await Promise.all([...this.definitions.values()].map(async (record) => {
       const broken = await this.diagnostic(record)
+      const definitionEntryId = record.context.fiber.entry?.options.id
       return {
         id: record.config.id,
+        ...definitionEntryId === undefined ? {} : { definitionEntryId },
         ...(record.config.name === undefined ? {} : { name: record.config.name }),
         ...(record.config.description === undefined ? {} : { description: record.config.description }),
         ...(record.config.order === undefined ? {} : { order: record.config.order }),
@@ -194,7 +200,7 @@ export class AgentPresetRegistry extends TypertRemoteService {
   @Remote('list')
   async remoteExportList(): Promise<AgentPresetRoster> {
     const defaultId = this.defaultId
-    return { presets: (await this.list()).map(row => ({ ...row, isDefault: row.id === defaultId })) }
+    return { presets: (await this.list()).map(({ definitionEntryId: _entryId, ...row }) => ({ ...row, isDefault: row.id === defaultId })) }
   }
 
   /** Resolve an identity without starting an Agent.

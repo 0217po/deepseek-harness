@@ -45,7 +45,7 @@ kind: "package-reference"
 <details>
 <summary>实现内幕——点击展开</summary>
 
-头部操作带里的一个 slot 条目（preset 标签之后）渲染触发器与弹出层；弹出层通过测量锚点把自己收进视口。所有数据经 `ctx.jobs` 到达——组件不持有任何传输状态。名册跟随挂载：一个 `useEffect` 在控件存活期间保持会话的 `job.list` 流打开。观测跟随可见性：另一个 `useEffect` 为展开行的 job 打开流，并在收起、卸载或弹出层关闭时关闭它。
+头部操作带里的一个 slot 条目（preset 标签之后）渲染触发器与弹出层；弹出层挂载到 document body，因此不会被裁剪的头部列或右侧边栏截断，并按锚点定位、限制在视口内。所有数据经 `ctx.jobs` 到达——组件不持有任何传输状态。名册跟随挂载：一个 `useEffect` 在控件存活期间保持会话的 `job.list` 流打开。观测跟随可见性：另一个 `useEffect` 为展开行的 job 打开流，并在收起、卸载或弹出层关闭时关闭它。
 
 | 文件 | 角色 |
 |---|---|
@@ -92,5 +92,3 @@ kind: "package-reference"
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。本包只把 `ctx.jobs` 的名册与视图只读投影到一个 header slot，不发出 Cordis 事件，也不持有跨插件可变状态；其唯一的 slot 注册通过 HMR（热模块替换）安全性规范验证了资源释放行为。

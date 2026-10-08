@@ -535,7 +535,7 @@ interface LlmModelContext {
 }
 ```
 
-推理强度是另一项针对确切路由的能力。核心为标识符添加品牌类型，但不枚举其值；有序集合、展示名称和可选的部署默认值均由各适配器持有。
+推理强度是另一项确切路由能力。核心为标识符添加品牌类型，但不枚举其值；每个适配器负责按强度递增排列的选项、显示名称与可选部署默认值。该顺序比较可选控制，不预测 token 用量、成本或延迟。
 
 ```ts type-equiv
 /** Adapter-owned identifier for one model's selectable reasoning effort. */
@@ -557,7 +557,7 @@ interface LlmReasoningEffortInfo {
 ```ts type-equiv
 /** Selectable reasoning efforts for one exact provider/model route. */
 interface LlmModelReasoningInfo {
-  /** Supported efforts in adapter-preferred display order. */
+  /** Supported efforts from least to greatest selectable reasoning effort, not predicted token use or latency. */
   efforts: readonly LlmReasoningEffortInfo[]
   /**
    * Adapter-configured default materialized into requests when callers omit
@@ -640,8 +640,8 @@ interface GenerateOptions {
   sessionId?: Branded<'SessionId'>
   /**
    * Provider-neutral classification for an auxiliary model call. Adapters may
-   * map the purpose to model-hidden transport metadata or purpose-specific
-   * generation policy. Ordinary conversation requests leave it unset.
+   * map the purpose to model-hidden transport metadata. Ordinary conversation
+   * requests leave it unset.
    */
   purpose?: 'compaction' | 'session-title'
 }
@@ -746,9 +746,19 @@ interface LlmDiscoveredModel {
 
 `agent/request` 接收冻结的调用配置种子，并可返回替代值以切换提供方、模型、推理强度或采样参数。waterfall（瀑布式事件）开始前，循环会移除标记为适配器默认值的值，使确切模型准备过程填入所选路由的当前值；未带标记的显式设置仍保留在提议中。waterfall 结束后，准备过程会在轮次信号控制下拒绝显式指定但不受支持的推理强度 ID（不自动调整），并记录生效配置以及由适配器默认值提供的字段。步骤准入时，该 waterfall 与准备过程在组装和 `step/start` 之后、系统提示词与已接纳用户批次提交之前运行；在任一阶段取消都不会提交这两者。已准备调用的能力决定提示词协调，调用直至分派完成始终持有同一项适配器注册。到达 `llm/stream` 的请求会被深度冻结，因此变更会抛异常；请求还携带进程本地循环标识，使观察者不会把单独记录的冻结辅助调用误认成对话请求。
 
-在协议中，循环构建的请求只有派生历史：渲染后的提示词作为开头的 `system` 角色消息（surface 第 0 号节点，即一个 `system/message` 事件）传输，并且当已准备调用声明 `systemPromptUpdate: 'in-history'` 时，变化后的非空提示词可以作为后续的 `system` 角色消息跟在已缓存历史之后，由模型读作有效提示词；请求的 `system` 字段不设置——`GenerateOptions.system` 服务于标题提供方等直接单次调用方。空渲染文本使派生历史不包含任何系统消息，即使先前请求保留了多个提示词版本。已记录的请求会以最新的 `user/message`（轮次首步）或上一步的工具结果（后续步骤）结尾。开发不变式针对每个循环构建的请求精确重算此等式，并拒绝携带 `system` 字段的循环请求。
+在协议中，循环构建的请求只有派生历史：渲染后的提示词作为开头的 `system` 角色消息（surface 第 0 号节点，即一个 `system/message` 事件）传输，并且当已准备调用声明 `systemPromptUpdate: 'in-history'` 时，变化后的非空提示词可以作为后续的 `system` 角色消息跟在已缓存历史之后，由模型读作有效提示词；请求的 `system` 字段不设置——`GenerateOptions.system` 服务于标题提供方等直接单次调用方。空渲染文本使派生历史不包含任何系统消息，即使先前请求保留了多个提示词版本。已记录的请求会以最新的 `user/message`（轮次首步）或上一步的工具结果（后续步骤）结尾。
 
 FIXME(call-config-shape)：重新审视其余哪些字段出于缓存目的确实属于 epoch 层级（`model` 和模型持有的推理强度已明确属于；采样标量目前出于谨慎保留在此）。
+
+```ts type-equiv
+/** Concrete generation settings; omitted controls use the selected route's defaults. */
+interface LlmCallControls {
+  reasoningEffort?: ReasoningEffortId
+  temperature?: number
+  maxTokens?: number
+  stop?: string[]
+}
+```
 
 ```ts type-equiv
 /**
@@ -757,14 +767,26 @@ FIXME(call-config-shape)：重新审视其余哪些字段出于缓存目的确�
  * the loop builds requests from the logged header rather than accepting these
  * per call.
  */
-interface LlmCallConfig {
+interface LlmCallConfig extends LlmCallControls {
   provider: string
   model: string
-  reasoningEffort?: ReasoningEffortId
-  temperature?: number
-  maxTokens?: number
-  stop?: string[]
 }
+```
+
+```ts type-equiv
+/**
+ * Synchronous, pure configuration of one call before defaults and validation.
+ * Compose functions in the desired order; later writes replace earlier ones.
+ * The returned controls cannot change the captured route. Errors reject
+ * preparation before dispatch; only the resolved configuration is recordable.
+ * @param controls - detached, deeply frozen proposed controls, without defaults.
+ * @param model - detached, deeply frozen metadata from the captured adapter generation.
+ * @returns concrete controls; omitted fields receive the route's defaults.
+ */
+type ConfigureCall = (
+  controls: Readonly<LlmCallControls>,
+  model: Readonly<LlmResolvedModelInfo>,
+) => LlmCallControls
 ```
 
 ```ts type-equiv
@@ -1060,11 +1082,15 @@ async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<Ll
  * Resolve one call under its current adapter registration. The returned
  * one-shot handle keeps that registration across header logging and dispatch,
  * so HMR cannot combine one adapter's capability result with another adapter.
- * @param config - provider/model route and optional request controls.
+ * An optional synchronous callback selects concrete controls using captured
+ * model metadata. Defaults and validation apply to its result. Callback
+ * failures and cancellation reject preparation before dispatch.
+ * @param config - provider/model route and optional concrete request controls.
  * @param signal - optional cancellation for adapter-owned capability lookup.
+ * @param configure - pure control selection, called once before defaults and validation.
  * @returns a prepared config and its registration-bound stream entry point.
  */
-async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<PreparedLlmCall>
+async prepareCall( config: LlmCallConfig, signal?: AbortSignal, configure?: ConfigureCall, ): Promise<PreparedLlmCall>
 
 /**
  * Stream one model call as raw chunks (token-level deltas). Replay state is

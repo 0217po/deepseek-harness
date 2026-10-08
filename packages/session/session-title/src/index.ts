@@ -545,7 +545,6 @@ export class SessionTitleService extends Service {
     const boundary = this.ctx.sessionProjections.stateOf(session, 'turnBoundary')?.lastStepBoundary
     const route = session.requestHeader()?.config
     if (boundary?.kind !== 'start'
-      || boundary.seq <= pending.throughSeq
       || route?.provider !== options.provider
       || route.model !== options.model) return
     this.startPending(session, state, pending, { provider: options.provider, model: options.model })
