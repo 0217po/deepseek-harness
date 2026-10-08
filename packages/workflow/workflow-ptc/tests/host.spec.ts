@@ -1,4 +1,5 @@
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { compileFunction, constants } from 'node:vm'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
@@ -64,7 +65,9 @@ describe('workflow host callback validation', () => {
   it('returns the workflow outcome through a REPL expression without retaining an owner', async () => {
     const { runtime, start } = await setup(async (bindings, spec) => {
       expect(spec.stateOwner).toBeUndefined()
-      const evaluate = new Function('workflowHost', `return (async () => (${spec.program}))()`) as (host: HostBindings) => Promise<PtcRunResult['value']>
+      const evaluate = compileFunction(`return (async () => (${spec.program}))()`, ['workflowHost'], {
+        importModuleDynamically: constants.USE_MAIN_CONTEXT_DEFAULT_LOADER,
+      }) as (host: HostBindings) => Promise<PtcRunResult['value']>
       return { logs: [], value: await evaluate(bindings) }
     })
     const format = vi.spyOn(runtime, 'programFormat', 'get').mockReturnValue('repl')
