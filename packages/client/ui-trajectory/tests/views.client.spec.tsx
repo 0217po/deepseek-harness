@@ -1324,6 +1324,28 @@ describe('timeline projection', () => {
 })
 
 describe('TrajectoryView state', () => {
+  it.each([
+    { interrupted: true, status: '失败' },
+    { interrupted: false, status: '已完成' },
+  ])('uses the settled response status when the Step start is unloaded: $status', ({ interrupted, status }) => {
+    const nodes: LegacyConversationSlice['nodes'] = [{
+      kind: 'assistant', seq: 10, time: 10_000, turn: 2, step: 3,
+      blocks: [{ kind: 'text', text: 'loaded response' }],
+      ...(interrupted ? { interrupted: true } : {}),
+    }]
+    render(<TrajectoryView
+      {...standaloneProps(nodes)}
+      {...standaloneHistory(historySnapshot(nodes))}
+      {...standaloneDuration()}
+    />)
+    fireEvent.click(screen.getByRole('row', { name: /loaded response/ }))
+    expect(within(screen.getByRole('tabpanel')).getByText(status)).toBeTruthy()
+    fireEvent.click(within(screen.getByRole('table')).getByRole('button', { name: '请求 #1' }))
+    expect(within(screen.getByRole('tabpanel')).getByText(status)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '助手消息' }))
+    expect(within(screen.getByRole('tabpanel')).getByText(status)).toBeTruthy()
+  })
+
   it('reveals resident history one bounded page at a time', async () => {
     const nodes: LegacyConversationSlice['nodes'] = Array.from({ length: 5_000 }, (_, index) => ({
       kind: 'user' as const,

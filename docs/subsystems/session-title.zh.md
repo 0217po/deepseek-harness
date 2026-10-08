@@ -193,7 +193,8 @@ async refresh(session: Session, signal?: AbortSignal): Promise<SessionTitleSnaps
 
 /**
  * Register the sole optional title provider. Disposal aborts its pending and
- * active work before another provider may register.
+ * active work; a replacement may register once disposal has started, and the
+ * closing provider's late results never commit.
  * @param provider - provider identity, cadence, and generation function.
  * @returns exact Cordis effect disposer, which settles after active calls quiesce.
  */

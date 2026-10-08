@@ -289,6 +289,41 @@ describe('SessionTitleService Provider lifecycle', () => {
     await disposeReplacement()
   })
 
+  it('accepts a replacement while the previous provider drains and discards its late result', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(SessionTitleService, CONFIG)
+    const pending = deferred<SessionTitleProviderResult>()
+    const dispose = ctx.sessionTitle.register({
+      id: SessionTitleProviderId('retiring'),
+      automatic: 'all-prompts',
+      generate: () => pending.promise,
+    })
+    const session = ctx.sessions.create(SessionId('replace-while-draining'))
+    session.append('turn/start', { turn: 1 })
+    const message = appendHumanPrompt(session, 'Generate this title')
+    await settle()
+    appendRoute(session)
+    await settle()
+
+    const disposal = dispose()
+    const disposeReplacement = ctx.sessionTitle.register({
+      id: SessionTitleProviderId('replacement'),
+      automatic: 'all-prompts',
+      generate: async () => ({ title: 'replacement', messageSeqs: [message.seq] }),
+    })
+    expect(() => ctx.sessionTitle.register({
+      id: SessionTitleProviderId('duplicate'),
+      automatic: 'first-prompt',
+      generate: async () => ({ title: 'duplicate', messageSeqs: [message.seq] }),
+    })).toThrow(/"replacement" is already registered/)
+    pending.resolve({ title: 'stale provider result', messageSeqs: [message.seq] })
+    await disposal
+    expect(ctx.sessionTitle.get(session)?.title).not.toBe('stale provider result')
+    await disposeReplacement()
+  })
+
   it('supersedes an older all-messages revision and cannot commit an ignored abort', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)

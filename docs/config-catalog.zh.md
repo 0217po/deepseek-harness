@@ -94,7 +94,7 @@ export interface Config {
 
 - `inject`: `agents` · `sessions` · `llm` · `tools` · `systemPrompt` · `sessionProjections`
 - `refs`: [`AgentOptions`](subsystems/core.zh.md) · [`SessionId`](subsystems/core.zh.md) · `Volatile` (`@deepseek-ai/cosmokit`)
-- `source`: [`packages/core/agent-loop/src/index.ts:292`](../packages/core/agent-loop/src/index.ts)
+- `source`: [`packages/core/agent-loop/src/index.ts:303`](../packages/core/agent-loop/src/index.ts)
 
 ```ts config-catalog
 /** Agent-loop plugin configuration. */
@@ -141,7 +141,7 @@ export type Config = PresetDefinition
 
 - `inject`: `loader` · `sessionProjections`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/preset/agent-preset-registry/src/preset.ts:15`](../packages/preset/agent-preset-registry/src/preset.ts)
+- `source`: [`packages/preset/agent-preset-registry/src/preset.ts:13`](../packages/preset/agent-preset-registry/src/preset.ts)
 
 ```ts config-catalog
 /** Registry selection policy. */
@@ -759,7 +759,7 @@ export interface ToolResultPruneConfig {
 ## `@deepseek-ai/dsh-cordis-host-runner`
 
 - `inject`: `tools`
-- `source`: [`packages/extensions/cordis-host-runner/src/index.ts:93`](../packages/extensions/cordis-host-runner/src/index.ts)
+- `source`: [`packages/extensions/cordis-host-runner/src/index.ts:103`](../packages/extensions/cordis-host-runner/src/index.ts)
 
 ```ts config-catalog
 /** Runner configuration. */
@@ -841,7 +841,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-experimental-agent-team`
 
 - `inject`: `agents` · `sessions` · `sessionPersistence` · `sessionProjections` · `subagents`
-- `source`: [`packages/experimental/agent-team/src/types.ts:152`](../packages/experimental/agent-team/src/types.ts)
+- `source`: [`packages/experimental/agent-team/src/types.ts:153`](../packages/experimental/agent-team/src/types.ts)
 
 ```ts config-catalog
 /** Team-service deployment limits. */
@@ -850,11 +850,9 @@ export interface Config {
   readonly maxMembers?: number
   /** Maximum non-deleted tasks retained by one Team. */
   readonly maxTasks?: number
-  /** Maximum queued-minus-delivered messages for one target member. */
-  readonly maxPendingMessagesPerMember?: number
   /** Maximum UTF-8 bytes in one complete sender-framed delivery. */
   readonly maxMessageBytes?: number
-  /** Maximum milliseconds allowed for Team-owned runtime disposal. */
+  /** Maximum milliseconds for shared operation settlement and for each Team child drain. */
   readonly disposalTimeoutMs?: number
 }
 ```
@@ -2364,7 +2362,7 @@ export interface PlanModeConfig {
 ## `@deepseek-ai/dsh-plugin-manager`
 
 - `inject`: `loader` · `profileContext`
-- `source`: [`packages/boot/plugin-manager/src/index.ts:44`](../packages/boot/plugin-manager/src/index.ts)
+- `source`: [`packages/boot/plugin-manager/src/index.ts:42`](../packages/boot/plugin-manager/src/index.ts)
 
 ```ts config-catalog
 /** The pnpm executable, registries, and limits for diagnostics, lookups and connection checks. */

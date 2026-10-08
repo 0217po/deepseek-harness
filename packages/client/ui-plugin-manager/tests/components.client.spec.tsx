@@ -732,55 +732,6 @@ describe('PluginManagerPage', () => {
     }
   })
 
-  it('shows distinct preset targets and keeps scoped rows read-only despite a matching root configuration page', () => {
-    const rows: PackageRow[] = ['preset-standard', 'preset-cordis'].map(preset => ({
-      rowId: 'shared', preset, moduleName: 'shared-tool', enabled: true, phase: 'active',
-      readOnlyReason: 'preset-managed', meta: { title: 'shared' },
-    }))
-    const subjects: PluginsSubject[] = []
-    const { actions, setLanguage } = renderTab({ packages: [pkg({ rows })] }, { rows: new Set(['dsh-better-sidebar#shared']) }, {
-      'plugins.detail.actions:': (_view, owner) => {
-        const subject = subjectOf(owner)
-        if (subject !== undefined) subjects.push(subject)
-        return null
-      },
-    })
-    fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'dsh-better-sidebar') }))
-    const listed = [...document.querySelectorAll('[data-plugin-row]')]
-    expect(new Set(listed.map(item => item.getAttribute('data-plugin-row'))).size).toBe(2)
-    expect(subjects.at(-1)).toMatchObject({ kind: 'bundle', pkg: { rows: [
-      { rowId: 'shared', preset: 'preset-standard' }, { rowId: 'shared', preset: 'preset-cordis' },
-    ] } })
-    expect(screen.getByText('preset-standard/shared')).toBeTruthy()
-    expect(screen.getByText('preset-cordis/shared')).toBeTruthy()
-    for (const item of listed) {
-      const toggle = within(item as HTMLElement).getByRole('switch')
-      expect(toggle).toHaveProperty('disabled', true)
-      expect(toggle.getAttribute('title')).toBe(en.reasonPresetManaged)
-    }
-    expect(screen.queryByRole('button', { name: en.configureRow.replace('{name}', 'shared') })).toBeNull()
-    expect(actions.setRowEnabled).not.toHaveBeenCalled()
-    setLanguage(zh)
-    for (const item of listed) {
-      expect(within(item as HTMLElement).getByRole('switch').getAttribute('title')).toBe(zh.reasonPresetManaged)
-    }
-  })
-
-  it('shows an unevaluated preset condition without an Off label or switch', () => {
-    const rows: PackageRow[] = [{ rowId: 'conditional', preset: 'preset-standard', moduleName: 'tool',
-      enabled: false, conditional: true, phase: null, readOnlyReason: 'preset-managed' }]
-    const { setLanguage } = renderTab({ packages: [pkg({ rows })] })
-    fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'dsh-better-sidebar') }))
-    const item = document.querySelector<HTMLElement>('[data-plugin-row]')!
-    expect(within(item).getByText(en.rowStateConditional)).toBeTruthy()
-    expect(within(item).queryByText(en.partOff)).toBeNull()
-    expect(within(item).queryByRole('switch')).toBeNull()
-    expect(item.getAttribute('data-state')).toBeNull()
-    expect(screen.queryByText(en.partsCountOff.replace('{count}', '1'), { exact: false })).toBeNull()
-    setLanguage(zh)
-    expect(within(item).getByText(zh.rowStateConditional)).toBeTruthy()
-  })
-
   it('resolves row fields independently from bundle metadata and preserves subpath specifiers', () => {
     const rows = [
       row({ moduleName: '@acme/dsh-sidebar/navigation', meta: { description: { en: 'Navigation description.' } } }),

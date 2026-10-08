@@ -761,6 +761,7 @@ it('addresses children inside profile groups and marks ambiguous ids read-only',
     config: [{ id: 'child', name: './plugin.mjs', config: { service: 'child' } }] }])
   expect(await manager.setBundleEnabled('grouped', true)).toMatchObject({ application: 'applied' })
   expect((await manager.listPlugins()).find(row => row.patchId === 'child')).toBeDefined()
+  expect((await manager.listBundles()).find(item => item.name === 'grouped')?.rows.map(row => row.rowId)).toEqual(['child'])
   const entries = composeEntries([readProfilePatches('test', profile)])
   const duplicate = entries.find(row => row.id === 'managed')!
   writeFileSync(profile.patchPath, JSON.stringify([{ insert: [duplicate] }]))

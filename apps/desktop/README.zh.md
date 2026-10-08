@@ -356,6 +356,8 @@ pnpm run package:desktop:win:x64:unsigned
 
 该命令要求设置 `DSH_DESKTOP_APP_ID` 并具备常规构建依赖，包括编译原生模块所需的 Python 和 Visual C++ 构建工具。Python 不在 `PATH` 中时，将 `PYTHON` 设置为其可执行文件路径。命令将安装包写入 `.desktop-build/targets/win-x64/unsigned-artifacts/`，省略自动更新配置，清除签名凭据，且不生成发布完成记录。它不需要 EV 凭据或更新源地址。签名打包和上传命令仍遵循正式发布要求。
 
+<a id="windows-uninstall-rules"></a>
+
 ### Windows 安装界面
 
 Windows 安装程序使用原生 NSIS 页面，提供亮暗配色、系统阴影、可编辑的安装目录，以及默认勾选立即启动的完成页。安装仅面向当前用户。点击安装或按 Enter 均校验当前路径；路径规范化后仍拒绝磁盘根目录，包括带重复末尾分隔符的写法。新安装位置必须为空，非空位置必须是已登记的安装目录。受影响安装路径中的程序运行时显示系统提示，并保持应用运行；其他目录中的同名应用不阻止安装。静默更新最多等待受影响应用退出十秒，若仍在运行则以退出码 2 结束。
@@ -447,6 +449,26 @@ Windows 下载完成后的更新确认说明应用会在安装期间关闭、完
 
 已确认 Host 退出但任务未成功收尾时，常规与强更弹窗均展示本地化恢复提示。两种语言都根据类型化的准备失败原因选择提示，翻译文案变化不会改变失败分类。“查看技术详情”默认折叠，仅展示退出状态、信号、关闭确认和截止时间事实，不展示插件 stderr。展开详情既不重试，也不授权安装。
 
+<a id="local-desktop-settings"></a>
+
+### 本地桌面设置
+
+[壳层配置决策](../../.agents/notes/implemented/architecture/2026-10-08-desktop-shell-configuration.zh.md)说明独立于 Host 的配置归属，以及评估现有设置迁移的标准。
+
+Electron 主进程在启动时读取一次 `app.getPath('userData')/desktop/settings.json`，独立于 Host 和 Cordis 配置。打包应用默认路径为 Windows 的 `%APPDATA%\@deepseek-ai\dsh-desktop\desktop\settings.json` 和 macOS 的 `~/Library/Application Support/@deepseek-ai/dsh-desktop/desktop/settings.json`。开发模式使用启动器打印的 `userData` 路径。`DSH_HOME` 不改变此文件的位置。
+
+首次启动（包括升级后首次启动）时，Desktop 会在文件缺失时创建以下内容：
+
+```json
+{
+  "updates": {
+    "allowTestAuthPopupWindow": false
+  }
+}
+```
+
+已有文件不会被覆盖；缺少 `updates` 对象或该字段时均按 `false` 处理。将字段设为 `true` 后完全退出并重启应用，即可允许测试鉴权弹窗。改回 `false` 并重启即可再次禁止。创建、读取或校验失败时使用默认值 `false`，不阻止启动。Desktop 尝试在 Electron 控制台记录包含文件路径的警告；日志不可用也不阻止启动。修正文件并重启后才会应用显式设置。未知字段会保留。安装更新保留此用户数据文件；Windows 卸载按[卸载规则](#windows-uninstall-rules)删除它。
+
 <a id="mandatory-update-policy"></a>
 
 ### 强制更新策略
@@ -468,7 +490,9 @@ Windows 下载完成后的更新确认说明应用会在安装期间关闭、完
 
 时长必须是 1000 至 2147483647 毫秒的整数。启动与定时轮询独立于业务请求；前台／恢复检查遵守下次到期时间，手动检查绕过该时间并复用在途请求。客户端发送已安装平台、架构、DSH_CLIENT_VERSION、内置 dsh 版本、当前语言与 UTC 偏移、空 bundle ID 和固定 Nightly。不使用业务登录凭据或安装 ID。
 
-启用 `feishu-test` 时，包含 `error.code: "UNAUTHENTICATED"` 的 HTTP 401 JSON 响应会在用户主动检查和打包应用首次启动检查时提供登录入口，不等待本地后端就绪。本地化说明指出这是测试版、需要飞书鉴权，且登录不会下载或安装更新。确认后先关闭说明，再打开配置源站根路径的沙箱窗口，不使用响应中的登录 URL。并发检查复用整个确认／登录流程，并聚焦已有窗口。在测试环境登录窗口按 F12 可打开独立的 DevTools 进行排查。取消后，定时或前台检查不会反复弹窗；用户可手动重试。
+启用 `feishu-test` 时，包含 `error.code: "UNAUTHENTICATED"` 的 HTTP 401 JSON 响应仅在本地 `updates.allowTestAuthPopupWindow` 为 `true` 时提供登录入口。该字段默认为 `false`，禁止启动、手动检查更新、强更刷新以及延迟或重复失败触发的整个鉴权弹窗流程。测试网关 Cookie 仅在当前进程有效。启动时关闭弹窗后，需要鉴权的网关无法在本次进程中提供新的强更决策；需开启设置、重启并登录后才能获取。策略请求仍需网关鉴权，鉴权失败不会解除已知强更阻塞。常规更新和产品账号鉴权保持独立。正式环境始终使用原有匿名策略请求，不受此设置影响。
+
+允许弹窗时，用户主动检查和打包应用首次启动检查会提供登录入口，不等待本地后端就绪。本地化说明指出这是测试版、需要飞书鉴权，且登录不会下载或安装更新。确认后先关闭说明，再打开配置源站根路径的沙箱窗口，不使用响应中的登录 URL。并发检查复用整个确认／登录流程，并聚焦已有窗口。在测试环境登录窗口按 F12 可打开独立的 DevTools 进行排查。取消后，定时或前台检查不会反复弹窗；用户可手动重试。
 
 登录和策略请求共用内存 Session，与产品窗口及 updater 隔离；应用重启后需要重新登录。关闭窗口取消登录，导航失败提供本地化重试提示。返回服务后重新查询策略；重定向、Cookie 或 HTTP 422 都不是有效策略决定。取消、登录过期及无效响应均保留已知强更阻塞。固定登录结果写入进程诊断及可选更新日志；登录控制器不记录 Cookie、OAuth 参数或远程错误原文。真实 Harness 网关/API 联调及 macOS 登录验收仍未完成。
 

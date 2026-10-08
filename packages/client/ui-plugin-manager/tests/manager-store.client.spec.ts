@@ -8,7 +8,7 @@ import type { BundleInfo, ChangeResult, ManagementError, PluginEntryId, PluginIn
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ConfigLedger } from '../src/client/config-ledger.ts'
-import { offeredRegistries, packageView, packageRowKey, PluginManagerController, rowKey, sortPackages } from '../src/client/manager-store.ts'
+import { offeredRegistries, packageView, PluginManagerController, rowKey, sortPackages } from '../src/client/manager-store.ts'
 
 const INCOMPATIBLE = { name: 'dsh-late', version: '2.0.0', runtimeVersion: '0.1.0', peers: { '@deepseek-ai/dsh': '^0.2.0' } }
 const ROW_ENTRY = 'include:sidebar' as PluginEntryId
@@ -116,19 +116,6 @@ it('hands a custom page the shared configuration form of its entry', () => {
 })
 
 describe('packageView', () => {
-  it('keeps scoped rows read-only with distinct identities and their observed preset state', () => {
-    const view = packageView({ ...BUNDLE, rows: [
-      { rowId: 'shared', preset: 'preset-standard', moduleName: 'tool', readOnlyReason: 'preset-managed', composition: { enabled: true, fiberPhase: 'active' } },
-      { rowId: 'shared', preset: 'preset-cordis', moduleName: 'tool', readOnlyReason: 'preset-managed', composition: { enabled: 'conditional', fiberPhase: null } },
-    ] }, [])
-    expect(view.rows).toEqual([
-      { rowId: 'shared', preset: 'preset-standard', moduleName: 'tool', enabled: true, phase: 'active', readOnlyReason: 'preset-managed' },
-      { rowId: 'shared', preset: 'preset-cordis', moduleName: 'tool', enabled: false, phase: null, conditional: true, readOnlyReason: 'preset-managed' },
-    ])
-    expect(new Set(view.rows.map(packageRowKey)).size).toBe(2)
-    expect(packageRowKey({ rowId: 'ordinary' })).toBe('ordinary')
-  })
-
   it('joins a bundle with the entries its rows run as', () => {
     expect(packageView(BUNDLE, PLUGINS)).toEqual({
       name: 'dsh-better-sidebar', version: '0.16.0', description: 'A sidebar.', source: 'dsh-better-sidebar@^0.16.0',
