@@ -2279,6 +2279,26 @@ describe('per-program execution controls', () => {
     return { ...state, agent, session, execute }
   }
 
+  it('executes an agentless confined program without a Session execution scope', async () => {
+    const { ctx, runtime } = await controlledSetup()
+    try {
+      expect((await runCode(ctx, 'program')).isError).toBe(false)
+      expect(runtime.lastRequest?.stateOwner).toBeUndefined()
+      expect(runtime.lastRequest?.sandboxPolicy?.sessionId).toBeUndefined()
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('rejects Agent-owned confined execution when its policy service is absent', async () => {
+    const { ctx, runtime } = await setup()
+    const mode = vi.spyOn(runtime, 'sandboxMode', 'get').mockReturnValue('read-only')
+    const { agent } = fakeAgent()
+    try {
+      const result = await runCode(ctx, 'program', { agent })
+      expect(result.isError).toBe(true)
+      expect(JSON.stringify(result.content)).toContain('confined PTC runtime requires sandboxPolicy')
+    } finally { mode.mockRestore(); await ctx.fiber.dispose() }
+  })
+
   it('advertises configured timeout values and one-execution scope only when supported', async () => {
     const { ctx, tools } = await controlledSetup()
     try {

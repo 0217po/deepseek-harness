@@ -530,3 +530,12 @@ it('keeps failed per-call cleanup registered until process observation succeeds'
   expect(await h.ctx.sandboxPolicy.setMode(session, 'read-only')).toEqual([])
   expect(h.waitForExit).toHaveBeenCalledTimes(3)
 })
+
+it('unregisters a Session resource when process spawn fails', async () => {
+  const h = await setup()
+  const session = h.ctx.sessions.create(SessionId('failed-session-spawn'))
+  h.spawn.mockImplementation(() => { throw new Error('spawn failed') })
+  const result = await h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) }, NO_INITIAL_FRAME)
+  expect(result.error?.message).toContain('spawn failed')
+  expect(await h.ctx.sandboxPolicy.setMode(session, 'read-only')).toEqual([])
+})

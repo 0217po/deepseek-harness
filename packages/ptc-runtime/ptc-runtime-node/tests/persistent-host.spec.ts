@@ -465,3 +465,16 @@ it('reports a sandbox runner refusal before the REPL is ready', async () => {
     expect(result.sandbox).toEqual({ mode: 'read-only', denied: false, enforcement: 'full' })
   } finally { h.direct.resolve({ exitCode: 127, signal: null }); await pending; confine.mockRestore() }
 })
+
+it('releases a confirmed exited process even when its output pipe did not drain', async () => {
+  const h = await setup()
+  h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+  await h.start()
+  h.stdout.destroy()
+  const warn = vi.spyOn(h.ctx.logger, 'warn').mockImplementation(() => {})
+  try {
+    await expect(h.runtime.release(request.stateOwner!)).resolves.toBeUndefined()
+    expect(warn).toHaveBeenCalledWith('persistent Node process exited but its output did not drain cleanly')
+    await expect(h.runtime.release(request.stateOwner!)).resolves.toBeUndefined()
+  } finally { warn.mockRestore() }
+})
