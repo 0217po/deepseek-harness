@@ -3,6 +3,7 @@ import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-agent'
 
 export const name = 'parent-sandbox-override'
+export const inject = ['sandboxPolicy']
 
 /**
  * Snapshot-only overlay: switch each ROOT session to `read-only` at creation —

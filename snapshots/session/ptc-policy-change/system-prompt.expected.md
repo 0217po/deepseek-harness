@@ -184,10 +184,6 @@ interface ToolArgsMap {
     /** The task for the subagent. It already sees this conversation's completed turns, so build on them freely and state only what is new. */
     prompt: string;
   } & Record<string, JsonValue>;
-  /** Echo template text such as {{item}}, {{model}}, or {{ item }} without substitution. */
-  template_echo: {
-    text: string;
-  } & Record<string, JsonValue>;
   /** Record and update a task list to plan multi-step work and show progress; skip it for trivial single-step tasks. Add one todo per concrete step before you start. While work remains, keep the todos being worked on `in_progress`, several only when work runs in parallel. Mark each todo `completed` as soon as it is done. */
   todo_write: {
     /** The COMPLETE task list, replacing any previous list. */
@@ -213,6 +209,8 @@ interface ToolArgsMap {
     /** Required only with action blocked: the concrete condition that persisted across rounds and blocks progress. */
     blocked_reason?: string;
   } & Record<string, JsonValue>;
+  /** Wait while the test driver changes the Session file policy. */
+  wait_for_mode_change: Record<string, JsonValue>;
   /** Fetch the content of a specific HTTP(S) URL and return it decoded to text. */
   web_fetch: {
     /** The HTTP(S) URL to fetch. */
@@ -463,7 +461,6 @@ interface ToolOutputMap {
     kind: "activation";
     subagentId: string;
   };
-  template_echo: string;
   todo_write: {
     todos: ({
       content: string;
@@ -492,6 +489,7 @@ interface ToolOutputMap {
     };
     activation: "armed" | "disarmed";
   };
+  wait_for_mode_change: string;
   web_fetch: {
     url: string;
     statusCode: number;

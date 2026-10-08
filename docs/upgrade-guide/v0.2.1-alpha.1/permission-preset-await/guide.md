@@ -13,5 +13,6 @@ English | [中文](guide.zh.md)
 ## Migration
 
 1. Await `ctx.permissionPresets.set(session, name)` before starting work under the new policy.
-2. Handle promise rejection instead of catching only synchronous exceptions, and present returned notices when implementing a permission control.
-3. Confirm that selecting a new sandbox mode completes before the next program starts. The built-in `/permission` command already waits and displays notices.
+2. Replace the `setSandboxMode` import and calls with `await ctx.sandboxPolicy.setMode(session, mode)`, and declare `sandboxPolicy` in the plugin's `inject` list.
+3. Handle promise rejection instead of catching only synchronous exceptions, and present returned notices when implementing a permission control.
+4. Confirm that selecting a new sandbox mode completes before the next program starts. The built-in `/permission` command already waits and displays notices.

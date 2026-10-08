@@ -478,3 +478,15 @@ it('releases a confirmed exited process even when its output pipe did not drain'
     await expect(h.runtime.release(request.stateOwner!)).resolves.toBeUndefined()
   } finally { warn.mockRestore() }
 })
+
+it('preserves logs in a result-level failure when temporary process pipes do not drain', async () => {
+  const h = await setup()
+  h.onBoot(() => {
+    h.emit(frame({ type: 'log', text: 'captured before cleanup' }))
+    h.emit(frame({ type: 'done', value: encodePtcJsonWire(42) }))
+    h.stdout.destroy()
+  })
+  const result = await h.start({ program: '1', bindings: [] })
+  expect(result.logs).toEqual(['captured before cleanup'])
+  expect(result.error).toEqual({ kind: 'worker-exit', message: 'managed process exited but its output did not drain cleanly' })
+})

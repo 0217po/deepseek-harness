@@ -13,5 +13,6 @@ description: "权限预设调用方必须等待执行资源清理后，再使用
 ## 迁移
 
 1. 在新策略下启动工作前，等待 `ctx.permissionPresets.set(session, name)` 完成。
-2. 处理 Promise 拒绝，替换只捕获同步异常的代码；实现权限控件时展示返回的提示。
-3. 确认选择新沙箱模式的操作在下一个程序启动前完成。内置 `/permission` 命令已经等待完成并显示提示。
+2. 把 `setSandboxMode` 的导入与调用替换为 `await ctx.sandboxPolicy.setMode(session, mode)`，并在插件的 `inject` 列表中声明 `sandboxPolicy`。
+3. 处理 Promise 拒绝，替换只捕获同步异常的代码；实现权限控件时展示返回的提示。
+4. 确认选择新沙箱模式的操作在下一个程序启动前完成。内置 `/permission` 命令已经等待完成并显示提示。

@@ -172,3 +172,31 @@ it('revalidates caller state after cleanup before committing related events', as
     expect(session.snapshotEvents()).toEqual([])
   } finally { unregister() }
 })
+
+it('waits for overlapping operations under one Session independently', async () => {
+  const { session, policy } = await setup()
+  const firstDone = Promise.withResolvers<undefined>()
+  const secondDone = Promise.withResolvers<undefined>()
+  const first = policy.withExecution(session.id, new AbortController().signal, () => firstDone.promise)
+  const second = policy.withExecution(session.id, new AbortController().signal, () => secondDone.promise)
+  const switching = policy.setMode(session, 'read-only')
+  try {
+    firstDone.resolve(undefined)
+    await first
+    expect(session.snapshotEvents()).toEqual([])
+    secondDone.resolve(undefined)
+    await second
+    expect(await switching).toEqual([])
+  } finally { firstDone.resolve(undefined); secondDone.resolve(undefined); await Promise.allSettled([first, second, switching]) }
+})
+
+it('reports resource cleanup failure during provider disposal', async () => {
+  const { session, policy, fiber } = await setup()
+  const error = new Error('resource cleanup failed')
+  const unregister = policy.registerResource(session.id, { release: () => Promise.reject(error) })
+  const reported = vi.spyOn(fiber.ctx.logger, 'error').mockImplementation(() => {})
+  try {
+    await fiber.dispose()
+    expect(reported).toHaveBeenCalled()
+  } finally { unregister(); reported.mockRestore() }
+})
