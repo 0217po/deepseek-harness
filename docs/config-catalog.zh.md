@@ -799,7 +799,7 @@ export interface Config {
 
 - `inject`: `computerUse` · `tools` · `systemPrompt` · `subprocess` · `agents`
 - `refs`: [`Branded`](../packages/util/brand/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/computer-use/cua/src/index.ts:32`](../packages/computer-use/cua/src/index.ts)
+- `source`: [`packages/experimental/cua/src/index.ts:32`](../packages/experimental/cua/src/index.ts)
 
 ```ts config-catalog
 /** Native executable and per-operation resource bounds. */

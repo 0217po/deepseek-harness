@@ -17,7 +17,7 @@ export type NativeArchitecture = 'arm64' | 'x64'
  * @throws When the current host has no native implementation.
  */
 export function nativeHostArchitecture(platform: string, architecture: string): NativeArchitecture {
-  if (platform !== 'darwin' || (architecture !== 'arm64' && architecture !== 'x64')) throw new Error('Computer Use currently requires macOS on Apple silicon or Intel')
+  if (platform !== 'darwin' || (architecture !== 'arm64' && architecture !== 'x64')) throw new Error('Computer Use currently requires macOS on Apple silicon or Intel. Windows support is in development')
   return architecture
 }
 
@@ -48,7 +48,7 @@ export function nativeExecutablePath(packageRoot: string, architecture: NativeAr
  */
 export async function isSourcePackage(packageRoot: string): Promise<boolean> {
   const root = resolve(packageRoot, '../../..')
-  if (join(root, 'packages/computer-use/cua') !== packageRoot) return false
+  if (join(root, 'packages/experimental/cua') !== packageRoot) return false
   try {
     const manifest: unknown = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
     return typeof manifest === 'object' && manifest !== null && 'name' in manifest && manifest.name === '@deepseek-ai/dsh-root'

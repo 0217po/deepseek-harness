@@ -25,13 +25,13 @@ Inspect macOS permissions, select running applications and windows, read accessi
 <a id="use-this-package"></a>
 ## Use this package
 
-Enable this provider through explicit source composition on macOS 14 or later. Shipped profiles do not mount it. Prepare a native helper and load the registry/provider overlay:
+Enable this experimental provider through explicit source composition on macOS 14 or later. Windows support is in development. Shipped profiles do not mount it. Prepare a native helper and load the registry/provider overlay:
 
 ```sh
-swift build --package-path packages/computer-use/cua/native --configuration release
-cua_native_root="$PWD/packages/computer-use/cua/native"
+swift build --package-path packages/experimental/cua/native --configuration release
+cua_native_root="$PWD/packages/experimental/cua/native"
 export DSH_CUA_HELPER="$cua_native_root/.build/release/dsh-cua-native"
-pnpm dsh headless --patch packages/computer-use/cua/examples/macos.cordis.yml --dump-config
+pnpm dsh headless --patch packages/experimental/cua/examples/macos.cordis.yml --dump-config
 ```
 
 The dump command checks profile composition without a model request. For a real task, replace `--dump-config` with a prompt and configure the profile’s model credentials. The overlay mounts the computer-use registry and this provider; remove an existing competing provider before using it. The responsible host/helper needs Accessibility permission for AX/input and Screen Recording permission for capture. `getCapabilities` reports permissions and session lock state without opening a system dialog. Locked or unavailable desktop sessions reject UI observations and input before dispatch; the user must unlock macOS before resuming. `listApps` and `cua.getState` list running applications. `findApps(query)` searches standard macOS application directories by name, bundle ID or absolute path. `getApp` selects a unique name, bundle ID, path or running PID, obtains application consent, and launches a stopped app in the background when needed. A stopped executable is identified before approval and checked again before and after launch; unsigned code only receives task access. The returned object reads initial AX without activating the app. Launch cancellation may leave the application running. Model guidance starts with background observation and input, without activation during initialization or before each action. For hidden or minimized windows, try `app.show()` or `window.show()` and read fresh state. This requests unhide and unminimize without activation, raising or switching Spaces; app-level restoration selects the focused, main or sole AX window. The result names the selected `windowId`, or null when no window was selected, and reports `foregroundChanged` by comparing the front app and top window before and after the request. Null means foreground evidence was unavailable; later focus changes remain possible. If restoration fails or the window remains unusable, explain the needed foreground step, call `app.activate()` or an observed window’s `raise` action, then observe again. Necessary foreground access takes priority over preserving focus. Applications may change focus after input; background delivery does not guarantee an undisturbed user session.
@@ -74,7 +74,7 @@ Native preparation serializes compiler checks and publication with the shared fi
 
 ### Connect an external execution environment
 
-To run through persistent PTC, add `--patch packages/computer-use/cua/examples/persistent-ptc.cordis.yml` after the macOS overlay. This provider keeps variables for the live Agent and applies the selected file sandbox policy. The caller imports the bridge and supplies the current authorized `tools.cua` binding. Persistent PTC receives an installation-owned bridge file URL in its CUA instructions, so the project does not need to install this package. The example below is for an external host that resolves the package from its own installation and supplies `tools`; the package does not install a global object or keep variables alive:
+To run through persistent PTC, add `--patch packages/experimental/cua/examples/persistent-ptc.cordis.yml` after the macOS overlay. This provider keeps variables for the live Agent and applies the selected file sandbox policy. The caller imports the bridge and supplies the current authorized `tools.cua` binding. Persistent PTC receives an installation-owned bridge file URL in its CUA instructions, so the project does not need to install this package. The example below is for an external host that resolves the package from its own installation and supplies `tools`; the package does not install a global object or keep variables alive:
 
 ```javascript
 import { connectCua } from '@deepseek-ai/dsh-cua/bridge'
@@ -111,7 +111,7 @@ Indexed clicks support a single right/middle click or a single/double left click
 
 The object facade translates app/window methods into JSON operations. The bridge routes them through the normal tool pipeline, preserving authorization, nested logs and image admission. Agents and Hosts belonging to one user share a helper for the same native build. Each connection retains independent handles, snapshots, configuration and cancellation state; desktop operations use a global queue. The managed launcher transfers service lifetime to these connections, and the helper exits after the last connection finishes cleanup. Process locks cover both build identity and the real executable path, preventing duplicate startup and path collisions after a running executable is replaced. Native handles bind a process identity to its kernel start time, and snapshots retain native AX references only inside that helper. The same operation protocol can serve a future platform provider without adding platform logic to the object API.
 
-[Zod operation definitions](src/protocol.ts) own model parameters and separately declare Host resource fields and private continuations. Public data types derive from those definitions. `pnpm exec tsx packages/computer-use/cua/native/generate-protocol.ts` generates the native JSON Schema and Swift field/enum admission tables; the package test lane checks freshness and rejects Host-only fields at model admission. Native target validation, resource limits and operation behavior remain enforced at execution.
+[Zod operation definitions](src/protocol.ts) own model parameters and separately declare Host resource fields and private continuations. Public data types derive from those definitions. `pnpm exec tsx packages/experimental/cua/native/generate-protocol.ts` generates the native JSON Schema and Swift field/enum admission tables; the package test lane checks freshness and rejects Host-only fields at model admission. Native target validation, resource limits and operation behavior remain enforced at execution.
 
 [AX text formatting](native/Sources/CuaNative/AXTextFormatter.swift) consumes already-read node data. The AX walker alone assigns indices and retains native references, so formatting owns no second snapshot or target registry.
 
@@ -126,7 +126,7 @@ Node roles and metadata share one AX batch per observation. Group and scroll-are
 <a id="further-exploration"></a>
 ## Further Exploration
 
-- [Computer-use registration](../computer-use/README.md)
+- [Computer-use registration](../../computer-use/computer-use/README.md)
 - [Native protocol](native/protocol.schema.json)
 - [Object interfaces](src/types.ts)
 
@@ -197,7 +197,7 @@ The queue orders individual native requests. Holding an app object does not rese
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Only the macOS native implementation is provided. Browser tabs, AX diffs, unassociated system panels and accessory-only apps are unsupported.
+- Only the macOS native implementation is provided. Windows support is in development. Browser tabs, AX diffs, unassociated system panels and accessory-only apps are unsupported.
 - Coordinates use window-local points including the title bar. PNG pixel dimensions can differ. Window movement, application changes and other desktop users can race observations and input.
 - macOS Stage Manager can reduce background window bounds and screenshots to thumbnails. Full-window observation and coordinate input in this state are not guaranteed; model guidance requires explaining foreground needs and avoiding repeated focus reclamation.
 - Background input depends on private SkyLight symbols; macOS updates can make them unavailable. Validate each target OS version.

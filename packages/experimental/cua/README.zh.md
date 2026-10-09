@@ -25,13 +25,13 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-该提供方需要在 macOS 14 及以上通过源码配置显式启用，默认配置不加载它。先准备原生组件，再加载注册表和提供方覆盖层：
+该实验性提供方需要在 macOS 14 及以上通过源码配置显式启用。Windows 支持正在开发中。默认配置不加载它。先准备原生组件，再加载注册表和提供方覆盖层：
 
 ```sh
-swift build --package-path packages/computer-use/cua/native --configuration release
-cua_native_root="$PWD/packages/computer-use/cua/native"
+swift build --package-path packages/experimental/cua/native --configuration release
+cua_native_root="$PWD/packages/experimental/cua/native"
 export DSH_CUA_HELPER="$cua_native_root/.build/release/dsh-cua-native"
-pnpm dsh headless --patch packages/computer-use/cua/examples/macos.cordis.yml --dump-config
+pnpm dsh headless --patch packages/experimental/cua/examples/macos.cordis.yml --dump-config
 ```
 
 配置输出命令不发起模型请求。执行真实任务时，将 `--dump-config` 替换为任务提示，并配置该 profile 的模型凭据。配置挂载 computer-use 注册表和本 provider；使用前需移除已有的竞争 provider。负责执行的宿主或辅助进程需要辅助功能权限来读取 AX 和输入，需要屏幕录制权限来截图。`getCapabilities` 查询权限和锁屏状态，不弹出系统授权窗口。桌面会话锁定或不可用时，界面观察与输入会在分派前拒绝，需由用户解锁 macOS 后继续。`listApps` 和 `cua.getState` 列出运行中的应用。`findApps(query)` 按名称、bundle ID 或绝对路径搜索 macOS 标准应用目录。`getApp` 按唯一名称、bundle ID、路径或运行中的 PID 选择应用，取得应用许可后，在需要时后台启动尚未运行的应用。启动前先确认可执行文件身份，授权后在启动前后再次核对；未签名代码只取得任务许可。返回的对象读取初始 AX，不自动激活应用。启动被取消时，应用可能已经运行。模型指引要求先在后台观察和输入，不在初始化或每次动作前激活应用。窗口隐藏或最小化时，先尝试 `app.show()` 或 `window.show()`，再重新观察。它请求取消隐藏和恢复最小化，不主动激活、抬起窗口或切换桌面空间；应用级恢复选择焦点窗口、主窗口或唯一 AX 窗口。结果通过 `windowId` 指明选中的窗口，未选中时为 null；`foregroundChanged` 比较操作前后的前台应用和最上层窗口，无法取得完整观察时为 null，返回后仍可能发生焦点变化。恢复失败或窗口仍不可用时，说明需要前台的步骤，再调用 `app.activate()` 或窗口的 `raise` 动作并重新观察。必须使用前台时，以完成任务为先。应用收到输入后仍可能改变焦点，后台投递不保证用户操作始终不受干扰。
@@ -74,7 +74,7 @@ AX 观察默认只展示菜单栏入口。使用 `app.getAXState({ includeMenus:
 
 ### 接入外部执行环境
 
-使用 persistent PTC 时，在 macOS 配置后追加 `--patch packages/computer-use/cua/examples/persistent-ptc.cordis.yml`。该 provider 为存活的 Agent 保留变量，并遵守当前选择的文件沙箱策略。调用方导入适配模块，并提供当前执行中已授权的 `tools.cua` 绑定。persistent PTC 会在 CUA 指引中收到安装目录内 bridge 的文件 URL，项目无须安装本包。下面的例子用于能从自身安装目录解析本包、且已提供 `tools` 的外部宿主；本包不安装全局对象，也不负责保留变量：
+使用 persistent PTC 时，在 macOS 配置后追加 `--patch packages/experimental/cua/examples/persistent-ptc.cordis.yml`。该 provider 为存活的 Agent 保留变量，并遵守当前选择的文件沙箱策略。调用方导入适配模块，并提供当前执行中已授权的 `tools.cua` 绑定。persistent PTC 会在 CUA 指引中收到安装目录内 bridge 的文件 URL，项目无须安装本包。下面的例子用于能从自身安装目录解析本包、且已提供 `tools` 的外部宿主；本包不安装全局对象，也不负责保留变量：
 
 ```javascript
 import { connectCua } from '@deepseek-ai/dsh-cua/bridge'
@@ -111,7 +111,7 @@ AppKit sheet 可以通过其窗口 ID 单独选择，也会出现在所属文档
 
 对象接口将应用和窗口方法转换为 JSON 操作。适配模块通过标准工具链保留授权、嵌套日志和图片接入。同一用户的相同 helper 构建由多个 Agent 和 Host 共享。每条连接独立保存句柄、快照、配置和取消状态，桌面操作通过全局队列执行。受管启动器将服务生命期交给这些连接，最后一条连接清理完成后服务退出。进程锁覆盖构建身份及真实可执行路径，防止重复启动或覆盖运行版本后产生路径冲突。原生句柄绑定进程身份及内核启动时间，快照中的 AX 引用只保存在辅助进程内。未来平台可以实现相同操作协议，无需在对象接口中加入平台逻辑。
 
-[Zod 操作定义](src/protocol.ts)负责模型参数，并单独声明 Host 资源字段和内部续接操作。公共数据类型从这些定义推导。`pnpm exec tsx packages/computer-use/cua/native/generate-protocol.ts` 生成原生 JSON Schema 和 Swift 字段、枚举校验表；包测试检查产物是否同步，并验证模型不能提交 Host 专属字段。原生目标验证、资源上限和操作行为仍在执行处检查。
+[Zod 操作定义](src/protocol.ts)负责模型参数，并单独声明 Host 资源字段和内部续接操作。公共数据类型从这些定义推导。`pnpm exec tsx packages/experimental/cua/native/generate-protocol.ts` 生成原生 JSON Schema 和 Swift 字段、枚举校验表；包测试检查产物是否同步，并验证模型不能提交 Host 专属字段。原生目标验证、资源上限和操作行为仍在执行处检查。
 
 [AX 文本格式化](native/Sources/CuaNative/AXTextFormatter.swift)只接收已读取的节点数据。AX 遍历器独自分配索引并保存原生引用，格式化不维护另一套快照或目标注册表。
 
@@ -126,7 +126,7 @@ AppKit sheet 可以通过其窗口 ID 单独选择，也会出现在所属文档
 <a id="further-exploration"></a>
 ## 进一步阅读
 
-- [Computer-use 注册](../computer-use/README.zh.md)
+- [Computer-use 注册](../../computer-use/computer-use/README.zh.md)
 - [原生协议](native/protocol.schema.json)
 - [对象接口](src/types.ts)
 
@@ -197,7 +197,7 @@ Use selectText only on controls advertising selectionWritable. It selects a uniq
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 只提供 macOS 原生实现。不支持浏览器标签、启动应用、AX 差分、无法确认应用归属的系统面板，以及仅后台辅助类型的应用。
+- 只提供 macOS 原生实现，Windows 支持正在开发中。不支持浏览器标签、启动应用、AX 差分、无法确认应用归属的系统面板，以及仅后台辅助类型的应用。
 - 坐标使用包含标题栏的窗口内部 point，可能不同于 PNG 像素尺寸。窗口移动、应用变化及其他桌面使用者的操作可能与观察和输入交错。
 - macOS 台前调度可能将后台窗口的尺寸与截图变为缩略图，当前无法保证这种状态下的完整画面与坐标输入；模型指引要求说明前台需求并避免反复抢回焦点。
 - 后台输入依赖私有 SkyLight 符号，macOS 升级可能使其不可用，需在目标系统版本验证。
