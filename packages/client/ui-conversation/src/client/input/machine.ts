@@ -70,8 +70,8 @@ export class SubmitMachine {
    */
   dispatch(ev: InputEvent): readonly InputEffect[] {
     switch (ev.type) {
-      case 'draft-changed': return this.onDraftChanged(ev.command)
-      case 'claim': return this.onClaim(ev.claim)
+      case 'draft-changed': return this.followCommand(ev.command)
+      case 'claim': return this.followCommand(ev.claim)
       case 'enter': return this.onEnter(ev.mode, ev.draft, ev.submission)
       case 'adjudicated': return this.onAdjudicated(ev.attempt, ev.outcome)
       case 'adjudication-failed': return this.onAdjudicationFailed(ev.attempt, ev.message)
@@ -86,20 +86,14 @@ export class SubmitMachine {
   /**
    * Outside a transaction the claim follows the document's leading command
    * chip: deleting or displacing the chip releases it, and a history restore
-   * of the chip re-enters claimed.
+   * of the chip re-enters claimed. The claim event applies the same rule to a
+   * chip the editor just inserted, before its update commits; busy phases
+   * refuse both.
    */
-  private onDraftChanged(command: CommandClaim | undefined): readonly InputEffect[] {
+  private followCommand(command: CommandClaim | undefined): readonly InputEffect[] {
     if (this.phase !== 'plain' && this.phase !== 'claimed') return []
     this.claim = command
     this.phase = command === undefined ? 'plain' : 'claimed'
-    return []
-  }
-
-  /** The editor inserted a command chip; busy phases refuse another claim. */
-  private onClaim(claim: CommandClaim): readonly InputEffect[] {
-    if (this.phase !== 'plain' && this.phase !== 'claimed') return []
-    this.claim = claim
-    this.phase = 'claimed'
     return []
   }
 
@@ -187,7 +181,7 @@ export class SubmitMachine {
     return [{ type: 'notice', level: 'error', text: message }]
   }
 
-  /** Claimed command settlement retains the frozen transaction semantics. */
+  /** Claimed command settlement; after a failure the claim follows the leading command chip again. */
   private onSubmitSettled(ev: Extract<InputEvent, { type: 'submit-settled' }>): readonly InputEffect[] {
     const flight = this.inflight
     if (this.phase !== 'submitting' || flight === undefined || flight.attempt.seq !== ev.attempt.seq) return []
@@ -202,12 +196,8 @@ export class SubmitMachine {
       return effects
     }
     const text = ev.message ?? ev.outcome?.text
-    if (ev.draft === flight.attempt.draftSnapshot && this.claim !== undefined && ev.command === this.claim) {
-      this.phase = 'claimed'
-      return text === undefined ? [] : [{ type: 'notice', level: 'error', text }]
-    }
-    this.phase = 'plain'
-    this.claim = undefined
+    this.claim = ev.command
+    this.phase = ev.command === undefined ? 'plain' : 'claimed'
     return text === undefined ? [] : [{ type: 'notice', level: 'error', text }]
   }
 

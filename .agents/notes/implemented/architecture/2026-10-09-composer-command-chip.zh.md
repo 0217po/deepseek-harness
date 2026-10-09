@@ -14,9 +14,9 @@ Status: implemented
 
 - 节点携带 `CommandClaim`，包括其 submit 闭包。历史记录恢复节点时连同字段一起恢复，因此撤销 chip 删除会恢复认领。JSON 导出写入 token 文本；闭包没有 JSON 形式，因此 JSON 导入得到纯文本节点。
 - 检测投影把 chip 计为一个 U+FFFC，触发检测不会再读到命令名。剪贴板投影是不含分隔符的 token。chip 不是引用 occurrence。`EditorProjection.command` 是位于文档开头的 chip 所携带的认领。
-- 在提交事务之外，状态机的认领跟随文档：`draft-changed` 携带行首 chip 的认领，因此删除或挤开 chip 会释放认领，历史恢复会重新进入 claimed。命令提交失败时，只有草稿未变且同一个 chip 仍在行首才回到 claimed。Enter 时从输入文本裁决出的认领没有 chip，失败后回到 plain。
-- 一个根节点 transform 让 chip 保持在行首位置。前面有兄弟节点或位于后续块中的 chip 会变回字面 token，并像在旧 token 前输入那样释放认领。
-- 删除分两步。从折叠光标出发、方向触及 chip 的字符删除先把它标记为选中（宿主元素上的 `data-selected`；根元素的 `data-composer-chip-selected` 隐藏光标），同方向的下一次删除才整体移除它。其他按键、点击、失焦或光标离开 chip 都会清除标记。编辑器选区保持为折叠的 range，`isKeyboardSelectable()` 仍为 false，原因与引用 chip 记录的相同。Escape 仍不释放认领。
+- 在提交事务之外，状态机的认领跟随文档：`draft-changed` 携带行首 chip 的认领，因此删除或挤开 chip 会释放认领，历史恢复会重新进入 claimed。命令提交失败后按同一规则结算，只要行首仍有 chip 就回到 claimed；Enter 时从输入文本裁决出的认领没有 chip，回到 plain。
+- 节点 transform 让 chip 保持在行首位置。前面有兄弟节点或位于后续块中的 chip 会变回字面 token，并像在旧 token 前输入那样释放认领。chip 自身的 transform 覆盖兄弟节点插入和跨块移动；段落 transform 覆盖在 chip 所在块之前插入块的情况，因此没有任何更新需要遍历整个文档。
+- 删除分两步。从折叠光标出发、方向触及 chip 的字符删除先把它标记为选中（宿主元素上的 `data-selected`；根元素的 `data-composer-chip-selected` 隐藏光标），同方向的下一次删除才整体移除它。字符删除命令和删除类输入事件都会参与判断，因为 iOS 处理带范围的 `deleteContentBackward` 时不经过该命令。分发过程中没有产生字符删除的按键、点击、失焦或光标离开 chip 会清除标记，因此 macOS Ctrl+H 这类平台删除快捷键会保留它。编辑器选区保持为折叠的 range，`isKeyboardSelectable()` 仍为 false，原因与引用 chip 记录的相同。Escape 仍不释放认领。
 - 删除 `claim-decor.ts` 和文本引用的优先级规则。
 
 `slash/input-*` 事件、`CommandClaim`、`InputState.claim` 与触发源的字段保持不变。`CommandClaim.token` 仍以分隔符结尾，命令参数仍从其后的剪贴板文本读取。

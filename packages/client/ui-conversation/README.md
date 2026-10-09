@@ -167,6 +167,7 @@ None; Conversation assembly and browser input state do not alter provider-side p
 
 - **Only registered targets can render** — the shell deliberately has no implicit fallback target beyond the registered `chat` preference.
 - **Factory occurrences inherit their render-position Session** — `conversation.content` does not accept an independently addressed Session; that requires a separate Session-provider capability.
+- **A claimed command does not survive reload** — the persisted draft keeps text and references only, so a reloaded draft shows the command as its literal token instead of a chip; Enter still adjudicates and submits it as the command. Restoring the chip needs a side-effect-free way to re-resolve the claim from the command source.
 
 
 <a id="dev-note"></a>

@@ -847,7 +847,7 @@ export class SessionInputShell implements SessionInput {
           }
           this.dispatchRun(({
             type: 'submit-settled', attempt, ok: outcome.kind === 'success',
-            draft: this.projection.clipboardText, command: this.projection.command, outcome,
+            command: this.projection.command, outcome,
             ...(outcome.kind === 'error' && outcome.text === undefined ? { message: 'command failed' } : {}),
           }))
         },
@@ -856,7 +856,7 @@ export class SessionInputShell implements SessionInput {
           const message = error instanceof Error ? error.message : String(error)
           this.dispatchRun(({
             type: 'submit-settled', attempt, ok: false,
-            draft: this.projection.clipboardText, command: this.projection.command, message,
+            command: this.projection.command, message,
           }))
         },
       )

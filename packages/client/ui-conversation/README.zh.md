@@ -167,6 +167,7 @@ selector 必须是 owner currency 的纯函数。非 null 返回值作为 `match
 
 - **只有已注册 target 可以渲染**——除已注册的 `chat` 偏好外，shell 刻意不提供隐式 fallback target。
 - **Factory occurrence 继承渲染位置的 Session**——`conversation.content` 不接受独立寻址的 Session；该能力需要单独的 Session provider。
+- **已认领命令不会跨刷新保留**——持久化的草稿只保存文字和引用，刷新后的草稿把命令显示为字面 token 而不是 chip；Enter 仍会裁决并将其作为命令提交。恢复 chip 需要一种无副作用的方式，从命令来源重新解析认领。
 
 
 <a id="dev-note"></a>

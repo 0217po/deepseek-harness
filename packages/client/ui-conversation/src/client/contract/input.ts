@@ -321,12 +321,11 @@ export type InputEvent =
   | { readonly type: 'enter'; readonly mode: InputSubmitMode; readonly draft: string; readonly submission?: MessageSubmission }
   | { readonly type: 'adjudicated'; readonly attempt: SubmitAttempt; readonly outcome: PickOutcome }
   | { readonly type: 'adjudication-failed'; readonly attempt: SubmitAttempt; readonly message: string }
-  /** Settlement carries the live clipboard projection and leading command chip claim for claim re-entry decisions. */
+  /** Settlement carries the leading command chip's claim, which the claim follows after a failure. */
   | {
     readonly type: 'submit-settled'
     readonly attempt: SubmitAttempt
     readonly ok: boolean
-    readonly draft: string
     readonly command: CommandClaim | undefined
     readonly outcome?: SubmitOutcome
     readonly message?: string

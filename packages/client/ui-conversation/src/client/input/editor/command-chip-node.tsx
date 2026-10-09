@@ -10,8 +10,8 @@ import type { JSX } from 'react'
 import type {
   LexicalEditor, LexicalNode, NodeKey, SerializedLexicalNode, Spread,
 } from 'lexical'
-import { $createTextNode, DecoratorNode, RootNode } from 'lexical'
-import { $dfs } from '@lexical/utils'
+import { $createTextNode, DecoratorNode, ParagraphNode } from 'lexical'
+import { mergeRegister } from '@lexical/utils'
 import type { CommandClaim } from '../../contract/input.ts'
 import { CommandChip } from './CommandChip.tsx'
 
@@ -88,8 +88,9 @@ export class CommandChipNode extends DecoratorNode<JSX.Element> {
   }
 
   /**
-   * Arrows step across the chip and Backspace/Delete remove it whole, for
-   * the reason documented on ReferenceChipNode.isKeyboardSelectable.
+   * Arrows step across the chip and the default character deletion removes
+   * it whole, for the reason documented on ReferenceChipNode.isKeyboardSelectable;
+   * registerCommandChipSelection inserts the selecting step before that deletion.
    */
   override isKeyboardSelectable(): boolean {
     return false
@@ -129,21 +130,28 @@ export function $isCommandChipNode(node: LexicalNode | null | undefined): node i
   return node instanceof CommandChipNode
 }
 
+/** Replace a displaced chip with its literal token. */
+function $releaseChip(chip: CommandChipNode): void {
+  chip.replace($createTextNode(chip.getTextContent()))
+}
+
 /**
  * Keep command chips on the leading seat. A chip anywhere but the first
- * child of the first block (text typed or a line break inserted before it)
- * becomes its literal token, which releases the claim. The root transform
- * runs whenever any attached node is dirty.
+ * child of the first block (text, a line break, or a block inserted before
+ * it) becomes its literal token, which releases the claim. Inserting a
+ * sibling before the chip or moving it to another block marks the chip dirty;
+ * a block inserted before the chip's block marks only that block dirty.
  * @param editor - the shell-owned editor.
  * @returns the unregister disposer.
  */
 export function registerCommandChipSeat(editor: LexicalEditor): () => void {
-  return editor.registerNodeTransform(RootNode, (root) => {
-    for (const { node } of $dfs(root)) {
-      if ($isCommandChipNode(node)
-        && (node.getPreviousSibling() !== null || node.getParentOrThrow().getPreviousSibling() !== null)) {
-        node.replace($createTextNode(node.getTextContent()))
-      }
-    }
-  })
+  return mergeRegister(
+    editor.registerNodeTransform(CommandChipNode, (chip) => {
+      if (chip.getPreviousSibling() !== null || chip.getParentOrThrow().getPreviousSibling() !== null) $releaseChip(chip)
+    }),
+    editor.registerNodeTransform(ParagraphNode, (block) => {
+      const first = block.getFirstChild()
+      if ($isCommandChipNode(first) && block.getPreviousSibling() !== null) $releaseChip(first)
+    }),
+  )
 }
