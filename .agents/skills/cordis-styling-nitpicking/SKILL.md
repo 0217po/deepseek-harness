@@ -1,6 +1,6 @@
 ---
 name: cordis-styling-nitpicking
-description: Use when reviewing or auditing DeepSeek Harness plugin code for Cordis singleton patterns, unreversed side effects, or cleanup dependencies whose resources disappear before consumers finish. Reports substantiated P0 findings with ownership evidence and deterministic lifecycle verification.
+description: Use during code review of DeepSeek Harness Cordis plugins and helpers reachable from their entrypoints, including pull requests, and during focused lifecycle audits. Checks singleton state, unreversed side effects, and cleanup dependencies released before consumers finish; reports substantiated P0 findings with ownership evidence and deterministic verification.
 ---
 
 # Cordis Styling Nitpicking
