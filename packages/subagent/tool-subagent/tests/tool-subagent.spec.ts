@@ -227,7 +227,7 @@ describe('dsh-tool-subagent', () => {
     await disposeSetupProvider(ctx)
     ctx.subagents.registerProvider({
       name: 'mock',
-      capabilities: { agentOptions: true, agentPreset: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      capabilities: { agentOptions: true, agentPreset: false, outputSchema: false, depthLimit: false },
       inheritsParentContext: false,
       agentRouteDefaults: { provider: 'beta', model: 'replacement-model' },
       start: replacementStart,
@@ -313,7 +313,7 @@ describe('dsh-tool-subagent', () => {
     await ctx.plugin(SubagentRuntime)
     ctx.subagents.registerProvider({
       name: 'bare',
-      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false },
       inheritsParentContext: false,
       start: async (request) => {
         seen = request
@@ -454,7 +454,7 @@ describe('dsh-tool-subagent', () => {
     // the provider survives.
     ctx.subagents.registerProvider({
       name: 'continuable',
-      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false },
       inheritsParentContext: false,
       start: async () => { throw new Error('lifecycle test does not start a child') },
       prepareContinuable: async () => ({}),
@@ -522,7 +522,7 @@ describe('dsh-tool-subagent', () => {
     await ctx.plugin(SubagentRuntime)
     ctx.subagents.registerProvider({
       name: 'spy',
-      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false },
       inheritsParentContext: false,
       start: async (request) => {
         if (request.signal.aborted) sawAborted()
@@ -576,14 +576,14 @@ describe('dsh-tool-subagent', () => {
     expect(unwrapped.Config).toBeDefined()
   })
 
-  it('passes persona/toolFilter/maxDepth config through to the start request', async () => {
-    let seen: { persona?: string; toolFilter?: unknown; maxDepth?: number } | undefined
+  it('passes maxDepth config through to the start request', async () => {
+    let seen: { maxDepth?: number } | undefined
     const ctx = await projectedContext()
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
     ctx.subagents.registerProvider({
       name: 'capture2',
-      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: true, toolFilter: true, persona: true },
+      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: true },
       inheritsParentContext: false,
       start: async (request) => {
         seen = request
@@ -596,14 +596,10 @@ describe('dsh-tool-subagent', () => {
     })
     await ctx.plugin(tool, {
       provider: 'capture2',
-      persona: 'You are the child.',
-      toolFilter: { deny: ['subagent'] },
       maxDepth: 2,
     })
 
     await callSubagent(ctx, { description: 'd', prompt: 'p' })
-    expect(seen?.persona).toBe('You are the child.')
-    expect(seen?.toolFilter).toMatchObject({ deny: ['subagent'] })
     expect(seen?.maxDepth).toBe(2)
   })
 
@@ -629,33 +625,18 @@ describe('dsh-tool-subagent', () => {
     })).rejects.toThrow('subagent maxDepth must be a non-negative safe integer')
   })
 
-  it('a partial toolFilter (deny only) does not materialize an empty allow-list (deny-all trap)', async () => {
-    let seen: { toolFilter?: { readonly allow?: readonly string[]; readonly deny?: readonly string[] } } | undefined
-    const ctx = await projectedContext()
-    await mountWorkingDirectoryFixture(ctx)
-    await ctx.plugin(SubagentRuntime)
-    ctx.subagents.registerProvider({
-      name: 'capture3',
-      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false, toolFilter: true, persona: false },
-      inheritsParentContext: false,
-      start: async (request) => {
-        seen = request
-        return {
-          id: SessionId('capture3-child'),
-          result: Promise.resolve({ output: [{ type: 'text', text: 'ok' }], stopReason: 'completed' as const }),
-          dispose: async () => {},
-        }
-      },
-    })
-    await ctx.plugin(tool, { provider: 'capture3', toolFilter: { deny: ['subagent'] }, maxDepth: 'provider-managed' })
-    await callSubagent(ctx, { description: 'd', prompt: 'p' })
-    expect(seen?.toolFilter).toEqual({ deny: ['subagent'] })
-    expect(seen?.toolFilter).not.toHaveProperty('allow')
+  it.each([
+    { persona: 'Child persona' },
+    { toolFilter: { deny: ['subagent'] } },
+    { toolFilter: {} },
+    { persona: undefined },
+  ])('rejects removed composition configuration at plugin load: %j', async (removed) => {
+    await expect(setup({ provider: 'mock', ...removed }))
+      .rejects.toThrow(/no longer supported; configure persona and tool plugins in an Agent Preset/)
   })
 
   it('an omitted agentOptions does not materialize an empty object onto the request', async () => {
-    // Same schemastery trap as toolFilter, adjacent field: an omitted
-    // `agentOptions` config key materializes `{}` without the forced default,
+    // An omitted `agentOptions` materializes `{}` without the forced default,
     // which reads as present and puts a dishonest `agentOptions: {}` on every
     // start request.
     let seen: { agentOptions?: unknown } | undefined
@@ -664,7 +645,7 @@ describe('dsh-tool-subagent', () => {
     await ctx.plugin(SubagentRuntime)
     ctx.subagents.registerProvider({
       name: 'capture4',
-      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false },
       inheritsParentContext: false,
       start: async (request) => {
         seen = request
@@ -681,19 +662,6 @@ describe('dsh-tool-subagent', () => {
     expect(seen).not.toHaveProperty('agentOptions')
   })
 
-  it('an explicit empty toolFilter fails at plugin load, not at first delegation', async () => {
-    const ctx = await projectedContext()
-    await mountWorkingDirectoryFixture(ctx)
-    await ctx.plugin(SubagentRuntime)
-    ctx.subagents.registerProvider({
-      name: 'p',
-      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false, toolFilter: true, persona: false },
-      inheritsParentContext: false,
-      start: () => { throw new Error('unreachable') },
-    })
-    const fiber = ctx.plugin(tool, { provider: 'p', toolFilter: {} })
-    await expect(fiber).rejects.toThrow(/names neither `allow` nor `deny`/)
-  })
 })
 
 describe('dsh-tool-subagent local activation', () => {
@@ -792,7 +760,7 @@ describe('dsh-tool-subagent local activation', () => {
     let survivingChildId: ReturnType<typeof SessionId> | undefined
     ctx.subagents.registerProvider({
       name: 'gated',
-      capabilities: { agentOptions: false, agentPreset: false, outputSchema: true, depthLimit: true, toolFilter: true, persona: true },
+      capabilities: { agentOptions: false, agentPreset: false, outputSchema: true, depthLimit: true },
       inheritsParentContext: false,
       start: async () => { throw new Error('continuable policy must not start a one-shot child') },
       prepareContinuable: async (request) => {
@@ -855,7 +823,7 @@ describe('depth budget configuration', () => {
     await ctx.plugin(SubagentRuntime)
     ctx.subagents.registerProvider({
       name: 'capture',
-      capabilities: { agentOptions: false, agentPreset: false, outputSchema: true, depthLimit: true, toolFilter: true, persona: true },
+      capabilities: { agentOptions: false, agentPreset: false, outputSchema: true, depthLimit: true },
       inheritsParentContext: false,
       start: async (request) => {
         requests.push(request)
@@ -875,14 +843,6 @@ describe('depth budget configuration', () => {
     await callSubagent(ctx, { description: 'd', prompt: 'p' })
     expect(requests[0]?.label).toBe('d')
     expect(requests[0]?.maxDepth).toBe(1)
-    expect(requests[0]?.toolFilter).toBeUndefined()
-  })
-
-  it('forwards an explicit tool filter unchanged instead of encoding the depth policy into it', async () => {
-    const { ctx, requests } = await captureSetup({ toolFilter: { deny: ['dangerous'] }, maxDepth: 0 })
-    await callSubagent(ctx, { description: 'd', prompt: 'p' })
-    expect(requests[0]?.maxDepth).toBe(0)
-    expect(requests[0]?.toolFilter).toEqual({ deny: ['dangerous'] })
   })
 
   it('rejects a numeric maxDepth on a provider without the depthLimit capability at mount', async () => {
@@ -891,7 +851,7 @@ describe('depth budget configuration', () => {
     await ctx.plugin(SubagentRuntime)
     ctx.subagents.registerProvider({
       name: 'no-depth',
-      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false },
       inheritsParentContext: false,
       start: async () => { throw new Error('unreachable') },
     })
@@ -906,7 +866,7 @@ describe('depth budget configuration', () => {
     await ctx.plugin(SubagentRuntime)
     ctx.subagents.registerProvider({
       name: 'external',
-      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false },
       inheritsParentContext: false,
       start: async (request) => {
         requests.push(request)
@@ -920,6 +880,5 @@ describe('depth budget configuration', () => {
     await ctx.plugin(tool, { provider: 'external', maxDepth: 'provider-managed' })
     await callSubagent(ctx, { description: 'd', prompt: 'p' })
     expect(requests[0]?.maxDepth).toBeUndefined()
-    expect(requests[0]?.toolFilter).toBeUndefined()
   })
 })

@@ -635,8 +635,6 @@ export class SubagentRuntime extends TypertRemoteService {
       { when: request.agentOptions !== undefined, cap: 'agentOptions' },
       { when: request.outputSchema !== undefined, cap: 'outputSchema' },
       { when: request.maxDepth !== undefined, cap: 'depthLimit' },
-      { when: request.toolFilter !== undefined, cap: 'toolFilter' },
-      { when: request.persona !== undefined, cap: 'persona' },
     ]
     for (const { when, cap } of needs) {
       if (when && !provider.capabilities[cap]) {

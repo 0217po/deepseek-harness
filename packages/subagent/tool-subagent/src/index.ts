@@ -64,22 +64,6 @@ export interface Config extends PresetSelectionConfig {
    */
   agentOptions?: AgentOptions
   /**
-   * Per-child persona that shadows `deployment:persona-prefix`. Requires the
-   * provider's `persona` capability; omission preserves the deployment persona.
-   */
-  persona?: string
-  /**
-   * Tool filter applied to every child. Filtered tools disappear from its
-   * prompt and reject execution. Requires the provider's `toolFilter`
-   * capability; unknown names fail startup.
-   */
-  toolFilter?: {
-    /** Global tool names the child keeps; everything else is removed. */
-    allow?: string[]
-    /** Global tool names removed from the child. */
-    deny?: string[]
-  }
-  /**
    * Maximum child depth: a non-negative safe integer (`0` forbids delegation),
    * or `'provider-managed'` to send no cap. A numeric cap
    * requires the provider's `depthLimit` capability (mount fails loud
@@ -108,14 +92,8 @@ export const Config: z<Config> = z.object({
     reasoningEffort: ReturnType<typeof ReasoningEffortId>
     maxTokens: number
   }),
-  persona: z.string(),
   agentPreset: z.string().min(1),
   allowedAgentPresets: (z.array(z.string().min(1)).min(1) as z<string[] | undefined>).default(undefined),
-  // Preserve omission; Schemastery's `{ allow: [] }` default would deny every tool.
-  toolFilter: z.object({
-    allow: z.array(z.string()).default(undefined as unknown as string[]),
-    deny: z.array(z.string()).default(undefined as unknown as string[]),
-  }).default(undefined as unknown as { allow: string[]; deny: string[] }),
   maxDepth: z.union([z.natural().max(Number.MAX_SAFE_INTEGER), z.const('provider-managed' as const)]),
 })
 
@@ -165,6 +143,11 @@ function providerWording(inheritsConversation: boolean): { description: string; 
  * @param session - unpublished Session supplied by a direct Agent setup; omit for a standing composition.
  */
 export async function apply(ctx: Context, config: Config, session?: Session): Promise<void> {
+  for (const field of ['persona', 'toolFilter']) {
+    if (Object.hasOwn(config, field)) {
+      throw new Error(`tool-subagent: ${field} is no longer supported; configure persona and tool plugins in an Agent Preset and select it with agentPreset (spawn only)`)
+    }
+  }
   const presets = new SubagentPresetSelection(config)
   if (presets.configured && ctx.get('agentPresets') === undefined) {
     throw new Error('tool-subagent: agent preset selection requires the agent-presets service')
@@ -172,10 +155,6 @@ export async function apply(ctx: Context, config: Config, session?: Session): Pr
   // Direct apply() bypasses Schemastery's numeric constraints. A direct-apply
   // omission stays capless (the schema default only runs through the loader).
   if (config.maxDepth !== 'provider-managed') assertSubagentMaxDepth(config.maxDepth)
-  // Reject an empty explicit filter at load instead of failing every delegation.
-  if (config.toolFilter !== undefined && config.toolFilter.allow === undefined && config.toolFilter.deny === undefined) {
-    throw new Error('tool-subagent: `toolFilter` is configured but names neither `allow` nor `deny` — remove the key or fill the filter')
-  }
   const toolName = config.toolName ?? 'subagent'
 
   const modelSelectionCapable = config.modelSelectionSettings === true
@@ -344,8 +323,6 @@ export async function apply(ctx: Context, config: Config, session?: Session): Pr
             parent,
             ...agentPreset === undefined ? {} : { agentPreset },
             ...requestedChildAgentOptions !== undefined ? { agentOptions: requestedChildAgentOptions } : {},
-            ...config.persona !== undefined ? { persona: config.persona } : {},
-            ...config.toolFilter !== undefined ? { toolFilter: config.toolFilter } : {},
             ...maxDepth !== undefined ? { maxDepth } : {},
           }
 

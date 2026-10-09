@@ -9,8 +9,8 @@
   en: 686fb5136bef0a3b
   zh: d25d6569174a01b5
 /deepseek-ai-dsh-tool-subagent/summary:
-  en: 958d2b1c56ac6ec7
-  zh: cc1997a9ac09e7a5
+  en: c09d40329253a9d8
+  zh: 91c1bbe5557bdda9
 /deepseek-ai-dsh-tool-subagent/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -18,14 +18,14 @@
   en: 93f1701f5209ecb5
   zh: 6310fd012400aead
 /deepseek-ai-dsh-tool-subagent/use-this-package/minimal-configuration:
-  en: 4babf53ca389f1ef
-  zh: d6f7d2fadad0a25f
+  en: 6a82283a51912841
+  zh: 35728acc16931bb4
 /deepseek-ai-dsh-tool-subagent/use-this-package/managed-delegation:
-  en: 0233562878187324
-  zh: c28c8bf333a9adb2
+  en: bb715d037cde14bd
+  zh: a88e98c07115fbd1
 /deepseek-ai-dsh-tool-subagent/use-this-package/selecting-a-child-preset:
-  en: 27e92fa7a46c06d8
-  zh: 739b1fc19ce5c90a
+  en: 1950ef92bab0f46e
+  zh: 593f5f64ed9b5631
 /deepseek-ai-dsh-tool-subagent/use-this-package/selecting-a-child-llm:
   en: 0d37e3b3957515e4
   zh: ea1a94b2f29e7d9a
@@ -117,8 +117,8 @@
   en: f5d5f97a153f7c70
   zh: 3d6bc05b9eadfbc2
 /deepseek-ai-dsh-tool-subagent/known-limitations-and-deferred-work:
-  en: 8dcae464eb95d9ae
-  zh: 05fd445c9d8459e2
+  en: c17c91a188bb0d8c
+  zh: d77c1ffcf1eca737
 /deepseek-ai-dsh-tool-subagent/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

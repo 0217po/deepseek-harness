@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-使用本包可为 agent 提供具名工具，把工作委派给配置的后端。每次调用都会启动受管理的 activation 并返回子任务 id；运行时负责完成通知与清理。本地子任务支持消息和恢复，外部后端执行一次任务，并通过完成通知返回最终回答。受支持的后端可以公开获准的子级 LLM 路由。每个实例均可设置子 agent 的 persona、工具权限与深度限制。
+使用本包可为 agent 提供具名工具，把工作委派给配置的后端。每次调用都会启动受管理的 activation 并返回子任务 id；运行时负责完成通知与清理。本地子任务支持消息和恢复，外部后端执行一次任务，并通过完成通知返回最终回答。受支持的后端可以公开获准的子级 LLM 路由。每个实例可选择子级 preset 和深度限制。
 
 ## 目录
 
@@ -50,8 +50,6 @@ kind: "package-reference"
 | `agentOptions` | — | 配置的子级 `provider`、`model`、适配器所有的 `reasoningEffort` 与正整数 `maxTokens` 默认值；要求提供方支持 `agentOptions`，并会覆盖提供方持有的路由默认值 |
 | `agentPreset` | — | 独立子级 preset 的默认 id；要求进程内 spawn |
 | `allowedAgentPresets` | — | 非空 preset-id 白名单，作为模型可选的 `agent_preset` 枚举；与 `agentPreset` 同时配置时必须包含后者 |
-| `persona` | — | 每个子 agent 独立的 persona；要求提供方具备 `persona` 能力 |
-| `toolFilter` | — | 每个子 agent 独立的全局工具限制；要求提供方具备 `toolFilter` 能力 |
 | `maxDepth` | Host 设置（`1`） | 绝对委派深度上限（`0` 禁止委派）；`'provider-managed'` 不向进程外提供方发送上限 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-subagent)是每个受支持字段及其 JSDoc 的穷尽式真源。
@@ -62,7 +60,7 @@ kind: "package-reference"
 
 所有后端的完成通知都会附带最终回答。本地 Spawn 和 Fork 子任务还可以发送消息，在活跃期间通过 `send_message` 接受更多工作，或在结束后恢复。Codex、Claude Code、ACP 与 DSH SDK 后端不接受后续消息。
 
-`maxDepth` 限制递归深度（`0` 禁止委派）；省略时，每次委派读取 Host 当前的 `subagent.maxDepth` 设置，初始值为 `1`。数值深度要求提供方具备 `depthLimit` 能力；`'provider-managed'` 把预算留给进程外提供方。当提供方支持时，`persona` 与 `toolFilter` 会配置每个子 agent；工具在达到上限时仍然可见——每次尝试启动都会检查调用 agent 的当前深度，被拒绝时返回出错的工具结果。
+`maxDepth` 限制递归深度（`0` 禁止委派）；省略时，每次委派读取 Host 当前的 `subagent.maxDepth` 设置，初始值为 `1`。数值深度要求提供方具备 `depthLimit` 能力；`'provider-managed'` 把预算留给进程外提供方。工具在达到上限时仍然可见；每次尝试启动都会检查调用 agent 的当前深度，被拒绝时返回出错的工具结果。
 
 <a id="selecting-a-child-preset"></a>
 ### 选择子级 preset
@@ -71,7 +69,7 @@ kind: "package-reference"
 
 配置的默认值与白名单必须引用已声明 preset。preset 内的工具在 Agent 初始化期间检查这些 id 并读取描述；直接挂载在 Host 的工具在加载时检查。此检查不激活候选 preset。创建子级时，选中 preset 的激活失败会拒绝组装。两个选择字段都省略时，工具不要求 preset 服务。模型省略选择时使用配置的 `agentPreset`；若也没有默认值，则加入父方当前 preset 代际。任何显式 id 都挂载当前可用代际，即使与父方 id 相同。
 
-在 [preset 插件列表](../../preset/agent-preset-registry/README.zh.md)中组合可复用的 persona 与工具。现有工具级 `persona` 与 `toolFilter` 仍在该组装之后应用于子级作用域。本地子级采用共享的 [preset 恢复规则](../subagent/README.zh.md#restoring-child-composition)。
+在 [preset 插件列表](../../preset/agent-preset-registry/README.zh.md)中配置 persona 与工具。包含 `persona` 或 `toolFilter` 的工具配置在加载时会报迁移错误。本地子级采用共享的 [preset 恢复规则](../subagent/README.zh.md#restoring-child-composition)。
 
 ### 选择子级 LLM
 
@@ -221,7 +219,7 @@ Start independent delegations with `subagent` or `subagent_fork` together in one
 
 - **本工具不等待结果**——使用完成通知或子任务消息。程序化结果等待由 subagent 服务提供。
 - **随附 fork 工具不能选择子级 LLM 路由**——它们继承父级提供方与模型，使复制的对话前缀仍有资格复用 KV Cache。仅当路由变更能保留复用或公开有界重算成本时，才重新启用选择。
-- **逐子级覆盖按实例固定**——配置的 `persona`、`toolFilter` 与深度上限若需独立于允许的 preset 变化，仍需要另一名称不同的工具。LLM 选择要求启用逐 Session 偏好，且提供方必须声明 `agentOptions`；两个进程内提供方和 DSH SDK 会声明该能力，而 ACP、Codex 与 Claude Code 会拒绝它，而不是忽略它。
+- **深度上限按实例固定**——不同名称的工具可设置不同上限。LLM 选择要求启用逐 Session 偏好，且提供方必须声明 `agentOptions`；两个进程内提供方和 DSH SDK 会声明该能力，而 ACP、Codex 与 Claude Code 会拒绝它，而不是忽略它。
 
 <a id="dev-note"></a>
 ### 开发备注

@@ -31,11 +31,11 @@ function fakeParent(id = 'parent-1'): Agent {
 
 const ALL_CAPS: SubagentCapabilities = {
   agentOptions: true, agentPreset: true, outputSchema: true,
-  depthLimit: true, toolFilter: true, persona: true,
+  depthLimit: true,
 }
 const NO_CAPS: SubagentCapabilities = {
   agentOptions: false, agentPreset: false, outputSchema: false,
-  depthLimit: false, toolFilter: false, persona: false,
+  depthLimit: false,
 }
 
 function baseRequest(overrides: Partial<SubagentStartRequest> = {}): SubagentStartRequest {
@@ -238,8 +238,6 @@ describe('SubagentRuntime', () => {
     ['agentOptions', { agentOptions: { model: 'child-model' } }],
     ['outputSchema', { outputSchema: { type: 'object', properties: {} } }],
     ['depthLimit', { maxDepth: 1 }],
-    ['toolFilter', { toolFilter: { deny: ['bash'] } }],
-    ['persona', { persona: 'reviewer' }],
   ] as const)('rejects unsupported %s before provider startup', async (_capability, override) => {
     const { subagents } = await service()
     const provider = new StubProvider('weak', NO_CAPS)

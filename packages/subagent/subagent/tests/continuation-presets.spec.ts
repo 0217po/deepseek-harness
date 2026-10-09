@@ -233,6 +233,7 @@ describe('continuable child presets', () => {
         child.session.append('subagent/descriptor', snapshotSubagentDescriptor({
           mode: 'continuable', provider: 'separate', label: 'historical',
           agentProvider: 'mock', agentModel: 'mock', persona: 'Historical child persona.',
+          toolFilter: { deny: ['reviewing_only'] },
         }))
         ctx.agentPresets.composeFrom(childCtx, parent.ctx)
       },
@@ -244,7 +245,7 @@ describe('continuable child presets', () => {
     const stored = await settled(ctx, childId)
     expect(stored.meta.agentPreset).toBe(agentPreset)
     expect(stored.events.some(event => event.type === 'agent-preset/selected')).toBe(false)
-    expect(adapter.requests[0]?.tools?.map(tool => tool.name)).toEqual(['reviewing_only'])
+    expect((adapter.requests[0]?.tools ?? []).map(tool => tool.name)).toEqual([])
     expect(JSON.stringify(adapter.requests[0]?.messages.filter(message => message.role === 'system')))
       .toContain('Historical child persona.')
   })

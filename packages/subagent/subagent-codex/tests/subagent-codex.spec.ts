@@ -441,8 +441,6 @@ describe('task admission and package contracts', () => {
         agentPreset: false,
         outputSchema: false,
         depthLimit: false,
-        toolFilter: false,
-        persona: false,
       },
       inheritsParentContext: false,
     })
