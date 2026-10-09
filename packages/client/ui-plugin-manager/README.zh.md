@@ -110,6 +110,8 @@ Host 入口通过生成的 Remote 接口暴露 `pluginRegistryProbe.fastest()`�
 
 浏览器插件通过 `ctx.slots.inject()` 注册 `plugins` 侧栏入口与它的 `main` 面板，使两者跟随 slot 延迟声明、本地化变化与销毁。页面为全局页面，不属于任何 Session。显示文本来自包元信息与页面字典。
 
+插件主列表、实验性插件页与详情页面包屑共用 28px 的页头顶部内边距。macOS 下，各页头叠加框架的 48px 标题栏避让量，因此无论侧栏展开还是收起，首行内容均距视口顶部 76px。Windows 由框架提供 40px 标题栏内边距，再加页面的 28px，合计 68px；普通浏览器为 28px。页面不重新定义 `--dsh-frame-top-clearance`，也不重复叠加 Windows 标题栏内边距。
+
 添加控件复用 `Button`、`Menu` 和 `MenuItemButton`。两个安装入口调用同一个 `openInstall` 回调，使用 `InstallDialog` 与 `PluginManagerController`。root 作用域的 list slot `plugins.add.actions` 接受贡献的 `MenuItemButton` 行，放在安装项之后；每个贡献者接收 `onDismiss()` 回调，在开始动作前关闭菜单。
 
 ### store

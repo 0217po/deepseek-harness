@@ -18,7 +18,7 @@ This skill is guidance, not a complete checklist. It covers judgment calls that 
 ## Reuse before adding
 
 - **Extend an existing component, container, or interaction before creating a new one.** A new capability that fits an existing surface (an extra menu item, a new prop on an existing primitive) beats a parallel element stacked beside it.
-- **Icons come from the existing icon library.** Pick the semantically closest existing icon; a new glyph requires designer approval before it lands — when reviewing a PR that adds one, suggest requesting a designer review.
+- **Action icons come from the existing icon library.** Pick the semantically closest existing icon; a new glyph requires designer approval before it lands. For official and official experimental plugin artwork, use [dsh-official-plugin-artwork](../dsh-official-plugin-artwork/SKILL.md), not enlarged toolbar glyphs.
 - **Right-sidebar content registers a slot in the existing sidebar**, never a separate sidebar. Every sidebar tab declares a tab icon matching its meaning.
 - **Icon-only actions whose meaning is not obvious get a Tooltip.** Informational content the pointer must rest on or select uses HoverCard instead. Prefer these shared primitives over ad-hoc title attributes.
 
