@@ -439,24 +439,23 @@ describe('edge joins', () => {
     expect(state.rows[0]?.derivedCredential).toMatchObject({ configured: true })
   })
 
-  it('surfaces a settings describe failure', async () => {
-    const { ctx, mirror } = api({ describeSettings: () => Promise.resolve(remoteFail('settings down')) })
+  it('recovers the provider directory when an initial settings failure is retried', async () => {
+    let settingsCall = 0
+    const { ctx, mirror } = api({
+      describeSettings: () => Promise.resolve(++settingsCall === 1
+        ? remoteFail('settings down')
+        : remoteOk({ writable: true, hasDocument: false, namespaces: NAMESPACES })),
+    })
     const store = new ModelsSettingsStore(ctx, settingsSchema, mirror)
     await store.load()
     expect(store.store.getSnapshot()).toMatchObject({ status: 'error', error: 'settings down' })
-  })
-
-  it('reports a terminally unavailable settings mirror precisely', async () => {
-    const { ctx } = api()
-    const store = new ModelsSettingsStore(
-      ctx,
-      settingsSchema,
-      new SettingsDescribeMirror(ctx, 'memory'),
-    )
     await store.load()
-    expect(store.store.getSnapshot()).toMatchObject({
-      status: 'error',
-      error: 'settings are unavailable in this browser',
+    const state = store.store.getSnapshot()
+    expect(state).toMatchObject({ status: 'ready', error: null, writable: true })
+    expect(state.rows.find(row => row.entry.provider === 'openai')).toMatchObject({
+      configured: true,
+      apiKeyEnv: 'OPENAI_API_KEY',
+      credential: { configured: true, writable: true },
     })
   })
 
