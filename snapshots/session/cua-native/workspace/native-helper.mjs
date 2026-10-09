@@ -42,6 +42,7 @@ function serve() {
   const instanceId = randomUUID()
   const sockets = new Set()
   const application = { count: 0, value: '', visualCount: 0, frontPid: 42, frontWindowId: 99 }
+  const captureBroker = { pendingCapture: false }
   let started = false
   let hadClient = false
   let connection = 0
@@ -52,7 +53,7 @@ function serve() {
     const connectionId = ++connection
     const input = createInterface({ input: socket })
     const scopedRecord = (event, data = {}) => record(event, { connection: connectionId, ...data })
-    const call = createApplicationState(socket, scopedRecord, application, connectionId)
+    const call = createApplicationState(socket, scopedRecord, application, captureBroker, connectionId)
     input.on('line', line => {
       const request = JSON.parse(line)
       if (!connected) {
@@ -108,7 +109,7 @@ function serve() {
   })
 }
 
-function createApplicationState(socket, record, application, connectionId) {
+function createApplicationState(socket, record, application, captureBroker, connectionId) {
   const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
   const scope = connectionId === 1 ? 'fixture' : `fixture-${connectionId}`
   const app = { appHandle: `${scope}-app`, pid: 9, name: 'Fixture', bundleId: 'test.fixture' }
@@ -177,6 +178,10 @@ function createApplicationState(socket, record, application, connectionId) {
     if (params.windowId === 9 && ['screenshot', 'click', 'scroll', 'drag'].includes(method) && params.elementIndex === undefined) {
       refuse('WINDOW_CHANGED', 'Window display and accessibility bounds disagree. Read fresh state; if unchanged, use AX actions or explicitly restore the window before capture or coordinate input')
     }
+    if (method === 'screenshot' && captureBroker.pendingCapture) {
+      socket.write(JSON.stringify({ type: 'diagnostic', requestId, stage: 'helper.failed', elapsedMs: 1, errorCode: 'CAPTURE_BUSY' }) + '\n')
+      refuse('CAPTURE_BUSY', 'A previous system capture is still pending; other native operations remain available')
+    }
     if (method === 'screenshot' && malformedScreenshot) {
       socket.write(JSON.stringify({ type: 'diagnostic', requestId, stage: 'capture-image.begin', elapsedMs: 1 }) + '\ninvalid screenshot response\n')
       return
@@ -198,6 +203,9 @@ function createApplicationState(socket, record, application, connectionId) {
       return { dispatched: true, verified: false }
     }
     if (method === 'pressKey' && params.key === 'Return') observationChanged = true
+    // Fixture-only keys simulate a pending system callback and its eventual completion.
+    if (method === 'pressKey' && params.key === 'F11') captureBroker.pendingCapture = true
+    if (method === 'pressKey' && params.key === 'F10') captureBroker.pendingCapture = false
     if (method === 'pressKey' && params.key === 'F12') malformedScreenshot = true
     if (method === 'typeText') application.value += params.text
     else if (!['pressKey', 'scroll', 'drag'].includes(method)) refuse('UNSUPPORTED_OPERATION', method)
