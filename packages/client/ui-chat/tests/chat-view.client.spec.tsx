@@ -2,7 +2,7 @@
 
 import type { ProcessGroupData } from '../src/client/contract/process-groups.ts'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
-import type { GlobalStandardProps, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
+import type { GlobalStandardProps, PropsRenderFactories, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useEffect, useMemo } from 'react'
@@ -261,6 +261,13 @@ declare const flowDispatch: ChatViewSlotProps['renderSlot']
 type NodeRenderer = typeof nodeDispatch<'conversation.chat.node'>
 type FlowRenderer = typeof flowDispatch<'conversation.chat.flow'>
 type ImageRenderer = (owner: MessageImagesOwnerProps) => React.ReactNode
+type HarnessStandardProps = ChatViewSlotProps & PropsRenderFactories
+
+function isImageOwner(owner: object): owner is MessageImagesOwnerProps {
+  return 'images' in owner && Array.isArray(owner.images)
+    && 'loadImage' in owner && typeof owner.loadImage === 'function'
+    && 'align' in owner && (owner.align === 'start' || owner.align === 'end')
+}
 type ToolOwner = Pick<ChatNodeOwnerProps, 'openFile' | 'inspectCall'> & {
   readonly callId: string
   readonly toolName: string
@@ -275,7 +282,7 @@ const assistantSlots: Pick<React.ComponentProps<typeof AssistantNodeView>, 'rend
 }
 
 function HarnessChatFlow({ standard, owner, hookContext, renderSlot }: {
-  readonly standard: ChatViewSlotProps
+  readonly standard: HarnessStandardProps
   readonly owner: ChatFlowOwnerProps
   readonly hookContext: ChatFlowHookContext
   readonly renderSlot: ChatFlowSlotProps['renderSlot']
@@ -289,7 +296,7 @@ function HarnessChatFlow({ standard, owner, hookContext, renderSlot }: {
 }
 
 function HarnessChatNode({ standard, owner, hookContext, usePerformanceUsage, toolOwners, fallback }: {
-  readonly standard: ChatViewSlotProps
+  readonly standard: HarnessStandardProps
   readonly owner: RoutedChatNodeOwner
   readonly hookContext: ChatNodeHookContext
   readonly usePerformanceUsage: React.ComponentProps<typeof TurnTailNodeView>['usePerformanceUsage']
@@ -428,10 +435,13 @@ function makeHarness(
     if (key === 'conversation.chat.node') {
       return renderNodeSlot(key, owner as RoutedChatNodeOwner, opts as Parameters<NodeRenderer>[2])
     }
-    if (key === 'conversation.message.images') {
-      return imageSlotOverride?.(owner as MessageImagesOwnerProps) ?? opts?.fallback ?? null
-    }
     throw new Error(`Undeclared flow child: ${key}`)
+  }
+  const renderFactorySlot: PropsRenderFactories['renderFactorySlot'] = (name, owner, opts) => {
+    if (name !== 'conversation.message.images.view' || !isImageOwner(owner)) {
+      throw new Error(`Unexpected Chat image Factory call: ${name}`)
+    }
+    return imageSlotOverride?.(owner) ?? opts?.fallback ?? null
   }
   const renderSlot: FlowRenderer = (key, owner, opts) => {
     if (key !== 'conversation.chat.flow') throw new Error(`Undeclared ChatView child: ${key}`)
@@ -443,7 +453,8 @@ function makeHarness(
   // SessionProvider seat arrives with the session-scope child declaration;
   // ChatView never invokes it (pass-through stub).
   const SessionProviderStub: ChatViewSlotProps['SessionProvider'] = ({ children }) => <>{children}</>
-  const props: ChatViewSlotProps = {
+  const props: HarnessStandardProps = {
+    renderFactorySlot,
     usePanelInfo: selector => selector({ activePanelId: null }),
     sessionId: SID,
     useSession: bindSnapshotSelector(session.source),

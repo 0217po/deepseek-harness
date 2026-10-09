@@ -10,6 +10,11 @@ import { zh } from '../src/client/locale.ts'
 
 const t = makeTranslate(zh, commonZh)
 
+/** Reject attachment loads in component fixtures without durable images. */
+export const unusedImageLoader: AssistantMarkdownProps['loadImage'] = async () => {
+  throw new Error('This component fixture has no durable image attachments')
+}
+
 function content(input: ReasoningContentInput) {
   // The component only reads these inputs; unused framework seats are exercised in assembly tests.
   return createElement(ReasoningContent, { ...input, t } as ComponentProps<typeof ReasoningContent>)

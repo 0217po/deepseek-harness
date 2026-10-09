@@ -17,7 +17,7 @@ describe('Chat View type chain', () => {
       void chat.openFile({ turnSeq: 1, callId: 'c' })
       // @ts-expect-error ChatView renders only its flow child.
       chat.renderSlot('conversation.chat.node', {}, { hookContext: nodeContext })
-      // @ts-expect-error Image rendering belongs to the flow.
+      // @ts-expect-error Image rendering belongs to its Factory.
       chat.renderSlot('conversation.message.images', {})
       // @ts-expect-error Flow owner data cannot override the flow's render authority.
       void flowOwner.renderSlot

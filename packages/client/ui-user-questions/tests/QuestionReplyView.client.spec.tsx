@@ -19,7 +19,6 @@ function renderView(data: QuestionReplyData) {
     },
     openFile: vi.fn(),
     openSkill: vi.fn(),
-    renderMessageImages: () => null,
     inspectCall: vi.fn(),
     forkAt: vi.fn(),
     loadImage: vi.fn(() => Promise.reject(new Error('not used'))),

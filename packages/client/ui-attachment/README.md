@@ -49,7 +49,7 @@ While a file drag is over the page, the full-viewport overlay announces the drop
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The plugin waits for `conversation.input.attachments`, `conversation.message.images`, `conversation.trajectory.images`, and `tool.call.images` through `ctx.slots.inject`. It then registers the composer rail, document drop target, shared history gallery for Chat, Trajectory, and Tool results, and original-image lightbox. The presentation components are driven entirely by props: the slot owner supplies attachment data, image loading, callbacks, and the locale translator; the package entry exports no components.
+The plugin provides the root-scoped `conversation.message.images.content` Factory and waits for `conversation.input.attachments`, `conversation.message.images`, `conversation.trajectory.images`, and `tool.call.images` through `ctx.slots.inject`. Each official image entry registers at priority 100 and calls the same Content Factory, which owns gallery sizing, preview state, and default labels. Callers supply references, an authorized loader, layout hints, and optional complete labels. The Factory reuses this package's gallery without reading Session state; loading and URL caching remain with the resource owner. Chat and Trajectory retain ownership of their replaceable image positions. The composer rail and drop target remain ordinary entries, and the package entry exports no components.
 
 | File | Role |
 |---|---|

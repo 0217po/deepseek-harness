@@ -140,23 +140,27 @@ describe('Chat apply wiring', () => {
     await b.runtime.dispose()
   })
 
-  it('owns node and image rendering through the flow slot with the shared Chat store', async () => {
+  it('owns node dispatch in the shared-store flow and image rendering in its Factory', async () => {
     const b = await bench()
     onTestFinished(() => b.runtime.dispose())
+    b.runtime.renderRoot()
     expect(b.runtime.slots.spec('conversation.chat.flow')).toMatchObject({ kind: 'single', scope: 'session' })
     const view = b.runtime.slots.entries('conversation.view')[0]
     const flow = b.runtime.slots.entries('conversation.chat.flow')[0]
+    const images = b.runtime.factoryOf('conversation.message.images.view')
     expect(view?.children?.['conversation.chat.flow']).toBeDefined()
     expect(view?.children?.['conversation.chat.node']).toBeUndefined()
     expect(view?.children?.['conversation.message.images']).toBeUndefined()
     expect(flow?.children?.['conversation.chat.node']).toBeDefined()
-    expect(flow?.children?.['conversation.message.images']).toBeDefined()
+    expect(flow?.children?.['conversation.message.images']).toBeUndefined()
+    expect(images.children?.['conversation.message.images']).toMatchObject({ kind: 'single', scope: 'session' })
     expect(flow?.store).toBeDefined()
     expect(flow?.store).toBe(view?.store)
     await b.chat.dispose()
     expect(b.runtime.slots.spec('conversation.chat.flow')).toBeUndefined()
     expect(b.runtime.slots.spec('conversation.chat.node')).toBeUndefined()
     expect(b.runtime.slots.spec('conversation.message.images')).toBeUndefined()
+    expect(() => b.runtime.factoryOf('conversation.message.images.view')).toThrow('no definition')
   })
 
   it('lets another registrant replace one composer stats pill by id', async () => {

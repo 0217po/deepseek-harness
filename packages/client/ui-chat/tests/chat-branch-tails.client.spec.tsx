@@ -17,6 +17,7 @@ import {
 } from '../src/client/chat/MessageItem.tsx'
 import { AssistantMarkdown, type AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
 import { useDetailedPresentation } from './presentation-fixture.client.ts'
+import { unusedImageLoader } from './reasoning-component-fixture.tsx'
 import { useDisclosure } from '../src/client/chat/use-disclosure.ts'
 import { useSearchableHidden } from '../src/client/chat/searchable-hidden.ts'
 import { ActivityPill, UsagePill, type StatPillProps } from '../src/client/chat/StatsPills.tsx'
@@ -30,7 +31,7 @@ afterEach(() => {
 })
 
 const t: ChatNodeViewProps['t'] = makeTranslate(zh, commonZh)
-const renderMessageImages: AssistantMarkdownProps['renderMessageImages'] = () => null
+const renderFactorySlot: AssistantMarkdownProps['renderFactorySlot'] = () => null
 const RETRY_ID = 'retry-fixture' as Extract<ConversationNode, { kind: 'model-retry' }>['retryId']
 
 // Recency scans the whole transcript; a detached fixture is its own latest row.
@@ -67,9 +68,10 @@ function MessageItem({ node, t: translate, referenceLabels, skillNames }: Messag
         }
         : node,
   }
-  const props = {
-    node: viewNode, t: translate, renderMessageImages, openFile: vi.fn(), openSkill: vi.fn(), useChat: useDetachedChat,
-  } as unknown as ChatNodeViewProps
+  const props: Partial<Omit<ChatNodeViewProps, 'node'>> & { node: ChatConversationViewNode } = {
+    node: viewNode, t: translate, loadImage: unusedImageLoader, renderFactorySlot,
+    openFile: vi.fn(), openSkill: vi.fn(), useChat: useDetachedChat,
+  }
   switch (node.kind) {
     case 'user':
     case 'steering':
@@ -1051,7 +1053,7 @@ describe('small branch tails', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text: 'one-liner' }]}
         streaming={false}
-        renderMessageImages={renderMessageImages}
+        loadImage={unusedImageLoader} renderFactorySlot={renderFactorySlot}
       />,
     )
     expect(view.getByText('one-liner')).toBeTruthy()

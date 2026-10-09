@@ -6,6 +6,7 @@ import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-tes
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import { AssistantMarkdown, type AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
 import { useDetailedPresentation } from './presentation-fixture.client.ts'
+import { unusedImageLoader } from './reasoning-component-fixture.tsx'
 import { useDisclosure } from '../src/client/chat/use-disclosure.ts'
 import { useSearchableHidden } from '../src/client/chat/searchable-hidden.ts'
 import { ActivityPill, UsagePill, type StatPillProps } from '../src/client/chat/StatsPills.tsx'
@@ -13,7 +14,7 @@ import { zh } from '../src/client/locale.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 
 const t: AssistantMarkdownProps['t'] = makeTranslate(zh, commonZh)
-const renderMessageImages: AssistantMarkdownProps['renderMessageImages'] = () => null
+const renderFactorySlot: AssistantMarkdownProps['renderFactorySlot'] = () => null
 
 afterEach(() => {
   cleanup()
@@ -29,7 +30,7 @@ describe('render branch tails', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text: 'done thinking' }, { kind: 'text', text: 'answer' }]}
         streaming
-        renderMessageImages={renderMessageImages}
+        loadImage={unusedImageLoader} renderFactorySlot={renderFactorySlot}
       />,
     )
     // reasoning at index 0 with a later block: running is false → ok state.
@@ -72,7 +73,7 @@ describe('render branch tails', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text: 'still thinking' }]}
         streaming
-        renderMessageImages={renderMessageImages}
+        loadImage={unusedImageLoader} renderFactorySlot={renderFactorySlot}
       />,
     )
     expect(view.container.querySelector('[data-state="running"]')).not.toBeNull()

@@ -31,6 +31,7 @@ import { ApprovalCommand } from './chat/ApprovalCommand.tsx'
 import { ChatView } from './chat/ChatView.tsx'
 import { ChatFlow } from './chat/ChatFlow.tsx'
 import { registerChatNodeRenderers } from './chat/register-node-renderers.ts'
+import { MessageImagesView } from './chat/MessageImagesView.tsx'
 import { ActivityPill, UsagePill } from './chat/StatsPills.tsx'
 import { registerConversationNodes } from './conversation-nodes/register.ts'
 import { QuotaNoticeHost } from './chat/QuotaNoticeHost.tsx'
@@ -169,6 +170,11 @@ export function apply(ctx: Context): void {
   ctx.effect(() => () => { transcriptView.dispose(); performancePolicy.dispose() })
   const performanceUsage = performancePolicy.mode
   registerChatNodeRenderers(ctx, performanceUsage, presentation)
+  ctx.slots.registerFactory({
+    name: 'conversation.message.images.view',
+    scope: 'session',
+    children: { 'conversation.message.images': { kind: 'single', scope: 'session' } },
+  }, MessageImagesView)
 
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',
@@ -211,7 +217,6 @@ export function apply(ctx: Context): void {
     name: 'conversation.chat.flow', locale: NS, store: chatStore,
     children: {
       'conversation.chat.node': { kind: 'keyed', scope: 'session', inject: CHAT_NODE_INJECT },
-      'conversation.message.images': { kind: 'single', scope: 'session' },
     },
     inject: (sessionId: SessionId): ChatFlowDataInjected => {
       const binding = ctx.sessions.binding(sessionId)

@@ -223,7 +223,7 @@ export function ChatView({
                 </button>
               </div>
             )}
-            <MarkdownDelegateProvider openExternalLink={openExternalLink} openFile={requestOpenFile} fileImages={fileImages}>
+            <MarkdownDelegateProvider openFile={requestOpenFile} openExternalLink={openExternalLink} fileImages={fileImages}>
               {renderSlot('conversation.chat.flow', {
                 entries, pendingInputs, lastInputTurn, deferCollapse,
                 cwd, openFile: requestOpenFile, openSkill, inspectCall, forkAt, loadImage, fileMentions,

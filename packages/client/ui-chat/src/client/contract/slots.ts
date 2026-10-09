@@ -7,11 +7,11 @@ import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type {
   CommandNode, CompactionSummaryNode, ConversationLocationDataStore, ConversationTurnDataMap,
   ConversationGroupData, GroupSnapshot,
-  MessageImageLoader, MessageImagesOwnerProps, RenderEntry, RenderMessageImages, TurnLocation,
+  MessageImageLoader, MessageImagesOwnerProps, RenderEntry, TurnLocation,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
   HostObservable, InjectFace, KeyedSnapshotSelectorHook, PropsLocale, PropsRenderSlots, PropsRuntime,
-  PropsStore, SlotHookFactory, SnapshotSelectorHook,
+  PropsRenderFactories, PropsStore, SlotHookFactory, SnapshotSelectorHook,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { MarkdownFileMentions, MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -214,14 +214,8 @@ export interface ChatNodeOwnerProps {
   openFile: (path: string, options?: OpenFileOptions) => void
   inspectCall: ((callId: ToolCallId) => void) | undefined
   forkAt: (seq: number) => void
-  /**
-   * Session-authorized image loader, down-threaded from the Chat view so a
-   * chat-node renderer can render the attachment presentation slot directly
-   * with only the durable references plus this loader, instead of receiving a
-   * rendering closure.
-   */
+  /** Session-authorized image loader supplied by the Chat view. */
   loadImage: MessageImageLoader
-  renderMessageImages: RenderMessageImages
   fileMentions: (owner: TurnTailOwnerProps) => MarkdownFileMentions | undefined
   /** Turn-process state when this Node belongs to a projected Turn. */
   turnProcess?: TurnProcessOwnerProps | undefined
@@ -247,7 +241,7 @@ export interface PresentationInjected {
 
 /** Full props of one keyed Chat renderer. */
 export type ChatNodeViewProps<Kind extends ChatNodeKind = ChatNodeKind> =
-  PropsRuntime<'conversation.chat.node', Kind> & PropsLocale<'chat'>
+  PropsRuntime<'conversation.chat.node', Kind> & PropsLocale<'chat'> & PropsRenderFactories
 
 /** Command-row owner share. */
 export interface CommandRowOwnerProps {
@@ -324,7 +318,8 @@ export interface ChatFlowOwnerProps extends Pick<ChatNodeOwnerProps,
 /** Full props of the Chat-owned flow renderer. */
 export type ChatFlowSlotProps =
   PropsRuntime<'conversation.chat.flow'>
-  & PropsRenderSlots<'conversation.chat.node' | 'conversation.message.images'>
+  & PropsRenderSlots<'conversation.chat.node'>
+  & PropsRenderFactories
   & PropsStore<ChatStore>
   & InjectFace<ChatFlowDataInjected>
   & PropsLocale<'chat'>
@@ -338,7 +333,7 @@ export type ChatViewSlotProps =
   & PropsLocale<'chat'>
 
 /** Full props of the durable-message image renderer. */
-export type MessageImagesProps = PropsRuntime<'conversation.message.images'> & PropsLocale<'conversation'>
+export type MessageImagesProps = PropsRuntime<'conversation.message.images'> & PropsRenderFactories
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SessionStandardProps {
@@ -352,6 +347,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 
   interface SlotFactoryMap {
+    /** Portable Chat image position, retaining the existing image Slot. */
+    'conversation.message.images.view': {
+      scope: 'session'
+      props: MessageImagesOwnerProps
+      children: { 'conversation.message.images': { kind: 'single'; scope: 'session' } }
+    }
     /** Session-independent reasoning Markdown with Chat labels and compact typography. */
     'conversation.chat.reasoning.content': {
       scope: 'root'

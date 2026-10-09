@@ -474,9 +474,6 @@
     "bfa9b3c146cb954091623aa0ceddd08e3d346a8fd1651168021397e4d7750f1d": 2,
     "f5a208f3ac88b7d5c0de75f72c4a4652b85e21f4ebddf397bd2ff3265a66f6e2": 2
   },
-  "packages/client/ui-chat/tests/chat-branch-tails.client.spec.tsx": {
-    "12a4fcbcbe9194fe012835a6c0346eab98441db62b74da62f80a8cd510774c5a": 1
-  },
   "packages/client/ui-chat/tests/chat-view.client.spec.tsx": {
     "6061de0a1e01547eb1abf9d4e1b5fa79fda112fa35dda980775491123413dcce": 3,
     "6787497d471fc8faaa78ffcbd497c36ceba82c1b8ee16d0d450b405ad4dddc25": 1
@@ -783,10 +780,6 @@
     "e888d93b9171a1022992aecebca9c67f8b564ae541bbf0f9129eda3ea423b95c": 1,
     "efed1d00d0f288a0c2716c88ee57ba53ace8f627abba4bd2c20de596755b5bad": 1,
     "f37cbef85628f8df72f3d455868ac0715105f463a9bd858f10e2cb5f984baefb": 1
-  },
-  "packages/client/ui-trajectory/tests/table.client.spec.tsx": {
-    "8230c12479e8aa0eb39efd18be824c802edff5965e6e4f062089753e65f2e7cf": 1,
-    "bfc698b45e3bff20b13dd4dc94cca8df3902a5d534fc57e80306ad2c9e96e4b7": 1
   },
   "packages/client/ui-trajectory/tests/views.client.spec.tsx": {
     "958ba19bf4d19e2dd44b271fa784091302bd3a2fdf291db6839fc49da543c5cf": 2

@@ -93,6 +93,15 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     useTrajectory: UseTrajectory
   }
 
+  interface SlotFactoryMap {
+    /** Portable Trajectory image position retaining its independent Slot. */
+    'conversation.trajectory.images.view': {
+      scope: 'session'
+      props: MessageImagesOwnerProps
+      children: { 'conversation.trajectory.images': { kind: 'single'; scope: 'session' } }
+    }
+  }
+
   interface SlotMap {
     /**
      * Renderer for one group of durable record images in the Trajectory

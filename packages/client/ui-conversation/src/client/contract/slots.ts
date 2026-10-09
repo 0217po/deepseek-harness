@@ -3,6 +3,7 @@ import type { ReactNode, RefObject } from 'react'
 import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { FileUploadReceiptId } from '@deepseek-ai/dsh-client-file-upload/client'
+import type { ImageLightboxLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {
   MaybeSnapshotSelectorHook, ObservableSnapshot, SnapshotSelectorHook,
@@ -117,8 +118,26 @@ export interface MessageImagesOwnerProps {
   thumbnail?: boolean
 }
 
-/** Slot-backed renderer used by Conversation targets without importing an attachment implementation. */
-export type RenderMessageImages = (owner: Omit<MessageImagesOwnerProps, 'loadImage'>) => ReactNode
+/** Message-image strings the owner resolves from its own locale namespace. */
+export interface MessageImageLabels {
+  /** Fallback display name for an unnamed image. */
+  image: string
+  /** Thumbnail tooltip inviting the original-image preview. */
+  open: string
+  /** Accessible thumbnail label; receives the image's display name. */
+  openNamed: (label: string) => string
+  /** Loading placeholder shown until bytes resolve. */
+  loading: string
+  /** Retry-control label shown when the load fails. */
+  loadFailed: string
+  /** Lightbox strings forwarded to the opened preview. */
+  lightbox: ImageLightboxLabels
+}
+
+/** Root-scoped image gallery input with explicit reading authority and optional caller copy. */
+export interface MessageImagesContentInput extends MessageImagesOwnerProps {
+  readonly labels?: MessageImageLabels
+}
 
 /** Selector hook over the current Session's assembled Conversation. */
 export type UseConversation = SnapshotSelectorHook<ConversationSnapshot>
@@ -126,6 +145,15 @@ export type UseConversation = SnapshotSelectorHook<ConversationSnapshot>
 export type UseConversationViews = SnapshotSelectorHook<readonly ViewTab[]>
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SlotFactoryMap {
+    /** Official reusable gallery, with explicit authorized loading and optional caller copy. */
+    'conversation.message.images.content': {
+      scope: 'root'
+      props: MessageImagesContentInput
+      locale: 'conversation'
+    }
+  }
+
   interface SlotMap {
     /** Conversation shell beneath its root-scoped main-panel entry. */
     'main.conversation': { kind: 'single'; scope: 'session-maybe' }

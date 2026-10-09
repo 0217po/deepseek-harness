@@ -2,6 +2,7 @@ import { Fragment, memo, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { MessageImageSource } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { PropsRenderFactories } from '@deepseek-ai/dsh-client-ui-slots'
 import { fileExtension, FileTypeIcon, fileSizeText, JsonBlock, projectUserText, StateDot, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps } from '../contract/slots.ts'
 import type { ModelRetryNode, TurnErrorNode, UserMessageNode } from '../contract/snapshot.ts'
@@ -160,11 +161,11 @@ function TurnMaxTokensItem({ t }: {
 
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
-  content, renderMessageImages, actions, pending = false, echo = false, referenceLabels = [], skillNames = [],
+  content, loadImage, renderFactorySlot, actions, pending = false, echo = false, referenceLabels = [], skillNames = [],
   previewAttachments, references, t,
 }: {
   content: readonly unknown[]
-  renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
+  renderFactorySlot: PropsRenderFactories['renderFactorySlot']
   /** Optional IconActions (or similar) below the bubble; receives the joined text. */
   actions?: (text: string) => ReactNode
   /** Whether this is the Host-authoritative pre-admission steering projection. */
@@ -179,7 +180,7 @@ function UserStyleBubble({
   previewAttachments?: readonly PresentedAttachment[]
   references?: Pick<ChatNodeOwnerProps, 'openFile' | 'openSkill'>
   t: ChatViewSlotProps['t']
-}): ReactNode {
+} & Pick<ChatNodeOwnerProps, 'loadImage'>): ReactNode {
   const { text, attachments: contentAttachments, rest } = contentParts(content)
   const attachments = previewAttachments ?? contentAttachments
   const compactImages = attachments.length > 1
@@ -197,10 +198,8 @@ function UserStyleBubble({
             {attachments.map((attachment, index) => attachment.type === 'image'
               ? (
                 <Fragment key={`image:${index}`}>
-                  {renderMessageImages({
-                    images: [attachment.image],
-                    align: 'end',
-                    compact: compactImages,
+                  {renderFactorySlot('conversation.message.images.view', {
+                    images: [attachment.image], loadImage, align: 'end', compact: compactImages,
                   })}
                 </Fragment>
               )
@@ -236,18 +235,19 @@ function UserStyleBubble({
 /**
  * Render one Host-authoritative pending steering item with the same visual
  * language as its eventual durable transcript node.
- * @param props - Pending message content and conversation translator.
+ * @param props - pending content, authorized image loader, and Factory/locale seats.
  * @returns the pending steering bubble.
  */
-export function PendingSteeringBubble({ content, renderMessageImages, t }: {
+export function PendingSteeringBubble({ content, loadImage, renderFactorySlot, t }: {
   content: readonly unknown[]
-  renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
+  renderFactorySlot: PropsRenderFactories['renderFactorySlot']
   t: ChatViewSlotProps['t']
-}): ReactNode {
+} & Pick<ChatNodeOwnerProps, 'loadImage'>): ReactNode {
   return (
     <UserStyleBubble
       content={content}
-      renderMessageImages={renderMessageImages}
+      renderFactorySlot={renderFactorySlot}
+      loadImage={loadImage}
       pending
       t={t}
       actions={text => (
@@ -267,14 +267,14 @@ export function PendingSteeringBubble({ content, renderMessageImages, t }: {
  * visual language and surface marker as the Host occurrence that replaces
  * it: draft text plus object-URL previews, visible from the submit click
  * until the durable `user/message` or steering occurrence renders.
- * @param props - the session snapshot's pending submission and render seats.
+ * @param props - the pending submission, authorized image loader, and render seats.
  * @returns the echoed user bubble.
  */
-export function PendingSubmissionBubble({ submission, renderMessageImages, t }: {
+export function PendingSubmissionBubble({ submission, loadImage, renderFactorySlot, t }: {
   submission: PendingSubmission
-  renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
+  renderFactorySlot: PropsRenderFactories['renderFactorySlot']
   t: ChatViewSlotProps['t']
-}): ReactNode {
+} & Pick<ChatNodeOwnerProps, 'loadImage'>): ReactNode {
   const content = useMemo(
     () => (submission.text === '' ? [] : [{ type: 'text', text: submission.text }]),
     [submission.text],
@@ -299,7 +299,8 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, t }: 
     <UserStyleBubble
       content={content}
       previewAttachments={previewAttachments}
-      renderMessageImages={renderMessageImages}
+      renderFactorySlot={renderFactorySlot}
+      loadImage={loadImage}
       pending={submission.placement === 'steering'}
       echo
       t={t}
@@ -318,14 +319,15 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, t }: 
 
 /** User and admitted-steering keyed Chat renderer. */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
-  node, renderMessageImages, openFile, openSkill, t,
+  node, renderFactorySlot, loadImage, openFile, openSkill, t,
 }: ChatNodeViewProps<'user' | 'steering'>) {
   const data = node.data
   return (
     <UserStyleBubble
       content={data.content}
       references={{ openFile, openSkill }}
-      renderMessageImages={renderMessageImages}
+      renderFactorySlot={renderFactorySlot}
+      loadImage={loadImage}
       {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
       {...data.skillNames === undefined ? {} : { skillNames: data.skillNames }}
       t={t}
