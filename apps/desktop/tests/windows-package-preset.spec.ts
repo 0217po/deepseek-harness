@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -71,5 +72,22 @@ it('rejects missing presets, traversal, deployment mismatches and secrets in pub
     await writeFile(join(root, 'presets/test.env'), 'DSH_DESKTOP_WINDOWS_TOKEN_PIN=private-value\n')
     expect(() => load()).toThrow(/unsupported setting DSH_DESKTOP_WINDOWS_TOKEN_PIN/u)
     expect(() => load()).not.toThrow(/private-value/u)
+  })
+})
+
+it('cache maintenance reaches cache path validation without a signing file', async () => {
+  await withPreset(async (root) => {
+    await writeFile(join(root, 'presets/test.env'),
+      'DSH_DESKTOP_AUTO_UPDATE_ENV=test\nDSH_DESKTOP_WINDOWS_SIGNATURE_CACHE_DIR=relative-cache\n')
+    const result = spawnSync(process.execPath,
+      [join(import.meta.dirname, '../scripts/manage-windows-signature-cache.mjs'), '--usage'], {
+        env: { ...process.env, DSH_PACKAGING_CONFIG_DIR: root, DSH_PACKAGING_PRESET: 'test' },
+        encoding: 'utf8', timeout: 10_000, windowsHide: true,
+      })
+    expect(result.error).toBeUndefined()
+    expect(result.signal).toBeNull()
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('absolute local')
+    expect(result.stderr).not.toContain('cannot read')
   })
 })
