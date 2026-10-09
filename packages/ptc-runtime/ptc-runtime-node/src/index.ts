@@ -58,7 +58,6 @@ export class NodePtcRuntime extends PtcRuntime {
     this.processes = new PolicyProcesses(ctx)
     if (this.config.executionMode === 'persistent-in-memory') {
       this.inMemory = new InMemoryExecution(ctx, this.config, this.processes)
-      return
     }
     ctx.effect(() => async () => {
       this.disposed = true
@@ -99,23 +98,32 @@ export class NodePtcRuntime extends PtcRuntime {
 
   /**
    * Run a resolved program under the configured execution mode.
+   * Session mode changes cancel admitted calls before process launch as well as active programs.
    * @param spec - Inputs returned by resolve for the configured mode.
    * @returns Logs, JSON completion or failure; retained processes remain until release or invalidation.
    */
   async run(spec: PtcRunSpec): Promise<PtcRunResult> {
-    await this.processes.wait(spec.sandboxPolicy?.sessionId)
-    if (this.inMemory) return this.inMemory.run(spec)
     if (this.disposed) throw new Error('ptc-runtime-node: run after disposal')
-    if (spec.sandboxPolicy === undefined) throw new Error('ptc-runtime-node: run requires a resolved sandbox policy')
-    if (!isAbsolute(spec.cwd) || (spec.timeoutMs !== null && (!Number.isFinite(spec.timeoutMs) || spec.timeoutMs <= 0 || spec.timeoutMs > this.config.maxTimeoutMs))) throw new Error('ptc-runtime-node: run requires resolved cwd and timeout')
-    const bindings = validateBindings(spec)
     const controller = new AbortController()
     const completion = Promise.withResolvers<void>()
+    const unregister = spec.sandboxPolicy === undefined ? undefined : this.processes.register(spec.sandboxPolicy, async () => {
+      controller.abort(new Error('sandbox mode changed'))
+      await completion.promise
+    })
     const live = { controller, finished: completion.promise }
     this.live.add(live)
     try {
+      await this.processes.wait(spec.sandboxPolicy?.sessionId)
+      if (this.inMemory) {
+        const signal = spec.signal === undefined ? controller.signal : AbortSignal.any([spec.signal, controller.signal])
+        return await this.inMemory.run({ ...spec, signal })
+      }
+      if (spec.sandboxPolicy === undefined) throw new Error('ptc-runtime-node: run requires a resolved sandbox policy')
+      if (!isAbsolute(spec.cwd) || (spec.timeoutMs !== null && (!Number.isFinite(spec.timeoutMs) || spec.timeoutMs <= 0 || spec.timeoutMs > this.config.maxTimeoutMs))) throw new Error('ptc-runtime-node: run requires resolved cwd and timeout')
+      const bindings = validateBindings(spec)
       return await this.execute(spec, spec.sandboxPolicy, bindings, controller)
     } finally {
+      unregister?.()
       this.live.delete(live)
       completion.resolve()
     }

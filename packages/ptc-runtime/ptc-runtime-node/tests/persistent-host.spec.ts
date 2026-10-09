@@ -120,6 +120,60 @@ it.each(['per-call', 'persistent-in-memory'] as const)('cancels a %s call when i
   expect(h.spawn).not.toHaveBeenCalled()
 })
 
+it.each(['per-call', 'persistent-in-memory'] as const)('keeps an approved wider %s call when the standing mode is unchanged', async (executionMode) => {
+  const h = await setup({ executionMode })
+  const session = h.ctx.sessions.create(SessionId('temporary-admission'))
+  setSandboxMode(session, 'read-only')
+  const standing = h.ctx.sandboxPolicy.resolve({ session })
+  h.receive((message) => {
+    if (typeof message !== 'object' || message === null || !('type' in message)) return
+    const done = { type: 'done', value: encodePtcJsonWire(1) }
+    if (message.type === 'run') h.emit(frame(done))
+    else if (message.type === 'boot') h.emit(done)
+  })
+  const pending = h.start({
+    program: executionMode === 'per-call' ? 'return 1' : '1',
+    bindings: [],
+    sandboxPolicy: { ...standing, mode: 'danger-full-access' },
+  })
+  setSandboxMode(session, 'read-only')
+  expect(await pending).toMatchObject({ value: 1, sandbox: { mode: 'danger-full-access' } })
+  expect(h.spawn).toHaveBeenCalledOnce()
+  expect(h.ctx.sandboxPolicy.resolve({ session }).mode).toBe('read-only')
+})
+
+it.each(['per-call', 'persistent-in-memory'] as const)('keeps a %s call canceled when policy changes back during earlier cleanup', async (executionMode) => {
+  const h = await setup({ executionMode })
+  const session = h.ctx.sessions.create(SessionId('waiting-admission'))
+  const booted = Promise.withResolvers<undefined>()
+  const cleaning = Promise.withResolvers<undefined>()
+  const cleanup = Promise.withResolvers<boolean>()
+  h.receive((message) => {
+    if (typeof message === 'object' && message !== null && 'type' in message
+      && (message.type === 'run' || message.type === 'boot')) booted.resolve(undefined)
+  })
+  h.waitForExit.mockImplementation(() => { cleaning.resolve(undefined); return cleanup.promise })
+  const first = h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) })
+  let waiting: ReturnType<typeof h.start> | undefined
+  try {
+    await booted.promise
+    setSandboxMode(session, 'read-only')
+    await cleaning.promise
+    waiting = h.start({ ...request, stateOwner: {}, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) }, NO_INITIAL_FRAME)
+    setSandboxMode(session, 'danger-full-access')
+    setSandboxMode(session, 'read-only')
+    expect(h.spawn).toHaveBeenCalledOnce()
+    cleanup.resolve(true)
+    expect((await first).error?.kind).toBe('abort')
+    expect((await waiting).error?.kind).toBe('abort')
+    expect(h.spawn).toHaveBeenCalledOnce()
+  } finally {
+    cleanup.resolve(true)
+    await first
+    await waiting
+  }
+})
+
 describe('persistent PTC host protocol', () => {
   it.each([
     null,

@@ -35,7 +35,7 @@ export class PolicyProcesses {
   }
 
   /**
-   * Track one process until its owner confirms cleanup.
+   * Track an admitted call or retained process until its owner confirms cleanup.
    * @param policy - Resolved process policy, including an optional Session identity.
    * @param release - Idempotent cancellation and awaited cleanup.
    * @returns Removal after successful process cleanup.
