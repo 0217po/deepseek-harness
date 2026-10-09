@@ -25,7 +25,8 @@ import { createPluginProfile } from '../../desktop/src/project-manager.ts'
 const SETTINGS_NAMESPACE = 'agent-preset-registry'
 const SUBAGENT_MODEL_SELECTION_SETTINGS_NAMESPACE = 'subagent-model-selection-settings'
 import { applyChildComposition, childSessionMeta } from '@deepseek-ai/dsh-subagent'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId, LlmAdapter, createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-compaction-basic'
 import type {} from '@deepseek-ai/dsh-skill'
 import type {} from '@deepseek-ai/dsh-tools'
@@ -45,6 +46,23 @@ const CLAUDE_CODE_PACKAGE_DIR = join(REPO_ROOT, 'packages/subagent/subagent-clau
 /** The installation anchor whose dependency surface the runtime resolution mirrors. */
 const INSTALL_ANCHOR = join(REPO_ROOT, 'apps/cli/package.json')
 const MINIMAL_PROMPT = 'You are a helpful software engineer assistant.'
+/** Deterministic model responses for the shipped minimal compaction path. */
+class MinimalCompactionAdapter extends LlmAdapter {
+  readonly requests: GenerateOptions[] = []
+
+  override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+    return Promise.resolve({ provider, id: model, name: model, context: { contextWindow: 100_000 } })
+  }
+
+  override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    this.requests.push(options)
+    yield { type: 'block-start', index: 0, blockType: 'text' }
+    yield { type: 'block-end', index: 0, block: {
+      type: 'text', text: options.purpose === 'compaction' ? 'Preserve the requested project task.' : 'Ready.',
+    } }
+    yield { type: 'finish', reason: { kind: 'stop' } }
+  }
+}
 const MINIMAL_BASH_DESCRIPTION = `Run commands in a bash shell
 * When invoking this tool, the contents of the "command" parameter does NOT need to be XML-escaped.
 * Network access depends on the task environment. Prefer configured mirrors/proxies when they are available.
@@ -317,10 +335,78 @@ describe('the shipped Web composition', () => {
       expect(ctx.agentPresets.serviceFor(handle.agent, 'fs')).toBeUndefined()
       expect(ctx.get('fs')?.sandboxMode).toBeDefined()
       expect(handle.agent.ctx.get('fs')?.sandboxMode).toBe(ctx.get('fs')?.sandboxMode)
-      expect(ctx.agentPresets.serviceFor(handle.agent, 'compaction')).toBeUndefined()
+      expect(ctx.agentPresets.serviceFor(handle.agent, 'compaction')).toBeDefined()
       expect(handle.agent.ctx.get('compaction')).toBeUndefined()
+      expect(ctx.commands.find(handle.agent, 'compact')).toBeDefined()
+      expect(await ctx.commands.execute(handle.agent, '/compact', [], new AbortController().signal))
+        .toMatchObject({ result: { kind: 'success', text: 'No compactable history yet.' } })
+      expect(handle.agent.session.snapshotEvents().some(event => event.type === 'compaction/start')).toBe(false)
     } finally {
       await handle.dispose()
+    }
+  })
+
+  it('compacts minimal history through /compact and continues from the checkpoint', async () => {
+    const adapter = new MinimalCompactionAdapter()
+    const unregister = ctx.llm.registerAdapter(['minimal-compaction-test'], adapter)
+    onTestFinished(unregister)
+    const handle = await ctx.agents.create({
+      sessionId: SessionId('preset-minimal-compaction'),
+      agentOptions: { provider: 'minimal-compaction-test', model: 'minimal-compaction-test' },
+      setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'minimal').then(() => undefined),
+    })
+    try {
+      handle.agent.followup(createUserMessage({
+        content: [{ type: 'text', text: 'Remember the project requirements. '.repeat(200) }], source: { kind: 'user' },
+      }))
+      await handle.agent.whenIdle()
+      const before = handle.agent.session.surface.replaceGeneration
+      const execution = await ctx.commands.execute(handle.agent, '/compact', [], new AbortController().signal)
+      expect(execution?.result.kind).toBe('success')
+      expect(handle.agent.session.surface.replaceGeneration).toBeGreaterThan(before)
+      const summary = handle.agent.session.snapshotEvents().find(event => event.type === 'compaction/summary')
+      expect(summary?.data.sourceCommandId).toBe(execution?.commandId)
+      expect(adapter.requests.filter(request => request.purpose === 'compaction')).toHaveLength(1)
+      handle.agent.followup(createUserMessage({
+        content: [{ type: 'text', text: 'Continue the project task.' }], source: { kind: 'user' },
+      }))
+      await handle.agent.whenIdle()
+      const last = adapter.requests.at(-1)
+      expect(last?.messages.flatMap(message => message.content)
+        .some(block => block.type === 'text' && block.text.includes('Preserve the requested project task.'))).toBe(true)
+      expect(toolNames(ctx, handle.agent)).toEqual(['bash', 'working_directory'])
+    } finally {
+      await handle.dispose()
+      unregister()
+    }
+  })
+
+  it('automatically compacts minimal history under context pressure', async () => {
+    const adapter = new MinimalCompactionAdapter()
+    const unregister = ctx.llm.registerAdapter(['minimal-pressure-test'], adapter)
+    onTestFinished(unregister)
+    const handle = await ctx.agents.create({
+      sessionId: SessionId('preset-minimal-pressure'),
+      agentOptions: { provider: 'minimal-pressure-test', model: 'minimal-pressure-test' },
+      setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'minimal').then(() => undefined),
+    })
+    try {
+      for (let turn = 0; turn < 3; turn++) {
+        handle.agent.followup(createUserMessage({
+          content: [{ type: 'text', text: 'Remember the project requirements. '.repeat(6000) }],
+          source: { kind: 'user' },
+        }))
+        await handle.agent.whenIdle()
+      }
+      const summaries = handle.agent.session.snapshotEvents().filter(event => event.type === 'compaction/summary')
+      expect(summaries.length).toBeGreaterThan(0)
+      expect(summaries.every(event => event.data.sourceCommandId === undefined)).toBe(true)
+      expect(handle.agent.session.snapshotEvents().some(event => event.type === 'compaction/start'
+        && event.data.turn !== null)).toBe(true)
+      expect(adapter.requests.some(request => request.purpose === 'compaction')).toBe(true)
+    } finally {
+      await handle.dispose()
+      unregister()
     }
   })
 
@@ -336,6 +422,8 @@ describe('the shipped Web composition', () => {
     try {
       expect(toolNames(ctx, minimal.agent)).toEqual(['bash', 'working_directory'])
       expect(toolNames(ctx, full.agent).length).toBeGreaterThan(10)
+      expect(ctx.agentPresets.serviceFor(minimal.agent, 'compaction'))
+        .not.toBe(ctx.agentPresets.serviceFor(full.agent, 'compaction'))
 
       await minimal.dispose()
 
