@@ -276,12 +276,13 @@
 }
 
 /* The image card's full path and size lines under the gallery, in the small
-   code font of the expanded IN/OUT card. Always rendered: the attachment
-   presentation slot is optional, so when nothing occupies it these lines are the
-   only evidence an image was returned. The enclosing .imageBody already carries
+   code font of the expanded IN/OUT card. When the attachment slot renders
+   nothing, these lines are the only evidence an image was returned. pre-wrap
+   keeps repeated whitespace in a path. The enclosing .imageBody already carries
    the row indent. */
 .imageMeta {
   margin-top: 4px;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
   font: var(--dsw-font-markdown-code-block-small);
   color: var(--dsw-alias-label-tertiary);

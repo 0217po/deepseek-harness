@@ -270,10 +270,10 @@ export const ToolRow = memo(function ToolRow({
               ? <ReadBlock {...readBody} labels={readLabels} maxLines={CHAT_READ_MAX_LINES} className={css.readBody} />
               : imageBody !== null
                 ? (
-                  /* Gallery, then the full path and each image's size. These
-                     come from the image card model, never from the row's flattened
-                     output, which JSON.stringifies the image block. They also stay
-                     visible when the attachment slot renders nothing. */
+                  /* Gallery, then the full path and each attached image's size.
+                     These come from the image card model, never from the row's
+                     flattened output, which JSON.stringifies the image block. They
+                     stay visible when the attachment slot renders nothing. */
                   <div className={css.imageBody}>
                     {renderSlot !== undefined && loadImage !== undefined && renderSlot('tool.call.images', {
                       images: imageBody.images,
@@ -284,7 +284,15 @@ export const ToolRow = memo(function ToolRow({
                       <div>{imageBody.path}</div>
                       {imageBody.images.map(({ attachment }, index) => (
                         <div key={index}>
-                          {t('row.imageSize', { width: attachment.width, height: attachment.height, bytes: attachment.bytes })}
+                          {attachment.originalDimensions === undefined
+                            ? t('row.imageSize', { width: attachment.width, height: attachment.height, bytes: attachment.bytes })
+                            : t('row.imageSizeDownscaled', {
+                              width: attachment.width,
+                              height: attachment.height,
+                              originalWidth: attachment.originalDimensions.width,
+                              originalHeight: attachment.originalDimensions.height,
+                              bytes: attachment.bytes,
+                            })}
                         </div>
                       ))}
                     </div>

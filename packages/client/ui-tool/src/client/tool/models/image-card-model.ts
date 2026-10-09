@@ -147,25 +147,17 @@ function imageReferences(content: readonly unknown[]): ImageAttachmentRef[] | nu
 }
 
 /**
- * Read the non-envelope text blocks of a settled image result, joined in order.
- *
- * A post-execute hook that appends further text blocks keeps them visible under
- * the gallery instead of being dropped. The envelope shape is the recognition
- * gate: a result without it is not a well-formed image read and declines.
- * @param content - the settled result's content blocks.
- * @returns `extraText` (null when only envelopes are present), or null when no
- *   envelope-shaped block is present.
+ * Join the text blocks other than the image envelope, in order. A post-execute
+ * hook that appends further text blocks keeps them visible under the gallery
+ * instead of being dropped.
+ * @param content - the settled result's text blocks.
+ * @returns the joined text, or null when there is none.
  */
-function imageTexts(content: readonly { type: string; text?: string }[]): { extraText: string | null } | null {
-  const parts: string[] = []
-  let sawEnvelope = false
-  for (const part of content) {
-    if (part.type !== 'text' || typeof part.text !== 'string') continue
-    if (IMAGE_ENVELOPE.test(part.text)) sawEnvelope = true
-    else parts.push(part.text)
-  }
-  if (!sawEnvelope) return null
-  return { extraText: parts.length > 0 ? parts.join('\n') : null }
+function extraTexts(content: readonly { type: string; text?: string }[]): string | null {
+  const parts = content.flatMap(part => part.type === 'text' && typeof part.text === 'string' && !IMAGE_ENVELOPE.test(part.text)
+    ? [part.text]
+    : [])
+  return parts.length > 0 ? parts.join('\n') : null
 }
 
 /**
@@ -221,11 +213,11 @@ export function imageCardModel(block: ToolCallBlock): ImageCardModel | null {
   // truth; `meta` contributes only the path, which the content does not carry.
   const refs = imageReferences(block.content)
   if (refs === null) return null
-  const texts = imageTexts(block.content)
-  if (texts === null) return null
+  // A result without the envelope is not a well-formed image read.
+  if (!block.content.some(part => part.type === 'text' && typeof part.text === 'string' && IMAGE_ENVELOPE.test(part.text))) return null
   return {
     path,
     images: refs.map(ref => ({ attachment: ref })),
-    extraText: texts.extraText,
+    extraText: extraTexts(block.content),
   }
 }
