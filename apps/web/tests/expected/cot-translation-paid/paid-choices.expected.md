@@ -1,4 +1,4 @@
-- button "返回插件列表": 插件列表
+- button "返回 实验性插件": 实验性插件
 - button "卸载 思考过程机器翻译" [disabled]: 卸载
 - switch "启用 思考过程机器翻译" [checked]
 - heading "思考过程机器翻译" [level=3]

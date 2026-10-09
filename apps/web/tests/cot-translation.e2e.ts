@@ -195,6 +195,7 @@ it.skipIf(MODE === 'record')('persists Bing reasoning translation across reopen 
   await settings.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
   await settings.getByRole('button', { name: '插件', exact: true }).click()
   const panel = settings.locator('[data-plugin-panel]')
+  await panel.getByRole('button', { name: '更多', exact: true }).click()
   const card = panel.locator(`[data-plugin-package="${BUNDLE_NAME}"]`)
   const toggle = card.getByRole('switch')
   await toggle.waitFor()
@@ -339,7 +340,7 @@ it.skipIf(MODE === 'record')('persists Bing reasoning translation across reopen 
   await expect.poll(() => body.getAttribute('data-translation-state')).toBe('ready')
   expect(calls).toHaveLength(6)
 
-  await panel.getByRole('button', { name: '返回插件列表', exact: true }).click()
+  await panel.getByRole('button', { name: '返回 实验性插件', exact: true }).click()
   await toggle.click()
   await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('false')
   await body.waitFor({ state: 'detached' })

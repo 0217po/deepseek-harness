@@ -50,7 +50,7 @@ export function TranslationBody(props: TranslationBodyProps) {
   return <div data-cot-translation="true" data-translation-state={state.failed ? 'failed' : state.pending ? 'pending' : 'ready'}
     data-translation-view={showOriginal ? 'original' : 'translated'}>
     <div className={css.toolbar}>
-      <Button size="sm" variant="ghost" disabled={state.failed}
+      <Button className={css.viewToggle} size="sm" variant="ghost" disabled={state.failed}
         onClick={() => { setOriginal(!showOriginal) }}>{actionLabel}</Button>
       {state.pending && <span role="status" aria-label={t('translating')}><IconLoadingOutlineRegular size={14} className={css.spinner} /></span>}
       {state.failed && <><span className={css.failure} role="status">{t('failed')}</span>
