@@ -197,7 +197,7 @@ Use selectText only on controls advertising selectionWritable. It selects a uniq
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 只提供 macOS 原生实现，Windows 支持正在开发中。本包暂放在 `experimental`，待 Windows 支持完成后迁回 `packages/computer-use/cua`。不支持浏览器标签、启动应用、AX 差分、无法确认应用归属的系统面板，以及仅后台辅助类型的应用。
+- 只提供 macOS 原生实现，Windows 支持正在开发中。本包暂放在 `experimental`，待 Windows 支持完成后迁回 `computer-use` 组。不支持浏览器标签、启动应用、AX 差分、无法确认应用归属的系统面板，以及仅后台辅助类型的应用。
 - 坐标使用包含标题栏的窗口内部 point，可能不同于 PNG 像素尺寸。窗口移动、应用变化及其他桌面使用者的操作可能与观察和输入交错。
 - macOS 台前调度可能将后台窗口的尺寸与截图变为缩略图，当前无法保证这种状态下的完整画面与坐标输入；模型指引要求说明前台需求并避免反复抢回焦点。
 - 后台输入依赖私有 SkyLight 符号，macOS 升级可能使其不可用，需在目标系统版本验证。
