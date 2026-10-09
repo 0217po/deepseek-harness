@@ -19,6 +19,7 @@ import { rowKey, type InstallState, type PackageRow, type PackageView, type Plug
 import { INSTALL_GIT_EXAMPLE, INSTALL_PATH_EXAMPLE, en, zh, type PluginManagerLocaleKey } from '../src/client/locales.ts'
 import type { PluginActivationOwnerProps, PluginAddActionsProps, PluginDetailProps, PluginsSubject } from '../src/client/slot-contract.ts'
 
+beforeEach(() => { localStorage.clear() })
 afterEach(cleanup)
 
 const translate = (dict: typeof en): PluginManagerPageProps['t'] => ((key: PluginManagerLocaleKey, params?: Record<string, string>): string =>
@@ -183,6 +184,7 @@ function renderTab(
   return {
     navigation,
     hidePage: () => { showPage = false; rerender(contents()) },
+    showPage: () => { showPage = true; rerender(contents()) },
     props,
     unmount,
     store,
@@ -500,15 +502,15 @@ describe('PluginManagerPage', () => {
       busy: ['dsh-protected'],
     })
     const cards = screen.getAllByRole('listitem')
-    // The Official group comes first.
+    // Offered extensions precede installed bundles.
     expect(cards.map(card => card.getAttribute('data-plugin-package'))).toEqual([
       '@deepseek-ai/dsh-experimental-agent-team-profile', 'dsh-better-sidebar', 'dsh-broken', 'dsh-protected', '@acme/dsh-tool', 'dsh-selected',
     ])
     expect(cards.map(card => card.getAttribute('data-plugin-status'))).toEqual(['disabled', 'running', 'problem', 'running', 'disabled', 'problem'])
-    // Each group heads with its title and its bare count; the official bundle carries its beta tag, no official tag.
+    // Group titles have no counts; the official bundle retains its experimental marker.
     expect(screen.getByRole('heading', { name: en.bundlesTitle })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: en.officialTitle })).toBeTruthy()
-    expect([...document.querySelectorAll('[data-plugin-count]')].map(count => count.textContent)).toEqual(['1', '5'])
+    expect(screen.getByRole('heading', { name: en.extensionsTitle })).toBeTruthy()
+    expect(document.querySelector('[data-plugin-count]')).toBeNull()
     expect(screen.getAllByText(en.statusBeta)).toHaveLength(1)
     expect(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', '@acme/dsh-tool') })).toHaveProperty('disabled', false)
     expect(screen.getByText('A sidebar.')).toBeTruthy()
@@ -522,7 +524,7 @@ describe('PluginManagerPage', () => {
     expect(locked.getAttribute('title')).toBe(en.reasonManagementRequired)
   })
 
-  it('omits built-in profile dependencies from cards and counts while retaining optional and third-party bundles', () => {
+  it('omits built-in profile dependencies while retaining optional and third-party bundles', () => {
     renderTab({
       packages: [
         ...[
@@ -541,7 +543,7 @@ describe('PluginManagerPage', () => {
     expect(screen.getAllByRole('listitem').map(card => card.getAttribute('data-plugin-package'))).toEqual([
       '@deepseek-ai/dsh-experimental-agent-team-profile', '@acme/dsh-base', 'dsh-better-sidebar',
     ])
-    expect([...document.querySelectorAll('[data-plugin-count]')].map(count => count.textContent)).toEqual(['1', '2'])
+    expect(document.querySelector('[data-plugin-count]')).toBeNull()
   })
 
   it.each([false, true])('shows an empty list for built-in bundles with errors and installed=%s', (installed) => {
@@ -732,55 +734,6 @@ describe('PluginManagerPage', () => {
     }
   })
 
-  it('shows distinct preset targets and keeps scoped rows read-only despite a matching root configuration page', () => {
-    const rows: PackageRow[] = ['preset-standard', 'preset-cordis'].map(preset => ({
-      rowId: 'shared', preset, moduleName: 'shared-tool', enabled: true, phase: 'active',
-      readOnlyReason: 'preset-managed', meta: { title: 'shared' },
-    }))
-    const subjects: PluginsSubject[] = []
-    const { actions, setLanguage } = renderTab({ packages: [pkg({ rows })] }, { rows: new Set(['dsh-better-sidebar#shared']) }, {
-      'plugins.detail.actions:': (_view, owner) => {
-        const subject = subjectOf(owner)
-        if (subject !== undefined) subjects.push(subject)
-        return null
-      },
-    })
-    fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'dsh-better-sidebar') }))
-    const listed = [...document.querySelectorAll('[data-plugin-row]')]
-    expect(new Set(listed.map(item => item.getAttribute('data-plugin-row'))).size).toBe(2)
-    expect(subjects.at(-1)).toMatchObject({ kind: 'bundle', pkg: { rows: [
-      { rowId: 'shared', preset: 'preset-standard' }, { rowId: 'shared', preset: 'preset-cordis' },
-    ] } })
-    expect(screen.getByText('preset-standard/shared')).toBeTruthy()
-    expect(screen.getByText('preset-cordis/shared')).toBeTruthy()
-    for (const item of listed) {
-      const toggle = within(item as HTMLElement).getByRole('switch')
-      expect(toggle).toHaveProperty('disabled', true)
-      expect(toggle.getAttribute('title')).toBe(en.reasonPresetManaged)
-    }
-    expect(screen.queryByRole('button', { name: en.configureRow.replace('{name}', 'shared') })).toBeNull()
-    expect(actions.setRowEnabled).not.toHaveBeenCalled()
-    setLanguage(zh)
-    for (const item of listed) {
-      expect(within(item as HTMLElement).getByRole('switch').getAttribute('title')).toBe(zh.reasonPresetManaged)
-    }
-  })
-
-  it('shows an unevaluated preset condition without an Off label or switch', () => {
-    const rows: PackageRow[] = [{ rowId: 'conditional', preset: 'preset-standard', moduleName: 'tool',
-      enabled: false, conditional: true, phase: null, readOnlyReason: 'preset-managed' }]
-    const { setLanguage } = renderTab({ packages: [pkg({ rows })] })
-    fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'dsh-better-sidebar') }))
-    const item = document.querySelector<HTMLElement>('[data-plugin-row]')!
-    expect(within(item).getByText(en.rowStateConditional)).toBeTruthy()
-    expect(within(item).queryByText(en.partOff)).toBeNull()
-    expect(within(item).queryByRole('switch')).toBeNull()
-    expect(item.getAttribute('data-state')).toBeNull()
-    expect(screen.queryByText(en.partsCountOff.replace('{count}', '1'), { exact: false })).toBeNull()
-    setLanguage(zh)
-    expect(within(item).getByText(zh.rowStateConditional)).toBeTruthy()
-  })
-
   it('resolves row fields independently from bundle metadata and preserves subpath specifiers', () => {
     const rows = [
       row({ moduleName: '@acme/dsh-sidebar/navigation', meta: { description: { en: 'Navigation description.' } } }),
@@ -908,19 +861,52 @@ describe('PluginManagerPage', () => {
       'plugins.row.config:dsh-better-sidebar#sidebar': view => view === 'summary' ? 'The sidebar row.' : <form aria-label="row form" />,
     }
 
-    it('lists an official plugin after the official bundles with its summary, and opens its page', () => {
+    it('keeps configuration and installed plugins on the main list and shows all official plugins on the secondary page', () => {
+      const team = '@deepseek-ai/dsh-experimental-agent-team-profile'
       renderTab(
-        { packages: [pkg({ name: '@deepseek-ai/dsh-experimental-agent-team-profile', installed: false, optional: true, removable: false, enabled: false })] },
+        { packages: [
+          pkg({ name: '@deepseek-ai/dsh-experimental-badge-skill-bundle', official: true }),
+          pkg({ name: '@deepseek-ai/dsh-experimental-agent-team-profile', installed: false, optional: true, removable: false, enabled: false }),
+          pkg({ name: '@deepseek-ai/dsh-subagent-claude-code', official: true, availability: 'missing', installed: false }),
+          pkg({ name: '@deepseek-ai/dsh-subagent-codex', official: true }),
+          pkg({ name: '@deepseek-ai/dsh-experimental-tool-worktree', official: true }),
+          pkg({ name: '@acme/new-official', official: true }),
+          pkg(),
+        ] },
         { items: [{ id: 'bash', label: 'Shell' }] },
         bodies,
       )
-      const official = document.querySelector('[data-plugin-group="official"]') as HTMLElement
-      expect(within(official).getAllByRole('listitem').map(card => card.getAttribute('data-plugin-item') ?? card.getAttribute('data-plugin-package')))
-        .toEqual(['@deepseek-ai/dsh-experimental-agent-team-profile', 'bash'])
-      expect(document.querySelector('[data-plugin-count]')?.textContent).toBe('2')
-      expect(within(official).getByText('Limits every command.')).toBeTruthy()
-      // An official plugin has no switch of its own: the Host composes it.
-      expect(within(official).queryByRole('switch', { name: en.enableToggle.replace('{name}', 'Shell') })).toBeNull()
+      const basic = document.querySelector('[data-plugin-group="basic"]') as HTMLElement
+      const extensions = document.querySelector('[data-plugin-group="extensions"]') as HTMLElement
+      expect(document.querySelector('[data-plugin-group="more"]')).toBeNull()
+      expect([...document.querySelectorAll('[data-plugin-group]')].map(group => group.getAttribute('data-plugin-group')))
+        .toEqual(['basic', 'extensions', 'bundles'])
+      expect(within(basic).getAllByRole('listitem').map(card => card.getAttribute('data-plugin-item'))).toEqual(['bash'])
+      expect(within(extensions).getByRole('heading', { name: en.extensionsTitle })).toBeTruthy()
+      expect(within(extensions).getByRole('button', { name: en.moreAction }).textContent).toBe(en.moreAction)
+      expect(within(extensions).getAllByRole('listitem').map(card => card.getAttribute('data-plugin-package')))
+        .toEqual(['@deepseek-ai/dsh-experimental-agent-team-profile', '@acme/new-official'])
+      expect(document.querySelector('[data-plugin-count]')).toBeNull()
+      expect(within(basic).getByText('Limits every command.')).toBeTruthy()
+      expect(within(basic).queryByRole('switch', { name: en.enableToggle.replace('{name}', 'Shell') })).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', team) }))
+      fireEvent.click(screen.getByRole('button', { name: en.backToList }))
+      expect(screen.getByRole('heading', { name: en.title, level: 1 })).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
+      expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
+      expect(screen.queryByRole('heading', { name: en.moreTitle, level: 3 })).toBeNull()
+      expect([...document.querySelectorAll('[data-plugin-group]')].map(group => group.getAttribute('data-plugin-group')))
+        .toEqual(['more'])
+      const more = document.querySelector('[data-plugin-group="more"]') as HTMLElement
+      expect(within(more).getAllByRole('listitem').map(card => card.getAttribute('data-plugin-package')))
+        .toEqual([team, '@acme/new-official', '@deepseek-ai/dsh-experimental-tool-worktree', '@deepseek-ai/dsh-experimental-badge-skill-bundle', '@deepseek-ai/dsh-subagent-codex', '@deepseek-ai/dsh-subagent-claude-code'])
+      expect(document.querySelector('[data-plugin-package="dsh-better-sidebar"]')).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', team) }))
+      fireEvent.click(screen.getByRole('button', { name: en.backToPackage.replace('{name}', en.moreTitle) }))
+      expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: en.backToList }))
+      expect(document.querySelector('[data-plugin-group="more"]')).toBeNull()
+      expect(document.querySelector('[data-plugin-package="dsh-better-sidebar"]')).not.toBeNull()
       fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'Shell') }))
       const detail = document.querySelector('[data-plugin-item-detail="bash"]') as HTMLElement
       expect(within(detail).getByRole('heading', { level: 3 }).textContent).toBe('Shell')
@@ -928,7 +914,44 @@ describe('PluginManagerPage', () => {
       expect(within(detail).getByRole('form', { name: 'bash form' })).toBeTruthy()
       fireEvent.click(within(detail).getByRole('button', { name: en.backToList }))
       expect(document.querySelector('[data-plugin-item-detail]')).toBeNull()
-      expect(screen.getByRole('heading', { name: en.officialTitle })).toBeTruthy()
+      expect(screen.getByRole('heading', { name: en.basicTitle })).toBeTruthy()
+    })
+
+    it('returns from package details to the secondary page and retains it across React remounts', () => {
+      const name = '@deepseek-ai/dsh-experimental-terminal-bundle'
+      const b = renderTab({ packages: [pkg({ name, official: true })] })
+      fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
+      expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', name) }))
+      fireEvent.click(screen.getByRole('button', { name: en.backToPackage.replace('{name}', en.moreTitle) }))
+      expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
+      b.hidePage()
+      b.showPage()
+      expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
+      expect(document.querySelector(`[data-plugin-package="${name}"]`)).not.toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: en.backToList }))
+      expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeNull()
+    })
+
+    it('keeps toggled plugins in their group and position', () => {
+      const names = ['@deepseek-ai/dsh-experimental-cot-translation-bundle', '@deepseek-ai/dsh-experimental-terminal-bundle'] as const
+      const packages = names.map(name => pkg({ name, official: true, enabled: false }))
+      const b = renderTab({ packages })
+      fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
+      const group = document.querySelector('[data-plugin-group="more"]') as HTMLElement
+      const cards = () => within(group).getAllByRole('listitem').map(card => card.getAttribute('data-plugin-package'))
+      expect(cards()).toEqual(names)
+      fireEvent.click(within(group).getByRole('switch', { name: en.enableToggle.replace('{name}', names[1]) }))
+      expect(b.actions.setEnabled).toHaveBeenCalledWith(names[1], true)
+      b.set({ packages: packages.map((entry, index) => ({ ...entry, enabled: index === 1 })) })
+      expect(cards()).toEqual(names)
+      expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
+    })
+
+    it('starts on the main list when the navigation store is recreated', () => {
+      const first = createNavigationStore().create()
+      first.actions.setView({ kind: 'more' })
+      expect(createNavigationStore().create().getSnapshot()).toEqual({ view: { kind: 'list' } })
     })
 
     it('counts an official plugin as content: the empty line waits for a page with nothing at all', () => {
@@ -952,9 +975,10 @@ describe('PluginManagerPage', () => {
       expect(within(detail).queryByRole('button', { name: en.configureRow.replace('{name}', 'dsh-better-sidebar') })).toBeNull()
     })
 
-    it('opens a row\'s configuration page from its configure control and leads back to the bundle', () => {
+    it.each([false, true])('opens row configuration and returns to the bundle and originating list, from secondary page: %s', (fromMore) => {
       const theme = row({ rowId: 'theme', moduleName: 'dsh-better-sidebar/theme', entryId: 'include:theme' as PluginEntryId })
-      renderTab({ packages: [pkg({ rows: [row(), theme] })] }, { rows: new Set(['dsh-better-sidebar#sidebar']) }, bodies)
+      renderTab({ packages: [pkg({ official: fromMore, rows: [row(), theme] })] }, { rows: new Set(['dsh-better-sidebar#sidebar']) }, bodies)
+      if (fromMore) fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
       fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'dsh-better-sidebar') }))
       expect(screen.queryByRole('button', { name: en.configureRow.replace('{name}', 'dsh-better-sidebar/theme') })).toBeNull()
       fireEvent.click(screen.getByRole('button', { name: en.configureRow.replace('{name}', 'dsh-better-sidebar') }))
@@ -967,6 +991,8 @@ describe('PluginManagerPage', () => {
       fireEvent.click(within(page).getByRole('button', { name: en.backToPackage.replace('{name}', 'dsh-better-sidebar') }))
       expect(document.querySelector('[data-plugin-row-detail]')).toBeNull()
       expect(document.querySelector('[data-plugin-detail="dsh-better-sidebar"]')).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: fromMore ? en.backToPackage.replace('{name}', en.moreTitle) : en.backToList }))
+      expect(screen.getByRole('heading', { name: fromMore ? en.moreTitle : en.title, level: 1 })).toBeTruthy()
     })
   })
 
@@ -1859,13 +1885,14 @@ describe('PluginManagerPage', () => {
     const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView')
     Object.defineProperty(Element.prototype, 'scrollIntoView', { value: scrollIntoView, configurable: true })
     try {
-      const { actions, set } = renderTab({ packages: [pkg()] })
+      const { actions, set } = renderTab({ packages: [pkg(), pkg({ name: '@deepseek-ai/dsh-experimental-terminal-bundle', official: true })] })
       // A package the list does not show has nothing to scroll to; the mark still times out.
       set({ highlight: 'missing' })
       expect(scrollIntoView).not.toHaveBeenCalled()
       act(() => { vi.advanceTimersByTime(2_400) })
       expect(actions.clearHighlight).toHaveBeenCalledTimes(1)
       set({ highlight: 'dsh-better-sidebar' })
+      expect(screen.getByRole('heading', { name: en.title, level: 1 })).toBeTruthy()
       expect(document.querySelector('[data-plugin-package="dsh-better-sidebar"]')?.hasAttribute('data-plugin-highlight')).toBe(true)
       expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center', behavior: 'smooth' })
       act(() => { vi.advanceTimersByTime(2_400) })
@@ -1877,6 +1904,61 @@ describe('PluginManagerPage', () => {
       else Object.defineProperty(Element.prototype, 'scrollIntoView', descriptor)
       vi.useRealTimers()
     }
+  })
+
+  it('highlights only the visible list and does not extend the mark when navigating or refreshing', () => {
+    vi.useFakeTimers()
+    const name = '@deepseek-ai/dsh-experimental-terminal-bundle'
+    const scrollIntoView = vi.fn()
+    const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView')
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { value: scrollIntoView, configurable: true })
+    try {
+      const { actions, set } = renderTab({ packages: [
+        pkg({ name, official: true }),
+        pkg({ name: '@deepseek-ai/dsh-subagent-codex', official: true }),
+      ] })
+      expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeNull()
+      set({ highlight: name })
+      expect(screen.getByRole('heading', { name: en.title, level: 1 })).toBeTruthy()
+      expect(scrollIntoView).not.toHaveBeenCalled()
+      set({ highlight: null })
+      fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
+      set({ highlight: name })
+      expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
+      expect(document.querySelector(`[data-plugin-package="${name}"]`)?.hasAttribute('data-plugin-highlight')).toBe(true)
+      expect(scrollIntoView).toHaveBeenCalledExactlyOnceWith({ block: 'center', behavior: 'smooth' })
+      act(() => { vi.advanceTimersByTime(1_600) })
+      fireEvent.click(screen.getByRole('button', { name: en.backToList }))
+      expect(screen.getByRole('heading', { name: en.title, level: 1 })).toBeTruthy()
+      expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeNull()
+      expect(scrollIntoView).toHaveBeenCalledTimes(1)
+      set({ packages: [pkg({ name, official: true })] })
+      act(() => { vi.advanceTimersByTime(799) })
+      expect(actions.clearHighlight).not.toHaveBeenCalled()
+      act(() => { vi.advanceTimersByTime(1) })
+      expect(actions.clearHighlight).toHaveBeenCalledTimes(1)
+    } finally {
+      if (descriptor === undefined) delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
+      else Object.defineProperty(Element.prototype, 'scrollIntoView', descriptor)
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps edited configuration open and preserves explicit detail navigation after remounting with a highlight', () => {
+    const b = renderTab({ packages: [pkg()] }, { items: [{ id: 'bash', label: 'Shell' }] }, {
+      'plugins.item:bash': view => view === 'page' ? <input aria-label="Draft setting" defaultValue="original" /> : null,
+    })
+    act(() => { b.navigation.actions.setView({ kind: 'item', id: 'bash' }) })
+    const draft = screen.getByRole('textbox', { name: 'Draft setting' })
+    fireEvent.change(draft, { target: { value: 'unsaved change' } })
+    b.set({ highlight: 'dsh-better-sidebar' })
+    expect(screen.getByRole('textbox', { name: 'Draft setting' })).toBe(draft)
+    expect(draft).toHaveProperty('value', 'unsaved change')
+
+    b.hidePage()
+    act(() => { b.navigation.actions.setView({ kind: 'package', name: 'dsh-better-sidebar' }) })
+    b.showPage()
+    expect(document.querySelector('[data-plugin-detail="dsh-better-sidebar"]')).not.toBeNull()
   })
 
   it('marks a card without a scrollIntoView to call', () => {
@@ -1989,25 +2071,29 @@ describe('PluginManagerPage', () => {
   })
 })
 
-it('offers bundle-owned guidance only after explicit enablement and navigates to its detail page', () => {
-  const name = 'dsh-better-sidebar'
-  const { set, actions } = renderTab({ packages: [pkg({ enabled: false })] }, { bundles: new Set([name]) }, {
+it.each([false, true])('opens activation guidance details and returns to the originating list (experimental: %s)', (fromMore) => {
+  const name = fromMore ? '@deepseek-ai/dsh-experimental-terminal-bundle' : 'dsh-better-sidebar'
+  const bundle = pkg({ name, official: fromMore })
+  const { set, actions } = renderTab({ packages: [{ ...bundle, enabled: false }] }, { bundles: new Set([name]) }, {
     [`plugins.bundle.activation:${name}`]: (_view, owner) => <button onClick={(owner as PluginActivationOwnerProps).onOpenDetails}>Go to setup</button>,
     [`plugins.bundle.config:${name}`]: () => <div>Bundle setup</div>,
   })
+  if (fromMore) fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
   expect(screen.queryByText('Go to setup')).toBeNull()
-  set({ packages: [pkg()] })
+  set({ packages: [bundle] })
   expect(screen.queryByText('Go to setup')).toBeNull()
-  set({ packages: [pkg({ enabled: false })] })
+  set({ packages: [{ ...bundle, enabled: false }] })
   fireEvent.click(screen.getByRole('switch'))
   expect(actions.setEnabled).toHaveBeenCalledWith(name, true)
   expect(screen.queryByText('Go to setup')).toBeNull()
-  set({ packages: [pkg()], busy: [name] })
+  set({ packages: [bundle], busy: [name] })
   expect(screen.queryByText('Go to setup')).toBeNull()
   set({ busy: [] })
   fireEvent.click(screen.getByText('Go to setup'))
   expect(screen.getByText('Bundle setup')).toBeTruthy()
   expect(screen.queryByText('Go to setup')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: fromMore ? en.backToPackage.replace('{name}', en.moreTitle) : en.backToList }))
+  expect(screen.getByRole('heading', { name: fromMore ? en.moreTitle : en.title, level: 1 })).toBeTruthy()
 })
 
 it('dismisses activation guidance until the user enables the bundle again', () => {
@@ -2050,12 +2136,14 @@ describe('on-demand Official bundles', () => {
     installTarget: { spec: `${name}@2.0.0`, version: '2.0.0' },
   })
 
-  it('keeps one card in Official before installation, after installation, and after removal', () => {
+  it('keeps one card on the secondary page before installation, after installation, and after removal', () => {
     const entry = catalog()
     const { actions, set } = renderTab({ packages: [entry] })
+    expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
     const assertOfficial = () => {
       expect(document.querySelectorAll(`[data-plugin-package="${name}"]`)).toHaveLength(1)
-      expect(document.querySelector('[data-plugin-group="official"]')?.contains(document.querySelector(`[data-plugin-package="${name}"]`))).toBe(true)
+      expect(document.querySelector('[data-plugin-group="more"]')?.contains(document.querySelector(`[data-plugin-package="${name}"]`))).toBe(true)
       expect(document.querySelector('[data-plugin-group="bundles"]')).toBeNull()
     }
     assertOfficial()
@@ -2074,12 +2162,14 @@ describe('on-demand Official bundles', () => {
       status: 'accepted', kind: 'registry', name, version: '2.0.0', spec: `${name}@2.0.0`, registry: null,
       bundle: true, selection: true, saveExact: true,
     } } })
+    fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
     expect(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', title) }).hasAttribute('disabled')).toBe(true)
   })
 
   it('offers an explicit update and displays installed and target versions', () => {
     const entry = { ...catalog(), installed: true, availability: 'profile' as const, removable: true, version: '1.0.0' }
     const { actions } = renderTab({ packages: [entry] })
+    fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
     expect(screen.getByText(en.statusUpdateAvailable)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', title) }))
     const detail = document.querySelector('[data-plugin-detail]') as HTMLElement
@@ -2091,6 +2181,7 @@ describe('on-demand Official bundles', () => {
 
   it.each([undefined, `${name}@1.0.0`])('retains dependency source=%s beside unavailable status and the update action', (source) => {
     renderTab({ packages: [{ ...catalog(), ...source === undefined ? {} : { source }, installed: true, removable: true, error: { code: 'operation-error', diagnostic: 'Unreadable package files' } }] })
+    fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
     expect(screen.getByText(en.statusMissingFiles)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', title) }))
     const detail = document.querySelector('[data-plugin-detail]') as HTMLElement
@@ -2111,6 +2202,7 @@ describe('on-demand Official bundles', () => {
     const entry: PackageView = { ...catalog(), installed: true, availability: 'profile', removable: true, version: '2.0.0',
       installTarget: { spec, version: '2.0.0' }, ...source === undefined ? {} : { source } }
     renderTab({ packages: [entry] })
+    fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
     expect(screen.queryByText(en.statusUpdateAvailable) !== null).toBe(expected)
     fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', title) }))
     const detail = document.querySelector('[data-plugin-detail]') as HTMLElement
@@ -2123,6 +2215,7 @@ describe('on-demand Official bundles', () => {
     const { installTarget: _target, ...entry } = catalog()
     const { actions, set } = renderTab({ packages: [{ ...entry, enabled: true,
       error: { code: 'operation-error', diagnostic: 'Source package is not built' } }] })
+    fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
     const toggle = screen.getByRole('switch', { name: en.enableToggle.replace('{name}', title) })
     expect(toggle.hasAttribute('disabled')).toBe(false)
     fireEvent.click(toggle)
@@ -2133,6 +2226,7 @@ describe('on-demand Official bundles', () => {
 
   it('does not present an absent catalog package as built in or as an empty loaded component list', () => {
     renderTab({ packages: [catalog()] })
+    fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
     fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', title) }))
     const detail = document.querySelector('[data-plugin-detail]') as HTMLElement
     expect(within(detail).queryByText(en.sourceBuiltIn)).toBeNull()

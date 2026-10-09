@@ -52,7 +52,7 @@ Existing records remain valid. The additive working-directory source kind is att
 <a id="verification"></a>
 ## Verification
 
-DSH_COVERAGE_TEST_TIMEOUT_MS=90000 pnpm exec vitest run packages/session/working-directory/tests packages/shell/tool-bash/tests/tools.spec.ts packages/shell/tool-pwsh/tests/tools.spec.ts packages/subagent/subagent/tests/schedule-tools.spec.ts: 5 files and 207 tests passed with the CI test and hook timeout budget.
+pnpm exec vitest run packages/session/working-directory/tests packages/shell/tool-bash/tests/tools.spec.ts packages/shell/tool-pwsh/tests/tools.spec.ts packages/subagent/subagent/tests/schedule-tools.spec.ts: 5 files and 207 tests passed.
 
 <a id="dev-note"></a>
 ## Dev Note

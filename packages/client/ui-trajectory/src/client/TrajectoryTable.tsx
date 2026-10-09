@@ -2258,7 +2258,7 @@ export function TrajectoryTable({
     ), [allRecords, selectedRequestInfo])
   const selectedRequestRecords = selectedRequestRecordTemplates.map(currentRecord)
   const selectedRequestAssistant = selectedRequestRecords.find(
-    record => record.cell.kind === 'message',
+    record => record.cell.kind === 'message' && record.cell.requestOnly !== true,
   )
   const selectedRequestAnchor = selectedRequestAssistant ?? selectedRequestRecords[0]
   const selectedRequestNumber = selectedRequestInfo?.number
@@ -3151,15 +3151,19 @@ export function TrajectoryTable({
                   )}
                   {selectedRequestInfo.error !== undefined && (
                     <div>
-                      <dt>{t('details.error')}</dt>
-                      <dd className={css.error}>{requestErrorMessage(selectedRequestInfo, t)}</dd>
+                      <dt>{t(selectedRequestState !== 'error' && selectedRequestInfo.retry !== undefined
+                        ? 'details.lastAttemptError'
+                        : 'details.error')}</dt>
+                      <dd className={selectedRequestState === 'error' ? css.error : undefined}>
+                        {requestErrorMessage(selectedRequestInfo, t)}
+                      </dd>
                     </div>
                   )}
                   {selectedRequestInfo.retry !== undefined && (
                     <div>
                       <dt>{t('details.retry')}</dt>
                       <dd>
-                        {t('details.scheduled')} {selectedRequestInfo.maxRetries === undefined
+                        {selectedRequestInfo.maxRetries === undefined
                           ? selectedRequestInfo.retry
                           : t('request.retryProgress', {
                             retry: selectedRequestInfo.retry,

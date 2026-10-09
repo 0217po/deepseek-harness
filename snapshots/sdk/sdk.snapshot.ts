@@ -102,6 +102,8 @@ function dirOf(url: string): string {
 interface SdkAssertions {
   /** Additional profile patches applied after the shared composition. */
   patches?: readonly string[]
+  /** Wait for the recorded provider title before sending each subsequent prompt. */
+  waitForProviderTitle?: boolean
   /** Final response required from a completed turn before updating goldens. */
   expectedFinalResponse?: string
   /** Environment overrides passed to the runtime subprocess. */
@@ -124,6 +126,7 @@ interface SdkAssertions {
 }
 
 const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
+  'session-title-stability': { waitForProviderTitle: true },
   'dynamic-tool-updates': {
     expectedFinalResponse: 'DONE',
   },
@@ -634,6 +637,11 @@ async function runScenario(scenario: CorpusScenario): Promise<{
     const liveSessions: (string | undefined)[] = [sessionId]
     await harness.start()
     const subscription = harness.client.subscribeSessionTree(sessionId)
+    const titleSubscription = assertions.waitForProviderTitle === true
+      ? harness.client.subscribeSessionTree(sessionId)
+      : undefined
+    const expectedTitles = records(primaryFixture).filter(event => event.type === 'session/title'
+      && ((event.data as JsonObject).source as JsonObject).kind === 'provider')
     const completionSubscription = scenario.name === 'subagent-continuable'
       ? harness.client.subscribeSessionTree(sessionId)
       : undefined
@@ -663,6 +671,13 @@ async function runScenario(scenario: CorpusScenario): Promise<{
           },
         })
         results.push(result)
+        if (titleSubscription !== undefined) {
+          const expected = expectedTitles[results.length - 1]?.data as JsonObject | undefined
+          expect(expected, 'each turn has a recorded provider title').toBeDefined()
+          await waitForRootEvent(titleSubscription, sessionId, event => event.type === 'session/title'
+            && ((event.data as JsonObject).source as JsonObject).kind === 'provider'
+            && (event.data as JsonObject).title === expected?.title, observe)
+        }
         if (completionSubscription !== undefined) {
           expect(result.finalResponse, 'run returns at the first parent idle').toBe('DONE')
           expect(result.events.filter(event => event.type === 'turn/end'))
@@ -711,6 +726,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
     } finally {
       subscription.close()
       completionSubscription?.close()
+      titleSubscription?.close()
     }
     await harness.close()
     const logs = (await Promise.all([

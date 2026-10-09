@@ -6,6 +6,8 @@ Desktop analytics follows the [product collection policy](../../packages/client/
 
 The desktop application is an Electron shell around the complete dsh Web application. An Electron RunAsNode child starts the shared profile runner, and Electron immediately loads the packaged Web entry at `dsh-app://app/`. Its shared loading page waits for Host boot injections, then starts the client without navigating to another document. Electron forwards application HTTP requests to the authenticated Web Host, dropping connection-level response headers (`transfer-encoding`, `connection`, `keep-alive`) that describe the Node fetch rather than the resource, and marking plugin bundle responses `no-store` because their per-launch revisions would only accumulate in Chromium's disk cache; WebSocket streams connect to that Host with credentials attached only for the owned application window. Node IPC carries boot injections, readiness, and shutdown. Desktop listens on an OS-assigned port by default, so it cannot collide with Web’s `3080` or a reserved port; a `webserver.config.port` patch can override it.
 
+Desktop binds `127.0.0.1`, the address Electron dials for the ready URL and the WebSocket credential filter. WebSocket streams use `ws:` or `wss:` according to the Host listener; credentials require matching authority and scheme.
+
 The first application-menu command, **About DeepSeek Harness**, opens Electron's native About panel with the application icon, product name, and installed release version. The menu follows the Desktop shell locale. On macOS, Hide, Hide Others, Show All, and Quit use localized labels; Hide and Quit include the DeepSeek Harness product name. These commands retain their native actions and shortcuts. macOS reads the icon from its application bundle, so an unpackaged development launch displays Electron's icon; Windows receives the packaged PNG.
 
 Desktop’s local native directory flow opens an Electron folder dialog attached to the application window, restoring, showing, and focusing that window first. Concurrent requests share one dialog; cancellation returns no path and failures remain retryable. Ordinary Web uses the Host chooser. Browse mode lists Host directories. On Linux without zenity or kdialog, automatic selection uses browse instead of the Electron dialog.
@@ -199,6 +201,8 @@ Record the current dsh version as the base. A production Desktop release uses th
 
 Use the actual creation date in Asia/Shanghai. For each base and date, start the index at 1 and increment after checking retained release records and published objects; never reuse a published version. Test distribution does not publish the corresponding unsuffixed base.
 
+Manual Windows CI uses a separate unpublished build identifier: `auto` appends the UTC date, workflow run number and attempt (`.YYYYMMDD.run.attempt`, with `-test` for a stable base). For example, `0.2.1-alpha.1.20261008.42.2`. These numbers are not reserved release sequence numbers.
+
 Pass the confirmed version to the packaging command as `--build-version`, which reaches the artifact names, the update feed, and the upload validation as one value. The manifests keep the product version, so a test build no longer rewrites the release family and leaves nothing to revert:
 
 ```sh
@@ -352,7 +356,15 @@ On Windows x64, use the complete unsigned packaging command for local installati
 pnpm run package:desktop:win:x64:unsigned
 ```
 
-The command requires `DSH_DESKTOP_APP_ID` and the normal build dependencies, including Python and Visual C++ build tools for native modules. Set `PYTHON` to the Python executable when it is absent from `PATH`. It writes the installer to `.desktop-build/targets/win-x64/unsigned-artifacts/`, omits automatic-update configuration, strips signing credentials, and creates no release completion record. It does not require EV credentials or an update origin. The signed packaging and upload commands retain their release requirements.
+The command reads `.env.windows` and requires `DSH_DESKTOP_APP_ID` and the [mandatory-update policy settings](#mandatory-update-policy), including a real HTTPS service origin. The local run and CI use Node 24; the remaining tools are the root `packageManager` version of pnpm, Git, PowerShell, tar, Python, Visual C++ Build Tools and a Windows SDK. Set `PYTHON` when Python is absent from `PATH`. It writes the installer to `.desktop-build/targets/win-x64/unsigned-artifacts/`, omits ordinary automatic-update configuration, strips signing credentials, and creates no release completion record. EV and upload credentials are unnecessary. Signed packaging and upload retain their release requirements.
+
+Run `pnpm install --frozen-lockfile`, then `pnpm run package:desktop:win:x64:unsigned --check` to validate configuration and tooling before the full command above. Packaging performs its own complete build and isolated runtime smoke without an online model. Stage logs remain under `.desktop-build/packaging-runs/`; a successful build alone does not qualify the installer. Dependency installation and runtime preparation need access to npm, GitHub release assets and nodejs.org; use the existing registry and proxy configuration when the network requires it. Caches and tool locations belong to the build machine, not tracked personal paths.
+
+The [manual Windows workflow](../../.github/workflows/windows-package.yml) selects a self-hosted Windows x64 runner with the dedicated `dsh-win-package-trial` label and calls the same unsigned command. Provision PowerShell 7 and the tools listed above before starting the runner. It requires the policy deployment and HTTPS origin; test deployments also require comma-separated login origins. These public inputs generate a temporary `.env.windows` without signing or upload credentials. `build_version` defaults to `auto`, using the CI identifier described in [Release versions](#release-versions). An explicit version uses the existing product-version validator. The resolved version appears in the run summary before packaging; manifests remain unchanged.
+
+After this workflow reaches the default branch, select it in Actions, choose the source branch, fill the inputs and click Run workflow. It has no push or PR trigger and leaves existing automatic CI unchanged. Packaging logs and successful EXE artifacts are retained for 14 days; installation, signing and publication are separate operations. Run it once from the default branch and inspect the retained logs and installer before relying on Actions packaging. Checkout cleans the runner-owned source directory, including ignored files; never point it at a development checkout. Runs share one concurrency group without cancelling an active build; only one run can remain pending, and a newer dispatch replaces that pending run. Diagnostics are uploaded only after a successful clean checkout, and generated settings are removed even when preparation fails after writing them.
+
+<a id="windows-uninstall-rules"></a>
 
 ### Windows installer interface
 
@@ -423,6 +435,14 @@ pnpm run prepare:desktop
 
 This diagnostic command is an alternative stopping point, not the first half of a two-command build. A later `package:desktop*` command repeats the official build and preparation so it cannot consume stale dsh packages, runtime files, or dsh content.
 
+<a id="desktop-runtime-preparation"></a>
+
+### Desktop runtime preparation
+
+Desktop [patch policy](scripts/runtime-patch-policy.ts) explicitly classifies every workspace patch as shared, workspace-only, or runtime-only. Shared entries reuse the root patch bytes and verify their hash against the root lockfile; runtime-only entries use separate repository files without changing workspace installation. Workspace-only patches belong to build tools or dependencies already embedded in client bundles. Unclassified or stale entries, missing files, changed hashes, incompatible resolved versions, and workspace-only packages entering the runtime stop packaging. The [preparation script](scripts/prepare-runtime-patches.ts) writes only to the temporary project; pnpm applies the selected patches and rejects application failures.
+
+Desktop dependency overrides are declared separately in the patch-policy module, not inferred from patch versions. The pi-ai constraint keeps its runtime version at the version qualified by the shared patch. Desktop still resolves a fresh runtime lockfile for each build, then installs with `--frozen-lockfile`; dependency resolution across separate builds is not yet reproducible. CLI packed-installation tests and other distribution flows retain their own configuration.
+
 Every package command builds the repository, packs the first-party production closures rooted at dsh and the private Desktop Host, and prepares the target Electron distribution and pnpm CLI. `prepare:dsh` installs the production graph once at build time, prepares materialized packages for electron-builder to archive under `app.asar/dsh`, removes package-manager metadata, and writes `desktop-runtime.json` with shared package versions and final file hashes. Signed macOS builds sign and verify native files before inventory generation; electron-builder excludes this already-signed tree from nested re-signing. Resource mappings explicitly include `dsh/node_modules`, which the default root-directory filter omits; the prepared runtime inventory is checked after native signing. Native executables and libraries are unpacked beside ASAR; Python, standalone Node and pnpm remain in external runtime resources. Windows packaging checks every prepared PE against its ASAR unpacked entry and byte-identical disk copy, including unsigned builds. Builder glob rules match braces in PE filenames as single-character wildcards, so a matching neighboring file may also be unpacked. Prepared runtime smoke uses the verified target descriptor rather than the build host architecture. Signed installer, notarization, installed upgrade, and target-specific native-module qualification require the release environment.
 
 Signed macOS packaging writes `Contents/Resources/app-update.yml` while assembling the App and before code signing, including the directory build that feeds the parallel ZIP and DMG lanes. The signing hook verifies the exact feed and updater cache directory. Both lane copies and the promoted App are checked again before the release completion record is written; a missing or mismatched configuration prevents artifact promotion and therefore prevents upload.
@@ -445,6 +465,26 @@ If task teardown fails after confirmed Host exit, installation is refused and th
 
 Confirmed Host exit without successful task teardown displays localized recovery guidance in both ordinary and mandatory update dialogs. A typed preparation cause selects that guidance in each locale; changing translated wording cannot reclassify the failure. “View technical details” is collapsed by default and exposes only exit status, signal, shutdown acknowledgement, and deadline facts, not plugin stderr. Expanding it neither retries nor authorizes installation.
 
+<a id="local-desktop-settings"></a>
+
+### Local desktop settings
+
+The [shell configuration decision](../../.agents/notes/implemented/architecture/2026-10-08-desktop-shell-configuration.md) defines Host-independent ownership and the criteria for evaluating existing settings for migration.
+
+The Electron main process reads `app.getPath('userData')/desktop/settings.json` once at startup, independently of Host and Cordis configuration. The default packaged paths are `%APPDATA%\@deepseek-ai\dsh-desktop\desktop\settings.json` on Windows and `~/Library/Application Support/@deepseek-ai/dsh-desktop/desktop/settings.json` on macOS. Development uses the `userData` path printed by its launcher. `DSH_HOME` does not relocate this file.
+
+On first launch, including after an upgrade, Desktop creates this document if it is absent:
+
+```json
+{
+  "updates": {
+    "allowTestAuthPopupWindow": false
+  }
+}
+```
+
+Existing documents are never overwritten; an omitted `updates` object or field resolves to `false`. Set the field to `true` to permit test authentication dialogs, then fully quit and restart the application. Set it back to `false` and restart to suppress them again. Creation, read, or validation failures use the default `false` without blocking startup. Desktop attempts to warn through the Electron console with the file path; unavailable logging does not block startup. Correct the file and restart to apply an explicit setting. Unknown fields are preserved. Installation updates retain this user-data file; Windows uninstallation removes it under the [uninstall rules](#windows-uninstall-rules).
+
 <a id="mandatory-update-policy"></a>
 
 ### Mandatory update policy
@@ -466,7 +506,9 @@ Packaging reads `.env.windows` or `.env.macos`: `DSH_DESKTOP_AUTO_UPDATE_ENV=tes
 
 Durations are integers from 1000 through 2147483647 milliseconds. Startup and scheduled polling are independent of business requests; foreground/resume checks respect the next due time, while manual checks bypass it and join any request in flight. The client sends the installed platform, architecture, DSH_CLIENT_VERSION, bundled dsh version, current locale and UTC offset, an empty bundle ID, and fixed Nightly. It uses no business login credentials or installation ID.
 
-With `feishu-test`, an HTTP 401 JSON response containing `error.code: "UNAUTHENTICATED"` offers login during user-initiated checks and the packaged application's initial startup check, without waiting for the local backend. A localized explanation identifies the test build, the need for Feishu authentication, and that login neither downloads nor installs updates. Confirmation closes the explanation before opening a sandboxed window at the configured origin’s root, not a response-provided login URL. Concurrent checks reuse the entire confirmation/login operation and focus its existing window. Press F12 in the test login window to open detached DevTools for diagnosis. Cancellation does not trigger repeated prompts from periodic or foreground checks; users can retry manually.
+With `feishu-test`, an HTTP 401 JSON response containing `error.code: "UNAUTHENTICATED"` offers login only when the local `updates.allowTestAuthPopupWindow` setting is `true`. It defaults to `false`, suppressing the entire authentication dialog flow during startup, manual update checks, mandatory-update refreshes, and deferred or repeated failures. Test gateway cookies are process-local. With popups disabled at startup, a gateway requiring authentication cannot provide new mandatory-update decisions during that process; enable the setting, restart and sign in to obtain them. Policy requests still enforce gateway authentication, and an authentication failure never clears a known mandatory block. Ordinary updates and product account authentication remain independent. Production keeps its anonymous policy requests regardless of this setting.
+
+When permitted, login is offered during user-initiated checks and the packaged application's initial startup check, without waiting for the local backend. A localized explanation identifies the test build, the need for Feishu authentication, and that login neither downloads nor installs updates. Confirmation closes the explanation before opening a sandboxed window at the configured origin’s root, not a response-provided login URL. Concurrent checks reuse the entire confirmation/login operation and focus its existing window. Press F12 in the test login window to open detached DevTools for diagnosis. Cancellation does not trigger repeated prompts from periodic or foreground checks; users can retry manually.
 
 Login and policy requests share an in-memory Session, separate from product windows and the updater; restarting requires a new login. Closing cancels login, and navigation failure provides localized retry guidance. Returning to the service triggers a fresh policy query; a redirect, cookie, or HTTP 422 is not a valid policy decision. Cancellation, expiry, and invalid responses retain any known mandatory block. Fixed login outcomes appear in process diagnostics and the optional update journal; cookies, OAuth parameters, and remote error text are not recorded by the login controller. Live Harness gateway/API integration and macOS login qualification remain unverified.
 

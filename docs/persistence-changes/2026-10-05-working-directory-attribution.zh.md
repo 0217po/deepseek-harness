@@ -52,7 +52,7 @@ changes:
 <a id="verification"></a>
 ## 验证
 
-DSH_COVERAGE_TEST_TIMEOUT_MS=90000 pnpm exec vitest run packages/session/working-directory/tests packages/shell/tool-bash/tests/tools.spec.ts packages/shell/tool-pwsh/tests/tools.spec.ts packages/subagent/subagent/tests/schedule-tools.spec.ts：采用 CI 的测试及 hook 超时预算，5 个文件、207 个测试通过。
+pnpm exec vitest run packages/session/working-directory/tests packages/shell/tool-bash/tests/tools.spec.ts packages/shell/tool-pwsh/tests/tools.spec.ts packages/subagent/subagent/tests/schedule-tools.spec.ts：5 个文件、207 个测试通过。
 
 <a id="dev-note"></a>
 ## 开发备注
