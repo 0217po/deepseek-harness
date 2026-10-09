@@ -163,8 +163,8 @@ describe('web e2e: settings modal and General preferences', () => {
     expect(await enabledRows.count()).toBeGreaterThan(0)
     expect(await enabledRows.getByText('已启用', { exact: true }).count()).toBe(0)
     expect(await dialog.locator('[data-plugin-scope="global"] [role="img"][aria-label="运行中"]').count()).toBe(0)
-    expect(await dialog.locator('[data-plugin-count]').getAttribute('data-plugin-count'))
-      .toBe(String(expectedPluginCount))
+    expect(await dialog.getByText('由 Agent 预设按会话组成', { exact: true }).count()).toBe(1)
+    expect(await dialog.getByText('系统与所有会话共用', { exact: true }).count()).toBe(1)
     expect(await dialog.getByRole('button', { name: '内置插件', exact: true }).getAttribute('aria-current')).toBe('true')
     // One contribution shows as the page itself, without a tab row.
     expect(await dialog.getByRole('tab').count()).toBe(0)
@@ -182,17 +182,11 @@ describe('web e2e: settings modal and General preferences', () => {
     ] as const
     for (const [entryId, status] of instanceRows) {
       const row = dialog.locator(`[data-plugin-scope="preset"] [data-plugin-entry="${entryId}"]`)
-      // An id that repeats the title adds nothing, so its card shows no chip and its name omits it.
-      const repeatsTitle = entryId === 'tool-subagent'
-      const name = repeatsTitle ? `tool-subagent, ${status}` : `tool-subagent, ${entryId}, ${status}`
+      const name = `子智能体委派工具, ${entryId}, ${status}`
       const trigger = row.getByRole('button', { name, exact: true })
       await trigger.waitFor({ timeout: 10_000 })
       expect(await trigger.getAttribute('aria-expanded')).toBe('false')
       const identity = row.locator('code')
-      if (repeatsTitle) {
-        expect(await identity.count()).toBe(0)
-        continue
-      }
       expect(await identity.textContent()).toBe(entryId)
       expect(await identity.getAttribute('title')).toBe(entryId)
     }
@@ -204,7 +198,7 @@ describe('web e2e: settings modal and General preferences', () => {
     )
     await compareOrRefreshGolden(PLUGIN_INSTANCES_EXPECTED, instancesSnapshot, MODE)
     await dialog.getByRole('button', {
-      name: 'tool-subagent, tool-subagent-fork, 已启用',
+      name: '子智能体委派工具, tool-subagent-fork, 已启用',
       exact: true,
     }).click()
     expect(await dialog.locator('[data-plugin-entry="tool-subagent-fork"] button')
