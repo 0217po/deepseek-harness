@@ -16,6 +16,7 @@
                 defaultReasoningEffort: high
 
 - id: skill-office
+  disabled: false
   config:
     assetRoot: !!js process.cwd() + '/office-skills'
 
@@ -26,5 +27,6 @@
   disabled: true
 
 - id: office-commands
+  disabled: false
   config:
     command: false

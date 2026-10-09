@@ -9,7 +9,7 @@ import { runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import { readImageFile } from '@deepseek-ai/dsh-attachment-local'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { expectNoRenderContext, officeModelPatches, reportOfficeUsage } from './fixtures/real-office.ts'
+import { expectNoRenderContext, officeModelPatches } from './fixtures/real-office.ts'
 import { renderCliFixture } from './fixtures/render-cli.ts'
 
 const repo = fileURLToPath(new URL('../../../../', import.meta.url))
@@ -117,7 +117,6 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each(['native', 'ptc'
           await writeFile(join(traceDir, `xlsx-${kind}-${mode}.jsonl`), bytes)
         }
         events = parseSessionLog(bytes.toString('utf8'))
-        await reportOfficeUsage(events, `${kind}-${mode}`)
         expect(await readFile(join(cwd, 'input.xlsx'))).toEqual(original)
         const verified = await execa(python!, ['-c', `
 from openpyxl import load_workbook

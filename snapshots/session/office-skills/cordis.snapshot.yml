@@ -45,6 +45,7 @@
               - id: deepseek-v4-pro
 
 - id: skill-office
+  disabled: false
   config:
     assetRoot: !!js process.cwd() + '/office-skills'
 
@@ -55,5 +56,6 @@
   disabled: true
 
 - id: office-commands
+  disabled: false
   config:
     command: !!js "[process.cwd() + '/office-node', process.cwd() + '/office-cli.js']"

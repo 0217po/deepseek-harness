@@ -1331,6 +1331,13 @@ describe('headless recorded-session snapshots', () => {
               expect(saved).toContain('id: demo')
               expect(saved).toContain('disabled: false')
             }
+            if (scenario.name.startsWith('office-progressive-')) {
+              const log = actualLogs[0]!.content
+              const results = parseSessionLog(log).flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
+              expect(results).toHaveLength(4)
+              expect(results.every(result => result.isError === false)).toBe(true)
+              expect(log).toContain('# Office task routing')
+            }
             if (scenario.name === 'advanced-toolchain') verifyAdvancedToolchain(actualLogs)
             if (scenario.name === 'session-query-spill') {
               await verifySessionQuerySpill(actualLogs[0]!.content, spillRoot, locatorRoot)

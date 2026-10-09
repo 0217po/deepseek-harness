@@ -5,7 +5,7 @@ description: Create, edit, inspect, or convert Office documents, spreadsheets, p
 
 # Office task routing
 
-Load the format skill before creating, reading, or editing Office files. Standalone rendering, PDF export, and recalculation need only their operation skill.
+Call the `skill` tool with the format skill name before creating, reading, or editing Office files. Standalone rendering, PDF export, and recalculation need only their operation skill.
 
 - Create, read, or edit: `office-docx` (Word), `office-pptx` (PowerPoint), or `office-xlsx` (Excel).
 - Images, visual inspection, or tasks primarily about layout, spacing, sizing, or alignment: `office-render`, even without an explicit visual-check request.
