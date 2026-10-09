@@ -1,6 +1,8 @@
 import { Duplex, PassThrough } from 'node:stream'
 import { setImmediate } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
+import { SessionId } from '@deepseek-ai/dsh-session'
+import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { PtcBindingFunction, PtcRunRequest } from '@deepseek-ai/dsh-ptc-runtime'
 import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
@@ -14,7 +16,7 @@ const NO_INITIAL_FRAME = Symbol('no initial frame')
 async function setup(config: Config = {}) {
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose() })
-  const { runtime, fiber } = await mountRuntime(ctx, { ...config, executionMode: 'persistent-in-memory' })
+  const { runtime, fiber } = await mountRuntime(ctx, { ...config, executionMode: config.executionMode ?? 'persistent-in-memory' })
   const control = new Duplex({
     read() {},
     write(chunk: Buffer, _encoding, callback) {
@@ -91,6 +93,32 @@ async function setup(config: Config = {}) {
 function frame(payload: unknown, id = 1) { return { id, payload } }
 function call(id = 1, args: unknown = encodePtcJsonWire(null)) { return frame({ type: 'call', id, global: 'tools', name: 'test', args }) }
 const bound: PtcRunRequest = { ...request, bindings: [{ global: 'tools', functions: { test: async () => 42 } }] }
+
+it.each(['per-call', 'persistent-in-memory'] as const)('cancels a %s call when its Session policy changes before process launch', async (executionMode) => {
+  const h = await setup({ executionMode })
+  const session = h.ctx.sessions.create(SessionId('policy-admission'))
+  const policy = h.ctx.sandboxPolicy.resolve({ session })
+  expect(policy.mode).toBe('danger-full-access')
+  h.receive((message) => {
+    if (typeof message !== 'object' || message === null || !('type' in message)) return
+    const done = { type: 'done', value: encodePtcJsonWire(1) }
+    if (message.type === 'run') h.emit(frame(done))
+    else if (message.type === 'boot') h.emit(done)
+  })
+
+  const pending = h.start({
+    program: executionMode === 'per-call' ? 'return 1' : '1',
+    bindings: [],
+    stateOwner: {},
+    sandboxPolicy: policy,
+  })
+  setSandboxMode(session, 'read-only')
+
+  const result = await pending
+  expect(h.ctx.sandboxPolicy.resolve({ session }).mode).toBe('read-only')
+  expect(result).toMatchObject({ error: { kind: 'abort' } })
+  expect(h.spawn).not.toHaveBeenCalled()
+})
 
 describe('persistent PTC host protocol', () => {
   it.each([
