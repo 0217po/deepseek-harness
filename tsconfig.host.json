@@ -8,6 +8,8 @@
     "rewriteRelativeImportExtensions": false
   },
   "include": [
+    "apps/web/tests/collapse-timing.e2e.ts",
+    "apps/web/tests/chat-flow-layout.e2e.ts",
     "apps/web/product-isolation.ts",
     "apps/web/tests/connection-recovery.e2e.ts",
     "apps/web/tests/server-restart.e2e.ts",
@@ -381,6 +383,7 @@
     { "path": "./packages/subprocess/subprocess" },
     { "path": "./packages/subprocess/subprocess-local" },
     { "path": "./packages/ssh/ssh" },
+    { "path": "./packages/ssh/ssh-helper-runtime" },
     { "path": "./packages/ssh/fs-ssh" },
     { "path": "./packages/ssh/subprocess-ssh" },
     { "path": "./packages/ssh/sandbox-ssh" },
