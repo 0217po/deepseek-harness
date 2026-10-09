@@ -46,9 +46,8 @@ The command plugin accepts separate configuration:
 | `command` | Carrier or installed Kit | Executable and fixed arguments for `dsoffice`; `false` omits that command. |
 | `checkCommand` | Configured Python checker | Executable and fixed arguments for `office-check`; `false` omits that command. |
 | `assetRoot` | Carrier resources or packaged `assets/` | Directory containing the shared checker and skills. |
-| `runtime` | Explicit carrier resources | [Workspace runtime configuration](../tool-workspace-dependencies/README.md) used to prepare the checker interpreter. |
 
-Command overrides require an absolute executable as their first argument. Launchers receive the caller's remaining arguments unchanged and live only while the command plugin is mounted. Windows launchers preserve empty arguments, embedded quotes, trailing backslashes, Unicode paths, and shell pipelines on Windows PowerShell 5.1 and PowerShell 7; PowerShell arrays supplied as one argument become comma-separated text, and pipeline text uses UTF-8 without a byte-order mark. A missing executable returns a nonzero exit code. The shell environment prepends their private directory to each tool call's `PATH`; it does not change the process or user's shell configuration. Disabling a command does not prevent skill loading. `office-check` validates or copies the supplied Python payload on first use when necessary; it is omitted when neither a runtime nor `checkCommand` is supplied. It never downloads an interpreter. The general `load_workspace_dependencies` tool supplies authoring interpreters and libraries independently.
+Command overrides require an absolute executable as their first argument. Launchers receive the caller's remaining arguments unchanged and live only while the command plugin is mounted. Windows launchers preserve empty arguments, embedded quotes, trailing backslashes, Unicode paths, and shell pipelines on Windows PowerShell 5.1 and PowerShell 7; PowerShell arrays supplied as one argument become comma-separated text, and pipeline text uses UTF-8 without a byte-order mark. A missing executable returns a nonzero exit code. The shell environment prepends their private directory to each tool call's `PATH`; it does not change the process or user's shell configuration. Disabling a command does not prevent skill loading. `office-check` directly runs the Python checker with the selected carrier interpreter or explicit `checkCommand`; it is omitted when neither is supplied. The checker uses only Python standard-library modules. Command registration and execution neither prepare nor copy a runtime. The general `load_workspace_dependencies` tool supplies authoring interpreters and libraries independently.
 
 `DSH_PRIMARY_RUNTIME` selects authoring and checker resources. Kit commands use the carrier's Node.js when supplied, otherwise the host Node.js, so Python-only authoring payloads are supported.
 
@@ -110,7 +109,6 @@ PowerShell 5.1 pipeline launches temporarily replace and restore .NET Framework'
 |---|---|
 | [`src/index.ts`](src/index.ts) | Resource registration and unchanged skill bodies. |
 | [`src/commands.ts`](src/commands.ts) | Local launchers, carrier selection, and shell environment contribution. |
-| [`src/check.ts`](src/check.ts) | Private checker invocation using the shared workspace runtime resolver. |
 | [`assets/`](assets/) | Router, six subskills, and read-only OOXML checker. |
 
 </details>

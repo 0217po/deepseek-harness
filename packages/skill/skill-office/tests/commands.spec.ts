@@ -45,13 +45,6 @@ function directory(ctx: Context): string {
   return path.split(delimiter)[0]!
 }
 
-async function checkerRuntime(ctx: Context): Promise<unknown> {
-  const script = await readFile(join(directory(ctx), 'office-check'), 'utf8')
-  const serialized = / '([A-Za-z0-9_-]+)' "\$@"\n$/u.exec(script)?.[1]
-  if (serialized === undefined) throw new Error('Missing serialized checker runtime')
-  return JSON.parse(Buffer.from(serialized, 'base64url').toString('utf8'))
-}
-
 it.skipIf(process.platform === 'win32')('executes the installed capabilities command without Node on PATH', async () => {
   vi.stubEnv('PATH', '')
   const ctx = await context()
@@ -158,27 +151,8 @@ it.each(['win32', 'linux'])('uses bundled interpreters and explicit resources wi
   }
 })
 
-it('uses explicit runtime configuration with the source checker launcher', async () => {
-  vi.stubEnv('DSH_PRIMARY_RUNTIME', join(root, 'primary-runtime'))
-  const runtime = { source: join(root, 'custom-runtime'), root: join(root, 'installed') }
-  const ctx = await context()
-  await ctx.plugin(Commands, { runtime })
-  expect(await checkerRuntime(ctx)).toEqual(runtime)
-})
-
-it('does not acquire a checker runtime for a carrierless profile', async () => {
-  const ctx = await context(), profile = join(root, 'profiles', 'headless')
-  ctx.provide('profileContext', {
-    name: 'headless', dir: profile, patchPath: join(profile, 'cordis.patch.yml'), installAnchor: join(root, 'package.json'),
-    cwd: root, home: root, startedBundles: [], overlays: [], telemetryDisabledEnv: undefined,
-  })
-  await ctx.plugin(Commands)
-  await expect(readFile(join(directory(ctx), 'office-check'))).rejects.toMatchObject({ code: 'ENOENT' })
-  await expect(readdir(join(profile, 'runtimes'))).rejects.toMatchObject({ code: 'ENOENT' })
-})
-
 it('writes PowerShell launchers with literal arguments and the selected checker environment', async () => {
-  const ctx = await context(), configured = await context()
+  const ctx = await context()
   const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
   Object.defineProperty(process, 'platform', { value: 'win32' })
   try {
@@ -190,8 +164,6 @@ it('writes PowerShell launchers with literal arguments and the selected checker 
     expect(launcher.toString('utf8')).toContain("$commandArgs = @('percent%value', 'double\"quote', 'apostrophe''value') + $args")
     expect(launcher.toString('utf8')).toContain("$PSNativeCommandArgumentPassing = 'Legacy'")
     expect(await readFile(join(directory(ctx), 'office-check.ps1'), 'utf8')).toContain('python.exe')
-    Commands.apply(configured, { runtime: { source: join(root, 'custom-runtime') } })
-    expect(await readFile(join(directory(configured), 'office-check.ps1'), 'utf8')).toContain('$env:TSX_TSCONFIG_PATH')
   } finally {
     Object.defineProperty(process, 'platform', platform)
   }

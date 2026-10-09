@@ -233,20 +233,6 @@ export async function installPrimaryRuntime(source: string, root: string): Promi
 }
 
 /**
- * Resolve an existing carrier payload for local consumers without registering a model tool.
- * @param config - Absolute payload source and optional installation directory.
- * @param signal - Cancellation checked before payload validation or copying.
- * @returns Validated interpreter and library paths; file operations run to completion.
- */
-export async function resolveWorkspaceDependencies(config: Config, signal: AbortSignal): Promise<WorkspaceDependencies> {
-  signal.throwIfAborted()
-  if (!isAbsolute(config.source) || (config.root !== undefined && !isAbsolute(config.root))) {
-    throw new Error('workspace dependencies: source and root must be absolute paths')
-  }
-  return config.root === undefined ? resolvePrimaryRuntime(config.source) : installPrimaryRuntime(config.source, config.root)
-}
-
-/**
  * Register the read-only path query; the first invocation prepares (or merely validates) the payload.
  * @param ctx - Tool registry owner.
  * @param config - Payload location and optional installation directory.

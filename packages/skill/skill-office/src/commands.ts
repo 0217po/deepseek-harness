@@ -7,7 +7,6 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import type {} from '@deepseek-ai/dsh-shell-env'
-import { Config as RuntimeConfigSchema, type Config as RuntimeConfig } from '@deepseek-ai/dsh-tool-workspace-dependencies'
 
 /** Local interpreter and resource selection; commands execute in the same host as these resources. */
 export interface Config {
@@ -17,8 +16,6 @@ export interface Config {
   checkCommand?: string[] | false
   /** Directory containing the shared scripts/ and Office skills. */
   assetRoot?: string
-  /** Workspace interpreter selection; defaults to an explicitly supplied carrier payload. */
-  runtime?: RuntimeConfig
 }
 
 /** Validate local command configuration. */
@@ -26,7 +23,6 @@ export const Config: z<Config> = z.object({
   command: z.union([z.array(z.string()).min(1), z.const(false)]),
   checkCommand: z.union([z.array(z.string()).min(1), z.const(false)]),
   assetRoot: z.string().min(1),
-  runtime: RuntimeConfigSchema.extra('default', undefined),
 })
 
 /** Cordis plugin identity. */
@@ -36,18 +32,16 @@ export const inject = ['shellEnv']
 
 function quote(value: string): string { return `'${value.replaceAll("'", "'\\''")}'` }
 
-function writeLauncher(directory: string, name: string, command: readonly string[], sourceConfig?: string): void {
+function writeLauncher(directory: string, name: string, command: readonly string[]): void {
   const executable = command[0]
   if (executable === undefined || !isAbsolute(executable)) throw new Error(`office-commands: ${name} requires an absolute executable`)
   if (command.some(argument => /[\0\r\n]/u.test(argument))) throw new Error('office-commands: command arguments must not contain NUL or newlines')
   const script = join(directory, name)
-  const environment = sourceConfig === undefined ? '' : `export TSX_TSCONFIG_PATH=${quote(sourceConfig)}\n`
-  writeFileSync(script, `#!/bin/sh\n${environment}exec ${command.map(quote).join(' ')} "$@"\n`, { mode: 0o700, flag: 'wx' })
+  writeFileSync(script, `#!/bin/sh\nexec ${command.map(quote).join(' ')} "$@"\n`, { mode: 0o700, flag: 'wx' })
   chmodSync(script, 0o700)
   if (process.platform === 'win32') {
     const literal = (value: string): string => `'${value.replaceAll("'", "''")}'`
     const args = command.slice(1).map(literal).join(', ')
-    const environment = sourceConfig === undefined ? '' : `$env:TSX_TSCONFIG_PATH = '${sourceConfig.replaceAll("'", "''")}'\n`
     // Windows PowerShell counts escaped quotes when deciding whether to wrap an argument; doubled quotes keep each value enclosed.
     const nativeArguments = String.raw`$quoteReplacement = if ($PSVersionTable.PSVersion.Major -le 5) { '$1$1""' } else { '$1$1\"' }
 $nativeArgs = @(foreach ($argument in $commandArgs) {
@@ -62,7 +56,7 @@ if ($MyInvocation.ExpectingInput -and $PSVersionTable.PSVersion.Major -le 5) {
   if ($null -eq $inputEncodingField) { throw 'office-commands: Windows PowerShell input encoding field is unavailable' }
   $savedInputEncoding = $inputEncodingField.GetValue($null)
 }`
-    writeFileSync(`${script}.ps1`, `\ufeff${environment}$PSNativeCommandArgumentPassing = 'Legacy'\n`
+    writeFileSync(`${script}.ps1`, '\ufeff$PSNativeCommandArgumentPassing = \'Legacy\'\n'
       + '$OutputEncoding = [System.Text.UTF8Encoding]::new($false)\n'
       + `$commandArgs = @(${args}) + $args\n${nativeArguments}\n${inputEncoding}\n$global:LASTEXITCODE = 127\ntry {\n`
       + '  if ($null -ne $inputEncodingField) { $inputEncodingField.SetValue($null, $OutputEncoding) }\n'
@@ -84,21 +78,12 @@ export function apply(ctx: Context, config: Config = {}): void {
   const node = process.env.DSH_BUNDLED_OFFICE_NODE ?? (carrierRuntime ? join(carrierRuntime, 'dependencies/node/bin', process.platform === 'win32' ? 'node.exe' : 'node') : process.execPath)
   const assetRoot = config.assetRoot ?? process.env.DSH_BUNDLED_OFFICE_SKILLS ?? (bundled ? join(dirname(bundled), 'office-skills') : fileURLToPath(new URL('../assets/', import.meta.url)))
   if (!isAbsolute(assetRoot)) throw new Error('office-commands: assetRoot must be an absolute directory')
-  const runtime = config.runtime ?? (bundled ? { source: bundled } : undefined)
   const kit = config.command ?? (process.env.DSH_BUNDLED_OFFICE_CLI === '' ? false : [node, process.env.DSH_BUNDLED_OFFICE_CLI
     ?? join(dirname(fileURLToPath(import.meta.resolve('@deepseek-ai/libreoffice-kit/package.json'))), 'lib/cli.js')])
-  const source = import.meta.url.endsWith('.ts')
   const checker = join(assetRoot, 'scripts/check_office.py')
-  const check = config.checkCommand ?? (runtime === undefined ? false : bundled && config.runtime === undefined
+  const check = config.checkCommand ?? (bundled
     ? [join(bundled, 'dependencies/python', process.platform === 'win32' ? 'python.exe' : 'bin/python3'), checker]
-    : [
-      node,
-      /* v8 ignore start -- source-unit coverage cannot change import.meta.url; commands.built.e2e.ts executes check.js without tsx. */
-      ...(source ? ['--import', import.meta.resolve('tsx/esm')] : []),
-      fileURLToPath(new URL(source ? './check.ts' : './check.js', import.meta.url)),
-      /* v8 ignore stop */
-      checker, Buffer.from(JSON.stringify(runtime)).toString('base64url'),
-    ])
+    : false)
   const parent = join(resolveDshHome(), 'commands')
   mkdirSync(parent, { recursive: true, mode: 0o700 })
   // Windows mkdtemp needs extended paths; shell PATH keeps ordinary absolute directories.
@@ -120,8 +105,7 @@ export function apply(ctx: Context, config: Config = {}): void {
   }
   try {
     if (kit !== false) writeLauncher(directory, 'dsoffice', shortCommand(kit))
-    if (check !== false) writeLauncher(directory, 'office-check', shortCommand(check),
-      source && (!bundled || config.runtime !== undefined) && config.checkCommand === undefined ? fileURLToPath(new URL('../../../../tsconfig.base.json', import.meta.url)) : undefined)
+    if (check !== false) writeLauncher(directory, 'office-check', shortCommand(check))
     ctx.effect(() => () => { removeDirectories() })
     ctx.shellEnv.register({ name, commandDirectories: [directory], variables: {}, resolve: () => ({}) })
   } catch (error) {

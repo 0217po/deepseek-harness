@@ -425,16 +425,3 @@ it.each(['flat', 'legacy'])('rejects pnpm without a Node.js interpreter in %s me
   const { node: _node, ...input } = manifest
   expect(() => parsePrimaryRuntime(format === 'legacy' ? legacyManifest(input) : input)).toThrow('invalid metadata')
 })
-
-it('resolves checker resources from existing payloads and rejects cancellation or relative directories', async () => {
-  const { source, root, manifest } = await fixture()
-  const signal = new AbortController().signal
-  expect(await workspaceDependencies.resolveWorkspaceDependencies({ source }, signal)).toEqual(workspaceDependencyPaths(source, manifest))
-  expect(await workspaceDependencies.resolveWorkspaceDependencies({ source, root }, signal))
-    .toEqual(workspaceDependencyPaths(root, manifest))
-  await expect(workspaceDependencies.resolveWorkspaceDependencies({ source }, AbortSignal.abort(new Error('cancelled'))))
-    .rejects.toThrow('cancelled')
-  for (const config of [{ source: 'relative' }, { source, root: 'relative' }]) {
-    await expect(workspaceDependencies.resolveWorkspaceDependencies(config, signal)).rejects.toThrow('absolute paths')
-  }
-})
