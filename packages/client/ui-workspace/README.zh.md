@@ -51,7 +51,7 @@ kind: "package-reference"
 
 ### 管理会话
 
-Session 行“...”菜单的最后一个内置项为“查看 Session ID”。它打开只读对话框，显示并全选完整 ID，支持手动复制和“复制”按钮。复制成功或失败通过全局提示反馈；失败时 ID 仍可手动选中。查看和复制不会 retain 会话、加载历史或调用 Host。“关闭”按钮、对话框关闭图标和 Escape 均可关闭对话框。
+Session 行“...”菜单的最后一个内置项为“查看 Session ID”。它打开只读对话框，以单行输入框显示 ID，右侧提供“复制”按钮，并全选完整 ID 供手动复制。复制成功或失败通过全局提示反馈；失败时 ID 仍可手动选中。查看和复制不会 retain 会话、加载历史或调用 Host。“关闭”按钮、对话框关闭图标和 Escape 均可关闭对话框。
 
 Session 行内的 Rename 操作打开一个以该行显示标题预填的对话框；确认未修改的标题是有意允许的——这正是把当前自动标题钉住、不再被重新生成覆盖的手势。双击标题也会打开 Rename；对于未归档 Session，先发生的点击会打开其对话。Rename 使用临时 `workspaceOperation` reference，并等待首次历史打开。行内 Fork 正常读取普通冷历史。Host 报告源会话需要迁移时，应用级 Toast 提供打开该会话的操作；该操作仅导航，不重试 fork。成功的 fork 在源会话最后一个已完成轮次处创建分支，通过 Session Controller 递增继承的持久化标题，不 retain 子会话、不打开其历史，也不改变选择。Workspace 行内的 Delete 操作会打开确认框，说明保留边界；成功后该分组被移除，其 Session 则留在 Ungrouped 下。Pin、Rename、Fork、Archive 和查看 Session ID 本身就是 `sidebar.workspaces.session.menu.item` 列表的条目（pin 与 archive 同时也是 `sidebar.workspaces.session.row.action` 的条目），因此客户端插件的 action 由其 `order` 决定落在哪个位置。
 

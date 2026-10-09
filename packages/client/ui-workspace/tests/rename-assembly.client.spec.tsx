@@ -143,11 +143,12 @@ describe('session rename through the assembled browser', () => {
     fireEvent.click(trigger)
     fireEvent.click(view.getByRole('menuitem', { name: '查看 Session ID' }))
     expect(view.queryByRole('menu')).toBeNull()
-    const field = await view.findByRole('textbox', { name: 'Session ID' }) as HTMLTextAreaElement
+    const field = await view.findByRole('textbox', { name: 'Session ID' }) as HTMLInputElement
     expect(field.value).toBe(SID)
     expect(field.readOnly).toBe(true)
     fireEvent.focus(field)
-    expect(field.selectionEnd - field.selectionStart).toBe(SID.length)
+    expect(field.selectionStart).toBe(0)
+    expect(field.selectionEnd).toBe(SID.length)
     fireEvent.keyDown(field, { key: 'Escape' })
     await waitFor(() => { expect(view.queryByRole('dialog', { name: 'Session ID' })).toBeNull() })
     await runtime.dispose()

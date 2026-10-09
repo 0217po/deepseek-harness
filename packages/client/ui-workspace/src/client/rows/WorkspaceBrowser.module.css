@@ -568,10 +568,19 @@
   color: var(--dsw-alias-label-primary);
 }
 
+.sessionIdRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .sessionIdValue {
-  height: auto;
-  resize: none;
-  overflow-wrap: anywhere;
+  flex: 1;
+  min-width: 0;
+}
+
+.sessionIdRow > button {
+  flex-shrink: 0;
 }
 
 .renameInput:disabled {

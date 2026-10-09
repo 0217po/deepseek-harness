@@ -86,8 +86,15 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
     expect(await idField.inputValue()).toBe(sessionId)
     expect(await idField.getAttribute('readonly')).not.toBeNull()
     await idField.focus()
-    expect(await idField.evaluate((element: HTMLTextAreaElement) =>
-      element.value.slice(element.selectionStart, element.selectionEnd))).toBe(sessionId)
+    expect(await idField.evaluate((element: HTMLInputElement) =>
+      element.value.slice(element.selectionStart ?? 0, element.selectionEnd ?? 0))).toBe(sessionId)
+    const copyButton = idDialog.getByRole('button', { name: 'Copy', exact: true })
+    const fieldBox = await idField.boundingBox()
+    const copyBox = await copyButton.boundingBox()
+    expect(fieldBox).not.toBeNull()
+    expect(copyBox).not.toBeNull()
+    expect(copyBox!.x).toBeGreaterThanOrEqual(fieldBox!.x + fieldBox!.width)
+    expect(Math.abs(copyBox!.y + copyBox!.height / 2 - fieldBox!.y - fieldBox!.height / 2)).toBeLessThan(2)
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
     await idDialog.getByRole('button', { name: 'Copy', exact: true }).click()
     await page.getByRole('alert').filter({ hasText: 'Session ID copied' }).waitFor()

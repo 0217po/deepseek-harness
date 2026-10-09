@@ -135,7 +135,11 @@ describe('Session ID action', () => {
     const settleSessionId = vi.fn()
     render(<SessionIdDialog {...overlay} t={translate} useSessionIdRequest={hook(sessionId)}
       settleSessionId={settleSessionId} copySessionId={copySessionId} />)
-    const field = screen.getByRole('textbox', { name: 'Session ID' }) as HTMLTextAreaElement
+    const field = screen.getByRole('textbox', { name: 'Session ID' }) as HTMLInputElement
+    const copy = screen.getByRole('button', { name: translate('copy') })
+    expect(field.tagName).toBe('INPUT')
+    expect(field.nextElementSibling).toBe(copy)
+    expect(screen.getAllByRole('button', { name: translate('copy') })).toHaveLength(1)
     expect(field.value).toBe(sessionId)
     expect(field.readOnly).toBe(true)
     fireEvent.focus(field)

@@ -34,23 +34,20 @@ export function SessionIdDialog({ useSessionIdRequest, settleSessionId, copySess
       onClose={settleSessionId}
       closeLabel={t('close')}
       title={t('sessionId.title')}
-      footer={(
-        <>
-          <Button variant="outline" onClick={settleSessionId}>{t('close')}</Button>
-          <Button variant="primary" onClick={() => { void copySessionId(sessionId) }}>{t('copy')}</Button>
-        </>
-      )}
+      footer={<Button variant="outline" onClick={settleSessionId}>{t('close')}</Button>}
     >
-      <textarea
-        key={sessionId}
-        className={css.sessionIdValue}
-        aria-label={t('sessionId.title')}
-        readOnly
-        rows={3}
-        value={sessionId}
-        data-modal-autofocus
-        onFocus={(event) => { event.currentTarget.select() }}
-      />
+      <div className={css.sessionIdRow}>
+        <input
+          key={sessionId}
+          className={css.sessionIdValue}
+          aria-label={t('sessionId.title')}
+          readOnly
+          value={sessionId}
+          data-modal-autofocus
+          onFocus={(event) => { event.currentTarget.select() }}
+        />
+        <Button variant="outline" onClick={() => { void copySessionId(sessionId) }}>{t('copy')}</Button>
+      </div>
     </Modal>
   )
 }
