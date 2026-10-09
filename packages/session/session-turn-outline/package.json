@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-turn-outline",
   "description": "Whole-log turn outline projection (turnOutline) for the DeepSeek Harness",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -42,7 +42,7 @@
     "@deepseek-ai/dsh-session-projection": "workspace:*"
   },
   "dependencies": {
-    "zod": "^4.4.3"
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",

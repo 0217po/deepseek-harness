@@ -73,11 +73,11 @@ Client business code may statically read `process.env.DSH_CLIENT_*`; every refer
 
 ## Shared modules and the module graph
 
-A dynamic browser half either carries a module privately or requests the shared module-table identity. The client baseline is centralized in [`web/src/platform.ts`](web/src/platform.ts): `PLATFORM_MODULES` names shell-seeded React, Cordis, and static Client libraries; `PRELOADED_CLIENT_EXTERNALS` is reserved for dynamic rows whose factories must arrive before shell boot and is empty when no such row exists.
+A dynamic browser half either carries a module privately or requests the shared module-table identity. The client baseline is centralized in [`web/src/platform.ts`](web/src/platform.ts): `PLATFORM_MODULES` names shell-seeded React, Cordis, selected third-party libraries, and static Client libraries; `PRELOADED_CLIENT_EXTERNALS` is reserved for dynamic rows whose factories must arrive before shell boot and is empty when no such row exists.
 
-1. **Baseline externals are implicit for every dynamic bundle.** Do not repeat React, Cordis, `client/store`, `ui-primitives`, `ui-slots`, or `ui-dockkit` in package manifests.
+1. **Baseline externals are implicit for every dynamic bundle.** Do not repeat entries from `PLATFORM_MODULES` in `dsh.client.external`; npm dependency declarations still follow the dependency rules above.
 2. **`dsh.client.external` is not a feature-plugin dependency mechanism.** Only infrastructure, transport, or generated assembly may add a package-specific non-baseline value request whose dynamic row must be materialized through the module table. Declare the exact import specifier; only a trailing `/client` aliases the package row.
-3. **Silence means a private copy.** Ordinary third-party implementation libraries may be bundled independently. A value reached only through `import type` is erased and creates no request.
+3. **Silence means a private copy.** Third-party implementation libraries outside the baseline may be bundled independently. A value reached only through `import type` is erased and creates no request.
 4. **A request has two possible suppliers.** A dynamic package supplies its own row; `PLATFORM_MODULES` supplies an exact static-table key. There is no `dsh.client.provide` alias protocol.
 5. **Validate both sides.** The dynamic build preset externalizes the baseline and rejects undeclared workspace value imports; [`verify-client-packages`](../../scripts/verify-client-packages.ts) rejects malformed or redundant requests, missing suppliers, and synchronous request cycles.
 6. **Package-local dynamic chunks are self-contained.** Source uses `import()` and the shared preset emits `require.async("./client.<name>.js")`; an entry or chunk must not retain a synchronous relative `require("./client*.js")`. Keep every static relative dependency inside its owning output chunk rather than relying on a sibling-chunk graph the runtime does not support.
