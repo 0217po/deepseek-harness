@@ -453,7 +453,7 @@ describe('native helper transport', () => {
     const reportDiagnostic = vi.fn()
     const f = fixture({ reportDiagnostic })
     const pending = f.client.request('screenshot', {}, new AbortController().signal, ToolCallId('capture'))
-    for (let index = 0; index < 100; index++) {
+    for (let index = 0; index < 200; index++) {
       f.reply({ type: 'diagnostic', requestId: 'capture', stage: `phase-${index}`, elapsedMs: index })
     }
     f.reply({ id: 'capture', result: { data: 'image' } })
@@ -461,7 +461,7 @@ describe('native helper transport', () => {
     const retained = reportDiagnostic.mock.calls.map(call => call[0]).find(value => value.includes('discarded'))
     expect(retained).toContain('Earlier screenshot diagnostic records were discarded')
     expect(retained).not.toContain('"stage":"phase-0"')
-    expect(retained).toContain('"stage":"phase-99"')
+    expect(retained).toContain('"stage":"phase-199"')
     expect(Buffer.byteLength(retained!.split('\n').slice(1).join(''))).toBeLessThanOrEqual(8192)
     expect(reportDiagnostic.mock.calls.flat().join('\n')).toContain('host.reply')
   })

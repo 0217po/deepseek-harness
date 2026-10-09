@@ -60,7 +60,10 @@ func refusesInvalidSharedConfiguration(_ name: String, _ value: JSONValue) throw
     defer { try? FileManager.default.removeItem(atPath: directory) }
     var first = try SharedHelperLock(path: options.versionLockPath)
     #expect(first != nil)
-    try withExtendedLifetime(first) { #expect(try SharedHelperLock(path: options.versionLockPath) == nil) }
+    try withExtendedLifetime(first) {
+        let competing = try SharedHelperLock(path: options.versionLockPath)
+        #expect(competing == nil)
+    }
     first = nil
     let successor = try SharedHelperLock(path: options.versionLockPath)
     #expect(successor != nil)

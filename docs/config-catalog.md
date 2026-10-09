@@ -813,6 +813,10 @@ export interface Config {
   buildTimeoutMs: number
   /** Deadline for one native operation, including capture and AX traversal. */
   timeoutMs: number
+  /** Maximum time to connect to or start the shared native helper. */
+  connectTimeoutMs: number
+  /** Screenshot deadline including time queued behind other native operations. */
+  screenshotTimeoutMs: number
   /** Deadline for each individual Accessibility system call. */
   axTimeoutMs: number
   /** Maximum bytes retained for one helper response frame. */
@@ -829,7 +833,7 @@ export interface Config {
   dragSteps: number
   /** Delay in milliseconds after each Unicode key-down or key-up event. */
   textEventIntervalMs: number
-  /** Managed process termination grace in milliseconds. */
+  /** Agent connection cleanup and native launcher termination grace in milliseconds. */
   graceMs: number
   /** Maximum nodes admitted by a native accessibility snapshot. */
   maxElements: number

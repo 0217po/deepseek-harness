@@ -47,6 +47,7 @@ async function fixture(options: {
 } = {}) {
   const root = await mkdtemp('/tmp/cua-')
   const sockets = new Set<Socket>()
+  const peerClosures: Promise<void>[] = []
   const channels: NativeChannel[] = []
   const server = createServer({ allowHalfOpen: true })
   runtime.source = `/tmp/dsh-cua-${userInfo().uid}`
@@ -79,8 +80,10 @@ async function fixture(options: {
   const helloWaiters: (() => void)[] = []
   server.on('connection', (socket) => {
     sockets.add(socket)
+    const closed: PromiseWithResolvers<void> = Promise.withResolvers()
+    peerClosures.push(closed.promise)
     socket.on('error', () => {})
-    socket.on('close', () => { sockets.delete(socket) })
+    socket.on('close', () => { sockets.delete(socket); closed.resolve() })
     socket.on('end', () => {
       if (options.close) options.close(socket)
       else socket.end()
@@ -138,7 +141,9 @@ async function fixture(options: {
   async function waitHello(count: number): Promise<void> {
     while (hellos.length < count) await new Promise<void>((resolve) => { helloWaiters.push(resolve) })
   }
-  return { open, config, spawn, spawned: spawned.promise, handles, hellos, waitHello, operations, sockets, socketPath, listen }
+  return {
+    open, config, spawn, spawned: spawned.promise, handles, hellos, waitHello, operations, sockets, peerClosures, socketPath, listen,
+  }
 }
 
 function write(channel: NativeChannel, text: string): Promise<void> {
@@ -291,6 +296,40 @@ describe.skipIf(process.platform === 'win32')('shared native Unix connection', (
     expect(f.hellos).toHaveLength(0)
   })
 
+  it('reports non-Error provider failures through the Error stream without losing their cause', async () => {
+    const f = await fixture({ launch: () => ({ ...launcherFixture(), done: Promise.reject('provider unavailable') }) })
+    const channel = f.open()
+    await expect(channel.done).rejects.toMatchObject({ code: 'NATIVE_CONNECT', cause: 'provider unavailable' })
+    await channel.waitForClose()
+  })
+
+  it('rejects an unsuccessful launcher with no captured stderr', async () => {
+    const f = await fixture({ launch: () => ({ ...launcherFixture(), done: Promise.resolve({ exitCode: 1, signal: null }) }) })
+    const channel = f.open()
+    await expect(channel.done).rejects.toThrow('Native launcher failed (exit 1, signal null)')
+    await channel.waitForClose()
+  })
+
+  it('preserves runtime-directory creation errors before starting any native process', async () => {
+    const f = await fixture({ listen: false })
+    runtime.directory = join(f.config.cwd, 'absent-parent', 'runtime')
+    const channel = f.open()
+    await expect(channel.done).rejects.toMatchObject({ code: 'ENOENT' })
+    await channel.waitForClose()
+    expect(f.spawn).not.toHaveBeenCalled()
+  })
+
+  it('handles cancellation dispatched synchronously by the managed launcher provider', async () => {
+    const f = await fixture({ launch: () => {
+      channel.close()
+      return launcherFixture()
+    } })
+    const channel = f.open()
+    await expect(channel.done).rejects.toMatchObject({ code: 'NATIVE_CLOSED' })
+    await channel.waitForClose()
+    expect(f.hellos).toHaveLength(0)
+  })
+
   it('bounds a peer that accepts the socket but never completes its handshake', async () => {
     const f = await fixture({ ready: () => {} })
     vi.useFakeTimers()
@@ -331,6 +370,69 @@ describe.skipIf(process.platform === 'win32')('shared native Unix connection', (
     await expect(channel.waitForClose()).rejects.toMatchObject({ code: 'NATIVE_CLEANUP' })
     await expect(channel.done).rejects.toMatchObject({ code: 'NATIVE_CLEANUP' })
     expect(f.handles[0]?.terminate).not.toHaveBeenCalled()
+  })
+
+  it('rejects new writes while awaiting the peer cleanup acknowledgement', async () => {
+    const eof = Promise.withResolvers<Socket>()
+    const f = await fixture({ close: (socket) => { eof.resolve(socket) } })
+    const channel = f.open()
+    const reply = nextBytes(channel)
+    await write(channel, 'before-close\n')
+    await reply
+    channel.close()
+    const peer = await eof.promise
+    await expect(write(channel, 'after-close\n')).rejects.toMatchObject({ code: 'NATIVE_CLOSED' })
+    peer.end()
+    await channel.waitForClose()
+    expect(f.operations).toEqual(['before-close'])
+  })
+
+  it('contains a synchronous socket write failure and releases the connection', async () => {
+    const f = await fixture()
+    const channel = f.open()
+    const reply = nextBytes(channel)
+    await write(channel, 'before-failure\n')
+    await reply
+    const failure = new Error('socket rejected write')
+    const socketWrite = vi.spyOn(Socket.prototype, 'write').mockImplementationOnce(() => { throw failure })
+    try { await expect(write(channel, 'never\n')).rejects.toBe(failure) }
+    finally { socketWrite.mockRestore() }
+    await channel.waitForClose()
+    expect(f.operations).toEqual(['before-failure'])
+  })
+
+  it('allows the stdin end operation to release the Agent scope', async () => {
+    const f = await fixture()
+    const channel = f.open()
+    const reply = nextBytes(channel)
+    await write(channel, 'last\n')
+    await reply
+    channel.stdin.end()
+    await channel.waitForClose()
+    await channel.done
+    await Promise.all(f.peerClosures)
+    expect(f.sockets.size).toBe(0)
+  })
+
+  it('reports when a cancelled startup command does not release its managed range', async () => {
+    const outcome = Promise.withResolvers<SubprocessOutcome>()
+    const range = Promise.withResolvers<boolean>()
+    const f = await fixture({ launch: () => ({ ...launcherFixture(), done: outcome.promise,
+      waitForExit: () => range.promise,
+      terminate: () => { outcome.resolve({ exitCode: null, signal: 'SIGTERM' }) },
+    }) })
+    const channel = f.open()
+    await f.spawned
+    vi.useFakeTimers()
+    try {
+      channel.close()
+      await vi.advanceTimersByTimeAsync(f.config.graceMs)
+      await expect(channel.done).rejects.toMatchObject({ code: 'NATIVE_CLEANUP' })
+      await expect(channel.waitForClose()).rejects.toMatchObject({ code: 'NATIVE_CLEANUP' })
+    } finally {
+      range.resolve(true)
+      vi.useRealTimers()
+    }
   })
 
   it('bounds launcher retries while the listener remains absent', async () => {
@@ -424,9 +526,9 @@ describe.skipIf(process.platform === 'win32')('shared native Unix connection', (
     const emit = kind === 'reset' ? vi.spyOn(Socket.prototype, 'emit').mockImplementation(function (this: Socket, event: string | symbol, ...args: unknown[]) {
       if (!injected && event === 'end') {
         injected = true
-        originalEmit.call(this, 'error', Object.assign(new Error('peer reset during admission'), { code: 'ECONNRESET' }))
+        Reflect.apply(originalEmit, this, ['error', Object.assign(new Error('peer reset during admission'), { code: 'ECONNRESET' })])
       }
-      return originalEmit.call(this, event, ...args)
+      return Reflect.apply(originalEmit, this, [event, ...args]) === true
     }) : undefined
     try {
       const channel = f.open()
