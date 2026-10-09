@@ -79,11 +79,12 @@ import Darwin
         let seconds = parsed?.method == "screenshot"
             ? min(configuration.timeoutSeconds, configuration.screenshotTimeoutSeconds) : configuration.timeoutSeconds
         let grace = configuration.shutdownGraceSeconds
+        let axTimeout = Double(configuration.axTimeoutSeconds)
         let onFatal = self.onFatal
         let channel = self.channel
         deadline = NativeDeadline(seconds: seconds) {
             trace?.mark("helper.deadline", errorCode: "NATIVE_TIMEOUT")
-            control.cancel(NativeFailure(code: "NATIVE_TIMEOUT", message: "Native operation exceeded its deadline"), grace: grace,
+            control.cancel(NativeFailure(code: "NATIVE_TIMEOUT", message: "Native operation exceeded its deadline"), grace: grace, axTimeout: axTimeout,
                 unresponsive: {
                     onFatal(NativeFailure(code: "NATIVE_UNRESPONSIVE", message: "Native operation did not stop after cancellation"), grace)
                 }, blockedReply: { channel.shutdown() })
@@ -98,7 +99,8 @@ import Darwin
                 requestID = .string(request.id)
                 if request.method == "screenshot" { try self.capture.requireAvailable() }
                 let result = try await self.scheduler.perform(cancellation: self.cancellation) {
-                    try await self.execute(request, trace: trace)
+                    control.startOperation()
+                    return try await self.execute(request, trace: trace)
                 }
                 if let failure = control.failure { throw failure }
                 response = .object(["id": requestID, "result": result])
@@ -151,7 +153,7 @@ import Darwin
         let grace = configuration.shutdownGraceSeconds
         let onFatal = self.onFatal
         let channel = self.channel
-        requestControl?.cancel(failure, grace: grace, unresponsive: {
+        requestControl?.cancel(failure, grace: grace, axTimeout: Double(configuration.axTimeoutSeconds), unresponsive: {
             onFatal(NativeFailure(code: "NATIVE_UNRESPONSIVE", message: "Native operation did not stop after cancellation"), grace)
         }, blockedReply: { channel.shutdown() })
     }

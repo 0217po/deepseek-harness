@@ -106,6 +106,7 @@ final class SharedSocket: @unchecked Sendable {
     let descriptor: Int32
     private let lock = NSLock()
     private var stopped = false
+    private var nonblocking = false
     init(descriptor: Int32) {
         self.descriptor = descriptor
         var enabled: Int32 = 1
@@ -135,6 +136,13 @@ final class SharedSocket: @unchecked Sendable {
         while true {
             let count = Darwin.read(retained, bytes.baseAddress, bytes.count)
             if count < 0 && errno == EINTR { continue }
+            if count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) {
+                var item = pollfd(fd: retained, events: Int16(POLLIN), revents: 0)
+                let ready = poll(&item, 1, -1)
+                if ready < 0 && errno == EINTR { continue }
+                guard ready > 0 else { throw Self.failure("Waiting for helper socket input") }
+                continue
+            }
             guard count >= 0 else { throw Self.failure("Reading helper socket") }
             return count
         }
@@ -146,7 +154,14 @@ final class SharedSocket: @unchecked Sendable {
             while offset < bytes.count {
                 let (count, error): (Int, Int32) = try lock.withLock {
                     guard !stopped else { throw NativeFailure(code: "NATIVE_IO", message: "Helper socket is closed") }
-                    // A nonblocking send keeps close independent of a client that stopped reading.
+                    if !nonblocking {
+                        let flags = fcntl(descriptor, F_GETFL, 0)
+                        guard flags >= 0, fcntl(descriptor, F_SETFL, flags | O_NONBLOCK) == 0 else {
+                            throw Self.failure("Configuring nonblocking helper socket")
+                        }
+                        nonblocking = true
+                    }
+                    // O_NONBLOCK also bounds large AF_UNIX sends that ignore MSG_DONTWAIT on macOS.
                     let count = Darwin.send(descriptor, bytes.baseAddress!.advanced(by: offset), bytes.count - offset, MSG_DONTWAIT)
                     return (count, errno)
                 }

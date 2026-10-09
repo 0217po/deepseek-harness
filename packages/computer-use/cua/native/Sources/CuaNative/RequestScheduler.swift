@@ -71,6 +71,7 @@ final class NativeRequestControl: @unchecked Sendable {
     private let lock = NSLock()
     private var task: Task<Void, Never>?
     private var reason: NativeFailure?
+    private var operationStarted = false
     private var operationDone = false
     private var completed = false
 
@@ -80,9 +81,10 @@ final class NativeRequestControl: @unchecked Sendable {
         if cancel { task.cancel() }
     }
     func finishOperation() { lock.withLock { operationDone = true } }
+    func startOperation() { lock.withLock { operationStarted = true } }
     func finish() { lock.withLock { completed = true; task = nil } }
 
-    func cancel(_ failure: NativeFailure, grace: Double,
+    func cancel(_ failure: NativeFailure, grace: Double, axTimeout: Double,
                 unresponsive: @escaping @Sendable () -> Void, blockedReply: @escaping @Sendable () -> Void) {
         let cancellation: (Bool, Task<Void, Never>?) = lock.withLock {
             guard !completed, reason == nil else { return (false, nil) }
@@ -92,10 +94,14 @@ final class NativeRequestControl: @unchecked Sendable {
         guard cancellation.0 else { return }
         cancellation.1?.cancel()
         _ = NativeDeadline(seconds: grace) { [self] in
-            let state = lock.withLock { (completed, operationDone) }
+            let state = lock.withLock { (completed, operationStarted, operationDone) }
+            if !state.0 && (!state.1 || state.2) { blockedReply() }
+        }
+        _ = NativeDeadline(seconds: axTimeout + grace) { [self] in
+            let state = lock.withLock { (completed, operationStarted, operationDone) }
             guard !state.0 else { return }
-            if state.1 { blockedReply() }
-            else { unresponsive() }
+            if state.1 && !state.2 { unresponsive() }
+            else { blockedReply() }
         }
     }
 }
