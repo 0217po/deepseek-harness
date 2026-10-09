@@ -603,6 +603,46 @@ describe('RowActionToast', () => {
     expect(screen.getByRole('alert').textContent).toBe(translate('toast.sessionIdCopyFailed'))
   })
 
+  it.each([t, tEn])('replaces other notices with plain shortcut fork failures and only keeps the latest', (translate) => {
+    vi.useFakeTimers()
+    try {
+      const { dismissToast, notify } = toastSurface(undefined, translate)
+      notify({ kind: 'archived', sessionId: sid('one') })
+      act(() => { vi.advanceTimersByTime(1000) })
+      notify({ kind: 'shortcutForkFailed', reason: 'unavailable' })
+      const first = screen.getByRole('alert')
+      expect(first.textContent).toBe(translate('shortcut.noCompletedTurn'))
+      expect(first.querySelector('svg')).toBeNull()
+      expect(first.querySelector('button')).toBeNull()
+      act(() => { vi.advanceTimersByTime(3000) })
+      expect(screen.getByRole('alert')).toBe(first)
+      notify({ kind: 'shortcutForkFailed', reason: 'failed' })
+      const retry = screen.getByRole('alert')
+      expect(retry).not.toBe(first)
+      expect(retry.textContent).toBe(translate('shortcut.forkFailed'))
+      expect(retry.querySelector('svg')).toBeNull()
+      act(() => { vi.advanceTimersByTime(3999) })
+      expect(screen.getAllByRole('alert')).toEqual([retry])
+      expect(dismissToast).not.toHaveBeenCalled()
+      act(() => { vi.advanceTimersByTime(1) })
+      expect(dismissToast).toHaveBeenCalledOnce()
+      expect(screen.queryByRole('alert')).toBeNull()
+
+      notify({ kind: 'shortcutForkFailed', reason: 'failed' })
+      act(() => { vi.advanceTimersByTime(1000) })
+      notify({ kind: 'sessionIdCopied' })
+      const latest = screen.getByRole('alert')
+      expect(latest.textContent).toBe(translate('toast.sessionIdCopied'))
+      act(() => { vi.advanceTimersByTime(3000) })
+      expect(screen.getAllByRole('alert')).toEqual([latest])
+      expect(dismissToast).toHaveBeenCalledOnce()
+      act(() => { vi.advanceTimersByTime(1000) })
+      expect(screen.queryByRole('alert')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('the stopped-and-archived notice offers the same undo and filter actions under its own wording', () => {
     const { undoArchive, notify } = toastSurface()
     notify({ kind: 'stoppedAndArchived', sessionId: sid('one') })

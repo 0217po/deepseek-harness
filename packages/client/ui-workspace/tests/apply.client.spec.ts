@@ -9,6 +9,7 @@ import type { WorkspaceId, WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ShortcutCommand } from '@deepseek-ai/dsh-client-shortcuts/client'
 import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-workspace/client'
@@ -54,7 +55,14 @@ const workspaceState = (
 
 async function bench() {
   const ctx = new Context()
-  ctx.provide('shortcuts', { register: () => () => {}, catalog: createSnapshotStore([]) })
+  const commands = new Map<string, ShortcutCommand>()
+  ctx.provide('shortcuts', {
+    register: (command: ShortcutCommand) => {
+      commands.set(command.id, command)
+      return () => { commands.delete(command.id) }
+    },
+    catalog: createSnapshotStore([]),
+  })
   ctx.provide('uiConversation', {})
   await ctx.plugin(SlotRegistry).await()
   const create = vi.fn(async (input: { name: string } | { path: string }) => ({
@@ -149,7 +157,7 @@ async function bench() {
   locale.setLocale('zh')
   ctx.provide('locale', locale)
   return {
-    ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, rename,
+    ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, rename, commands,
     retain, using, selectPanel, search, renameSession, binding, fork, pickDirectory, pinSession, unpinSession,
     workspacesSubscribe, initializeDefault, history, scope, sessionOf,
     setWorkspaces: (snapshot: WorkspaceSnapshot): void => { workspaceSnapshot = snapshot },
@@ -170,6 +178,9 @@ function declare(slots: SlotRegistry, ...names: HoleName[]): () => void {
   ]))
   return slots.register({ name: 'root', children } as never, () => null)
 }
+
+/** Own the sidebar declaration independently of the frame-wide overlay in lifecycle tests. */
+function SidebarDeclarationOwner() { return null }
 
 /** The one entry registered under `id` in a list. */
 function entry(slots: SlotRegistry, key: RowListName, id: string): StoredEntry {
@@ -319,6 +330,57 @@ describe('ui-workspace apply', () => {
     expect(b.retain).not.toHaveBeenCalled()
     expect(b.using).not.toHaveBeenCalled()
     expect(b.binding).not.toHaveBeenCalled()
+  })
+
+  it('publishes shortcut fork failures through the same latest-notice source as row actions', async () => {
+    const b = await bench()
+    onTestFinished(() => b.ctx.fiber.dispose())
+    declare(b.slots, 'shell.overlay')
+    const removeBrowser = b.slots.register({
+      name: 'shell.overlay', id: 'test-sidebar-owner',
+      children: { 'sidebar.workspaces': { kind: 'single', scope: 'root' } },
+    }, SidebarDeclarationOwner)
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    b.setSessions(sessionState([{ ...summary('source', 1), retainedBy: { mainView: 1 } }]))
+    const browser = faceOf(b.slots.entries('sidebar.workspaces')[0]!) as WorkspaceBrowserInjected
+    const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    onTestFinished(() => warning.mockRestore())
+    const invoke = () => {
+      const resolution = b.commands.get('session.fork')!.resolve({ region: 'page', modal: null, target: null })
+      if (resolution.status !== 'handled') throw new Error('the source must be available')
+      resolution.run()
+    }
+
+    browser.notifyArchivedNotOpenable()
+    expect(toast.hooks.toast.getSnapshot()).toMatchObject({ kind: 'archivedNotOpenable' })
+    b.fork.mockRejectedValueOnce(new SessionForkError(
+      new RemoteError('session/fork-unavailable', 'no completed turn', { sessionId: sid('source') }), sid('source'),
+    ))
+    invoke()
+    await vi.waitFor(() => {
+      expect(toast.hooks.toast.getSnapshot()).toMatchObject({ kind: 'shortcutForkFailed', reason: 'unavailable' })
+    })
+    expect(b.fork).toHaveBeenCalledExactlyOnceWith({ sessionId: sid('source'), increaseTitle: true })
+    expect(warning).not.toHaveBeenCalled()
+    const unavailable = toast.hooks.toast.getSnapshot()
+    b.fork.mockRejectedValueOnce(new Error('connection closed'))
+    invoke()
+    await vi.waitFor(() => {
+      expect(toast.hooks.toast.getSnapshot()).toMatchObject({ kind: 'shortcutForkFailed', reason: 'failed' })
+    })
+    expect(toast.hooks.toast.getSnapshot()).not.toBe(unavailable)
+    expect(warning).toHaveBeenCalledExactlyOnceWith('session fork rejected:', expect.any(Error))
+    const failure = toast.hooks.toast.getSnapshot()
+    removeBrowser()
+    expect(b.slots.entries('sidebar.workspaces')).toEqual([])
+    expect(entry(b.slots, 'shell.overlay', 'workspace.row-toast').component).toBe(RowActionToast)
+    expect(toast.hooks.toast.getSnapshot()).toBe(failure)
+    browser.notifyArchivedNotOpenable()
+    expect(toast.hooks.toast.getSnapshot()).toMatchObject({ kind: 'archivedNotOpenable' })
+    toast.dismissToast()
+    expect(toast.hooks.toast.getSnapshot()).toBeNull()
+    expect(browser).not.toHaveProperty('dismissForkError')
   })
 
   it('derives the pinned and archived Sets from the Workspace snapshot, rebuilt only when it changes', async () => {

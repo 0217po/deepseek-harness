@@ -233,8 +233,6 @@ export type WorkspaceBrowserInjected = {
   closeAddWorkspace: () => void
   /** Publish directory interaction occupancy for command availability. */
   setDirectoryBusy: (busy: boolean) => void
-  /** Dismiss the shortcut's fork-failure notification. */
-  dismissForkError: () => void
   /**
    * Create a fresh Session, or preserve a reusable blank with explicit draft options.
    * Without an explicit Workspace, inherit the current Session Workspace,
@@ -298,6 +296,7 @@ export type RowToast =
   | { kind: 'archivedNotOpenable' }
   | { kind: 'defaultWorkspaceFailed' }
   | { kind: 'forkRequiresOpen'; sessionId: SessionId }
+  | { kind: 'shortcutForkFailed'; reason: 'unavailable' | 'failed' }
   /**
    * An explicit New Session request that failed. `message` is untranslated:
    * a Host refusal as `code: message` — the stable code stays in the copy so

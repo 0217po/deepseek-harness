@@ -31,6 +31,15 @@ export function RowActionToast({ useToast, useStore, dismissToast, undoArchive, 
       />
     )
   }
+  if (toast.kind === 'shortcutForkFailed') {
+    return (
+      <Toast
+        key={`toast-${String(toast.seq)}`}
+        text={t(toast.reason === 'unavailable' ? 'shortcut.noCompletedTurn' : 'shortcut.forkFailed')}
+        onDone={dismissToast}
+      />
+    )
+  }
   if (toast.kind === 'forkRequiresOpen') {
     return (
       <Toast
@@ -87,7 +96,7 @@ export function RowActionToast({ useToast, useStore, dismissToast, undoArchive, 
 
 /** The copy of one plain warning, keyed by the notice kind the union closes over. */
 function plainNoticeText(
-  toast: Exclude<RowToastState, { kind: 'archived' | 'stoppedAndArchived' | 'createFailed' | 'forkRequiresOpen' | 'sessionIdCopied' }>,
+  toast: Exclude<RowToastState, { kind: 'archived' | 'stoppedAndArchived' | 'createFailed' | 'forkRequiresOpen' | 'sessionIdCopied' | 'shortcutForkFailed' }>,
   t: RowToastProps['t'],
 ): string {
   switch (toast.kind) {
