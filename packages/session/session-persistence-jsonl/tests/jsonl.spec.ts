@@ -8,7 +8,7 @@ import { scheduler } from 'node:timers/promises'
 import { SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
-import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import {
   assertNoRetiredHeaderFields, encodeSegment, eventLines, generationLogFilename, generationLogPath,
   logPath, parseGenerationLogFilename, projectDir, projectKey, scanLog, sessionDir, SessionLogScanner,

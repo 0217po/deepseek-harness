@@ -41,6 +41,7 @@ describe('common paid translation persistence', () => {
   it.each(['caller cancellation', 'provider deadline'] as const)(
     'keeps a pending result ahead of an immediate retry after %s without billing again', async (interruption) => {
       const b = await paidFixture(cleanups, { translator: { deepseekTimeoutMs: 60_000 } }), backend = b.ctx.sessionPersistence as SessionPersistence & Pick<JsonlHandleStorage, 'persistBatch'>
+      expect(typeof backend.persistBatch).toBe('function')
       const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
       cleanups.push(async () => { release.resolve(undefined) })
       const persist = backend.persistBatch.bind(backend)

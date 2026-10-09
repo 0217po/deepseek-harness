@@ -1738,7 +1738,7 @@ export const Config: z<Config> = z.object({
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
   let service!: Fiber
-  // An async generator awaits these thenable disposers, changing their registered identity.
+  // Keep this generator synchronous so thenable disposers are registered as functions, not awaited.
   ctx.effect(function* () {
     const tracker = new JsonlBackendTracker(name)
     yield tracker.install(ctx)
@@ -1749,9 +1749,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       },
     })
     yield service.dispose
-  })
+  }, 'session-persistence-jsonl resources')
   await service.await()
 }
-
-/** JSONL persistence plugin, including its Loader configuration schema. */
-export default { name, Config, apply }
