@@ -163,3 +163,9 @@ Remote handles unary method calls with one request and one result, and stream me
 The API layers are organized as `remotes → gateway → connection → webserver`. The BFF and Typert RPC layers live under `packages/api`; Connection and WebServer live at `packages/client/connection` and `packages/host/webserver`. Unary results containing `Uint8Array`, including nested fields and array entries, use [binary Remote transfer](../.agents/notes/implemented/architecture/2026-09-17-workspace-file-binary-transfer.md). A feature that needs a response outside the RPC envelope registers an exact Connection Fetch route.
 
 Lookup policy is configured per key, so all `agent` or `session` parameters share the cold-resume behavior. Accepting live objects only would require an explicit per-parameter or per-endpoint policy, which does not exist; the business method must not guess whether the object came from restoration.
+
+### Business ownership
+
+`packages/api` owns transport, call shape, and session lifecycle. A business rule — a state-dependent decision, a feature-specific handling path, or a per-feature filter — belongs to an independent business package and reaches this layer through a registration surface or projected data. A new business branch here needs an independent-package review.
+
+A new remote capability declares its own service instead of growing an existing one, marks the capability method with `@Remote`, and leaves client-facing types to inference. Remote payloads stay JSON with no output-side decode, and existing method and field names are additive.

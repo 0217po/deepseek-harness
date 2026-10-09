@@ -4,6 +4,8 @@
 
 本文是 Typert API Gateway 的当前状态参考。它描述业务服务如何声明一元与流式 Remote 方法、构建如何生成 Host 与 Client 约定，以及调用如何复用 Connection 的 RPC 与 `/api` 路由。会话事件、增量数据和其他流协议不属于本文范围；它们可以使用同一个 Connection，但不使用 Remote 方法描述符。
 
+<a id="programming-model"></a>
+
 ## 编程模型
 
 业务服务通过 `@Remote` 或 `@RemoteScope` 选择对 Client 开放的方法。未标记的方法不会进入生成的 Client 类型或运行时贡献，也不能通过 `ctx.remote` 调用。
@@ -156,6 +158,8 @@ pnpm run build:lib
 
 运行中的 Client watcher 会在重新打包时消费这些生成文件。若已单独运行 `pnpm run build:lib:host` 刷新 Host 约定，也可再运行 `pnpm run build:lib:client` 完成 Client 侧；干净工作树不能跳过 Host 阶段。仅重新编译前端源码不能从 Host decorator 推导新类型。`pnpm run typecheck` 会执行 Host lib 阶段后再运行 Client tsc，CI 与发布构建也使用同一顺序。
 
+<a id="boundaries"></a>
+
 ## 边界
 
 Remote 处理单请求单结果的一元方法调用，以及项沿 Host → Client 方向流动、而 Client 的项经 `this.ctx.invocation.uplink()` 到达正在运行的 Host 方法的流方法。会话事件流、分页、增量 reduce、projection 和实体子流仍需要独立的数据协议与注册模型；即使它们复用 Connection，也不应伪装成 Remote 方法或放入调用描述符。
@@ -163,3 +167,11 @@ Remote 处理单请求单结果的一元方法调用，以及项沿 Host → Cli
 API 各层按 `remotes → gateway → connection → webserver` 组织。BFF 与 Typert RPC 层位于 `packages/api`；Connection 与 WebServer 位于 `packages/client/connection` 和 `packages/host/webserver`。包含 `Uint8Array` 的一元结果（包括嵌套字段和数组条目）使用[二进制 Remote 传输](../.agents/notes/implemented/architecture/2026-09-17-workspace-file-binary-transfer.zh.md)。需要 RPC 信封之外响应的功能注册精确的 Connection Fetch 路由。
 
 lookup 策略按 key 配置，因此所有 `agent` 或 `session` 参数共享冷恢复行为。只接受 live 对象需要显式的逐参数或逐 endpoint 策略，而这种策略并不存在；不能通过业务方法内部猜测对象是否来自恢复。
+
+<a id="business-ownership"></a>
+
+### 业务所有权
+
+`packages/api` 负责传输、调用形态与会话生命周期。业务规则——依赖状态的判断、与具体功能绑定的处理路径、逐功能的过滤——归独立业务包所有，经注册面或投影数据接入本层；在此新增业务分支须走独立包评审。
+
+新的远程能力声明自己的 service，而不是继续扩大既有 service；能力方法用 `@Remote` 标注，面向 Client 的类型交给推断。远程载荷保持 JSON、不做输出侧 decode；既有的方法与字段名只增不改。

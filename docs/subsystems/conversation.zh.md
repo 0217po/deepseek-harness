@@ -71,6 +71,8 @@ Group 存储在安装前校验完整提交结果：根 Group 引用与记录一�
 
 实时 Assistant delta 作为 Client-only `assistant/live-chunk` event 到达。重连 baseline 会把活跃的进程内紧凑 stream 展开为相同的瞬态 event，持久 `assistant/message` 与 `assistant/attempt` event 则嵌入完整紧凑 stream 供历史回放。瞬态 event 可以初始化 Context。每条工具 delta 和后续 `tool/call` 都可以按同一个 callId 匹配为 start，即使名称尚未到达；只有最早的 Match 调用 `start()`，后续 Match 调用 `update()`。准备态 Tool 节点只有在名称可用后才显示。历史分页不把已结束消息展开为实时 delta。消费 Assistant 输出的 Definition 通过同一组匹配和更新接口处理 live chunk 与持久 settlement，其他 Definition 直接返回 `null`，无需展开 stream。
 
+<a id="definition-and-typed-chat-payload"></a>
+
 ## Definition 与类型化 Chat payload
 
 为了完整展示关联关系，下面把生产方声明和 Client 贡献写在同一个代码块里。实际的包族中，branded id 与 `SessionEventMap` 声明留在事件生产方，Definition、Chat data 合并与 renderer 留在 Client 插件。
