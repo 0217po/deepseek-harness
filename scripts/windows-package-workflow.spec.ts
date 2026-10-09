@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { relative, resolve } from 'node:path'
 import yaml from 'js-yaml'
 import { expect, it } from 'vitest'
@@ -24,6 +26,35 @@ const workflow = yaml.load(readFileSync(resolve(root, '.github/workflows/windows
   }>
 }
 const job = workflow.jobs.package!
+
+it.skipIf(process.platform !== 'win32')('resets only the allocated checkout without following dependency junctions', () => {
+  const directory = mkdtempSync(resolve(tmpdir(), 'windows-checkout-'))
+  try {
+    const parent = resolve(directory, 'runner-workspace')
+    const workspace = resolve(parent, 'repository')
+    const external = resolve(directory, 'external')
+    mkdirSync(workspace, { recursive: true })
+    mkdirSync(external)
+    writeFileSync(resolve(external, 'keep.txt'), 'keep')
+    symlinkSync(external, resolve(workspace, 'node_modules'), 'junction')
+    const script = resolve(directory, 'reset.ps1')
+    writeFileSync(script, job.steps.find(step => step.name === 'Reset packaging checkout')!.run!)
+    const run = (target: string) => execFileSync('pwsh', ['-NoProfile', '-File', script], {
+      cwd: directory,
+      env: { ...process.env, RUNNER_WORKSPACE: parent, GITHUB_WORKSPACE: target },
+      stdio: 'pipe',
+    })
+    run(workspace)
+    expect(existsSync(workspace)).toBe(false)
+    expect(readFileSync(resolve(external, 'keep.txt'), 'utf8')).toBe('keep')
+    expect(() => run(external)).toThrow()
+    symlinkSync(external, workspace, 'junction')
+    expect(() => run(workspace)).toThrow()
+    expect(readFileSync(resolve(external, 'keep.txt'), 'utf8')).toBe('keep')
+  } finally {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 3 })
+  }
+})
 
 it('routes manual packaging to the dedicated runner with explicit preset and signing selection', () => {
   expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])

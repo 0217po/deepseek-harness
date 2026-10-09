@@ -40,6 +40,17 @@ jobs:
       DSH_PACKAGING_PRESET: ${{ inputs.preset }}
       PACKAGE_SIGNING: ${{ inputs.signing }}
     steps:
+      - name: Reset packaging checkout
+        working-directory: ${{ runner.temp }}
+        run: |
+          $workspace = [IO.Path]::GetFullPath($env:GITHUB_WORKSPACE)
+          $parent = [IO.Path]::GetFullPath($env:RUNNER_WORKSPACE)
+          if ([IO.Path]::GetDirectoryName($workspace) -ne $parent) { throw 'Checkout must be a direct child of RUNNER_WORKSPACE' }
+          for ($item = [IO.DirectoryInfo]::new($workspace); $null -ne $item; $item = $item.Parent) {
+            if ($item.Exists -and ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Checkout ancestors cannot be links' }
+          }
+          node -e "require('node:fs').rmSync(process.argv[1], { recursive: true, force: true, maxRetries: 3 })" $workspace
+          if ($LASTEXITCODE -ne 0) { throw 'Checkout cleanup failed' }
       - uses: actions/checkout@v7.0.1
         id: checkout
         with:
