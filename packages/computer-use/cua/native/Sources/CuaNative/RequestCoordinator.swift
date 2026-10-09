@@ -59,10 +59,15 @@ import Darwin
         operation = Task { [weak self] in
             guard let self else { return }
             var requestID: JSONValue = .null
+            var trace: ScreenshotTrace?
             let response: JSONValue
             do {
                 let request = try NativeRequest(data: data)
                 requestID = .string(request.id)
+                if request.method == "screenshot" {
+                    trace = ScreenshotTrace(requestID: request.id)
+                    trace?.mark("helper.received")
+                }
                 let params = try RequestParameters(request)
                 let requiresCatalog = ["getApp", "listApps", "findApps", "typeText", "pressKey"].contains(request.method)
                 let catalog = requiresCatalog ? ApplicationCatalog.snapshot() : ApplicationCatalogSnapshot(applications: [], frontPID: nil)
@@ -79,12 +84,14 @@ import Darwin
                                                                                cancellation: self.cancellation).first
                         }
                     }
-                    let outcome = try await self.worker.execute(request.method, params: params, catalog: catalog, installed: installed)
+                    trace?.mark("worker.begin")
+                    let outcome = try await self.worker.execute(request.method, params: params, catalog: catalog, installed: installed, trace: trace)
+                    trace?.mark("worker.end")
                     switch outcome {
                 case .result(let value): result = value
                 case .capture(let target):
-                    let image = try await self.capture.capture(target, cancellation: self.cancellation)
-                    result = try await self.worker.finishCapture(target, image: image)
+                    let image = try await self.capture.capture(target, cancellation: self.cancellation, trace: trace)
+                    result = try await self.worker.finishCapture(target, image: image, trace: trace)
                     case .foreground(let plan): result = try await self.performForeground(plan, requestID: request.id)
                     case .paste(let plan):
                         try await self.clipboard.perform(text: plan.text, format: plan.format, maxBytes: plan.maxBytes,
@@ -99,13 +106,15 @@ import Darwin
                 }
                 response = .object(["id": requestID, "result": result])
             } catch let failure as NativeFailure {
+                trace?.mark("helper.failed", errorCode: failure.code)
                 response = .object(["id": requestID, "error": .object(["code": .string(failure.code), "message": .string(failure.message)])])
             } catch {
+                trace?.mark("helper.failed", errorCode: "NATIVE_ERROR")
                 response = .object(["id": requestID, "error": .object([
                     "code": .string(requestID == .null ? "INVALID_REQUEST" : "NATIVE_ERROR"), "message": .string(error.localizedDescription)])])
             }
             guard !self.stopping, self.active == token else { return }
-            do { try await self.writer.write(response) }
+            do { try await self.writer.write(response, trace: trace) }
             catch let failure as NativeFailure {
                 if failure.code == "NATIVE_RESPONSE_LIMIT" {
                     // The bounded writer rejects before emitting any bytes, so one small

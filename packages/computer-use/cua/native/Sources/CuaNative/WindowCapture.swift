@@ -34,7 +34,7 @@ private actor CaptureCompletion {
 
 struct WindowCapture: Sendable {
     private let encoder = DispatchQueue(label: "dsh.cua.png")
-    func capture(_ target: CaptureTarget, cancellation: CancellationLatch) async throws -> CapturedPNG {
+    func capture(_ target: CaptureTarget, cancellation: CancellationLatch, trace: ScreenshotTrace? = nil) async throws -> CapturedPNG {
         let completion = CaptureCompletion()
         let encoder = self.encoder
         return try await withTaskCancellationHandler {
@@ -42,7 +42,9 @@ struct WindowCapture: Sendable {
                 completion.install(continuation)
                 do { try cancellation.check() }
                 catch { completion.finish(.failure(NativeFailure(code: "NATIVE_CANCELLED", message: "Capture cancelled"))); return }
+                trace?.mark("shareable-content.begin")
                 SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: false) { content, error in
+                    trace?.mark("shareable-content.end")
                     guard let content else { completion.finish(.failure(Self.captureFailure(error))); return }
                     guard let window = content.windows.first(where: { $0.windowID == target.window.windowID && $0.owningApplication?.processID == target.process.pid }) else {
                         completion.finish(.failure(NativeFailure(code: "WINDOW_UNAVAILABLE", message: "Selected window is not available for capture"))); return
@@ -50,6 +52,7 @@ struct WindowCapture: Sendable {
                     do { try cancellation.check(); try NativePlatform.verify(target.process) }
                     catch let error as NativeFailure { completion.finish(.failure(error)); return }
                     catch { completion.finish(.failure(Self.captureFailure(error))); return }
+                    trace?.mark("capture-config.begin")
                     let filter = SCContentFilter(desktopIndependentWindow: window)
                     let expected = target.window.bounds
                     guard window.frame.origin.x == expected.x, window.frame.origin.y == expected.y,
@@ -69,15 +72,21 @@ struct WindowCapture: Sendable {
                     configuration.showsCursor = false
                     configuration.ignoreShadowsSingleWindow = true
                     configuration.ignoreGlobalClipSingleWindow = true
+                    trace?.mark("capture-config.end")
+                    trace?.mark("capture-image.begin")
                     SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration) { image, error in
+                        trace?.mark("capture-image.end")
                         guard let image else { completion.finish(.failure(Self.captureFailure(error))); return }
                         guard image.width == pixelsWide, image.height == pixelsHigh else {
                             completion.finish(.failure(NativeFailure(code: "WINDOW_CHANGED", message: "Capture pixel dimensions changed from the selected window geometry"))); return
                         }
+                        trace?.mark("png-encode.queued")
                         encoder.async {
                             do {
                                 try cancellation.check()
+                                trace?.mark("png-encode.begin")
                                 let png = try autoreleasepool { try Self.encode(image) }
+                                trace?.mark("png-encode.end")
                                 try cancellation.check()
                                 completion.finish(.success(png))
                             } catch let error as NativeFailure { completion.finish(.failure(error)) }
@@ -87,6 +96,7 @@ struct WindowCapture: Sendable {
                 }
             }
         } onCancel: {
+            trace?.mark("capture.cancelled")
             completion.finish(.failure(NativeFailure(code: "NATIVE_CANCELLED", message: "Capture cancelled; late frames are discarded")))
         }
     }

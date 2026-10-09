@@ -292,7 +292,7 @@ function mount(ctx: Context, config: Config, helperPath: string): void {
             throw new NativeError('APP_ACCESS_REQUIRED', 'Select the application with getApp before reading or controlling it')
           }
           if (!client || (client.disposed && !('appHandle' in request.params))) {
-            client = new NativeClient(ctx, native)
+            client = new NativeClient(ctx, native, message => ctx.logger.debug(message))
             clients.set(agent, client)
           }
           const nativeClient = client

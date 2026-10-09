@@ -10,6 +10,11 @@ const Reply = z.union([
   z.object({ id: z.string(), error: z.object({ code: z.string().min(1), message: z.string() }).strict() }).strict(),
 ])
 
+const screenshotPrefix = '[cua-screenshot] '
+const ScreenshotDiagnostic = z.object({
+  requestId: z.string(), stage: z.string(), elapsedMs: z.number().finite().nonnegative(), errorCode: z.string().optional(),
+})
+
 /** Native refusal or transport failure with a stable machine-readable code. */
 export class NativeError extends Error {
   /**
@@ -45,7 +50,13 @@ export class NativeClient {
   private disposal: Promise<void> | undefined
   private active: { id: string; resolve: (value: JsonValue) => void; reject: (error: NativeError) => void } | undefined
 
-  constructor(owner: { subprocess: Pick<SubprocessRuntime, 'spawn'> }, config: NativeClientConfig) {
+  /**
+   * @param owner - Managed subprocess provider.
+   * @param config - Executable, transport bounds and deadlines.
+   * @param reportDiagnostic - Optional Host diagnostic sink; never receives captured content.
+   */
+  constructor(owner: { subprocess: Pick<SubprocessRuntime, 'spawn'> }, config: NativeClientConfig,
+    private readonly reportDiagnostic?: (message: string) => void) {
     this.config = config
     this.handle = owner.subprocess.spawn({
       argv: [
@@ -85,12 +96,17 @@ export class NativeClient {
     }
     if (this.active) throw new NativeError('NATIVE_BUSY', 'Await native operations sequentially')
     const id = callId ?? randomUUID()
+    const capture = method === 'screenshot'
+    const diagnosticOffset = capture ? this.handle.collected.stderr?.readFrom(0).nextOffset ?? 0 : 0
+    const started = performance.now()
+    let nativeFailure: NativeError | undefined
     const frame = `${JSON.stringify({ id, method, params })}\n`
     if (Buffer.byteLength(frame) > this.config.maxRequestBytes) {
       throw new NativeError('NATIVE_REQUEST_LIMIT', 'Request exceeded the configured byte limit before dispatch')
     }
     const outcome = Promise.withResolvers<JsonValue>()
     this.active = { id, ...outcome }
+    if (capture) this.diagnostic(screenshotPrefix + JSON.stringify({ requestId: id, stage: 'host.dispatch', elapsedMs: 0 }))
     const abort = (): void => { this.fail(new NativeError('NATIVE_CANCELLED', 'Operation cancelled; inspect fresh state before retrying input')) }
     signal.addEventListener('abort', abort, { once: true })
     const timer = setTimeout(() => {
@@ -110,11 +126,56 @@ export class NativeClient {
       }
       const result = await outcome.promise
       if (this.failure) throw this.failure
+      if (capture) this.diagnostic(screenshotPrefix + JSON.stringify({
+        requestId: id, stage: 'host.reply', elapsedMs: performance.now() - started,
+      }))
       return result
+    } catch (error) {
+      if (error instanceof NativeError) nativeFailure = error
+      throw error
     } finally {
       clearTimeout(timer)
       signal.removeEventListener('abort', abort)
-      if (this.failure !== undefined) await this.dispose()
+      try {
+        if (this.failure !== undefined) await this.dispose()
+      } finally {
+        if (capture) {
+          const diagnostics = this.screenshotDiagnostics(id, diagnosticOffset)
+          if (nativeFailure && diagnostics) nativeFailure.message += `\nScreenshot diagnostics:\n${diagnostics}`
+          if (diagnostics) this.diagnostic(diagnostics)
+          this.diagnostic(screenshotPrefix + JSON.stringify({
+            requestId: id, stage: 'host.settled', elapsedMs: performance.now() - started,
+          }))
+        }
+      }
+    }
+  }
+
+  private screenshotDiagnostics(id: string, offset: number): string {
+    const output = this.handle.collected.stderr?.readFrom(offset)
+    if (!output) return ''
+    const records: string[] = []
+    for (const line of output.text.split('\n')) {
+      if (!line.startsWith(screenshotPrefix)) continue
+      let value: unknown
+      try { value = JSON.parse(line.slice(screenshotPrefix.length)) }
+      catch (error) {
+        // A retained tail may begin or end inside one diagnostic record.
+        void error
+        continue
+      }
+      const parsed = ScreenshotDiagnostic.safeParse(value)
+      if (parsed.success && parsed.data.requestId === id) records.push(screenshotPrefix + JSON.stringify(parsed.data))
+    }
+    if (output.lossy) records.unshift('[Earlier screenshot diagnostic bytes were discarded from the bounded stderr tail.]')
+    return records.join('\n')
+  }
+
+  private diagnostic(message: string): void {
+    try { this.reportDiagnostic?.(message) }
+    catch (error) {
+      // Diagnostic consumers must not replace the native result or prevent process cleanup.
+      void error
     }
   }
 

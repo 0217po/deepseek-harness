@@ -48,6 +48,8 @@ def cases():
          "params must be an object"),
         (request("unknown-param", "listApps", {"launch": True}), "unknown-param", "INVALID_ARGUMENT",
          "Unknown operation parameter"),
+        (request("capture-debug", "screenshot", {"unexpected": "private capture content"}),
+         "capture-debug", "INVALID_ARGUMENT", "Unknown operation parameter"),
         (request("", "protocol-absent", {}), "", "UNSUPPORTED", "Unsupported native operation: protocol-absent"),
         (request("call-中文-🧪", "protocol-absent\noperation", {}), "call-中文-🧪", "UNSUPPORTED",
          "Unsupported native operation: protocol-absent\noperation"),
@@ -86,6 +88,15 @@ def validate(stdout, stderr, expected):
         assert isinstance(error["message"], str) and error["message"], (index, response)
         if message is not None:
             assert error["message"] == message, (index, message, response)
+    if any(identifier == "capture-debug" for _, identifier, _, _ in expected):
+        prefix = b"[cua-screenshot] "
+        records = [json.loads(line[len(prefix):]) for line in stderr.splitlines() if line.startswith(prefix)]
+        records = [item for item in records if item["requestId"] == "capture-debug"]
+        assert records[0]["stage"] == "helper.received", records
+        assert any(item.get("errorCode") == "INVALID_ARGUMENT" for item in records), records
+        assert all(set(item) <= {"requestId", "stage", "elapsedMs", "errorCode"} for item in records), records
+        assert all(item["elapsedMs"] >= 0 for item in records), records
+        assert b"private capture content" not in stderr
 
 
 def exercise(helper, directory, payload, expected, timeout):

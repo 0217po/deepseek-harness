@@ -152,11 +152,19 @@ actor AXWorker {
             throw NativeFailure(code: "STALE_SNAPSHOT", message: "Snapshot belongs to another window")
         }
     }
-    private func coordinateWindow(_ identity: ProcessIdentity, _ windowID: UInt32) throws -> WindowInfo {
-        try WindowGeometry.resolve(owner: identity, windowID: windowID) {
+    private func coordinateWindow(_ identity: ProcessIdentity, _ windowID: UInt32, trace: ScreenshotTrace? = nil) throws -> WindowInfo {
+        try WindowGeometry.resolve(owner: identity, windowID: windowID, readWindow: { pid, id in
+            trace?.mark("window-info.begin")
+            let window = try NativePlatform.ownedWindow(pid, id)
+            trace?.mark("window-info.end")
+            return window
+        }) {
             // Capture without Accessibility permission retains its CG/SCK checks.
             guard AXIsProcessTrusted() else { return nil }
-            return try ax().windowBounds(windowID, owner: identity)
+            trace?.mark("ax-geometry.begin")
+            let bounds = try ax().windowBounds(windowID, owner: identity)
+            trace?.mark("ax-geometry.end")
+            return bounds
         }
     }
     private func observedCoordinateWindow(_ handle: String, _ identity: ProcessIdentity, _ windowID: UInt32) throws -> WindowInfo {
@@ -187,7 +195,8 @@ actor AXWorker {
                              accessibilityError: failure.accessibilityError)
     }
 
-    func execute(_ method: String, params: RequestParameters, catalog: ApplicationCatalogSnapshot, installed: InstalledApplication? = nil) throws -> DriverOutcome {
+    func execute(_ method: String, params: RequestParameters, catalog: ApplicationCatalogSnapshot, installed: InstalledApplication? = nil,
+                 trace: ScreenshotTrace? = nil) throws -> DriverOutcome {
         try cancellation.check()
         guard !closed else { throw NativeFailure(code: "NATIVE_CLOSED", message: "Helper is closing") }
         let locked = observeSession()
@@ -298,8 +307,12 @@ actor AXWorker {
                 "snapshotId": .string(id), "tree": .string(projection.tree), "elements": .array(projection.elements),
                 "windows": .array(observedWindows.map(\.json)), "truncated": .bool(projection.truncated)]))
         case "screenshot":
+            trace?.mark("screen-permission.begin")
             try NativePlatform.requireScreenRecording()
-            let window = try coordinateWindow(identity, params.windowID())
+            trace?.mark("screen-permission.end")
+            trace?.mark("geometry.before.begin")
+            let window = try coordinateWindow(identity, params.windowID(), trace: trace)
+            trace?.mark("geometry.before.end")
             return .capture(CaptureTarget(appHandle: handle, process: identity, window: window))
         case "paste":
             return .paste(PastePlan(handle: handle, text: try params.string("text"), format: try params.optionalString("format") ?? "text",
@@ -424,16 +437,23 @@ actor AXWorker {
         }
         try ax().perform(element, "AXRaise")
     }
-    func finishCapture(_ target: CaptureTarget, image: CapturedPNG) throws -> JSONValue {
+    func finishCapture(_ target: CaptureTarget, image: CapturedPNG, trace: ScreenshotTrace? = nil) throws -> JSONValue {
+        trace?.mark("postflight.begin")
         try cancellation.check()
         let identity = try validateIdentity(target.appHandle)
         guard identity == target.process else { throw NativeFailure(code: "STALE_APP", message: "Capture process identity changed") }
         try NativePlatform.requireUnlocked(observeSession())
         try NativePlatform.requireScreenRecording()
-        let after = try coordinateWindow(identity, target.window.windowID)
+        trace?.mark("geometry.after.begin")
+        let after = try coordinateWindow(identity, target.window.windowID, trace: trace)
+        trace?.mark("geometry.after.end")
         guard after.bounds == target.window.bounds else { throw NativeFailure(code: "WINDOW_CHANGED", message: "Window moved or resized during capture; observe again") }
         observedWindowBounds[target.appHandle, default: [:]][after.windowID] = after.bounds
-        return .object(["mimeType": .string("image/png"), "data": .string(image.bytes.base64EncodedString()),
+        trace?.mark("base64.begin")
+        let encoded = image.bytes.base64EncodedString()
+        trace?.mark("base64.end")
+        trace?.mark("postflight.end")
+        return .object(["mimeType": .string("image/png"), "data": .string(encoded),
             "pixelWidth": .number(Double(image.width)), "pixelHeight": .number(Double(image.height)), "bounds": after.bounds.json,
             "coordinateSpace": .string("window-points"), "windowId": .number(Double(after.windowID))])
     }

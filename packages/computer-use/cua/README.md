@@ -66,6 +66,8 @@ Values and placeholders are separate. Named, stateful or actionable groups and s
 
 Observations emit by default and also return their value. In persistent PTC, use `void await app.getAXState()` for one emitted copy, or `emit:false` and one explicit print. Capturing a screenshot after an emitted tree can fail independently; retain the successful AX output.
 
+Screenshot diagnostics use `[cua-screenshot]` records keyed by the tool request ID. Native records measure elapsed milliseconds from request receipt around window/AX geometry checks, ScreenCaptureKit enumeration and capture, PNG/Base64 encoding, and response writing. Host debug logs add dispatch, reply and cleanup completion timings. The helper stderr buffer retains at most 8192 bytes; available complete records for a failed screenshot are appended to its error and therefore remain in exported Session traces. Truncation is marked, and late stderr may be absent from successful-call diagnostics. Records contain stages, timings and error codes, not titles, AX text or image bytes. Diagnostic sink failures do not replace capture results.
+
 Native preparation serializes compiler checks and publication with the shared file lock. It updates the package payload and runs a content-addressed copy under native/.build/prepared, preserving executable files used by earlier source-runtime processes. Identical builds reuse the same file; corrupted retained copies fail validation. Cancellation and preparation failure finish managed process cleanup before releasing the lock.
 
 ### Connect an external execution environment

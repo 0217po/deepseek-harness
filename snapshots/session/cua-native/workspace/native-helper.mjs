@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /** Deterministic JSONL native substitute; this fixture never reads or controls the desktop. */
-import { appendFileSync, existsSync } from 'node:fs'
+import { appendFileSync, existsSync, writeSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 
 const observe = existsSync(new URL('./observe-helper', import.meta.url))
@@ -23,6 +23,7 @@ let generation = 0
 let count = 0
 let value = ''
 let observationChanged = false
+let malformedScreenshot = false
 let visualCount = 0
 let frontPid = 42
 let frontWindowId = 99
@@ -79,6 +80,11 @@ function call(requestId, method, params) {
   if (params.windowId === 9 && ['screenshot', 'click', 'scroll', 'drag'].includes(method) && params.elementIndex === undefined) {
     refuse('WINDOW_CHANGED', 'Window display and accessibility bounds disagree. Read fresh state; if unchanged, use AX actions or explicitly restore the window before capture or coordinate input')
   }
+  if (method === 'screenshot' && malformedScreenshot) {
+    writeSync(2, '[cua-screenshot] ' + JSON.stringify({ requestId, stage: 'capture-image.begin', elapsedMs: 1 }) + '\n')
+    writeSync(1, 'invalid screenshot response\n')
+    return
+  }
   if (method === 'screenshot') return { windowId: params.windowId, mimeType: 'image/png', data: png, pixelWidth: 1, pixelHeight: 1, bounds, coordinateSpace: 'window-points' }
   if (method === 'click' || method === 'setValue') {
     const observed = [...snapshots.values()].find(snapshot => snapshot.snapshotId === params.snapshotId)
@@ -92,6 +98,7 @@ function call(requestId, method, params) {
     return { dispatched: true, verified: false }
   }
   if (method === 'pressKey' && params.key === 'Return') observationChanged = true
+  if (method === 'pressKey' && params.key === 'F12') malformedScreenshot = true
   if (method === 'typeText') value += params.text
   else if (!['pressKey', 'scroll', 'drag'].includes(method)) refuse('UNSUPPORTED_OPERATION', method)
   return { dispatched: true, verified: false }
@@ -101,7 +108,11 @@ input.once('close', () => process.exit(0))
 input.on('line', (line) => {
   const request = JSON.parse(line)
   let response
-  try { response = { id: request.id, result: call(request.id, request.method, request.params) } }
+  try {
+    const result = call(request.id, request.method, request.params)
+    if (result === undefined) return
+    response = { id: request.id, result }
+  }
   catch (error) { response = { id: request.id, error: { code: error.code ?? 'FIXTURE_ERROR', message: error.message } } }
   process.stdout.write(JSON.stringify(response) + '\n')
 })

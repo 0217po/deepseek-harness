@@ -47,6 +47,7 @@
     "Sources/CuaNative/RequestAdmission.swift",
     "Sources/CuaNative/RequestCoordinator.swift",
     "Sources/CuaNative/Runtime.swift",
+    "Sources/CuaNative/ScreenshotTrace.swift",
     "Sources/CuaNative/TextSelection.swift",
     "Sources/CuaNative/WindowCapture.swift",
     "Sources/CuaNative/WindowGeometry.swift"

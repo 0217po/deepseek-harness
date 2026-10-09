@@ -97,17 +97,21 @@ final class JSONLWriter: Sendable {
     private let queue = DispatchQueue(label: "dsh.cua.stdout")
     let limit: Int
     init(limit: Int) { self.limit = limit }
-    func write(_ response: JSONValue) async throws {
+    func write(_ response: JSONValue, trace: ScreenshotTrace? = nil) async throws {
         let limit = self.limit
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             queue.async {
                 do {
+                    trace?.mark("response.encode.begin")
                     let encoder = JSONEncoder()
                     encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
                     var frame = try encoder.encode(response)
                     frame.append(10)
                     guard frame.count <= limit else { throw NativeFailure(code: "NATIVE_RESPONSE_LIMIT", message: "Reply exceeded helper byte limit") }
+                    trace?.mark("response.encode.end")
+                    trace?.mark("response.write.begin")
                     try FileHandle.standardOutput.write(contentsOf: frame)
+                    trace?.mark("response.write.end")
                     continuation.resume()
                 } catch let error as NativeFailure { continuation.resume(throwing: error) }
                 catch { continuation.resume(throwing: NativeFailure(code: "NATIVE_IO", message: "Encoding or writing helper reply failed")) }

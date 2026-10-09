@@ -1,7 +1,7 @@
 /** Controlled process streams exercise the platform-independent native protocol client. */
 import { PassThrough, Writable } from 'node:stream'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
+import type { SubprocessHandle, SubprocessOutcome, SubprocessOutputReader } from '@deepseek-ai/dsh-subprocess'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
 import { NativeClient, NativeError } from '../src/native-client.ts'
@@ -15,6 +15,8 @@ function fixture(options: {
   stdin?: boolean
   stdout?: boolean
   writeError?: Error
+  stderr?: SubprocessOutputReader
+  reportDiagnostic?: (message: string) => void
 } = {}) {
   const requests: z.infer<typeof Request>[] = []
   const stdout = new PassThrough()
@@ -30,7 +32,7 @@ function fixture(options: {
   const handle: SubprocessHandle = {
     stdin: options.stdin === false ? undefined : stdin,
     stdout: options.stdout === false ? undefined : stdout,
-    stderr: undefined, control: undefined, collected: {},
+    stderr: undefined, control: undefined, collected: { stderr: options.stderr },
     done: done.promise, terminate, waitForExit,
   }
   const spawn = vi.fn(() => handle)
@@ -38,7 +40,7 @@ function fixture(options: {
     helperPath: '/fixture/helper', cwd: '/fixture', axTimeoutMs: 321, timeoutMs: options.timeoutMs ?? 60_000,
     maxRequestBytes: options.maxRequestBytes ?? 1024,
     maxResponseBytes: options.maxResponseBytes ?? 1024, graceMs: 10, textEventIntervalMs: 0.5,
-  })
+  }, options.reportDiagnostic)
   function finish() { done.resolve({ exitCode: 0, signal: null }); gone.resolve(true) }
   function reply(value: unknown) { stdout.write(Buffer.from(JSON.stringify(value) + '\n')) }
   function id(index = requests.length - 1) {
@@ -322,5 +324,64 @@ describe('native helper transport', () => {
     const error = new NativeError('PERMISSION_DENIED', 'Enable Accessibility')
     expect(error.code).toBe('PERMISSION_DENIED')
     expect(error.message).toBe('PERMISSION_DENIED: Enable Accessibility')
+  })
+
+  it('retains the last screenshot phase after timeout and helper cleanup', async () => {
+    vi.useFakeTimers()
+    try {
+      let text = ''
+      const reportDiagnostic = vi.fn()
+      const f = fixture({ timeoutMs: 25, reportDiagnostic,
+        stderr: { readFrom: offset => ({ text: text.slice(offset), nextOffset: text.length, lossy: false }) },
+      })
+      const pending = f.client.request('screenshot', {}, new AbortController().signal, ToolCallId('capture-timeout'))
+      const rejected = expect(pending).rejects.toMatchObject({ code: 'NATIVE_TIMEOUT',
+        message: expect.stringContaining('"stage":"capture-image.begin"'),
+      })
+      await vi.advanceTimersByTimeAsync(25)
+      text = '[cua-screenshot] {"requestId":"capture-timeout","stage":"capture-image.begin","elapsedMs":2}\n'
+      f.finish()
+      await rejected
+      expect(reportDiagnostic.mock.calls.flat().join('\n')).toContain('host.settled')
+      expect(vi.getTimerCount()).toBe(0)
+    } finally { vi.useRealTimers() }
+  })
+
+  it('filters screenshot diagnostics by request and omits unrelated stderr and extra fields', async () => {
+    let text = 'earlier stderr\n'
+    const readFrom = vi.fn((offset: number) => ({ text: text.slice(offset), nextOffset: text.length, lossy: false }))
+    const f = fixture({ stderr: { readFrom } })
+    const pending = f.client.request('screenshot', {}, new AbortController().signal, ToolCallId('current'))
+    text += 'private window title\n[cua-screenshot] incomplete\n'
+      + '[cua-screenshot] {"requestId":"previous","stage":"old.begin","elapsedMs":1}\n'
+      + '[cua-screenshot] {"requestId":"current","stage":"bad","elapsedMs":"invalid"}\n'
+      + '[cua-screenshot] {"requestId":"current","stage":"ax-geometry.begin","elapsedMs":3,"title":"private"}\n'
+    f.reply({ id: 'current', error: { code: 'WINDOW_CHANGED', message: 'Window changed' } })
+    await expect(pending).rejects.toMatchObject({ code: 'WINDOW_CHANGED', message:
+      'WINDOW_CHANGED: Window changed\nScreenshot diagnostics:\n'
+      + '[cua-screenshot] {"requestId":"current","stage":"ax-geometry.begin","elapsedMs":3}',
+    })
+    expect(readFrom).toHaveBeenLastCalledWith('earlier stderr\n'.length)
+    expect(f.client.disposed).toBe(false)
+  })
+
+  it('marks truncated screenshot diagnostics and keeps successful results out of model text', async () => {
+    const reportDiagnostic = vi.fn()
+    const readFrom = vi.fn()
+      .mockReturnValueOnce({ text: '', nextOffset: 10, lossy: false })
+      .mockReturnValue({ text: '[cua-screenshot] {"requestId":"capture","stage":"png-encode.end","elapsedMs":4}\n', nextOffset: 200, lossy: true })
+    const f = fixture({ reportDiagnostic, stderr: { readFrom } })
+    const pending = f.client.request('screenshot', {}, new AbortController().signal, ToolCallId('capture'))
+    f.reply({ id: 'capture', result: { data: 'image' } })
+    await expect(pending).resolves.toEqual({ data: 'image' })
+    expect(reportDiagnostic.mock.calls.flat().join('\n')).toContain('Earlier screenshot diagnostic bytes were discarded')
+    expect(reportDiagnostic.mock.calls.flat().join('\n')).toContain('host.reply')
+  })
+
+  it('does not let a Host diagnostic sink replace a screenshot result', async () => {
+    const f = fixture({ reportDiagnostic: () => { throw new Error('log sink failed') } })
+    const pending = f.client.request('screenshot', {}, new AbortController().signal)
+    f.reply({ id: f.id(), result: { data: 'image' } })
+    await expect(pending).resolves.toEqual({ data: 'image' })
   })
 })
