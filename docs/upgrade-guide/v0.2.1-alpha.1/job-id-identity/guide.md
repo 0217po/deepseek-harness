@@ -13,6 +13,6 @@ The job registry returns `<kind>-<short-uuid>` instead of `<kind>-N`; the suffix
 
 ## Migration
 
-1. Pass the exact id returned by a start result or `jobs.list()` to `job_output`, `job_wait`, and `job_kill`. Remove code that constructs an id from the kind and an ordinal.
+1. Pass the exact id returned by a start result or `jobs.list()` to `job_output` and `job_kill`; use `job_output` with `wait: true` to wait. Remove code that constructs an id from the kind and an ordinal.
 2. Pair SDK lifecycle events by `data.jobId`. Remove imports of `JobExecutionId` and code that maps it to a process-local `jobId`.
 3. Verify a new job's registration and settlement contain the same `jobId`, and a later registry instance issues a different one.

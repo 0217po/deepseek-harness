@@ -13,6 +13,6 @@ job 注册表返回 `<kind>-<short-uuid>`，不再返回 `<kind>-N`；后缀是 
 
 ## 迁移
 
-1. 把启动结果或 `jobs.list()` 返回的原始 id 传给 `job_output`、`job_wait` 和 `job_kill`。移除按 kind 和序号构造 id 的代码。
+1. 把启动结果或 `jobs.list()` 返回的原始 id 传给 `job_output` 和 `job_kill`；等待时为 `job_output` 设置 `wait: true`。移除按 kind 和序号构造 id 的代码。
 2. 使用 `data.jobId` 配对 SDK 生命周期事件。移除 `JobExecutionId` 导入，以及将它映射为进程内 `jobId` 的代码。
 3. 核对新 job 的注册与结算含有相同 `jobId`，后续注册表实例发放不同 id。
