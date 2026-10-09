@@ -42,7 +42,7 @@ export class PolicyProcesses {
    */
   register(policy: SandboxExecutionPolicy, release: () => Promise<void>): () => void {
     if (policy.sessionId === undefined) return () => {}
-    const session = this.ctx.sessions.get(policy.sessionId)
+    const session = this.ctx.get('sessions')?.get(policy.sessionId)
     const process: Process = {
       sessionId: policy.sessionId,
       mode: session === undefined ? policy.mode : this.ctx.sandboxPolicy.resolve({ session }).mode,

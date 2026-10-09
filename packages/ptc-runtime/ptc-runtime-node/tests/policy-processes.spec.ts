@@ -86,3 +86,13 @@ it('waits for all processes on owner unload and removes its policy observer', as
     setSandboxMode(session, 'read-only')
   } finally { cleanup.resolve(undefined); await disposed }
 })
+
+it('cleans an explicit policy resource without a mounted Session store', async () => {
+  const ctx = new Context()
+  onTestFinished(async () => { await ctx.fiber.dispose() })
+  const processes = new PolicyProcesses(ctx)
+  const release = vi.fn(async () => {})
+  processes.register({ sessionId: SessionId('external'), mode: 'read-only', workspaceRoot: process.cwd() }, release)
+  await ctx.fiber.dispose()
+  expect(release).toHaveBeenCalledTimes(1)
+})

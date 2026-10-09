@@ -34,7 +34,7 @@ function record(value: unknown): value is Record<string, unknown> { return typeo
 
 /** Node execution under file policy, with optional owner-scoped retained memory. */
 export class NodePtcRuntime extends PtcRuntime {
-  static inject = ['fs', 'subprocess', 'sandbox', 'sandboxPolicy', 'sessions']
+  static inject = ['fs', 'subprocess', 'sandbox', 'sandboxPolicy']
   static Config = NodeConfig
   readonly language = 'typescript'
   readonly isolation = 'process'

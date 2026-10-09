@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在提供 `fs`、`subprocess`、`sandbox`、`sandboxPolicy` 和 `sessions` 的组合中挂载本提供方。`dsh-tools` 的 PTC 模式传入调用 Session 的目录和常设策略；直接运行时消费方在执行前解析这些选项。
+在提供 `fs`、`subprocess`、`sandbox` 和 `sandboxPolicy` 的组合中挂载本提供方。`dsh-tools` 的 PTC 模式传入调用 Session 的目录和常设策略；直接运行时消费方在执行前解析这些选项。
 
 ### 配置
 
@@ -68,7 +68,7 @@ kind: "package-reference"
 <a id="persistent-repl"></a>
 ### 内存保留模式
 
-在现有 `@deepseek-ai/dsh-ptc-runtime-node` 插件上设置 `executionMode: persistent-in-memory` 即可保留状态。两种模式都需要 `fs`、`subprocess`、`sandbox`、`sandboxPolicy` 和 `sessions`；两种模式都应用所选文件沙箱策略。通过配置档补丁显式启用：
+在现有 `@deepseek-ai/dsh-ptc-runtime-node` 插件上设置 `executionMode: persistent-in-memory` 即可保留状态。两种模式都需要 `fs`、`subprocess`、`sandbox` 和 `sandboxPolicy`；两种模式都应用所选文件沙箱策略。通过配置档补丁显式启用：
 
 ```yaml
 - id: ptc-runtime
