@@ -1003,7 +1003,7 @@ def smoke_sdk_office(executable: Path) -> None:
         environment = {key: value for key, value in os.environ.items()
                        if not key.startswith("DSH_") and not any(part in key.upper() for part in ("KEY", "SECRET", "TOKEN", "PASSWORD"))}
         environment.update(PATH="")
-        node = root / resources.name / "primary-runtime/dependencies/node/bin" / ("node.exe" if native.startswith("win32-") else "node")
+        node = office / "node/bin" / ("node.exe" if native.startswith("win32-") else "node")
         cli = adapter.parent / "lib/cli.js"
         checks["render_cli"](
             [str(node), str(cli)], documents, root, expected_backend, environment,
@@ -1058,7 +1058,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 from deepseek_harness.office import convert, render_images, recalculate
 root = Path(sys.argv[1])
-assert convert(root / 'document.docx', root / 'python.pdf').backend == sys.argv[2]
+assert convert(root / 'color-blocks.docx', root / 'python.pdf').backend == sys.argv[2]
 rendered = render_images(root / 'python.pdf', root / 'images', pages=[1])
 assert rendered.images and rendered.images[0].path.read_bytes().startswith(b'\\x89PNG')
 recalculate(root / 'input.xlsx', root / 'calculated.xlsx')

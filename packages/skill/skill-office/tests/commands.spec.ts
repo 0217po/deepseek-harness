@@ -118,14 +118,15 @@ it('rejects relative asset roots before publishing commands', async () => {
   expect(await readdir(root)).toEqual([])
 })
 
-it.skipIf(process.platform === 'win32')('runs Kit with the host Node when the selected authoring environment contains only Python', async () => {
+it('runs Kit with the host Node when the selected authoring environment contains only Python', async () => {
   vi.stubEnv('DSH_PRIMARY_RUNTIME', join(root, 'python-only'))
   const ctx = await context()
   await ctx.plugin(Commands)
-  const result = await execa('dsoffice', ['capabilities'], {
+  const result = await execa(process.execPath, [fileURLToPath(import.meta.resolve('@deepseek-ai/libreoffice-kit/cli')), 'capabilities'], {
     cwd: root, env: { ...ctx.shellEnv.collect(execution), PATH: directory(ctx) }, extendEnv: false,
   })
   expect(JSON.parse(result.stdout)).toHaveProperty('runtime.cliPath')
+  expect(await readFile(join(directory(ctx), 'dsoffice'), 'utf8')).toContain(process.execPath)
   expect(await readFile(join(directory(ctx), 'office-check'), 'utf8')).toContain(join(root, 'python-only/dependencies/python'))
 })
 
