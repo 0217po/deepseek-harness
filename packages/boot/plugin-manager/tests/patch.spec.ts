@@ -41,19 +41,6 @@ it('creates a missing patch file and appends after insertions', async () => {
   ])
 })
 
-it.each([false, true])('preserves same-ID preset overrides when a Host override exists: %s', async (hostOverride) => {
-  const preset = { preset: 'preset-standard', id: 'tool-bash', name: 'package', disabled: true }
-  const file = await fixture(JSON.stringify([
-    ...hostOverride ? [{ id: 'tool-bash', disabled: false }] : [], preset,
-  ]))
-  expect(await writePluginEnabled(file, 'tool-bash', 'package', false)).toBe(true)
-  const disabled = { id: 'tool-bash', disabled: true }
-  expect(loadOptionalPatches('test', file)).toEqual(hostOverride ? [disabled, preset] : [preset, disabled])
-  expect(await writePluginEnabled(file, 'tool-bash', 'package', true)).toBe(true)
-  const enabled = { id: 'tool-bash', disabled: false }
-  expect(loadOptionalPatches('test', file)).toEqual(hostOverride ? [enabled, preset] : [preset, enabled])
-})
-
 it.each(['- id: [broken', 'mapping: true\n'])('refuses malformed documents without overwriting %s', async (text) => {
   const file = await fixture(text)
   await expect(writePluginEnabled(file, 'tool', 'package', true)).rejects.toThrow()

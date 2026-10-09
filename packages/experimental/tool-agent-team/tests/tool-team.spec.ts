@@ -202,6 +202,7 @@ describe('dsh-tool-team', () => {
     expect(JSON.parse(text(tasks))).toMatchObject({ tasks: [{ id: task.id, ownerName: member.target }] })
     const sent = await execute(ctx, lead, 'send_message', { target: member.target, message: 'review the diff' })
     expect(sent.isError).toBe(false)
+    expect(JSON.parse(text(sent))).toEqual({ sent: true })
     const interrupted = await execute(ctx, lead, 'interrupt_agent', { target: listed[1]!.target })
     expect(interrupted.isError).toBe(false)
     await child.whenIdle()
@@ -483,10 +484,10 @@ describe('dsh-tool-team', () => {
     expect(text(roster)).toBe(JSON.stringify(JSON.parse(text(roster))))
     const peer = await execute(ctx, child, 'send_message', { target: 'lead', message: 'progress report' })
     expect(peer.isError).toBe(false)
-    expect(JSON.parse(text(peer))).toMatchObject({ status: 'accepted' })
+    expect(JSON.parse(text(peer))).toEqual({ sent: true })
     const followup = await execute(ctx, child, 'send_message', { target: 'lead', message: 'review the report' })
     expect(followup.isError).toBe(false)
-    expect(JSON.parse(text(followup))).toMatchObject({ status: 'accepted' })
+    expect(JSON.parse(text(followup))).toEqual({ sent: true })
     await lead.whenIdle()
 
     const created = await execute(ctx, lead, 'team_task_create', {
@@ -696,7 +697,7 @@ describe('dsh-tool-team', () => {
       content: [{ type: 'text', text: 'resume with Team scope' }],
       signal: SIGNAL,
     })
-    expect(receipt.status).toBe('accepted')
+    expect(receipt.messageId).toEqual(expect.any(String))
     const resumed = await waitRunning(ctx, childId)
     expect((await assembly(ctx, resumed)).tools.map(schema => schema.name)
       .filter(name => TOOL_NAMES.includes(name)).sort()).toEqual(TOOL_NAMES)
