@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { Duplex, PassThrough } from 'node:stream'
 import { setImmediate } from 'node:timers/promises'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -524,11 +526,12 @@ it('keeps failed per-call cleanup registered until process observation succeeds'
   h.onBoot(() => { h.emit({ type: 'done', value: encodePtcJsonWire(42) }) })
   const result = await h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) })
   expect(result.error?.kind).toBe('worker-exit')
-  await expect(h.ctx.sandboxPolicy.setMode(session, 'read-only')).rejects.toThrow('range cannot be observed')
-  expect(h.ctx.sandboxPolicy.resolve({ session }).mode).toBe('danger-full-access')
+  expect(setSandboxMode(session, 'read-only')).toBeUndefined()
+  expect(h.ctx.sandboxPolicy.resolve({ session }).mode).toBe('read-only')
+  await expect(h.runtime.run(h.runtime.resolve({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) }))).rejects.toThrow('range cannot be observed')
   h.waitForExit.mockResolvedValue(true)
-  expect(await h.ctx.sandboxPolicy.setMode(session, 'read-only')).toEqual([])
-  expect(h.waitForExit).toHaveBeenCalledTimes(3)
+  await h.ctx.fiber.dispose()
+  expect(h.waitForExit.mock.calls.length).toBeGreaterThanOrEqual(3)
 })
 
 it('unregisters a Session resource when process spawn fails', async () => {
@@ -537,7 +540,7 @@ it('unregisters a Session resource when process spawn fails', async () => {
   h.spawn.mockImplementation(() => { throw new Error('spawn failed') })
   const result = await h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) }, NO_INITIAL_FRAME)
   expect(result.error?.message).toContain('spawn failed')
-  expect(await h.ctx.sandboxPolicy.setMode(session, 'read-only')).toEqual([])
+  expect(setSandboxMode(session, 'read-only')).toBeUndefined()
 })
 
 it('preserves execution context for bindings delivered by an external control stream', async () => {
@@ -545,17 +548,17 @@ it('preserves execution context for bindings delivered by an external control st
   const session = h.ctx.sessions.create(SessionId('external-binding-context'))
   const booted = Promise.withResolvers<undefined>()
   h.receive((raw) => {
-    const message = raw as { type: string; ok?: boolean; message?: string }
+    const message = raw as { type: string; ok?: boolean; value?: unknown }
     if (message.type === 'boot') booted.resolve(undefined)
-    if (message.type === 'reply') h.emit({ type: 'done', value: encodePtcJsonWire(message.message ?? '') })
+    if (message.type === 'reply') h.emit({ type: 'done', value: message.value })
   })
-  const pending = h.ctx.sandboxPolicy.withExecution(session.id, new AbortController().signal, signal =>
-    h.start({ ...request, signal, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }),
-      bindings: [{ global: 'tools', functions: { test: () => h.ctx.sandboxPolicy.setMode(session, 'read-only') } }],
-    }))
+  const context = new AsyncLocalStorage<string>()
+  const pending = context.run('binding context', () => h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }),
+    bindings: [{ global: 'tools', functions: { test: () => context.getStore() ?? null } }],
+  }))
   await booted.promise
   h.emit(call(1))
   const result = await pending
-  expect(result.value).toContain('operation that the change must cancel')
+  expect(result.value).toBe('binding context')
   expect(h.ctx.sandboxPolicy.resolve({ session }).mode).toBe('danger-full-access')
 })

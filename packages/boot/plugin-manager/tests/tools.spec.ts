@@ -1,3 +1,4 @@
+import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 /** Agent controls use the same manager methods as the Web and bound inventory reads. */
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -116,16 +117,16 @@ it('exposes an absent Official bundle installation target without display metada
 })
 
 it('checks the calling session on each execution, including after permission is revoked', async () => {
-  const { ctx, call, manager } = await fixture()
+  const { call, manager } = await fixture()
   const id = SessionId('manager-permissions')
   const session = Session.create(id, undefined, { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false })
   const agent = { session } as unknown as Agent
-  await ctx.sandboxPolicy.setMode(session, 'workspace-write')
+  setSandboxMode(session, 'workspace-write')
   expect((await call({ action: 'list_plugins' }, agent)).isError).toBe(true)
   expect(manager.listPlugins).not.toHaveBeenCalled()
-  await ctx.sandboxPolicy.setMode(session, 'danger-full-access')
+  setSandboxMode(session, 'danger-full-access')
   expect((await call({ action: 'list_plugins' }, agent)).isError).toBe(false)
-  await ctx.sandboxPolicy.setMode(session, 'read-only')
+  setSandboxMode(session, 'read-only')
   expect((await call({ action: 'list_plugins' }, agent)).isError).toBe(true)
   expect(manager.listPlugins).toHaveBeenCalledTimes(1)
 })
@@ -179,7 +180,7 @@ it('rejects never policy without prompting and keeps full-access calls prompt-fr
   const agent = activeAgent()
   expect((await call({ action: 'set_plugin', target: 'include:demo', enabled: true }, agent)).isError).toBe(true)
   expect(manager.setPluginEnabled).not.toHaveBeenCalled()
-  await ctx.sandboxPolicy.setMode(agent.session, 'danger-full-access')
+  setSandboxMode(agent.session, 'danger-full-access')
   expect((await call({ action: 'set_plugin', target: 'include:demo', enabled: true }, agent)).isError).toBe(false)
   expect(manager.setPluginEnabled).toHaveBeenCalledTimes(1)
   expect(prompted).not.toHaveBeenCalled()

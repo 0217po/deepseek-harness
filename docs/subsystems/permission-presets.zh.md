@@ -70,7 +70,7 @@ interface PresetOption {
 
 ## 切换与 `permission/preset` 事件
 
-`set(session, name)` 验证预设和 Auto 准入，等待 [sandbox-policy](../../packages/sandbox/sandbox-policy) 释放资源并提交变化的文件策略，再记录变化的预设身份和审批策略，并返回资源清空提示。文件策略所有者为所有调用方协调清理，包括直接选择沙箱模式的调用方。重新选择当前生效预设不追加事件。
+`set(session, name)` 解析预设（未知名称抛出异常），在适用时运行 Auto 准入，在 `name` 尚不是生效预设时追加一条仅记日志的 `permission/preset` 事件，然后通过各旋钮自己的 setter（[dsh-sandbox-policy](../../packages/sandbox/sandbox-policy) 的 `setSandboxMode` 与 [dsh-user-approval](../../packages/interaction/user-approval) 的 `setApprovalPolicy`）写入，且仅当该 knob 的生效值发生变化时才写。同一轮次内，选择事件先于旋钮事件出现；重新选择当前生效的预设则什么都不追加。
 
 `permission/preset` 是持久、仅记日志的用户意图：它不进入模型 transcript（文本记录），模型可见的后果由 knob 事件经各自消费方承担；它存在是为了在两个预设共享同一个旋钮组合时，让 `current()` 仍能保住用户选择的究竟是哪一个预设。`permissions` 投影把该选择与两个 knob 事件一同折叠，并保留用于区分空恢复 seed 与新会话的 `session/end-seed` 边界；回放不需要任何追赶状态或原始日志重扫。恢复的 `auto` 选择在 agent 发布前必须存在 live Auto 注册。完整事件声明见[持久化日志事件目录](../persistence-catalog.zh.md)；方法签名见生成的[服务目录](#ctxpermissionpresets--permissionpresetservice)。
 
@@ -132,13 +132,12 @@ resolve(name: string): PresetSpec
 optionOf(name: string): PresetOption
 
 /**
- * Await file-policy cleanup, then record the changed preset and approval policy.
- * Selecting the effective preset again appends nothing.
+ * Record a changed preset, then update each changed knob through its own
+ * setter. Selecting the effective preset again appends nothing.
  * @param session - the session the switch belongs to.
- * @param name - the preset to switch to; unknown names reject.
- * @returns Notices after old execution resources are released and the new preset is recorded.
+ * @param name - the preset to switch to; unknown names throw.
  */
-set(session: Session, name: string): Promise<string[]>
+set(session: Session, name: string): void
 ```
 
 Types: [Session](session.zh.md)

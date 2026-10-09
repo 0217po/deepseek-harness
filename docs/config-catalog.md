@@ -2299,9 +2299,9 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-permission-presets`
 
-- `inject`: `shell` · `approval` · `sessions` · `sessionProjections` · `sandboxPolicy`
+- `inject`: `shell` · `approval` · `sessions` · `sessionProjections`
 - `refs`: [`ApprovalPolicy`](subsystems/approval.md) · [`SandboxMode`](subsystems/sandbox.md) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/interaction/permission-presets/src/index.ts:160`](../packages/interaction/permission-presets/src/index.ts)
+- `source`: [`packages/interaction/permission-presets/src/index.ts:159`](../packages/interaction/permission-presets/src/index.ts)
 
 ```ts config-catalog
 /** The {@link PermissionPresetService} config: preset table and composition default. */
@@ -2438,7 +2438,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-ptc-runtime-node`
 
-- `inject`: `fs` · `subprocess` · `sandbox` · `sandboxPolicy`
+- `inject`: `fs` · `subprocess` · `sandbox` · `sandboxPolicy` · `sessions`
 - `source`: [`packages/ptc-runtime/ptc-runtime-node/src/config.ts:8`](../packages/ptc-runtime/ptc-runtime-node/src/config.ts)
 
 ```ts config-catalog
@@ -2606,7 +2606,7 @@ export interface Config {
 
 - `inject`: `sessionProjections`
 - `refs`: [`SandboxMode`](subsystems/sandbox.md)
-- `source`: [`packages/sandbox/sandbox-policy/src/index.ts:72`](../packages/sandbox/sandbox-policy/src/index.ts)
+- `source`: [`packages/sandbox/sandbox-policy/src/index.ts:71`](../packages/sandbox/sandbox-policy/src/index.ts)
 
 ```ts config-catalog
 /**

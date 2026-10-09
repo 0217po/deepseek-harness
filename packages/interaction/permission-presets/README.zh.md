@@ -82,7 +82,7 @@ kind: "package-reference"
 
 ### 写入路径
 
-`set()` 验证预设与 Auto 准入；文件策略变化时，等待 `sandboxPolicy.setMode()` 完成。清理与沙箱事件提交成功后，记录变化的 `permission/preset` 身份和审批策略。调用方等待完成并接收资源清空提示；清理失败时权限事件保持不变。同一 Session 的并发切换会被拒绝。没有实际变化的选择不追加事件。
+`set()` 解析预设，并在适用时同步执行 Auto 准入检查。切换仅在有效预设变化时追加 `permission/preset`，再通过各自的权威 setter——`dsh-sandbox-policy` 的 `setSandboxMode` 与 `dsh-user-approval` 的 `setApprovalPolicy`——写入每个变化的旋钮。因此，两个预设共享同一组取值时，选择事件仍会保留用户意图。Auto 与 Full access 之间切换时，记录新的身份与变化的审批策略。净变化为零的选择不追加任何内容。
 
 ### 读取侧与 `custom`
 

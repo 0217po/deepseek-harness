@@ -3,8 +3,8 @@
  * deployment's sandbox fallbacks plus per-session resolution: the file-effect
  * {@link SandboxMode}, the `workspace-write` root, and the override kit (the
  * `sandbox/mode` event, its fold, and its write path; the fold is the
- * `sandboxMode` session-projection unit and asynchronous setter live here;
- * `./session-mode.ts` declares the durable event).
+ * `sandboxMode` session-projection unit registered here, while the event and
+ * write path come from `./session-mode.ts`).
  * Before each agent request, the owner also contributes the resolved policy to
  * the cache-safe runtime-context snapshot. The agent loop logs that snapshot as
  * model history, so replay reconstructs the same mode and root the enforcing
@@ -20,18 +20,17 @@
  * @module @deepseek-ai/dsh-sandbox-policy
  */
 
-import { AsyncLocalStorage } from 'node:async_hooks'
 import { isAbsolute } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { z as zod } from 'zod'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-agent'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
-import type { Session, SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
+import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 
-export { SANDBOX_MODES } from './session-mode.ts'
+export { SANDBOX_MODES, setSandboxMode } from './session-mode.ts'
 
 /** Preserve execution-world spelling; enforcing providers resolve filesystem identity on their host. */
 function resolveWorkspaceRoot(path: string): string {
@@ -87,20 +86,6 @@ export interface SandboxPolicyRequest {
   mode?: SandboxMode
 }
 
-/** A process or retained environment that must stop before its Session changes file policy. */
-export interface SandboxPolicyResource {
-  /** Idempotently stop the resource and await cleanup; rejection prevents the policy change. */
-  release(): Promise<void>
-  /** User-facing consequence reported after a successful policy change. */
-  notice?: string
-}
-
-interface Execution {
-  sessionId: SessionId
-  controller: AbortController
-  done: Promise<void>
-}
-
 /** The sandbox-mode projection's state schema (state equals the public shape). */
 const sandboxModeStateSchema = zod.union([
   zod.literal('read-only'),
@@ -137,13 +122,6 @@ export class SandboxPolicyService extends Service {
   readonly defaultMode: SandboxMode
   /** The absolute `workspace-write` fallback root for calls without a session cwd. */
   readonly workspaceRoot: string
-  private readonly resources = new Map<SessionId, Set<SandboxPolicyResource>>()
-  private readonly executions = new Map<SessionId, Set<Execution>>()
-  private readonly activeExecution = new AsyncLocalStorage<Execution>()
-  private readonly changing = new Set<SessionId>()
-  private readonly committing = new Set<SessionId>()
-  private disposed = false
-
   constructor(ctx: Context, config: Config) {
     super(ctx, 'sandboxPolicy')
     // schemastery (static Config) already filled `mode`; the cast records that
@@ -151,27 +129,6 @@ export class SandboxPolicyService extends Service {
     // the process cwd is real branching, resolved absolute either way.
     this.defaultMode = config.mode as SandboxMode
     this.workspaceRoot = resolveWorkspaceRoot(config.workspaceRoot ?? process.cwd())
-    ctx.effect(() => async () => {
-      this.disposed = true
-      for (const executions of this.executions.values()) {
-        for (const execution of executions) execution.controller.abort(new Error('sandbox policy is disposed'))
-      }
-      const results = await Promise.allSettled([...this.resources.values()].flatMap(resources =>
-        [...resources].map(resource => resource.release())))
-      const failure = results.find(result => result.status === 'rejected')
-      if (failure?.status === 'rejected') throw failure.reason
-      this.resources.clear()
-      this.executions.clear()
-    }, 'sandbox policy lifecycle')
-    ctx.on('internal/dispatch', (_mode, name, args) => {
-      if (name !== 'session/event') return
-      const [session, event] = args as [Session, SessionEvent]
-      if (event.type !== 'sandbox/mode' || this.committing.has(session.id)) return
-      if (!this.resources.has(session.id) && !this.executions.has(session.id) && !this.changing.has(session.id)) return
-      if (event.data.mode !== this.resolve({ session }).mode) {
-        throw new Error('sandbox resources are still registered; await sandboxPolicy.setMode() to change the mode')
-      }
-    }, { global: true })
 
     ctx.sessionProjections.register({
       key: 'sandboxMode',
@@ -211,119 +168,6 @@ export class SandboxPolicyService extends Service {
       workspaceRoot: resolveWorkspaceRoot(session?.header.cwd ?? this.workspaceRoot),
       ...session === undefined ? {} : { sessionId: session.id },
     }
-  }
-
-  /**
-   * Cancel admitted operations and release registered resources before recording a new mode.
-   * An unchanged effective mode records the override without clearing resources.
-   * @param session - Session whose file policy changes.
-   * @param mode - Mode for subsequent executions.
-   * @param commit - Optional synchronous commit: validate caller state, invoke the supplied mode writer, then record related changes.
-   * @returns Resource-reset notices after the mode event is committed.
-   * @throws On concurrent changes, disposal, or cleanup failure; cleanup failures leave the mode unchanged.
-   */
-  async setMode(session: Session, mode: SandboxMode, commit?: (writeMode: () => void) => void): Promise<string[]> {
-    this.assertAvailable(session.id)
-    const changed = this.resolve({ session }).mode !== mode
-    const active = this.activeExecution.getStore()
-    if (changed && active?.sessionId === session.id && this.executions.get(session.id)?.has(active)) {
-      throw new Error('sandbox mode cannot change from an operation that the change must cancel')
-    }
-    this.changing.add(session.id)
-    try {
-      const notices: string[] = []
-      if (changed) {
-        const executions = [...this.executions.get(session.id) ?? []]
-        for (const execution of executions) execution.controller.abort(new Error('sandbox mode is changing'))
-        const resources = [...this.resources.get(session.id) ?? []]
-        const pending = [
-          ...executions.map(execution => execution.done.then(() => undefined)),
-          ...resources.map(async (resource) => { await resource.release(); return resource.notice }),
-        ]
-        if (pending.length > 0) {
-          const results = await Promise.allSettled(pending)
-          const failure = results.find(result => result.status === 'rejected')
-          if (failure?.status === 'rejected') throw failure.reason
-          for (const result of results) {
-            if (result.status === 'fulfilled' && result.value !== undefined) notices.push(result.value)
-          }
-          if (this.disposed) throw new Error('sandbox policy was disposed during the mode change')
-        }
-      }
-      const writeMode = (): void => {
-        this.committing.add(session.id)
-        try { session.append('sandbox/mode', { mode }) } finally { this.committing.delete(session.id) }
-      }
-      if (commit === undefined) writeMode()
-      else commit(writeMode)
-      return [...new Set(notices)]
-    } finally { this.changing.delete(session.id) }
-  }
-
-  /**
-   * Register an execution resource under its Session's file policy.
-   * @param sessionId - Session identity carried in the resolved execution policy.
-   * @param resource - Awaited cleanup and optional reset notice.
-   * @returns Disposer for an already stopped resource; contributor unload awaits cleanup before detaching.
-   * @throws While the Session changes mode or this provider is disposed.
-   */
-  registerResource(sessionId: SessionId, resource: SandboxPolicyResource): () => void {
-    this.assertAvailable(sessionId)
-    let resources = this.resources.get(sessionId)
-    if (resources === undefined) this.resources.set(sessionId, resources = new Set())
-    const detach = (): void => {
-      resources.delete(resource)
-      if (resources.size === 0 && this.resources.get(sessionId) === resources) this.resources.delete(sessionId)
-    }
-    const unregister = this.ctx.effect(() => {
-      resources.add(resource)
-      return async () => {
-        if (resources.has(resource)) await resource.release()
-        detach()
-      }
-    }, 'sandbox execution resource')
-    return () => {
-      detach()
-      // Explicit removal follows successful cleanup; the effect then only detaches.
-      void unregister()
-    }
-  }
-
-  /**
-   * Run one cancellable operation, including asynchronous preparation and final cleanup.
-   * @param sessionId - Session whose standing mode applies to the operation.
-   * @param signal - Caller-owned cancellation.
-   * @param run - Operation that observes the combined signal and awaits its own cleanup before settling.
-   * @returns The operation's result; mode changes await its settlement even when it rejects.
-   * @throws While the Session changes mode or this provider is disposed.
-   */
-  async withExecution<T>(sessionId: SessionId, signal: AbortSignal, run: (signal: AbortSignal) => Promise<T>): Promise<T> {
-    this.assertAvailable(sessionId)
-    const controller = new AbortController()
-    const done = Promise.withResolvers<undefined>()
-    const execution = { sessionId, controller, done: done.promise }
-    const release = this.ctx.effect(() => {
-      let executions = this.executions.get(sessionId)
-      if (executions === undefined) this.executions.set(sessionId, executions = new Set())
-      executions.add(execution)
-      return () => {
-        controller.abort(new Error('sandbox execution scope released'))
-      }
-    }, 'sandbox execution scope')
-    try {
-      return await this.activeExecution.run(execution, () => run(AbortSignal.any([signal, controller.signal])))
-    } finally {
-      const executions = this.executions.get(sessionId)
-      executions?.delete(execution)
-      if (executions?.size === 0) this.executions.delete(sessionId)
-      done.resolve(undefined)
-      await release()
-    }
-  }
-
-  private assertAvailable(sessionId: SessionId): void {
-    if (this.disposed) throw new Error('sandbox policy is disposed')
-    if (this.changing.has(sessionId)) throw new Error('sandbox mode change is still in progress')
   }
 
   /**

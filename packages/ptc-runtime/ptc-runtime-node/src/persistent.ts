@@ -8,6 +8,7 @@ import { clampTimeout } from '@deepseek-ai/dsh-timeout'
 import { SandboxUnavailableError, classifyRunnerFailure, isRunnerSpawnFailure } from '@deepseek-ai/dsh-sandbox'
 import type { ConfinedArgv, SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
+import type { PolicyProcesses } from './policy-processes.ts'
 import type { ResolvedConfig } from './config.ts'
 import { replyToBinding, validateBindings } from './bindings.ts'
 import { JsonChannel } from './channel.ts'
@@ -58,12 +59,10 @@ class Kernel {
   closed = false
 
   constructor(
-    private readonly ctx: Context, private readonly config: ResolvedConfig, readonly policy: SandboxExecutionPolicy, retained: boolean,
+    private readonly ctx: Context, private readonly config: ResolvedConfig,
+    readonly policy: SandboxExecutionPolicy, processes: PolicyProcesses,
   ) {
-    this.unregister = policy.sessionId === undefined ? undefined : ctx.sandboxPolicy.registerResource(policy.sessionId, {
-      release: () => this.dispose(),
-      ...retained ? { notice: 'PTC variables were cleared after the sandbox mode changed. Recreate variables before using them.' } : {},
-    })
+    this.unregister = processes.register(policy, () => this.dispose())
   }
 
   assertIdle(): void {
@@ -297,8 +296,9 @@ export class InMemoryExecution {
    * Own retained execution resources under the existing Node provider.
    * @param ctx - Provider lifecycle and execution services.
    * @param config - Validated limits and selected executable.
+   * @param processes - Provider-owned policy invalidation and cleanup.
    */
-  constructor(private readonly ctx: Context, private readonly config: ResolvedConfig) {
+  constructor(private readonly ctx: Context, private readonly config: ResolvedConfig, private readonly processes: PolicyProcesses) {
     if ('pkg' in process && this.config.bootstrapPath === undefined) throw new Error('Persistent PTC requires an explicit bootstrapPath in a packaged executable')
     ctx.effect(() => async () => {
       this.disposed = true
@@ -351,7 +351,7 @@ export class InMemoryExecution {
     }
     if (!kernel || kernel.closed) {
       if (kernel) this.kernels.delete(kernel)
-      kernel = new Kernel(this.ctx, this.config, { ...spec.sandboxPolicy }, spec.stateOwner !== undefined)
+      kernel = new Kernel(this.ctx, this.config, { ...spec.sandboxPolicy }, this.processes)
       this.kernels.add(kernel)
       if (spec.stateOwner !== undefined) this.owners.set(spec.stateOwner, kernel)
     }

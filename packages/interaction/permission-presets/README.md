@@ -82,7 +82,7 @@ The observable behavior is covered in [Use this package](#use-this-package); thi
 
 ### Write path
 
-`set()` validates the preset and Auto admission, then awaits `sandboxPolicy.setMode()` when the file policy changes. After cleanup and the sandbox event succeed, it records a changed `permission/preset` identity and approval policy. Callers await completion and receive resource-reset notices; cleanup failure leaves permission events unchanged. Concurrent changes to one Session reject. A net-zero selection appends nothing.
+`set()` resolves the preset and synchronously runs Auto admission when applicable. Transitions append `permission/preset` only when the effective preset changes, then write each changed knob through its canonical setter — `setSandboxMode` from `dsh-sandbox-policy` and `setApprovalPolicy` from `dsh-user-approval`. The selection event therefore preserves user intent when two presets share a bundle. Switching between Auto and Full access records the new identity and the changed approval policy. A net-zero selection appends nothing.
 
 ### Read side and `custom`
 

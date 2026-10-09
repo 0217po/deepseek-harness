@@ -51,9 +51,7 @@ kind: "package-reference"
 
 ### 切换会话模式
 
-运行时切换使用 `await ctx.sandboxPolicy.setMode(session, mode)`。服务取消已接纳的操作，等待登记资源停止，再追加持久的 `sandbox/mode` 事件。清理失败时保留旧模式；切换期间拒绝新的执行登记和资源登记。有效模式未变化时，记录覆盖值并保留资源。权限预设使用同一个操作。每个 Session 保留不可变的工作区根目录，所选模式通过回放跨重启保留。
-
-调用方通过 `withExecution(sessionId, signal, run)` 包含审批、执行和最终清理。模式切换会等待整个操作完成，包括嵌套工具。操作不能发起会取消自身的模式切换。提供方通过 `registerResource(sessionId, resource)` 登记存活进程，成功清理后移除登记。资源清理必须幂等；模式切换或贡献方卸载时都会等待清理完成。仍有执行或资源登记时，直接写入模式事件会被拒绝。
+会话的模式可以在运行时通过 UI 策略控件或显式切换来更改；切换记录在会话日志中，并在该会话的下一次受限调用时生效。切换通过回放跨重启保留，每个会话保持自己的模式——两个会话绝不会看到彼此状态。切换后的会话继续以不可变的工作区 cwd 作为写入边界。
 
 ### 失败与恢复
 
@@ -86,7 +84,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`SandboxPolicyService`、`Config` schema、策略解析与上下文贡献 |
-| [`src/session-mode.ts`](src/session-mode.ts) | `sandbox/mode` 事件与可接受的模式值 |
+| [`src/session-mode.ts`](src/session-mode.ts) | `sandbox/mode` 事件、其 fold 与写入路径 |
 
 </details>
 

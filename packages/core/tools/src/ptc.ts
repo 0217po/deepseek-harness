@@ -6,7 +6,7 @@
  * @module @deepseek-ai/dsh-tools/src/ptc
  */
 
-import { symbols } from '@deepseek-ai/cordis'
+import { symbols, type Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createUserMessage, HarnessError } from '@deepseek-ai/dsh-llm'
 declare module '@deepseek-ai/dsh-llm' {
@@ -23,6 +23,7 @@ import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type { ApprovalService } from '@deepseek-ai/dsh-user-approval'
 import { deepFreeze, snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import { defineTool, parameterSchemaSpecToJsonSchema } from './schema.ts'
+import { PtcCalls } from './ptc-calls.ts'
 import { TOOL_RUNTIME_SCHEDULER } from './index.ts'
 import type { PtcDispatchLog, ToolDefinition, ToolExecutionResult, ToolRuntime, ToolRunContext } from './index.ts'
 import type {} from './types.ts'
@@ -283,8 +284,6 @@ type RunCodeOutput = { logs: string[]; result?: JsonValue; sandbox?: PtcRunSandb
  * off its public service API and flow here as closures instead.
  */
 export interface RunCodeBridgeOptions {
-  /** Scope execution through the file-policy owner, including approval and nested-call cleanup. */
-  runSandboxExecution: (exec: ToolRunContext, run: (signal: AbortSignal) => Promise<RunCodeOutput>) => Promise<RunCodeOutput>
   /** Captures the calling Session current directory before program creation. */
   resolveWorkingDirectory: (exec: ToolRunContext) => Promise<string | undefined>
   /** Reads the approval channel when a program requests a wider sandbox mode. */
@@ -315,11 +314,13 @@ export interface RunCodeBridgeOptions {
  * @param registry - the owning registry (sub-calls go through its `execute`,
  *   bindings cover its registered tools).
  * @param options - the registry-private capabilities described above.
+ * @param ctx - Owning registry context, independent of the calling Agent.
  * @returns the registry-ready definition.
  */
-export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeOptions): ToolDefinition {
+export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeOptions, ctx: Context): ToolDefinition {
   const { requireRuntime, peekRuntime, maxParallel, shapeDispatchLog } = options
   const stateOwners = new WeakMap<object, WeakSet<PtcRuntime>>()
+  const calls = new PtcCalls(ctx)
   const definition = defineTool({
     name: RUN_CODE_NAME,
     // The description and `code` parameter description are placeholders here:
@@ -737,7 +738,8 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
           callSignal.removeEventListener('abort', onOuterAbort)
         }
       }
-      return runtime.sandboxMode === undefined ? run(exec.signal) : options.runSandboxExecution(exec, run)
+      return runtime.sandboxMode === undefined || exec.agent === undefined ? run(exec.signal)
+        : calls.run(exec.agent.session.id, exec.signal, () => options.resolveSandboxPolicy(exec).mode, run)
     },
     // The model-authored description is the call's always-visible UI label
     // (the bash `description` precedent); the program itself rides rawInput.

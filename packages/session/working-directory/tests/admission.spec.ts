@@ -1,3 +1,4 @@
+import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 /** Actual request admission follows directory and permission changes made after assembly. */
 import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -32,7 +33,7 @@ describe.each(['pre-step', 'prepareCall'] as const)('%s context changes', (phase
         if (changed) return
         changed = true
         await ctx.workingDirectory.set(agent, selected)
-        await ctx.sandboxPolicy.setMode(agent.session, 'danger-full-access')
+        setSandboxMode(agent.session, 'danger-full-access')
         ctx.approval.setPolicy(agent, 'ask')
       }
       if (phase === 'pre-step') {

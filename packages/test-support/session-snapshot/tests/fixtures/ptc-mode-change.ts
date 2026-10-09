@@ -1,3 +1,4 @@
+import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 /** Change the file policy from outside the active PTC call while a nested tool awaits cancellation. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session } from '@deepseek-ai/dsh-session'
@@ -11,7 +12,7 @@ export function apply(ctx: Context): void {
   const requested = Promise.withResolvers<Session | undefined>()
   // This continuation belongs to the test driver, outside any program's execution context.
   const changed = requested.promise.then(async (session) => {
-    if (session !== undefined) await ctx.sandboxPolicy.setMode(session, 'read-only')
+    if (session !== undefined) setSandboxMode(session, 'read-only')
   })
   void changed.catch((error: unknown) => { ctx.logger.error(error) })
   ctx.effect(() => async () => { requested.resolve(undefined); await changed }, 'snapshot policy change')

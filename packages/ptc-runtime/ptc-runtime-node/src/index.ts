@@ -15,6 +15,7 @@ import { replyToBinding, validateBindings } from './bindings.ts'
 import { JsonChannel } from './channel.ts'
 import { bootstrapArgs } from './launch.ts'
 import { NodeConfig, validateConfig } from './config.ts'
+import { PolicyProcesses } from './policy-processes.ts'
 import { InMemoryExecution } from './persistent.ts'
 import type { Config, ResolvedConfig } from './config.ts'
 export type { Config } from './config.ts'
@@ -33,11 +34,12 @@ function record(value: unknown): value is Record<string, unknown> { return typeo
 
 /** Node execution under file policy, with optional owner-scoped retained memory. */
 export class NodePtcRuntime extends PtcRuntime {
-  static inject = ['fs', 'subprocess', 'sandbox', 'sandboxPolicy']
+  static inject = ['fs', 'subprocess', 'sandbox', 'sandboxPolicy', 'sessions']
   static Config = NodeConfig
   readonly language = 'typescript'
   readonly isolation = 'process'
   private readonly inMemory?: InMemoryExecution
+  private readonly processes: PolicyProcesses
 
   override get programFormat(): 'function-body' | 'repl' { return this.inMemory ? 'repl' : 'function-body' }
   override get executionInstructions(): string {
@@ -52,8 +54,9 @@ export class NodePtcRuntime extends PtcRuntime {
     super(ctx)
     this.config = { ...config, nodeExecutable: config.nodeExecutable ?? process.execPath } as ResolvedConfig
     validateConfig(this.config)
+    this.processes = new PolicyProcesses(ctx)
     if (this.config.executionMode === 'persistent-in-memory') {
-      this.inMemory = new InMemoryExecution(ctx, this.config)
+      this.inMemory = new InMemoryExecution(ctx, this.config, this.processes)
       return
     }
     ctx.effect(() => async () => {
@@ -75,7 +78,7 @@ export class NodePtcRuntime extends PtcRuntime {
   }
 
   /**
-   * Resolve the selected execution mode, applying file policy only to per-call processes.
+   * Resolve directory, deadline and file policy for the selected execution mode.
    * @param request - Program, bindings, optional cwd/deadline, and resolved authority.
    * @returns Complete execution inputs with a capped numeric budget or an explicit null deadline.
    */
@@ -99,6 +102,7 @@ export class NodePtcRuntime extends PtcRuntime {
    * @returns Logs, JSON completion or failure; retained processes remain until release or invalidation.
    */
   async run(spec: PtcRunSpec): Promise<PtcRunResult> {
+    await this.processes.wait(spec.sandboxPolicy?.sessionId)
     if (this.inMemory) return this.inMemory.run(spec)
     if (this.disposed) throw new Error('ptc-runtime-node: run after disposal')
     if (spec.sandboxPolicy === undefined) throw new Error('ptc-runtime-node: run requires a resolved sandbox policy')
@@ -140,7 +144,6 @@ export class NodePtcRuntime extends PtcRuntime {
     const wallTimer = spec.timeoutMs === null ? undefined
       : setTimeout(() => { timedOut = true; controller.abort('execution deadline reached') }, spec.timeoutMs)
     let stopping: Promise<boolean> | undefined
-    let unregister: (() => void) | undefined
     const stop = (): Promise<boolean> => {
       if (stopping !== undefined) return stopping
       const cleanup = handle === undefined ? Promise.resolve(true) : terminateProcess(handle, this.config.graceMs)
@@ -177,6 +180,10 @@ export class NodePtcRuntime extends PtcRuntime {
         ? { kind: 'timeout', message: `execution deadline reached (${spec.timeoutMs}ms)` }
         : { kind: 'abort', message: messageOf(signal.reason) })
     }
+    const unregister = this.processes.register(policy, async () => {
+      controller.abort(new Error('sandbox mode changed'))
+      await stop()
+    })
     signal.addEventListener('abort', onAbort, { once: true })
     if (signal.aborted) onAbort()
     try {
@@ -212,11 +219,6 @@ export class NodePtcRuntime extends PtcRuntime {
       if (packaged) {
         env.DSH_PTC_RUNTIME_NODE = '1'
         env.NODE_OPTIONS = heapFlag
-      }
-      if (policy.sessionId !== undefined) {
-        unregister = this.ctx.sandboxPolicy.registerResource(policy.sessionId, {
-          release: async () => { controller.abort(new Error('sandbox mode is changing')); await stop() },
-        })
       }
       handle = this.ctx.subprocess.spawn({ argv: confined?.argv ?? argv, cwd: spec.cwd, env, stdio: { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', control: 'pipe' }, graceMs: this.config.graceMs, signal })
       const launched = handle

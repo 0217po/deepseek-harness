@@ -1,3 +1,4 @@
+import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { Context } from '@deepseek-ai/cordis'
@@ -12,7 +13,7 @@ import type { PtcRunRequest, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import ToolRuntime, { CodeRunFailedError, RUN_CODE_NAME, TOOL_ABORTED_BEFORE_DISPATCH, defineContentToolFixture, defineTool } from '@deepseek-ai/dsh-tools'
 import type { Config, JsonSchemaNode, PostToolDecision, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import ApprovalService, { type ApprovalOutcome, type ApprovalRequest } from '@deepseek-ai/dsh-user-approval'
 import type { SessionEventMap } from '@deepseek-ai/dsh-session'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
@@ -2261,6 +2262,7 @@ describe('PTC standing file policy and sandbox outcomes', () => {
 describe('per-program execution controls', () => {
   async function controlledSetup(approval = true) {
     const state = await setup()
+    await state.ctx.plugin(SessionStore)
     await state.ctx.plugin(SessionProjections)
     await state.ctx.plugin(SandboxPolicy, { mode: 'read-only', workspaceRoot: process.cwd() })
     if (approval) await state.ctx.plugin(ApprovalService, { policy: 'ask' })
@@ -2269,7 +2271,7 @@ describe('per-program execution controls', () => {
       executionInstructions: { get: () => 'Programs start with an empty environment.' },
       timeout: { get: () => ({ defaultMs: 120_000, maxMs: 600_000 }) },
     })
-    const session = Session.create(SessionId('program-controls'))
+    const session = state.ctx.sessions.create(SessionId('program-controls'))
     session.append('turn/start', { turn: 1 })
     const agent = { ctx: state.ctx, session } as Agent
     const execute = (args: Record<string, unknown>, signal = testToolSignal) => state.tools.execute({
@@ -2386,7 +2388,7 @@ describe('per-program execution controls', () => {
     const ask = vi.fn(() => Promise.resolve<ApprovalOutcome>('allowed-once'))
     ctx.on('approval/request', ask)
     try {
-      await ctx.sandboxPolicy.setMode(session, 'workspace-write')
+      setSandboxMode(session, 'workspace-write')
       expect((await execute({ sandbox_permissions: 'workspace-write', justification: 'Use current file permissions' })).isError).toBe(false)
       expect(runtime.lastRequest?.stateOwner).toBe(agent)
       expect(ask).not.toHaveBeenCalled()
@@ -2412,7 +2414,7 @@ describe('per-program execution controls', () => {
     try {
       await asked.promise
       if (source === 'caller') controller.abort('cancel outer approval')
-      else await ctx.sandboxPolicy.setMode(session, 'workspace-write')
+      else setSandboxMode(session, 'workspace-write')
       expect((await result).isError).toBe(true)
       expect(runtime.lastRequest).toBeUndefined()
     } finally { answer.resolve('cancelled'); await result; await ctx.fiber.dispose() }
