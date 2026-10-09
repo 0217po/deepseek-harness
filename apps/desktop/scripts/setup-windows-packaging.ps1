@@ -7,6 +7,8 @@ param(
 $ErrorActionPreference = 'Stop'
 if ($Root -notmatch '^[A-Za-z]:[\\/]') { throw 'Root must be an absolute local drive directory' }
 $rootPath = [IO.Path]::GetFullPath($Root)
+$drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($rootPath))
+if ($drive.DriveType -ne [IO.DriveType]::Fixed) { throw 'Packaging root requires a fixed local drive' }
 for ($ancestor = [IO.DirectoryInfo]::new($rootPath); $null -ne $ancestor; $ancestor = $ancestor.Parent) {
     if ($ancestor.Exists -and ($ancestor.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Packaging root cannot contain linked directories' }
 }

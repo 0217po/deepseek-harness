@@ -335,7 +335,9 @@ async function main(): Promise<void> {
   const { target } = invocation
   const environment = target.platform === 'darwin' && invocation.unsigned
     ? localMacOSPackageEnvironment()
-    : loadDesktopPackageEnvironment(target.platform, process.env, APP_ROOT, { unsigned: invocation.unsigned })
+    : loadDesktopPackageEnvironment(target.platform, process.env, APP_ROOT, {
+      unsigned: invocation.unsigned, prepareOnly: invocation.prepareOnly,
+    })
   const productVersion = packageVersion(join(APP_ROOT, 'package.json'), 'desktop package')
   // Release settings come from the selected configuration files, so the version this run publishes is an
   // argument; the environment variable below only carries it to the child processes that build.

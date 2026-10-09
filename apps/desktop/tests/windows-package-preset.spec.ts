@@ -23,6 +23,11 @@ it('loads unsigned public settings without requiring the signing secret file or 
     }, join(root, 'missing-checkout'), { unsigned: true })
     expect(environment.DSH_DESKTOP_APP_ID).toBe('com.example.desktop')
     expect(environment.DSH_DESKTOP_WINDOWS_TOKEN_PIN).toBeUndefined()
+    const prepared = loadDesktopPackageEnvironment('win32', {
+      DSH_PACKAGING_CONFIG_DIR: root, DSH_PACKAGING_PRESET: 'test',
+    }, root, { prepareOnly: true })
+    expect(prepared.DSH_DESKTOP_WINDOWS_TOKEN_PIN).toBeUndefined()
+    expect(prepared.DSH_PACKAGING_PRESET).toBe('test')
     expect(() => loadDesktopPackageEnvironment('win32', { DSH_PACKAGING_CONFIG_DIR: root, DSH_PACKAGING_PRESET: 'test' }))
       .toThrow(/cannot read/u)
   })
@@ -41,11 +46,24 @@ it('resolves signing file paths relative to the secret file and rejects public o
   })
 })
 
+it('preserves the selected preset when Windows environment enumeration uses lowercase keys', async () => {
+  await withPreset(async (root) => {
+    const values: NodeJS.ProcessEnv = { dsh_packaging_config_dir: root, dsh_packaging_preset: 'test' }
+    const environment = new Proxy(values, {
+      get: (target, name) => typeof name === 'string' ? target[name.toLowerCase()] : undefined,
+    })
+    const selected = loadDesktopPackageEnvironment('win32', environment, root, { unsigned: true })
+    expect(selected.DSH_PACKAGING_PRESET).toBe('test')
+  })
+})
+
 it('rejects missing presets, traversal, deployment mismatches and secrets in public configuration', async () => {
   await withPreset(async (root) => {
     const env = { DSH_PACKAGING_CONFIG_DIR: root, DSH_PACKAGING_PRESET: 'test' }
     const load = (override = {}) => loadDesktopPackageEnvironment('win32', { ...env, ...override }, root, { unsigned: true })
     expect(() => load({ DSH_PACKAGING_CONFIG_DIR: 'relative' })).toThrow(/absolute/u)
+    expect(() => load({ DSH_PACKAGING_CONFIG_DIR: undefined })).toThrow(/absolute/u)
+    expect(() => loadDesktopPackageEnvironment('darwin', env)).toThrow(/Windows only/u)
     expect(() => load({ DSH_PACKAGING_PRESET: '../secrets' })).toThrow(/preset must/u)
     expect(() => load({ DSH_PACKAGING_PRESET: 'production' })).toThrow(/cannot read/u)
     await writeFile(join(root, 'presets/test.env'), 'DSH_DESKTOP_AUTO_UPDATE_ENV=production\n')

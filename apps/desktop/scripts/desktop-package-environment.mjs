@@ -37,7 +37,7 @@ export function localMacOSPackageEnvironment(environment = process.env) {
  * @param {'win32' | 'darwin'} platform Target platform.
  * @param {NodeJS.ProcessEnv} environment Parent environment, retained only for unrelated build tools.
  * @param {string} appRoot Desktop application directory; relative credential paths resolve here.
- * @param {{ unsigned?: boolean }} options Unsigned presets never read the signing credential file.
+ * @param {{ unsigned?: boolean, prepareOnly?: boolean }} options Unsigned and preparation-only presets never read signing credentials.
  * @returns {NodeJS.ProcessEnv} Isolated environment with file-owned release settings.
  */
 export function loadDesktopPackageEnvironment(platform, environment = process.env, appRoot = APP_ROOT, options = {}) {
@@ -56,12 +56,13 @@ export function loadDesktopPackageEnvironment(platform, environment = process.en
     : /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN)|WINDOWS_SIGNATURE_CACHE_(?:DIR|CONCURRENCY))|DOWNLOAD_TEST_(?:ORIGIN|RELEASE_ID))$/u.test(name))
   if (preset !== undefined) {
     if (settings.DSH_DESKTOP_AUTO_UPDATE_ENV !== preset) throw new Error('desktop package: preset deployment must match its name')
-    if (!options.unsigned) Object.assign(settings, readSettings(join(environment.DSH_PACKAGING_CONFIG_DIR, 'secrets', 'windows-signing.env'),
+    if (!options.unsigned && !options.prepareOnly) Object.assign(settings, readSettings(join(dirname(dirname(path)), 'secrets', 'windows-signing.env'),
       name => /^DSH_DESKTOP_WINDOWS_(?:CER_FILE|SIGNTOOL|KEY_CONTAINER|TOKEN_PIN)$/u.test(name)))
   }
   return {
     ...Object.fromEntries(Object.entries(environment).filter(([name]) => !AMBIENT_RELEASE_SETTING.test(name))),
     ...settings,
+    ...(preset === undefined ? {} : { DSH_PACKAGING_PRESET: preset }),
   }
 }
 

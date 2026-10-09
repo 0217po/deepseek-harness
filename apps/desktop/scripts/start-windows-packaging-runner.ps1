@@ -10,6 +10,9 @@ foreach($entry in @(Get-ChildItem Env:)) {
 }
 $env:PATH=$runnerPath
 if (-not [IO.Path]::IsPathRooted($ConfigRoot) -or -not (Test-Path -LiteralPath $ConfigRoot -PathType Container)) { throw 'ConfigRoot must identify an existing absolute directory' }
+if ($ConfigRoot -notmatch '^[A-Za-z]:[\\/]') { throw 'ConfigRoot requires an absolute local drive directory' }
+$drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot([IO.Path]::GetFullPath($ConfigRoot)))
+if ($drive.DriveType -ne [IO.DriveType]::Fixed) { throw 'ConfigRoot requires a fixed local drive' }
 $env:DSH_PACKAGING_CONFIG_DIR=[IO.Path]::GetFullPath($ConfigRoot)
 $env:DSH_TELEMETRY_DISABLED='1'
 $env:POWERSHELL_TELEMETRY_OPTOUT='1'

@@ -1,4 +1,5 @@
 /** Resolve the version used by the manual Windows packaging workflow. */
+
 /**
  * Resolve an explicit version or a UTC date/run/attempt identifier without release storage access.
  * @param environment Manual version and GitHub run identity.

@@ -12,14 +12,14 @@ export function localMacOSPackageEnvironment(environment?: NodeJS.ProcessEnv): N
  * @param platform Target platform.
  * @param environment Parent environment, retained only for unrelated build tools.
  * @param appRoot Desktop application directory; relative credential paths resolve here.
- * @param options Unsigned presets never read the signing credential file.
+ * @param options Unsigned and preparation-only presets never read signing credentials.
  * @returns Isolated environment with file-owned release settings.
  */
 export function loadDesktopPackageEnvironment(
   platform: 'win32' | 'darwin',
   environment?: NodeJS.ProcessEnv,
   appRoot?: string,
-  options?: { unsigned?: boolean },
+  options?: { unsigned?: boolean, prepareOnly?: boolean },
 ): NodeJS.ProcessEnv
 
 /**
