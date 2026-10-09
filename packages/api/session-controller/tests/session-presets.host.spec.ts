@@ -50,6 +50,8 @@ interface HarnessOptions {
   readonly locked?: ReadonlySet<SessionId>
   /** Declared presets whose activation failed. */
   readonly broken?: ReadonlySet<string>
+  /** Requested presets whose resolution waits for the paired promise. */
+  readonly resolving?: ReadonlyMap<string, Promise<void>>
   /** Workspace placement served to `workspaceId` requests. */
   readonly workspace?: { readonly members: readonly SessionId[]; readonly archived: readonly SessionId[] }
 }
@@ -85,7 +87,8 @@ async function harness(options: HarnessOptions = {}) {
     }
     ctx.provide('agentPresets', {
       defaultId: presets[0],
-      resolve: (id?: string) => Promise.resolve().then(() => ({ id: known(id) })),
+      resolve: (id?: string) => Promise.resolve(id === undefined ? undefined : options.resolving?.get(id))
+        .then(() => ({ id: known(id) })),
       mount: (_ctx: Context, id?: string) => Promise.resolve().then(() => ({ id: usable(id) })),
       select: async (agent: Agent, agentPreset: string) => {
         usable(agentPreset)
@@ -336,6 +339,27 @@ describe('session.create reuse of a live blank Session', () => {
     expect(presetOf(SessionId('draft'))).toBe('standard')
   })
 
+  it('claims one Session in arrival order when an earlier preset resolves later', async () => {
+    const minimal = Promise.withResolvers<undefined>()
+    const { remote, selections, presetOf } = await harness({
+      presets: ['standard', 'minimal'], resolving: new Map([['minimal', minimal.promise]]),
+    })
+    await remote.create({ sessionId: SessionId('draft') })
+
+    const first = remote.create({ sessionId: SessionId('draft'), agentPreset: 'minimal' })
+    const second = remote.create({ sessionId: SessionId('draft') })
+    await new Promise(resolve => setTimeout(resolve, 0))
+    minimal.resolve(undefined)
+
+    expect(await first).toMatchObject({ ok: true, value: { sessionId: 'draft', agentPreset: 'minimal' } })
+    expect(await second).toMatchObject({ ok: true, value: { sessionId: 'draft', agentPreset: 'standard' } })
+    expect(selections).toEqual([
+      { sessionId: 'draft', agentPreset: 'minimal' },
+      { sessionId: 'draft', agentPreset: 'standard' },
+    ])
+    expect(presetOf(SessionId('draft'))).toBe('standard')
+  })
+
   it('shares one creation between concurrent callers of a new identity', async () => {
     const { ctx, remote } = await harness({ presets: ['standard'] })
 
@@ -364,6 +388,17 @@ describe('session.create reuse of a live blank Session', () => {
       error: { code: 'session/conflict', details: { sessionId: 'other', existingCwd: elsewhere } },
     })
     expect(ctx.agents.list().map(agent => agent.id)).toEqual(['other'])
+  })
+
+  it('refuses a Session in another directory before resolving the requested preset', async () => {
+    const { remote } = await harness({ presets: ['standard'] })
+    const elsewhere = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-session-preset-elsewhere-')))
+    tempDirs.push(elsewhere)
+    await remote.create({ sessionId: SessionId('other'), cwd: elsewhere })
+
+    const response = await remote.create({ sessionId: SessionId('other'), agentPreset: 'nope' })
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'session/conflict', details: { sessionId: 'other' } } })
   })
 
   it('leaves a subagent identity to subagent routing', async () => {
@@ -405,7 +440,7 @@ describe('session.create reuse of a live blank Session', () => {
     })
     if (response.ok) throw new Error('unreachable')
     expect('existingPreset' in response.error.details).toBe(false)
-    expect(response.error.message).toContain('records no agent preset')
+    expect(response.error.message).toBe('the deployment composes no agent preset roster, so session "s7" cannot run preset "standard"')
   })
 })
 

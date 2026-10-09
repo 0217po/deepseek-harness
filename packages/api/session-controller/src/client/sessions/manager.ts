@@ -494,8 +494,8 @@ export class SessionManager {
     } = {},
   ): Promise<RemoteResult<{ sessionId: SessionId }>> {
     const shared = {
-      ...opts.sessionId === undefined ? {} : { sessionId: opts.sessionId },
-      ...opts.agentPreset === undefined ? {} : { agentPreset: opts.agentPreset },
+      ...(opts.sessionId === undefined ? {} : { sessionId: opts.sessionId }),
+      ...(opts.agentPreset === undefined ? {} : { agentPreset: opts.agentPreset }),
     }
     const payload = opts.workspaceId !== undefined
       ? { workspaceId: opts.workspaceId, ...shared }

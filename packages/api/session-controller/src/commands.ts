@@ -33,6 +33,7 @@ import {
   apiSessionSubagentOwnershipError,
   hasApiSessionSubagentOwner,
   inspectApiSession,
+  type ApiSessionCreated,
 } from './agent.ts'
 import type {
   SessionAttachmentRequest,
@@ -117,9 +118,9 @@ export class SessionCommandController {
       }
     }
     const cwd = workspace?.path ?? request.cwd ?? this.defaultCwd
-    let adopted: Agent
+    let created: ApiSessionCreated
     try {
-      adopted = await this.agents.createSession({
+      created = await this.agents.createSession({
         ...(request.sessionId === undefined ? {} : { sessionId: request.sessionId }),
         cwd,
         ...(request.agentPreset === undefined ? {} : { agentPreset: request.agentPreset }),
@@ -129,7 +130,7 @@ export class SessionCommandController {
     } catch (error) {
       this.rejectCreation(error)
     }
-    const sessionId = adopted.id
+    const sessionId = created.agent.id
     if (workspace !== undefined) {
       try {
         await workspace.attachSession(sessionId)
@@ -141,8 +142,7 @@ export class SessionCommandController {
         )
       }
     }
-    const agentPreset = this.agents.presetForSession(adopted.session)
-    return { sessionId, ...(agentPreset === undefined ? {} : { agentPreset }) }
+    return { sessionId, ...(created.agentPreset === undefined ? {} : { agentPreset: created.agentPreset }) }
   }
 
   /**
