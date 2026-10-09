@@ -11,7 +11,7 @@ description: "新会话会创建新的 Agent，不再复用已有空 Session。"
 
 在 Web 和 Desktop 中，新会话按当前预设定义创建新的 Session 和 Agent。此前该操作会复用工作区内已有的空 Session，因而可能保留较早的预设定义。
 
-客户端调用 `uiWorkspace.startSession(workspaceId)` 采用相同行为。通过 `openWorkspace` 或 `connectWorkspace` 重连工作区时仍复用符合条件的空 Session。带草稿准备选项的调用保留已有复用与内容规则。已有 Agent 保留其预设组合；切换组合包后，全局可选工具会在其下一次请求时更新。
+客户端调用 `uiWorkspace.startSession(workspaceId)` 采用相同行为。通过 `openWorkspace` 或 `connectWorkspace` 重连工作区时仍复用符合条件的空 Session，该 Session 运行请求的或默认的预设，见 [`session.create` 空白会话复用](../session-create-blank-reuse/guide.zh.md)。带草稿准备选项的调用保留已有复用与内容规则。已有 Agent 保留其预设组合；切换组合包后，全局可选工具会在其下一次请求时更新。
 
 ## 迁移
 

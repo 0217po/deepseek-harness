@@ -341,7 +341,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'target', description: 'known Session identity or durable direct-parent subagent address to display.' }],
       },
       {
-        signature: 'openWorkspace(workspaceId: WorkspaceId, beforeOpen?: (sessionId: SessionId) => void, options?: NewSessionOptions): Promise<void>',
+        signature: 'openWorkspace( workspaceId: WorkspaceId, beforeOpen?: (sessionId: SessionId) => void, options?: Pick<StartSessionOptions, \'agentPreset\'>, ): Promise<void>',
         description: 'Connect a Workspace and open its Session unless a later navigation supersedes it.',
         parameters: [{ name: 'workspaceId', description: 'target Workspace.' }, { name: 'beforeOpen', description: 'optional synchronous preparation for the selected Session, skipped after supersession; a throw aborts the open and releases the retained reference.' }, { name: 'options', description: 'choices for the Session the connection creates or reuses.' }],
         returns: 'completion; a superseded request may create a Session but does not open it.',
@@ -354,7 +354,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the child SessionId after creation and inherited-title increment.',
       },
       {
-        signature: 'connectWorkspace(workspaceId: WorkspaceId, options?: NewSessionOptions): Promise<SessionId>',
+        signature: 'connectWorkspace(workspaceId: WorkspaceId, options?: Pick<StartSessionOptions, \'agentPreset\'>): Promise<SessionId>',
         description: 'Resolve the Session for a new conversation in a Workspace: the Host reuses the first listed blank member while it is reusable and otherwise creates one, under the requested preset or the Host default.',
         parameters: [{ name: 'workspaceId', description: 'target Workspace.' }, { name: 'options', description: 'choices for the created or reused Session.' }],
         returns: 'a Session already addressable through the Session Controller.',
@@ -720,10 +720,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type MatchedShare<E extends SlotEntryDef, M> = E[\'kind\'] extends \'chain\' ? {\n    matched: M;\n} : object;',
   },
   {
-    name: 'NewSessionOptions',
-    declaration: 'export interface NewSessionOptions {\n    readonly agentPreset?: string;\n}',
-  },
-  {
     name: 'ObservableSnapshot',
     declaration: 'export interface ObservableSnapshot<T> {\n    getSnapshot(): T;\n    subscribe(fn: () => void): () => void;\n}',
   },
@@ -989,7 +985,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'StartSessionOptions',
-    declaration: 'export interface StartSessionOptions extends DraftInitializationOptions, NewSessionOptions {\n}',
+    declaration: 'export interface StartSessionOptions extends DraftInitializationOptions {\n    readonly agentPreset?: string;\n}',
   },
   {
     name: 'StoreDecl',
