@@ -58,7 +58,7 @@ describe('AssistantMarkdown local-path images', () => {
   it.each([BASE, 'dsh-app://app/'])('renders a local image in closing prose through %s', (base) => {
     vi.spyOn(document, 'baseURI', 'get').mockReturnValue(base)
     const { container } = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown renderSlot={() => null} useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
         blocks={[textBlock('See ![diagram](/tmp/graph.png) for the layout.')]}
         streaming={false}
@@ -76,7 +76,7 @@ describe('AssistantMarkdown local-path images', () => {
 
   it('keeps non-absolute destinations inert', () => {
     const { container } = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown renderSlot={() => null} useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
         blocks={[textBlock('See ![diagram](relative.png).')]}
         streaming={false}

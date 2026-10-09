@@ -11,7 +11,7 @@ import type {
   PropsStore, SlotHookFactory, SnapshotSelectorHook,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { MarkdownFileMentions } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { MarkdownFileMentions, MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { createChatStore } from '../stores.ts'
 import type { ChatPresentationPolicy } from '../presentation-policy.ts'
@@ -68,12 +68,18 @@ export interface QuotaNoticeState {
   seq: number
 }
 
-/** Original reasoning offered to optional display-only renderers. */
+/** Original model-provided reasoning offered to the expanded Body Slot. */
 export interface ReasoningBodyOwnerProps {
-  /** Complete or streaming model-provided reasoning, unchanged by display extensions. */
-  text: string
+  /** Complete or streaming reasoning text. */
+  readonly text: string
   /** Whether the reasoning tail is still streaming. */
-  running: boolean
+  readonly running: boolean
+}
+
+/** Session-independent original or derived display input to the Content Factory. */
+export interface ReasoningContentInput extends ReasoningBodyOwnerProps {
+  /** Localized Markdown controls, used unchanged when supplied; omission uses Chat's defaults. */
+  readonly labels?: MarkdownLabels
 }
 
 /** Owner currency of one quota notice offered to the frame-wide chain. */
@@ -289,6 +295,15 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     chat: import('../locale.ts').ChatKey
   }
 
+  interface SlotFactoryMap {
+    /** Session-independent reasoning Markdown with Chat labels and compact typography. */
+    'conversation.chat.reasoning.content': {
+      scope: 'root'
+      props: ReasoningContentInput
+      locale: 'chat'
+    }
+  }
+
   interface SlotMap {
     /**
      * Final Chat node renderer, keyed by `ChatNodeKind`. The component receives
@@ -316,11 +331,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'conversation.chat.commandview': { kind: 'keyed'; scope: 'session'; owner: CommandRowOwnerProps }
     /**
-     * Display-only rendering of an expanded reasoning body. The first matching
-     * contribution renders; an unclaimed body uses the original compact Markdown.
-     * Contributions must preserve access to the original model-provided text.
+     * Expanded reasoning body with the unchanged model text. The official entry
+     * has priority 100 and calls the reasoning Content Factory; smaller priority
+     * values replace it. Contributions must preserve access to the original text.
      */
-    'conversation.chat.reasoning-body': { kind: 'chain'; scope: 'session'; owner: ReasoningBodyOwnerProps }
+    'conversation.chat.reasoning.body': { kind: 'single'; scope: 'session'; owner: ReasoningBodyOwnerProps }
     /**
      * Ordered feature contributions before a completed Turn's action row. Each
      * entry receives the Turn, closing sequence, and file opener. A fresh `id`

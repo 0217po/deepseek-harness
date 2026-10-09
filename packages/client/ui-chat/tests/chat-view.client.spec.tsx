@@ -52,6 +52,7 @@ import { ProcessState } from '../src/client/conversation-nodes/process-groups.ts
 import type { TurnProcessSpec } from '../src/client/contract/turn-process.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 import { installTurnNavigatorObserver } from './turn-navigator-fixture.ts'
+import { renderReasoningSlot } from './reasoning-component-fixture.tsx'
 import { ConversationGroupStore } from '../../ui-conversation/src/client/conversation/group-store.ts'
 
 function installGroupedSnapshot(
@@ -343,7 +344,7 @@ function makeHarness(
         return <ContextMessageNodeView {...nodeProps} node={nodeOwner.node} />
       case 'assistant-step':
         return <AssistantNodeView {...nodeProps} node={nodeOwner.node} usePresentation={props.usePresentation}
-          renderSlotChain={(_slot, _owner, options) => options?.fallback} />
+          renderSlot={renderReasoningSlot} />
       case 'command':
         return (
           <CommandNodeView

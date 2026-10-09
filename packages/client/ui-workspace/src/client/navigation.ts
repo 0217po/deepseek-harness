@@ -61,9 +61,14 @@ export interface UiWorkspace {
    * Fork a Session without changing the current selection.
    * @param sessionId - source Session.
    * @param onCreated - observer before the optional child-title update.
+   * @param options - optional permission to start source migration; omission preserves the Host default.
    * @returns the child SessionId after creation and inherited-title increment.
    */
-  forkSession(sessionId: SessionId, onCreated?: (childId: SessionId) => void): Promise<SessionId>
+  forkSession(
+    sessionId: SessionId,
+    onCreated?: (childId: SessionId) => void,
+    options?: Pick<Parameters<ISessions['fork']>[0], 'allowMigration'>,
+  ): Promise<SessionId>
   /**
    * Resolve the Session for a new conversation in a Workspace: the Host reuses
    * the first listed blank member while it is reusable and otherwise creates one,
@@ -251,7 +256,8 @@ class UiWorkspaceService extends Service implements UiWorkspace {
    * Reopen a saved blank Session under the preset its log recorded, or under
    * the Host default once that preset no longer activates. Listed values are
    * cached hints that can lag the log after an unclean Host exit, so the
-   * Session's projections are reloaded before the preset is read.
+   * Session's projections are reloaded before the preset is read; a Session
+   * that still awaits a format migration reloads only those cached hints.
    */
   private async restoreBlank(workspaceId: WorkspaceId, sessionId: SessionId): Promise<SessionId> {
     await this.sessions.refreshProjections(sessionId)
@@ -298,8 +304,17 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     this.replaceMain(sessionId, navigation, 'reveal', beforeOpen)
   }
 
-  async forkSession(sessionId: SessionId, onCreated?: (childId: SessionId) => void): Promise<SessionId> {
-    return this.sessions.fork({ sessionId, increaseTitle: true, ...onCreated === undefined ? {} : { onCreated } })
+  async forkSession(
+    sessionId: SessionId,
+    onCreated?: (childId: SessionId) => void,
+    options?: Pick<Parameters<ISessions['fork']>[0], 'allowMigration'>,
+  ): Promise<SessionId> {
+    return this.sessions.fork({
+      sessionId,
+      increaseTitle: true,
+      ...onCreated === undefined ? {} : { onCreated },
+      ...options?.allowMigration === undefined ? {} : { allowMigration: options.allowMigration },
+    })
   }
 
   startSession(workspaceId?: WorkspaceId, options?: StartSessionOptions): void {

@@ -192,10 +192,10 @@ it.skipIf(MODE === 'record')('reuses saved native Account Flash translations acr
   await expect.poll(() => translated.getAttribute('data-translation-state')).toBe('ready')
   expect(calls).toHaveLength(1)
   await compareOrRefreshGolden(join(EXPECTED, 'paid-result.expected.md'),
-    await captureStableAria(page, '[data-cot-translation]', scaffold.workspaceCwd), MODE)
-  await translated.getByRole('button', { name: '原文', exact: true }).click()
+    await captureStableAria(page, '[data-variant="think"]', scaffold.workspaceCwd), MODE)
+  await translated.getByRole('button', { name: '查看原文', exact: true }).click()
   await translated.getByText(ORIGINAL, { exact: true }).waitFor()
-  await translated.getByRole('button', { name: '译文', exact: true }).click()
+  await translated.getByRole('button', { name: '查看译文', exact: true }).click()
   expect(calls).toHaveLength(1)
   const saved = await readPersistedEvents(scaffold, auditSessionId)
   expect(saved.filter(event => !isTranslationRecord(event))).toEqual(events)

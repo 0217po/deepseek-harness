@@ -46,6 +46,7 @@
     "@deepseek-ai/dsh-experimental-webworker-packer": "workspace:*",
     "@deepseek-ai/dsh-experimental-webworker-runtime": "workspace:*",
     "@deepseek-ai/dsh-remote-mock": "workspace:*",
+    "@deepseek-ai/dsh-session-projection-cache": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@types/node": "^22.20.1",
     "@types/react": "~18.3.1",

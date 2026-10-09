@@ -28,7 +28,7 @@ export function localPathMediaUrl(base: string, value: string): string | undefin
   return fileMediaUrl(base, path)
 }
 
-export interface AssistantMarkdownProps {
+export interface AssistantMarkdownProps extends Pick<PropsRenderSlots<'conversation.chat.reasoning.body'>, 'renderSlot'> {
   /** Render only the requested business portion, preserving original block indexes. */
   groupPart?: string | undefined
   /** Stable Hook forwarded to each independently expandable reasoning block. */
@@ -39,8 +39,6 @@ export interface AssistantMarkdownProps {
   interrupted?: boolean | undefined
   /** Render consecutive image blocks through the attachment slot. */
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
-  /** Optional expanded reasoning extension; absent for standalone renderers. */
-  renderReasoningBody?: PropsRenderSlots<'conversation.chat.reasoning-body'>['renderSlotChain'] | undefined
   /** Hide reasoning that belongs to the Turn-level process disclosure. */
   reasoningHidden?: boolean | undefined
   /** Live display policy for reasoning summaries. */
@@ -56,7 +54,7 @@ export interface AssistantMarkdownProps {
 /** Reasoning block as the Think variant summary row (figma 39:28304). */
 export const AssistantMarkdown = memo(function AssistantMarkdown({
   blocks, streaming, interrupted, renderMessageImages, groupPart, useDisclosure,
-  reasoningHidden = false, usePresentation, revealProcess, mentions, renderReasoningBody, t,
+  reasoningHidden = false, usePresentation, revealProcess, mentions, renderSlot, t,
 }: AssistantMarkdownProps) {
   // Stable per locale revision (t identity changes on switch): a fresh object
   // per render would rebuild MarkdownText's component table every chunk.
@@ -100,7 +98,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
             reveal={revealProcess}
           >
             <ReasoningRow text={block.text} running={streaming && i === last} usePresentation={usePresentation}
-              useDisclosure={useDisclosure} renderReasoningBody={renderReasoningBody} t={t} />
+              useDisclosure={useDisclosure} renderSlot={renderSlot} t={t} />
           </ProcessReasoning>,
         )
         break
