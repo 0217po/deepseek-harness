@@ -18,6 +18,8 @@ import type { GlobalStandardProps, PropsLocale, PropsRenderSlots, PropsRuntime }
 import { bindSnapshotSelector, makeTranslate, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { registerToasts } from '../src/client/toast/register.ts'
+import { ArchiveToastEntry } from '../src/client/toast/Toast.tsx'
+import type { ArchiveToastEntryProps } from '../src/client/toast/contract.ts'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type {
@@ -532,6 +534,21 @@ function ToastFrame({ renderSlot }: PropsRenderSlots<'shell.overlay'>) {
 }
 
 describe('RowActionToast', () => {
+  it('adds the archive filter action when the display mapping supplies no actions', () => {
+    const instance = createWorkspaceViewStore().create()
+    const dismissToast = vi.fn()
+    const showArchived = vi.fn()
+    const filter = { label: 'Show archived', onClick: showArchived }
+    const renderFactorySlot = vi.fn<ArchiveToastEntryProps['renderFactorySlot']>(() => null)
+    render(<ArchiveToastEntry {...standard} kind="archived" sessionId={ROW.sessionId} seq={1}
+      t={t} useStore={bindSnapshotSelector(instance.store)} actions={instance.actions}
+      dismissToast={dismissToast} renderFactorySlot={renderFactorySlot}
+      display={() => ({ text: 'Archived', tone: 'success' })} filterAction={() => filter} />)
+    expect(renderFactorySlot).toHaveBeenCalledWith('workspace.toast.content', {
+      text: 'Archived', tone: 'success', actions: [filter], seq: 1, onDone: dismissToast,
+    })
+  })
+
   /** The notice surface over a test-owned notice source; dismissal clears the notice the way apply does. */
   async function toastSurface(
     viewState: { archivedFilter?: 'default' | 'show' | 'only' } = { archivedFilter: 'default' },
@@ -559,7 +576,11 @@ describe('RowActionToast', () => {
     await runtime.root.declare({ 'shell.overlay': { kind: 'list', scope: 'root' } }, ToastFrame)
     registerToasts(runtime.ctx, {
       ...createWorkspaceViewStore(),
-      create: () => ({ ...instance, store: view, getSnapshot: view.getSnapshot, subscribe: view.subscribe }),
+      create: () => ({
+        ...instance, store: view,
+        getSnapshot: () => view.getSnapshot(),
+        subscribe: listener => view.subscribe(listener),
+      }),
     }, {
       undoArchive, showArchived, openForkSource,
     })

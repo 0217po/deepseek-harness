@@ -353,7 +353,7 @@ describe('ui-workspace apply', () => {
     const browser = faceOf(b.slots.entries('sidebar.workspaces')[0]!) as WorkspaceBrowserInjected
     const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    onTestFinished(() => warning.mockRestore())
+    onTestFinished(() => { warning.mockRestore() })
     const invoke = () => {
       const resolution = b.commands.get('session.fork')!.resolve({ region: 'page', modal: null, target: null })
       if (resolution.status !== 'handled') throw new Error('the source must be available')
