@@ -161,12 +161,19 @@ function checkHtml() {
 try {
   const builtin = requireRuntime('node-addon-require-builtin')
   assert.equal(typeof builtin.requireBuiltin('internal/modules/esm/loader').getOrInitializeCascadedLoader, 'function')
+  console.error('runtime payload: pnpm')
   checkPnpm()
+  console.error('runtime payload: koffi')
   checkKoffi()
+  console.error('runtime payload: sharp')
   await checkSharp()
+  console.error('runtime payload: html')
   checkHtml()
+  console.error('runtime payload: pty')
   await checkPty()
+  console.error('runtime payload: search')
   await checkSearch()
+  console.error('runtime payload: checks complete; awaiting process exit')
 } finally {
   // This private tree contains only fixture files; Windows may release handles after terminal exit.
   await rm(scratch, { recursive: true, force: true, maxRetries: 20, retryDelay: 50 })
