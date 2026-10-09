@@ -15,6 +15,9 @@ export interface RuntimeRoster {
   plugins: Array<{ name: string; owner: string | undefined; state: number; modules: string[] }>
   modules: string[]
   client: WebBootGraph
+  dependencies?: { isError: boolean; python?: string }
+  office?: { names: string[]; tools: string[]; instructions: string }
+  officeShell?: Array<{ exitCode: number | null; timedOut: boolean; sandboxMode?: string; stderr: string }>
 }
 
 /**

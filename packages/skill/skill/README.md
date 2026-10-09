@@ -52,7 +52,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 - **Embedded skills.** Plugins register an in-memory skill with `ctx.skills.register(...)`; the registry fills in a default invocation policy and the `runtime` provider label. Same-name runtime registrations in one layer are first-wins with a warning.
 - **Provider registration.** A provider contributes its catalog with `ctx.skills.registerProvider(...)`; registration is synchronous, and the returned disposer removes the provider. `runtime` is a reserved provider name.
 
-An invocation policy on every skill decides which surfaces may advertise and load it: `modelInvocable` for model-facing tools and catalogs, `userInvocable` for human-facing commands. The registry keeps all four combinations, so one discovery result can serve both surfaces without conflating their catalogs.
+Invocation permissions decide whether the model or user may load a skill. `modelCatalogVisibility` independently controls model discovery: `listed` advertises the winner, while `unlisted` permits named loading without a catalog entry. Omitted values behave as `listed` without adding metadata to existing provider definitions or summaries. The registry selects scoped and same-name winners before consumers filter visibility; a hidden winner never reveals a lower-priority listed candidate. The permission combinations below apply regardless of visibility.
 
 | Policy | Model | User |
 |---|---|---|

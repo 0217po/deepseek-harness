@@ -416,6 +416,10 @@ function bootPatches(
   if (jsonl !== undefined) {
     patches.push({ id: 'session-persistence-jsonl', config: { ...configOf(jsonl), compression: 'none' } })
   }
+  // Office launchers require Node/Python executables and engine assets absent from the browser.
+  if (find(rows, 'office-commands') !== undefined) {
+    patches.push({ id: 'office-commands', disabled: true })
+  }
   const dir = join(root, IMAGE_HOME_DIRECTORY, 'profiles/preview')
   const profile: ProfileContext = {
     name: 'preview', dir, patchPath: join(dir, 'cordis.patch.yml'),

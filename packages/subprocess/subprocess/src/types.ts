@@ -15,8 +15,8 @@ export const DSH_ENV_PREFIX = 'DSH_' as const
 /** One environment key inside the managed {@link DSH_ENV_PREFIX} namespace. */
 export type DshEnvironmentKey = `${typeof DSH_ENV_PREFIX}${string}`
 
-/** Trusted DeepSeek Harness variables for one child-process execution. */
-export type DshEnvironment = Readonly<Record<DshEnvironmentKey, string>>
+/** Trusted Harness variables and optional local command PATH for one child-process execution. */
+export type DshEnvironment = Readonly<Record<DshEnvironmentKey, string> & { PATH?: string }>
 
 /** One captured stream: the (possibly truncated) text plus recovery info. */
 export interface CollectedOutput {

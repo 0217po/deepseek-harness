@@ -68,6 +68,9 @@
   name: '@deepseek-ai/dsh-tool-skill'
   disabled: true
 
+- id: workspace-dependencies
+  disabled: true
+
 - id: tool-jobs
   name: '@deepseek-ai/dsh-tool-jobs'
   disabled: true

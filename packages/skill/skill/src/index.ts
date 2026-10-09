@@ -47,11 +47,14 @@ export type SkillResourceBase =
 
 /** Invocation controls shared by skill discovery consumers. */
 export interface SkillInvocationPolicy {
-  /** Whether model-facing catalogs and loaders include this skill. */
+  /** Whether model-facing loaders may invoke this skill. */
   readonly modelInvocable: boolean
   /** Whether human-facing command catalogs and loaders include this skill. */
   readonly userInvocable: boolean
 }
+
+/** Whether a model catalog advertises a skill; invocation permissions are independent. */
+export type ModelCatalogVisibility = 'listed' | 'unlisted'
 
 /** Invocation-neutral skill metadata returned by `ctx.skills.list()`. */
 export interface SkillSummary {
@@ -65,6 +68,8 @@ export interface SkillSummary {
   readonly whenToUse?: string
   /** Resolved model and user invocation controls. */
   readonly invocation: SkillInvocationPolicy
+  /** Model catalog visibility; omission is listed. Applied after same-name winner selection. */
+  readonly modelCatalogVisibility?: ModelCatalogVisibility
   /** Discovery source that produced this winning skill. */
   readonly source: SkillSource
   /** Provider that owns this skill body. */
@@ -119,7 +124,7 @@ export interface SkillViewOptions extends SkillLookupOptions {
 }
 
 /**
- * Return whether a skill may be advertised to and loaded by a model.
+ * Return whether a model-facing loader may invoke a skill.
  * @param skill - skill metadata carrying resolved invocation controls.
  * @returns whether the policy permits model invocation.
  */
@@ -137,15 +142,12 @@ export function isUserInvocable(skill: Pick<SkillSummary, 'invocation'>): boolea
 }
 
 /**
- * Durable source for the context message a user-explicit skill invocation
- * injects: the user's own words ride a plain user message, and the rendered
- * skill body follows as injected `instructions`-form context carrying this
- * source, so transcript consumers present the injection from metadata
- * instead of re-parsing the model-facing text.
+ * Durable source for instructions loaded by a user invocation or nested skill call.
+ * Consumers identify the loaded skill from metadata without parsing its instructions.
  */
 export interface SkillInvocationSource {
   readonly kind: 'skill-invocation'
-  /** Invoked skill name, validated user-invocable at the injecting boundary. */
+  /** Loaded skill name, validated against the invocation policy. */
   readonly name: string
   /** Injected skill bodies are instructions for the model to follow. */
   readonly form: 'instructions'
@@ -153,7 +155,7 @@ export interface SkillInvocationSource {
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
-    /** A user-explicit skill invocation injected by the host. */
+    /** Loaded skill instructions injected by the host. */
     'skill-invocation': SkillInvocationSource
   }
 }
@@ -694,6 +696,7 @@ function runtimeCandidate(skill: SkillDefinition): SkillCandidate {
     description: skill.description,
     ...skill.whenToUse !== undefined ? { whenToUse: skill.whenToUse } : {},
     invocation: skill.invocation,
+    ...skill.modelCatalogVisibility !== undefined ? { modelCatalogVisibility: skill.modelCatalogVisibility } : {},
     source: skill.source,
     provider: skill.provider,
     ...skill.resourceBase !== undefined ? { resourceBase: skill.resourceBase } : {},
@@ -774,6 +777,7 @@ function toSummary(skill: SkillDefinition | SkillCandidate): SkillSummary {
     description,
     ...whenToUse !== undefined ? { whenToUse } : {},
     invocation,
+    ...skill.modelCatalogVisibility !== undefined ? { modelCatalogVisibility: skill.modelCatalogVisibility } : {},
     source,
     provider,
     ...resourceBase !== undefined ? { resourceBase } : {},

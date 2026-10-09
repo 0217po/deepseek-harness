@@ -84,6 +84,10 @@ The printed URL contains a process credential; share it only with intended users
 
 When you launch `dsh --profile web` over SSH, the URL line still prints but the browser is not opened for you: the SSH client or editor owns the local forwarding address. Without an advertised root the printed URL names the remote host's bind-address endpoint — loopback for a loopback bind — which you reach through your forwarding address. With `--public-url` the printed URL is the authenticated advertised root; the browser handoff stays suppressed, because opening a browser on the remote host cannot reach your screen.
 
+### Office and script runtimes
+
+Web supplies LibreOffice Kit for GUI previews and shell rendering. Office skills and `dsoffice` are enabled independently of authoring runtimes; Kit uses the host Node.js unless Desktop supplies one. Ordinary Web does not bundle or download Python, Node.js, or pnpm. `office-check` and `load_workspace_dependencies` require a carrier runtime or an existing payload selected by `DSH_PRIMARY_RUNTIME`; an empty value disables these runtime defaults. With a supplied runtime, standard, PTC, and Creator presets expose the dependency query; minimal does not.
+
 ### Per-session agent setup
 
 Each browser session selects a shipped preset (`standard` by default). The Agent presets settings page changes the default and edits preset child plugins; saves persist in `$DSH_HOME/profiles/web/cordis.patch.yml`. Creator's plugin-management tool is enabled only when the Host provides an editable profile.

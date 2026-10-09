@@ -306,6 +306,7 @@ describe('package payload constraints', () => {
     ])
   })
 
+
   it('accepts the Agent Team icon payload and rejects its omission', () => {
     const dir = 'packages/experimental/agent-team-profile'
     const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
@@ -403,12 +404,14 @@ it('requires the shared Web injection entry in the published payload', () => {
   } })).toEqual([expect.stringContaining('package.json files must be')])
 })
 
-it('requires Office skill bodies and helpers in the published payload', () => {
+it('requires Office commands, skill bodies, and helpers in the published payload', () => {
   const manifest = JSON.parse(readFileSync(new URL('../packages/skill/skill-office/package.json', import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
   expect(checkWorkspaceManifest({ dir: 'packages/skill/skill-office', manifest })).toEqual([])
-  expect(checkWorkspaceManifest({ dir: 'packages/skill/skill-office', manifest: {
-    ...manifest, files: ['lib/index.js', 'lib/types/**/*.d.ts'],
-  } })).toEqual([expect.stringContaining('package.json files must be')])
+  for (const omitted of ['lib/commands.js', 'lib/check.js', 'assets']) {
+    expect(checkWorkspaceManifest({ dir: 'packages/skill/skill-office', manifest: {
+      ...manifest, files: manifest.files!.filter(file => file !== omitted),
+    } })).toEqual([expect.stringContaining('package.json files must be')])
+  }
 })
 
 it('requires the local speech worker and locked runtime in the published payload', () => {

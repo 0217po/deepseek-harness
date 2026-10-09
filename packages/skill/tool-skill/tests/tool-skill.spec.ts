@@ -187,6 +187,31 @@ async function mintAgentScope(ctx: Context, subject: string | Agent): Promise<{ 
 }
 
 describe('dsh-tool-skill', () => {
+  it('keeps unlisted winners callable without advertising a shadowed listed skill', async () => {
+    const home = await tempDir('unlisted-skill')
+    const ctx = await setup(home)
+    try {
+      ctx.skills.register({ name: 'nested', description: 'Global listed version', content: 'Global body', source: 'runtime' })
+      const { agent, scope } = await mintAgentScope(ctx, home)
+      try {
+        const registry = scope.ctx.get('skills')!
+        registry.register({ name: 'nested', description: 'Private scoped version', content: 'Scoped body', source: 'runtime', modelCatalogVisibility: 'unlisted' })
+        registry.register({ name: 'forbidden', description: 'Forbidden', content: 'Forbidden body', source: 'runtime', modelCatalogVisibility: 'unlisted', invocation: { modelInvocable: false, userInvocable: false } })
+        expect(await composePrefixForAgent(ctx, agent)).toEqual([])
+        const result = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('nested'), agent, name: 'skill', arguments: { name: 'nested' } })
+        expect(result.isError).toBeFalsy()
+        expect(JSON.stringify(result)).toContain('Scoped body')
+        expect(JSON.stringify(result)).not.toContain('Global body')
+        const denied = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('denied'), agent, name: 'skill', arguments: { name: 'forbidden' } })
+        expect(denied.isError).toBe(true)
+        const decision = await proposeStep(ctx, agent, [createUserMessage({ content: [{ type: 'text', text: '/nested go' }], source: { kind: 'user' } })])
+        if (decision.kind !== 'enter') throw new Error('expected enter')
+        expect(decision.messages.at(-1)?.source).toMatchObject({ kind: 'skill-invocation', name: 'nested' })
+      } finally { await scope.dispose() }
+      expect(JSON.stringify(await composePrefix(ctx, home))).toContain('Global listed version')
+    } finally { await ctx.fiber.dispose() }
+  })
+
   it('registers the skill tool schema and removes it on dispose', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
@@ -516,7 +541,7 @@ describe('dsh-tool-skill', () => {
 
     const removal = catalogMessages(session)[2]
     if (removal?.type !== 'user/message') throw new Error('expected catalog removal')
-    expect(JSON.stringify(removal.data.content)).toContain('No skills are currently available')
+    expect(JSON.stringify(removal.data.content)).toContain('No skills are currently listed')
     expect(JSON.stringify(removal.data.content)).not.toContain('first-skill')
     expect(JSON.stringify(removal.data.content)).not.toContain('second-skill')
 
@@ -1126,4 +1151,28 @@ describe('user-explicit invocation injection', () => {
       .map(message => (message.source as { name: string }).name)
     expect(invoked).toEqual(['shared-skill'])
   })
+})
+
+it('records resolved providers and carries nested skill instructions on the enclosing result', async () => {
+  const home = await tempDir('nested-skill')
+  const ctx = await setup(home)
+  try {
+    ctx.skills.register({ name: 'nested-demo', description: 'Nested fixture', source: 'runtime', provider: 'fixture', content: 'Follow these instructions.' })
+    const direct = await ctx.tools.execute({ name: 'skill', callId: ToolCallId('direct'), arguments: { name: 'nested-demo' }, signal: testToolSignal })
+    expect(direct.meta).toEqual({ skill: { name: 'nested-demo', provider: 'fixture' } })
+    ctx.tools.register(defineContentToolFixture({
+      name: 'nested-loader', description: 'Nested fixture', parameters: {},
+      async execute(_args, exec) {
+        const result = await ctx.tools.execute({ name: 'skill', callId: ToolCallId('nested'), arguments: { name: 'nested-demo' }, signal: exec.signal, parent: exec.token })
+        for (const context of result.additionalContexts ?? []) exec.deferContext(context)
+        return result.content
+      },
+    }))
+    const nested = await ctx.tools.execute({ name: 'nested-loader', callId: ToolCallId('outer'), arguments: {}, signal: testToolSignal })
+    expect(nested.isError).toBe(false)
+    expect(nested.additionalContexts).toEqual([expect.objectContaining({
+      source: { kind: 'skill-invocation', name: 'nested-demo', form: 'instructions' },
+    })])
+    expect(nested.additionalContexts?.[0]?.content.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('Follow these instructions.')
+  } finally { await ctx.fiber.dispose() }
 })

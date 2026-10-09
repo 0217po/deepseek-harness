@@ -83,7 +83,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     name: 'skill',
     description: 'Load the full instructions for a skill. Call it before acting on a task that names or clearly matches a skill in the session skill catalog.',
     parameters: {
-      name: { type: 'string', required: true, description: 'The exact skill name from the available skills list.' },
+      name: { type: 'string', required: true, description: 'The exact skill name from the catalog, loaded skill instructions, or an explicit user request.' },
     },
     output: {
       schema: {
@@ -124,6 +124,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         },
       },
       render: (_args, value) => [{ type: 'text', text: renderSkillContent(value) }],
+      presentationMeta: (_args, value) => ({ skill: { name: value.name, provider: value.provider } }),
     },
     async execute(args, exec) {
       if (!isSkillName(args.name)) {
@@ -147,6 +148,10 @@ export function apply(ctx: Context, config: Config = {}): void {
       if (!isModelInvocable(skill)) {
         throw new Error(`skill "${args.name}" is not available for model invocation`)
       }
+      if (exec.parent !== undefined) exec.deferContext(createUserMessage({
+        content: [{ type: 'text', text: renderSkillContent(skill) }],
+        source: { kind: 'skill-invocation', name: skill.name, form: 'instructions' },
+      }))
       return {
         name: skill.name,
         provider: skill.provider,
@@ -225,7 +230,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       : { skills: [], complete: true }
     signal.throwIfAborted()
     if (!snapshot.complete) return decision
-    const skills = snapshot.skills.filter(isModelInvocable)
+    const skills = snapshot.skills.filter(skill => isModelInvocable(skill) && skill.modelCatalogVisibility !== 'unlisted')
     const entries = catalogSourceEntries(skills, catalogDescriptionMaxLength)
     const digest = digestCatalogEntries(entries)
     const history = catalogHistory(agent)
@@ -281,11 +286,11 @@ function renderCatalogMessage(entries: SkillCatalogSource['entries']): UserMessa
 function renderCatalogUpdate(entries: SkillCatalogSource['entries']): UserMessage {
   const availability = entries.length === 0
     ? [
-      'No skills are currently available through the `skill` tool. Do not use names from earlier skill catalogs.',
+      'No skills are currently listed. Names from loaded skill instructions or an explicit user request may still be invoked; the loader checks current availability and permissions.',
       'A user may still invoke a skill directly; its <skill_content> block then appears in this conversation. Follow it, and do not call the `skill` tool for it.',
     ]
     : [
-      'Use only names in this replacement catalog. If the user names a listed skill, or the task clearly matches its description, call the `skill` tool with the exact name before acting.',
+      'Use this catalog for discovery. Names from loaded skill instructions or an explicit user request may also be invoked. Load the matching skill before acting, unless its instructions are already in the conversation.',
       'A user may also invoke a skill directly; its <skill_content> block then appears in this conversation. Follow it, and do not call the `skill` tool again for that skill.',
     ]
   return createUserMessage({

@@ -136,6 +136,12 @@
             config:
               customSkillDirs:
                 - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-agent-preset/package.json')), 'skills')
+          - id: workspace-dependencies
+            name: '@deepseek-ai/dsh-tool-workspace-dependencies'
+            disabled: !!js "!(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME)"
+            config:
+              source: !!js "process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME ?? '')"
+              root: !!js "process.env.DSH_PRIMARY_RUNTIME === undefined ? process.env.DSH_BUNDLED_PRIMARY_RUNTIME_ROOT : undefined"
           - id: tool-skill
             name: '@deepseek-ai/dsh-tool-skill'
           - id: present

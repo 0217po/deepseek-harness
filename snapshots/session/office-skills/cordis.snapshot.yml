@@ -44,16 +44,16 @@
               - id: deepseek-v4-flash
               - id: deepseek-v4-pro
 
-- insert:
-    - id: office-skills
-      name: '@deepseek-ai/dsh-skill-office'
-      config:
-        assetRoot: !!js process.cwd() + '/office-skills'
-        node: !!js process.cwd() + '/office-node'
-        cli: !!js process.cwd() + '/office-cli.js'
+- id: skill-office
+  config:
+    assetRoot: !!js process.cwd() + '/office-skills'
 
 - id: tool-bash
   disabled: true
 
 - id: tool-pwsh
   disabled: true
+
+- id: office-commands
+  config:
+    command: !!js "[process.cwd() + '/office-node', process.cwd() + '/office-cli.js']"

@@ -79,6 +79,8 @@ A terminal request can opt into `shellActivity`. `inspectActivity()` combines su
 
 Children never inherit the harness's ambient secrets: credential-shaped names and ambient `DSH_*` facts are scrubbed, and the caller's explicit `env` merges after that scrub. A deliberately forwarded credential or a current `DSH_*` deployment fact still reaches the child; an explicit `undefined` tombstone removes an ordinary ambient entry.
 
+The trusted `DshEnvironment` also permits a `PATH` selected by [shell-env](../../shell/shell-env/README.md) for deployment-supplied commands; shell consumers merge that snapshot after ordinary caller environment entries.
+
 ### What can go wrong
 
 An executable that cannot be resolved fails loudly with a stable error. A spawn that never starts rejects `done`; there is no buffered output for a process that never ran. `waitForExit()` also rejects when the provider cannot prove its selected range is empty, and a provider fallback may not own descendants that escape its process group or observed session. When a transport owns its own spawn (the SDK client, MCP), route around the service and import `scrubbedParentEnv` directly so environment policy stays single-sourced.

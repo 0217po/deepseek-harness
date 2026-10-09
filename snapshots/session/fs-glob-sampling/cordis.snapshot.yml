@@ -65,6 +65,9 @@
   name: '@deepseek-ai/dsh-skill-filesystem'
   disabled: true
 
+- id: skill-office
+  disabled: true
+
 - id: tool-skill
   name: '@deepseek-ai/dsh-tool-skill'
   disabled: true

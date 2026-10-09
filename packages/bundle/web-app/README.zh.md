@@ -84,6 +84,10 @@ dsh --profile web --no-open --host "$(hostname -i | awk '{print $1}')" --public-
 
 通过 SSH 启动 `dsh --profile web` 时，URL 行仍会打印，但不会为你打开浏览器：本地转发地址由 SSH 客户端或编辑器持有。没有公告根时，打印的 URL 指向远端宿主机的绑定地址端点——绑定 loopback 时即 loopback——你通过自己的转发地址访问它。配置了 `--public-url` 时，打印的 URL 是带认证的公告根；浏览器交接仍被抑制，因为在远端宿主机上打开浏览器无法到达你的屏幕。
 
+### Office 与脚本运行时
+
+Web 自带 LibreOffice Kit，用于 GUI 预览和 shell 渲染。Office 技能和 `dsoffice` 的启用不依赖创作运行时；除 Desktop 提供 Node.js 外，Kit 使用宿主 Node.js。普通 Web 不捆绑或下载 Python、Node.js 或 pnpm。`office-check` 和 `load_workspace_dependencies` 需要载体运行时，或由 `DSH_PRIMARY_RUNTIME` 选择的现有 payload；空值禁用这些运行时默认项。提供运行时后，standard、PTC 和 Creator 预设展示依赖查询，minimal 不展示。
+
 ### 按会话的 agent 设置
 
 每个浏览器会话选择一个随发行版交付的 preset（默认 `standard`）。Agent 预设设置页可更改默认项并编辑预设的子插件；保存结果持久化到 `$DSH_HOME/profiles/web/cordis.patch.yml`。只有 Host 提供可编辑的 profile 时，Creator 的插件管理工具才会启用。

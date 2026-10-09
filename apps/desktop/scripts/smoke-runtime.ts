@@ -1,6 +1,6 @@
 /** Boot the materialized target runtime without access to a user's Harness profile. */
 
-import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -40,6 +40,7 @@ export async function smokeDesktopRuntime(
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     writeFileSync(join(home, 'npmrc'), '')
+    if (process.platform !== 'win32') symlinkSync('/bin/bash', join(home, 'bash'))
     createPluginProfile(profile)
     const pluginName = 'desktop-runtime-smoke-plugin'
     const plugin = join(home, pluginName)
@@ -85,8 +86,7 @@ export function apply(ctx) {
     }))
     writeFileSync(join(plugin, 'index.js'), `
 import { Context } from '@deepseek-ai/cordis'
-import { inspect, promisify } from 'node:util'
-import { execFile } from 'node:child_process'
+import { inspect } from 'node:util'
 import { readFile } from 'node:fs/promises'
 export function apply(ctx) {
   if (!(ctx instanceof Context)) throw new Error('desktop runtime: external plugin loaded another Cordis instance')
@@ -104,15 +104,27 @@ export function apply(ctx) {
   ctx.effect(() => ctx.webServer.register({ kind: 'exact', path: '/desktop-smoke-office-cli',
     async handler(_request, response) {
       try {
-        const skill = await ctx.skills.get('office-docx')
-        const json = skill?.content.match(/\\n(\\{\\n[\\s\\S]+)$/u)?.[1]
-        if (json === undefined) throw new Error('Office skill did not supply CLI paths')
-        const { libreofficeKit: { node, cli } } = JSON.parse(json)
-        const options = { cwd: ${JSON.stringify(home)}, env: { ...process.env, PATH: '' }, timeout: 120_000 }
-        const capabilities = await promisify(execFile)(node, [cli, 'capabilities'], options)
+        const skill = await ctx.skills.get('office-export-pdf')
+        if (!skill?.content.includes('dsoffice convert')) throw new Error('Office skill did not supply the direct command')
+        const managed = ctx.shellEnv.collect({})
+        const delimiter = process.platform === 'win32' ? ';' : ':'
+        const dshEnv = { ...managed, PATH: [managed.PATH.split(delimiter)[0], ${JSON.stringify(home)}].join(delimiter) }
         const output = ${JSON.stringify(join(home, 'cli.pdf'))}
-        await promisify(execFile)(node, [cli, 'convert', '--input', ${JSON.stringify(join(home, 'input.docx'))}, '--output', output], options)
-        response.end(JSON.stringify({ capabilities: JSON.parse(capabilities.stdout), pdf: (await readFile(output)).toString('base64') }))
+        async function run(command) {
+          const execution = await ctx.shell.execute(ctx.shell.resolve({ command,
+            workdir: ${JSON.stringify(home)}, timeoutMs: 120_000, dshEnv,
+            sandboxPolicy: { mode: 'workspace-write', workspaceRoot: ${JSON.stringify(home)} },
+            env: { PATH: '', OFFICE_SMOKE_INPUT: ${JSON.stringify(join(home, 'input.docx'))}, OFFICE_SMOKE_OUTPUT: output },
+          }))
+          const result = await execution.result()
+          if (result.exitCode !== 0 || result.timedOut || result.aborted) throw new Error(JSON.stringify(result))
+          return result.stdout.text
+        }
+        const capabilities = await run('dsoffice capabilities')
+        await run(process.platform === 'win32'
+          ? 'dsoffice convert --input "$env:OFFICE_SMOKE_INPUT" --output "$env:OFFICE_SMOKE_OUTPUT"'
+          : 'dsoffice convert --input "$OFFICE_SMOKE_INPUT" --output "$OFFICE_SMOKE_OUTPUT"')
+        response.end(JSON.stringify({ capabilities: JSON.parse(capabilities), pdf: (await readFile(output)).toString('base64') }))
       } catch (error) {
         response.statusCode = 500
         response.end(inspect(error, { depth: 5 }))
@@ -135,7 +147,7 @@ export function apply(ctx) {
   }
 }
 `)
-    writeFileSync(join(plugin, 'bundle.yml'), '- insert:\n    - id: desktop-runtime-smoke-plugin\n      name: desktop-runtime-smoke-plugin\n      inject: [webServer, officeToPdf, skills, pluginManager]\n')
+    writeFileSync(join(plugin, 'bundle.yml'), '- insert:\n    - id: desktop-runtime-smoke-plugin\n      name: desktop-runtime-smoke-plugin\n      inject: [webServer, officeToPdf, skills, shellEnv, shell, pluginManager]\n')
     cpSync(plugin, join(profile, 'node_modules', pluginName), { recursive: true })
     const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8')) as {
       dependencies?: Record<string, string>

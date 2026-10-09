@@ -1,0 +1,10 @@
+- id: skill-office
+  disabled: false
+  config:
+    assetRoot: !!js process.cwd() + '/office-skills'
+
+- id: tool-bash
+  disabled: true
+
+- id: tool-pwsh
+  disabled: true

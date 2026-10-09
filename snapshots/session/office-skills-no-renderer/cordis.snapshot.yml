@@ -15,15 +15,16 @@
                 reasoningEfforts: [off, low, high, max]
                 defaultReasoningEffort: high
 
-- insert:
-    - id: office-skills
-      name: '@deepseek-ai/dsh-skill-office'
-      config:
-        assetRoot: !!js process.cwd() + '/office-skills'
-        cli: false
+- id: skill-office
+  config:
+    assetRoot: !!js process.cwd() + '/office-skills'
 
 - id: tool-bash
   disabled: true
 
 - id: tool-pwsh
   disabled: true
+
+- id: office-commands
+  config:
+    command: false

@@ -1765,7 +1765,7 @@ Load the full instructions for a skill. Call it before acting on a task that nam
   "properties": {
     "name": {
       "type": "string",
-      "description": "The exact skill name from the available skills list."
+      "description": "The exact skill name from the catalog, loaded skill instructions, or an explicit user request."
     }
   },
   "required": [

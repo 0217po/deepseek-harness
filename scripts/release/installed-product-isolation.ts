@@ -62,10 +62,10 @@ function rejectExperimental(name: string, chain: readonly string[]): void {
   }
 }
 
-/** Resolve a dependency directory through the installed package's ancestor node_modules. */
+/** Resolve a declared package through ancestor node_modules, including names shared with Node builtins. */
 function installedPackage(from: string, name: string): string | undefined {
   const resolver = createRequire(join(from, 'package.json'))
-  for (const directory of resolver.resolve.paths(name) ?? []) {
+  for (const directory of resolver.resolve.paths(`${name}/package.json`) ?? []) {
     const candidate = join(directory, name)
     if (existsSync(join(candidate, 'package.json'))) return candidate
   }

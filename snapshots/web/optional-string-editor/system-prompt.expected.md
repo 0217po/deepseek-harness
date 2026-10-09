@@ -278,7 +278,7 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** Load the full instructions for a skill. Call it before acting on a task that names or clearly matches a skill in the session skill catalog. */
   skill: {
-    /** The exact skill name from the available skills list. */
+    /** The exact skill name from the catalog, loaded skill instructions, or an explicit user request. */
     name: string;
   } & Record<string, JsonValue>;
   /** Custom editing tool for viewing, creating and editing files * State is persistent across command calls and discussions with the user * If `path` is a file, `view` displays the result of applying `cat -n`. If `path` is a directory, `view` lists non-hidden files and directories up to 2 levels deep * The `create` command cannot be used if the specified `path` already exists as a file * If a `command` generates a long output, it will be truncated and marked with `<response clipped>` * A null placeholder for a parameter unused by the selected command is treated as omitted. Required parameters still need values; omit `str_replace.new_str` rather than setting it to null when deleting a match Notes for using the `str_replace` command: * The `old_str` parameter should match EXACTLY one or more consecutive lines from the original file. Be mindful of whitespaces! * If the `old_str` parameter is not unique in the file, the replacement will not be performed. Make sure to include enough context in `old_str` to make it unique * The `new_str` parameter should contain the edited lines that should replace the `old_str` */

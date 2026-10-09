@@ -41,6 +41,8 @@ skill 可以是被扫描根目录顶层的目录 bundle `<name>/SKILL.md`，也�
 
 目录与正文具有独立的生命周期：发现阶段把 frontmatter 解析进目录条目，每次加载都会重新读取当前文件，因此编辑 skill 正文无需版本化或缓存失效。
 
+`modelCatalogVisibility: unlisted` 将技能从模型目录隐藏，但保留具名工具调用和用户显式调用。省略时由注册表默认成 `listed`。仅接受 `listed` 与 `unlisted`；无效值会跳过技能并发出警告。调用权限字段保持独立。
+
 ### 根目录与优先级
 
 默认根按该提供方的 rank 顺序扫描：

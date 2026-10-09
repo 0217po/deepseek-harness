@@ -1,0 +1,17 @@
+- id: skill-office
+  config:
+    assetRoot: !!js process.cwd() + '/office-skills'
+
+- id: tool-bash
+  disabled: true
+
+- id: tool-pwsh
+  disabled: true
+
+- id: tools
+  config:
+    mode: ptc
+
+- id: office-commands
+  config:
+    command: !!js "[process.cwd() + '/office-node', process.cwd() + '/render-cli.cjs']"

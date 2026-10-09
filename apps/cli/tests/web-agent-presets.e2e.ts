@@ -196,11 +196,28 @@ function toolParameterNames(ctx: Context, agent: Agent, toolName: string): strin
 }
 
 let ctx: Context
+let officeHome: string
 beforeAll(async () => {
+  officeHome = await mkdtemp(join(tmpdir(), 'dsh-web-office-home-'))
+  vi.stubEnv('DSH_HOME', officeHome)
+  for (const key of ['DSH_PRIMARY_RUNTIME', 'DSH_BUNDLED_PRIMARY_RUNTIME', 'DSH_BUNDLED_OFFICE_CLI']) vi.stubEnv(key, undefined)
   ctx = await bootWeb(await mkdtemp(join(tmpdir(), 'dsh-web-presets-')))
 }, 120_000)
 
 describe('the shipped Web composition', () => {
+  it('exposes Office rendering without a bundled authoring runtime', async () => {
+    const handle = await ctx.agents.create({
+      sessionId: SessionId('web-office-without-python'),
+      setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'standard').then(() => undefined),
+    })
+    try {
+      expect(toolNames(ctx, handle.agent)).not.toContain('load_workspace_dependencies')
+      const skills = await ctx.skills.list({ scope: handle.agent })
+      expect(skills.find(skill => skill.name === 'office')?.modelCatalogVisibility).toBe('listed')
+      expect((await ctx.skills.get('office-render', { scope: handle.agent }))?.content).toContain('dsoffice render')
+    } finally { await handle.dispose() }
+  })
+
   it('exposes only the directory tool in the global layer', () => {
     // Directory selection is global; action tools belong to their Agent presets.
     expect(toolNames(ctx)).toEqual(['working_directory'])
@@ -465,9 +482,12 @@ describe('the shipped Web composition', () => {
       setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'standard').then(() => undefined),
     })
     try {
-      // The host (global) view carries the deployment-level provider alone:
-      // local discovery moved behind the presets with `skill-filesystem`.
-      expect((await ctx.skills.list({ cwd: proj })).map(skill => skill.name)).toEqual(['dsh-badge'])
+      // Host skills exclude the preset's workspace-local discovery.
+      expect((await ctx.skills.list({ cwd: proj })).map(skill => skill.name)).toEqual([
+        ...(process.platform === 'win32' ? ['diagnose-windows-sandbox-acl'] : []),
+        'dsh-badge', 'office', 'office-docx', 'office-export-pdf', 'office-pptx',
+        'office-recalculate', 'office-render', 'office-xlsx',
+      ])
 
       // The standard agent's view merges the global layer with its preset's
       // own local discovery over the session cwd.
@@ -908,4 +928,10 @@ describe('a session keeps the preset it was created with', () => {
   })
 })
 
-afterAll(async () => { await ctx?.fiber.dispose() })
+afterAll(async () => {
+  try { await ctx?.fiber.dispose() }
+  finally {
+    vi.unstubAllEnvs()
+    if (officeHome !== undefined) await rm(officeHome, { recursive: true, force: true })
+  }
+})

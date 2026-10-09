@@ -79,6 +79,14 @@
   name: '@deepseek-ai/dsh-skill-filesystem'
   disabled: true
 
+- id: skill-office
+  name: '@deepseek-ai/dsh-skill-office'
+  disabled: true
+
+- id: workspace-dependencies
+  name: '@deepseek-ai/dsh-tool-workspace-dependencies'
+  disabled: true
+
 - id: tool-skill
   name: '@deepseek-ai/dsh-tool-skill'
   disabled: true
