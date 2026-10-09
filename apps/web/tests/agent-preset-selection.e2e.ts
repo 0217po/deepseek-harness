@@ -470,8 +470,9 @@ it.each([false, true])('starts Creator from Plugins with Coding Tools=%s without
     expect(scaffold.ctx.agentPresets.composedPreset(creator.ctx)).toBe('cordis')
     expect(scaffold.ctx.tools.schemas(creator).map(tool => tool.name))
       .toEqual(expect.arrayContaining(['cordis_inspect_list', 'cordis_inspect_query', 'plugin_manager']))
-    expect(creator.session.snapshotEvents().some(event => event.type === 'agent-preset/selected'
-      && event.data.agentPreset === 'cordis')).toBe(true)
+    // The chip may also select Creator once the list updates; the registry records the switch only once.
+    expect(creator.session.snapshotEvents().filter(event => event.type === 'agent-preset/selected'
+      && event.data.agentPreset === 'cordis')).toHaveLength(1)
     expect(creator.session.snapshotEvents().some(event => event.type === 'user/message' || event.type === 'turn/start')).toBe(false)
     expect(scaffold.ctx.settings.describe().find(row => row.ns === 'ui-settings')?.value).toMatchObject({ enabled: developerTools })
     expect(scaffold.ctx.agentPresets.defaultId).toBe('standard')
