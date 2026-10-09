@@ -1,6 +1,6 @@
-/** Lazy assembly of generated Remote definitions; imports no Service, Registry, or transport. */
+/** Lazy assembly of generated Remote definitions using caller-supplied Zod; no runtime imports. */
 
-import { z } from 'zod'
+import type { z } from 'zod'
 import type {
   InvocationDescriptor,
   TypertClientRemote,
@@ -22,16 +22,17 @@ type Index = Pick<TypertRemoteInfo, 'descriptors' | 'methods'>
  * The class instance builds its shared descriptor/method index on first access;
  * input schemas and JSON Schema projections are cached only when requested.
  * @param spec - compiler-produced method facts and Zod factories.
+ * @param zod - the generated artifact's Zod runtime for named-input parsers.
  * @returns a lazy, mountable info instance with no registration or transport effects.
  */
-export function createTypertRemoteInfo(spec: TypertRemoteSpec): TypertRemoteInfo {
-  return new RemoteInfo(spec)
+export function createTypertRemoteInfo(spec: TypertRemoteSpec, zod: typeof z): TypertRemoteInfo {
+  return new RemoteInfo(spec, zod)
 }
 
 class RemoteInfo implements TypertRemoteInfo {
   private index?: Index
 
-  constructor(private readonly spec: TypertRemoteSpec) {}
+  constructor(private readonly spec: TypertRemoteSpec, private readonly zod: typeof z) {}
 
   get package(): string { return this.spec.package }
   get descriptors(): readonly InvocationDescriptor[] { return this.resolve().descriptors }
@@ -39,6 +40,7 @@ class RemoteInfo implements TypertRemoteInfo {
 
   private resolve(): Index {
     if (this.index !== undefined) return this.index
+    const zod = this.zod
     const descriptors: InvocationDescriptor[] = []
     const methods = Object.create(null) as Record<string, Method>
     for (const [endpoint, definition] of Object.entries(this.spec.methods)) {
@@ -59,7 +61,7 @@ class RemoteInfo implements TypertRemoteInfo {
         const direct = Object.assign(descriptor, {
           input(options?: TypertRemoteInputOptions) {
             const strict = options?.strict === true
-            return inputs[strict ? 1 : 0] ??= new NamedInput(parameters, strict)
+            return inputs[strict ? 1 : 0] ??= new NamedInput(parameters, strict, zod)
           },
           invoke(remote: TypertClientRemote, input: object, signal?: AbortSignal) {
             const named = input as Readonly<Record<string, unknown>>
@@ -99,13 +101,17 @@ class NamedInput implements TypertRemoteValue<object> {
   private schema?: z.ZodType<object>
   private projection?: Pick<TypertRemoteValue, 'jsonSchema' | 'jsonSchemaError'>
 
-  constructor(private readonly parameters: readonly Parameter[], private readonly strict: boolean) {}
+  constructor(
+    private readonly parameters: readonly Parameter[],
+    private readonly strict: boolean,
+    private readonly zod: typeof z,
+  ) {}
 
   private codec(parameter: Parameter): TypertRemoteCodecSpec {
     return this.strict ? parameter.strictCodec : parameter.codec
   }
 
-  readonly create = (): z.ZodType<object> => this.schema ??= z.strictObject(Object.fromEntries(this.parameters.map((parameter) => {
+  readonly create = (): z.ZodType<object> => this.schema ??= this.zod.strictObject(Object.fromEntries(this.parameters.map((parameter) => {
     const value = this.codec(parameter).create()
     return [parameter.wire, optional(parameter) ? value.optional() : value.nonoptional()]
   })))

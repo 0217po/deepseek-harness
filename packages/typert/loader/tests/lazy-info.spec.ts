@@ -14,7 +14,7 @@ it('validates invocation facts without selecting input policy or materializing s
       parameters: [{ name: 'request', source: 'json', codec, strictCodec: codec }],
       result: { ...codec, description: 'Created goal.' },
     },
-  } })
+  } }, z)
   const method = info.methods['goals/create']!
   const normal = method.input()
   const strict = method.input({ strict: true })

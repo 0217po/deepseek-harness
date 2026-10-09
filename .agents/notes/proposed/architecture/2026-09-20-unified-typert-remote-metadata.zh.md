@@ -22,13 +22,13 @@ CLI 帮助、参数解析和 MCP 工具发现需要在连接受控 Host 前取�
 
 [Registry](../../../../packages/typert/registry/src/service.ts) 实例属于各自的 Cordis Context 和进程。Host 与 Client 入口共享实现，而非状态。既有本地/Remote `get()` 与 `list()` 保留已注册的描述符对象；注册保留原子重复检查、通知、tombstone 和 fiber 管理的释放。不新增 Registry API、存储、订阅、元数据 RPC 或跨进程同步。独立 Program 和进程不共享对象身份。
 
-[发射器](../../../../packages/typert/generator/src/emitter.ts)为每个端点写入一份静态 `TypertRemoteMethodSpec`，并调用已发布纯入口 `@deepseek-ai/dsh-typert-protocol/remote-info` 提供的 `createTypertRemoteInfo({ package, methods })`。端点键提供 `namespace` 和 `method`，`id` 由包名与端点键组合。每份 spec 保留 service、接收者、有序参数、唯一的 `result` codec，以及可选的流模式、scope、uplink、取消、文档和源码位置字段。每个参数都有从同一 checker 解析后类型模型派生的 `codec` 和 `strictCodec`，分析器与模型不携带逐方法策略。参数 `wire` 默认使用 `name`；参数文档保留在 `parameters[].description`。不存在嵌套 `metadata`、独立 `output` 或 `parameterDescriptions`，也不导出顶层 `REMOTE_METHODS`。
+[发射器](../../../../packages/typert/generator/src/emitter.ts)为每个端点写入一份静态 `TypertRemoteMethodSpec`，并调用已发布纯入口 `@deepseek-ai/dsh-typert-protocol/remote-info` 提供的 `createTypertRemoteInfo({ package, methods }, z)`。端点键提供 `namespace` 和 `method`，`id` 由包名与端点键组合。每份 spec 保留 service、接收者、有序参数、唯一的 `result` codec，以及可选的流模式、scope、uplink、取消、文档和源码位置字段。每个参数都有从同一 checker 解析后类型模型派生的 `codec` 和 `strictCodec`，分析器与模型不携带逐方法策略。参数 `wire` 默认使用 `name`；参数文档保留在 `parameters[].description`。不存在嵌套 `metadata`、独立 `output` 或 `parameterDescriptions`，也不导出顶层 `REMOTE_METHODS`。
 
-[factory](../../../../packages/typert/protocol/src/remote-info.ts)返回真正的类实例，而非类构造函数或立即求值的对象字面量。构造时只保留 spec。首次读取 `descriptors` 或 `methods` 时（包括挂载或查询时）才构建并缓存一个共享索引。每个 `methods[endpoint]` 就是同一个直接方法描述符对象；仅使用 Context 接收者的方法保留在描述符和作用域声明中。带作用域投影的直接方法保留 scope 字段，但其通用具名调用器要求无作用域 Remote。
+[factory](../../../../packages/typert/protocol/src/remote-info.ts)返回真正的类实例，而非类构造函数或立即求值的对象字面量。构造时只保留 spec 和生成产物显式传入的 Zod 运行时，不构造 schema。首次读取 `descriptors` 或 `methods` 时（包括挂载或查询时）才构建并缓存一个共享索引。每个 `methods[endpoint]` 就是同一个直接方法描述符对象；仅使用 Context 接收者的方法保留在描述符和作用域声明中。带作用域投影的直接方法保留 scope 字段，但其通用具名调用器要求无作用域 Remote。
 
 直接方法的 `input(options?: TypertRemoteInputOptions)` 返回缓存的 `TypertRemoteValue<Input>`；唯一选项是 `strict?: boolean`。`method.input()` 与 `{ strict: false }` 使用普通 codec：已声明对象接受并剥离未知字段。`{ strict: true }` 递归拒绝未声明字段。两种具名参数封装都拒绝额外参数；显式 JSON 与字典键保持开放，有约束的字典值仍然校验。消费方选择一个视图，通过 `input.create().parse(raw)` 与 `input.jsonSchema` 取得匹配的解析和投影。Host 分发与唯一的 `result` codec 保留普通行为，包括二进制 `encode`/`decode`。
 
-每种输入策略的视图、具名解析器及 JSON Schema 投影都独立惰性求值并缓存。生成的独立 Zod factory 同样惰性求值且只缓存成功结果。原始 spec 内部要求 Zod factory，而面向消费方的 `TypertSchema<T>` 只承诺 `parse(value: unknown): T`。JSON Schema 仍是可选的生成器投影，而非运行时 `z.toJSONSchema()` 转换。纯叶入口运行时仅依赖 Zod，不依赖 Host 源码或传输。导入和元数据/schema 读取绝不发起网络调用；协议根入口也重新导出 factory，但会导入 Cordis。
+每种输入策略的视图、具名解析器及 JSON Schema 投影都独立惰性求值并缓存。生成的独立 Zod factory 同样惰性求值且只缓存成功结果。原始 spec 内部要求 Zod factory，而面向消费方的 `TypertSchema<T>` 只承诺 `parse(value: unknown): T`。JSON Schema 仍是可选的生成器投影，而非运行时 `z.toJSONSchema()` 转换。生成产物导入并传入 Zod，包括没有参数或导出 schema的 Remote 端点。纯叶入口只保留 Zod 类型导入，没有运行时模块依赖；协议根入口重新导出 factory 并导入 Cordis，但不会因此将 Zod 加入所有协议消费方的静态模块图。导入和元数据/schema 读取绝不发起网络调用。
 
 Registry 查询返回基础描述符。纯叶入口或协议根入口的 `isTypertRemoteMethod(descriptor)` 以 `object`/`unknown` 类型收窄直接调用能力；精确端点类型来自 `TYPERT_REMOTE.methods`，而非动态查询。一元 `mode` 省略；流式 `mode` 为 `'stream'`。`invoke(remote, input, signal?)` 在调用时解析已挂载的命名空间方法，保留其 `this`、可选位置参数空位和 signal。它不使用 async 包装，直接转发同一个完整 `Promise<RemoteResult<DecodedOutput>>` 或 `RemoteStreamHandle<Output, Uplink>`；流迭代、`send`、`end` 和 `dispose` 均保留。`TypertRemoteMethod` 的第五个泛型参数独立于结果解析器的原始输出，保留载体解码后的一元字节类型。
 
@@ -180,6 +180,7 @@ pnpm dsh --profile <profile-name> <profile-arguments>
 - 普通产物为每个端点生成一份静态方法 spec，并返回惰性类实例；直接方法索引引用描述符对象，保留完整流式/二进制类型、独立编译面及完整编译面的声明合并。
 - 描述符索引与每种输入策略的视图、解析器和投影都独立惰性求值并缓存；Loader 校验静态 spec 及可调用辅助能力，不调用选择器、解析器或投影。
 - 每个输入参数从同一模型生成普通与严格 codec；消费方无需方法注解即可选择策略。两种封装都拒绝额外具名参数；严格输入递归关闭已声明对象，但不关闭 JSON 或字典键，也不改变 Host 分发和结果。
+- 协议源码与构建入口没有 Zod 运行时依赖；生成产物显式提供 Zod，无参端点也能创建拒绝额外字段的空输入对象；生产 profile 的 Loader 回归保留真实 Session 事件断言。
 - Registry 身份、原子注册、撤销和释放保持不变。
 - 缺少文档或不支持可选投影不阻止生成；选中的工具拒绝缺少必需信息的条目，并仍然解析输出。
 - 严格源码/产物调用与有限 fallback 分别测试；撤销严格 descriptor 绝不启用 fallback。

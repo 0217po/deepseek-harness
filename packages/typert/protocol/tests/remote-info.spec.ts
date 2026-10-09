@@ -30,7 +30,9 @@ describe('lazy Remote info', () => {
       package: '@fixture/goals',
       get methods() { inventoryReads++; return { 'goals/create': definition({ parameters: [{ name: 'request', source: 'json', codec: input, strictCodec: input }], result: output }) } },
     }
-    const info = createTypertRemoteInfo(spec)
+    const runtime = { ...z }
+    const strictObject = vi.spyOn(runtime, 'strictObject')
+    const info = createTypertRemoteInfo(spec, runtime)
     expect(Object.getPrototypeOf(info)).not.toBe(Object.prototype)
     expect(info.package).toBe('@fixture/goals')
     expect(inventoryReads).toBe(0)
@@ -44,13 +46,17 @@ describe('lazy Remote info', () => {
     expect(inventoryReads).toBe(1)
     expect(inputProjectionReads + outputProjectionReads).toBe(0)
     expect(create).not.toHaveBeenCalled()
+    expect(strictObject).not.toHaveBeenCalled()
     expect(method).not.toHaveProperty('metadata')
     expect(method).not.toHaveProperty('output')
     expect(method.mode).toBeUndefined()
     expect(isTypertRemoteMethod(method)).toBe(true)
 
-    const parser = method.input().create()
+    const inputView = method.input()
+    expect(strictObject).not.toHaveBeenCalled()
+    const parser = inputView.create()
     expect(method.input().create()).toBe(parser)
+    expect(strictObject).toHaveBeenCalledTimes(1)
     expect(create).toHaveBeenCalledTimes(1)
     expect(parser.parse({ request: 'ship' })).toEqual({ request: 'ship' })
     expect(inputProjectionReads + outputProjectionReads).toBe(0)
@@ -75,7 +81,7 @@ describe('lazy Remote info', () => {
     const strictCodec = { ...codec, create: createStrict, jsonSchema: { ...codec.jsonSchema, additionalProperties: false } }
     const info = createTypertRemoteInfo({ package: '@fixture/goals', methods: {
       'goals/create': definition({ parameters: [{ name: 'request', source: 'json', codec, strictCodec }] }),
-    } })
+    } }, z)
     const method = info.methods['goals/create']!
     const normal = method.input()
     const strict = method.input({ strict: true })
@@ -110,7 +116,7 @@ describe('lazy Remote info', () => {
         cancellation: { parameter: 'signal' },
         scope: { context: 'agent', wire: 'agentId' },
       }),
-    } })
+    } }, z)
     const method = info.methods['goals/create']!
     const parser = method.input().create()
     expect(parser.parse({ agentId: 'agent' })).toEqual({ agentId: 'agent' })
@@ -139,7 +145,7 @@ describe('lazy Remote info', () => {
     const info = createTypertRemoteInfo({ package: '@fixture/goals', methods: {
       'goals/required': definition({ parameters: [{ name: 'value', source: 'json', codec: unknown, strictCodec: unknown }] }),
       'goals/empty': definition({ parameters: [] }),
-    } })
+    } }, z)
     expect(() => info.methods['goals/required']!.input().create().parse({})).toThrow()
     const empty = info.methods['goals/empty']!
     expect(empty.input().create().parse({})).toEqual({})
@@ -170,7 +176,7 @@ describe('lazy Remote info', () => {
   it('keeps Context-only descriptors without inventing a named direct caller', () => {
     const info = createTypertRemoteInfo({ package: '@fixture/goals', methods: {
       'goals/rename': definition({ invocation: { kind: 'context', context: 'agent', wire: 'agentId', codec: text }, implementation: 'renameCurrent' }),
-    } })
+    } }, z)
     expect(Object.keys(info.methods)).toEqual([])
     expect(info.descriptors[0]).toMatchObject({ id: '@fixture/goals#goals/rename', namespace: 'goals', method: 'rename', implementation: 'renameCurrent' })
     expect(info.descriptors[0]).not.toHaveProperty('input')
@@ -181,7 +187,7 @@ describe('lazy Remote info', () => {
     const uplink = { codec: text }
     const info = createTypertRemoteInfo({ package: '@fixture/goals', methods: {
       'goals/watch': definition({ mode: 'stream', parameters: [], uplink }),
-    } })
+    } }, z)
     const handle = { async *[Symbol.asyncIterator]() { yield 'frame' }, send: vi.fn(), end: vi.fn(), dispose: vi.fn() }
     const namespace = { watch: () => handle }
     const remote: object = { goals: namespace }
@@ -202,7 +208,7 @@ describe('lazy Remote info', () => {
         parameters: [{ name: 'request', source: 'json', description: 'Still documented.', codec: unsupported, strictCodec: unsupported }],
         result: { ...unsupported, description: 'Still a result.', decode, encode },
       }),
-    } })
+    } }, z)
     const method = info.methods['goals/create']!
     expect(method.input().jsonSchema).toBeUndefined()
     expect(method.input().jsonSchemaError).toBe('Unsupported tool type.')
@@ -217,7 +223,7 @@ describe('lazy Remote info', () => {
     expect(() => method.input().create()).toThrow('invalid schema factory')
     const unprojected = createTypertRemoteInfo({ package: '@fixture/goals', methods: {
       'goals/create': definition({ parameters: [{ name: 'request', source: 'json', codec: { ...text, jsonSchema: undefined }, strictCodec: text }] }),
-    } }).methods['goals/create']!
+    } }, z).methods['goals/create']!
     expect(unprojected.input().jsonSchemaError).toContain('request')
     expect(unprojected.input().create().parse({ request: 'valid' })).toEqual({ request: 'valid' })
   })

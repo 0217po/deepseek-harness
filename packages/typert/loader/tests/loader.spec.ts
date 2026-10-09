@@ -79,7 +79,8 @@ async function writeRemoteInfoRuntime(base: string): Promise<string> {
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ESNext },
   })
-  // The factory's only runtime dependency resolves through this fixture's node_modules/zod link.
+  const module = ts.createSourceFile('remote-info.js', outputText, ts.ScriptTarget.ESNext, true, ts.ScriptKind.JS)
+  expect(module.statements.filter(ts.isImportDeclaration)).toEqual([])
   const path = join(base, 'remote-info.mjs')
   await writeFile(path, outputText, { flag: 'wx', mode: 0o600 })
   return pathToFileURL(path).href
@@ -109,7 +110,7 @@ function invocationTypertSource(pkgName: string, factoryUrl: string): string {
     "      sourceLocation: { file: 'src/index.ts', line: 8, column: 3 },",
     '    },',
     '  },',
-    '})',
+    '}, z)',
     'export const TYPERT = {',
     '  package: REMOTE_INFO.package,',
     '  face: \'host\',',

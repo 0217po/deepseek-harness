@@ -527,6 +527,37 @@ void [strictParsed, normalInput, wrongInput, output, value, wrongResult, wrongOu
     expect(method.parameters[1]!.codec.create().parse(extra.request)).toEqual(input.request)
   })
 
+  it('supplies Zod to parameterless Host and Remote artifacts without exported schemas', async () => {
+    const root = fixture()
+    editFile(root, 'packages/remote/src/index.ts', () => `import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
+export class GoalService extends TypertRemoteService {
+  constructor() { super(undefined, 'goals') }
+  @Remote
+  ready(): boolean { return true }
+}
+`)
+    const [artifact] = new WorkspaceTypertGenerator(root).generate()
+    if (artifact?.remote === undefined) throw new Error('missing Remote artifact')
+    for (const source of [artifact.js, artifact.remote.js]) {
+      expect(source).toContain("import { z } from 'zod'")
+      expect(source).toContain('}, z)')
+    }
+    const host = await executableRemoteModule<{ TYPERT: { schemas: unknown[]; invocations: RuntimeMethod[] } }>(artifact.js)
+    const remote = await executable(artifact.remote.js)
+    expect(host.TYPERT.schemas).toEqual([])
+    expect(host.TYPERT.invocations).toHaveLength(1)
+    for (const method of [host.TYPERT.invocations[0]!, remote.TYPERT_REMOTE.methods['goals/ready']!]) {
+      for (const strict of [false, true]) {
+        const input = method.input({ strict })
+        const parser = input.create()
+        expect(input.create()).toBe(parser)
+        expect(parser.parse({})).toEqual({})
+        expect(() => parser.parse({ extra: true })).toThrow()
+      }
+      expect(method.result.create().parse(true)).toBe(true)
+    }
+  })
+
   it('supports optional named arguments and parameterless methods', async () => {
     const root = fixture()
     editFile(root, 'packages/remote/src/index.ts', source => source.replace('  constructor() {', `  @Remote

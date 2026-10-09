@@ -13,7 +13,7 @@ export async function executableRemoteModule<Module>(source: string): Promise<Mo
   const factory = ts.transpileModule(
     readFileSync(new URL('../../protocol/src/remote-info.ts', import.meta.url), 'utf8'),
     { compilerOptions: { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext } },
-  ).outputText.replace(/from (['"])zod\1/g, zodImport)
+  ).outputText
   const factoryUrl = `data:text/javascript,${encodeURIComponent(factory)}`
   const executable = source
     .replace(/from (['"])zod\1/g, zodImport)

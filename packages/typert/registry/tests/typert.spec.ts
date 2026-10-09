@@ -108,7 +108,7 @@ describe('TypertRegistry', () => {
         service: 'goals', invocation: { kind: 'direct' }, description: 'Create a goal.',
         parameters: [{ name: 'request', source: 'json', codec, strictCodec: codec }], result: codec,
       },
-    } })
+    } }, z)
     const descriptor = info.methods['goals/create']!
     expect(info.descriptors[0]).toBe(descriptor)
     try {
