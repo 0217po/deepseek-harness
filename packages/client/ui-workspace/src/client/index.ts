@@ -52,6 +52,7 @@ import { ForkSessionMenuItem } from './session-actions/ForkSession.tsx'
 import { PinSessionMenuItem, PinSessionRowButton } from './session-actions/PinSession.tsx'
 import { RenameSessionMenuItem, SessionRenameDialog } from './session-actions/RenameSession.tsx'
 import { RowActionToast } from './session-actions/RowActionToast.tsx'
+import { registerToasts } from './toast/register.ts'
 import { SessionIdDialog, SessionIdMenuItem } from './session-actions/SessionId.tsx'
 import { WorkspacePicker } from './WorkspacePicker.tsx'
 import { en, zh, type WorkspaceKey } from './locales.ts'
@@ -201,7 +202,7 @@ export function apply(ctx: Context): void {
     unarchiveSession,
   })
   installWorkspaceShortcuts(ctx, uiWorkspace, shortcutControls, archiveInjected().archiveSession,
-    reason => { notify({ kind: 'shortcutForkFailed', reason }) })
+    (reason) => { notify({ kind: 'shortcutForkFailed', reason }) })
   const archiveConfirmInjected = (): SessionArchiveConfirmInjected => ({
     hooks: { archiveRequest },
     settleSessionArchive: () => { archiveRequest.set(null) },
@@ -240,18 +241,21 @@ export function apply(ctx: Context): void {
     settleSessionRename: shortcutControls.closeRename,
     renameSession,
   })
-  const rowToastInjected = (): RowToastInjected => ({
-    hooks: { toast: rowToast },
-    dismissToast: () => { rowToast.set(null) },
+  const toastActions = {
     undoArchive: unarchiveSession,
     showArchived: () => { viewInstance.actions.setArchivedFilter('show') },
-    openForkSource: (sessionId) => {
+    openForkSource: (sessionId: SessionId) => {
       if (workspaces.list.getSnapshot().archivedSessionIds.includes(sessionId)) {
         notify({ kind: 'archivedNotOpenable' })
         return
       }
       openSession(sessionId)
     },
+  }
+  registerToasts(ctx, viewStore, toastActions)
+  const rowToastInjected = (): Pick<RowToastInjected, 'hooks' | 'dismissToast'> => ({
+    hooks: { toast: rowToast },
+    dismissToast: () => { rowToast.set(null) },
   })
   const browserInjected = (): WorkspaceBrowserInjected => ({
     // Explicit group actions keep their target; unscoped New Session inherits
@@ -328,10 +332,9 @@ export function apply(ctx: Context): void {
     yield ctx.slots.register({
       name: 'shell.overlay', id: 'workspace.session-archive', locale: NS, inject: archiveConfirmInjected,
     }, SessionArchiveConfirmDialog)
-    // The toast shares the browser's viewing store: it reads the archived
-    // filter to drop the archived notice's filter action once rows are visible.
     yield ctx.slots.register({
-      name: 'shell.overlay', id: 'workspace.row-toast', locale: NS, store: viewStore, inject: rowToastInjected,
+      name: 'shell.overlay', id: 'workspace.row-toast', inject: rowToastInjected,
+      children: { 'workspace.toast': { kind: 'keyed', scope: 'root' } },
     }, RowActionToast)
   })
   ctx.slots.inject('conversation.hero.workspace', () => ctx.slots.register(

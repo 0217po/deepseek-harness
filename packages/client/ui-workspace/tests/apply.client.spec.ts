@@ -8,7 +8,7 @@ import { SessionForkError } from '@deepseek-ai/dsh-api-session-controller/client
 import type { WorkspaceId, WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
-import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRenderSlots, StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ShortcutCommand } from '@deepseek-ai/dsh-client-shortcuts/client'
 import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
@@ -25,6 +25,7 @@ import { ForkSessionMenuItem } from '../src/client/session-actions/ForkSession.t
 import { PinSessionMenuItem, PinSessionRowButton } from '../src/client/session-actions/PinSession.tsx'
 import { RenameSessionMenuItem, SessionRenameDialog } from '../src/client/session-actions/RenameSession.tsx'
 import { RowActionToast } from '../src/client/session-actions/RowActionToast.tsx'
+import type { ArchiveToastInjected, ToastDisplayInjected } from '../src/client/toast/contract.ts'
 import { SessionIdDialog, SessionIdMenuItem } from '../src/client/session-actions/SessionId.tsx'
 import { WorkspacePicker } from '../src/client/WorkspacePicker.tsx'
 import { FLAT_SESSION_ORDER_KEY } from '../src/client/stores.ts'
@@ -180,7 +181,9 @@ function declare(slots: SlotRegistry, ...names: HoleName[]): () => void {
 }
 
 /** Own the sidebar declaration independently of the frame-wide overlay in lifecycle tests. */
-function SidebarDeclarationOwner() { return null }
+function SidebarDeclarationOwner({ renderSlot }: PropsRenderSlots<'sidebar.workspaces'>) {
+  return renderSlot('sidebar.workspaces', { wide: true, expandSidebar: () => {} })
+}
 
 /** The one entry registered under `id` in a list. */
 function entry(slots: SlotRegistry, key: RowListName, id: string): StoredEntry {
@@ -279,17 +282,22 @@ describe('ui-workspace apply', () => {
       ['workspace.session-id', undefined, SessionIdDialog, 'workspace'],
       ['workspace.session-rename', undefined, SessionRenameDialog, 'workspace'],
       ['workspace.session-archive', undefined, SessionArchiveConfirmDialog, 'workspace'],
-      ['workspace.row-toast', undefined, RowActionToast, 'workspace'],
+      ['workspace.row-toast', undefined, RowActionToast, undefined],
     ])
-    // The browser and the row toast declare the same viewing-store handle,
-    // which hands out one instance: the browser's injected callbacks write
-    // view state through it and the toast reads the archived filter from it.
-    // The row actions and the other overlay surfaces declare none.
+    // Only archive notice entries share the browser's viewing store.
     const browser = b.slots.entries('sidebar.workspaces')[0]!
     expect(browser.store).toBeDefined()
     expect(viewInstance(b.slots)).toBe(viewInstance(b.slots))
     const rowToastEntry = entry(b.slots, 'shell.overlay', 'workspace.row-toast')
-    expect(rowToastEntry.store).toBe(browser.store)
+    expect(rowToastEntry.store).toBeUndefined()
+    expect(b.slots.entries('workspace.toast').map(row => row.options.key)).toEqual([
+      'sessionIdCopied', 'sessionIdCopyFailed', 'pinFailed', 'unpinFailed', 'archivedNotOpenable',
+      'defaultWorkspaceFailed', 'shortcutForkFailed', 'createFailed', 'forkRequiresOpen', 'archived', 'stoppedAndArchived',
+    ])
+    for (const registration of b.slots.entries('workspace.toast')) {
+      expect(registration.locale).toBe('workspace')
+      expect(registration.store).toBe(['archived', 'stoppedAndArchived'].includes(String(registration.options.key)) ? browser.store : undefined)
+    }
     for (const registration of [...b.slots.entries(MENU_ITEM), ...b.slots.entries(ROW_ACTION), ...b.slots.entries('shell.overlay')]) {
       if (registration === rowToastEntry) continue
       expect(registration.store).toBeUndefined()
@@ -313,7 +321,7 @@ describe('ui-workspace apply', () => {
       if (!accepted) throw new Error('clipboard denied')
     })
     vi.stubGlobal('navigator', { clipboard: { writeText } })
-    onTestFinished(() => vi.unstubAllGlobals())
+    onTestFinished(() => { vi.unstubAllGlobals() })
     expect(dialog.hooks.sessionIdRequest.getSnapshot()).toBeNull()
     const requested = vi.fn()
     const unsubscribe = dialog.hooks.sessionIdRequest.subscribe(requested)
@@ -568,17 +576,19 @@ describe('ui-workspace apply', () => {
     unsubscribe()
 
     expect(view.getSnapshot().archivedFilter).toBe('default')
-    toast.showArchived()
+    const archived = b.slots.entries('workspace.toast').find(row => row.options.key === 'archived')!
+    const archiveDisplay = faceOf(archived) as ArchiveToastInjected
+    archiveDisplay.filterAction(b.locale.bind('workspace'), toast.dismissToast).onClick()
     expect(view.getSnapshot().archivedFilter).toBe('show')
 
-    toast.undoArchive(sid('one'))
+    archiveDisplay.display({ kind: 'archived', sessionId: sid('one'), seq: 1 }, b.locale.bind('workspace'), toast.dismissToast).actions![0]!.onClick()
     expect(unarchiveSession).toHaveBeenCalledWith('one')
     // A rejected undo is a console diagnostic.
     const rejection = new Error('unarchive exploded')
     unarchiveSession.mockRejectedValueOnce(rejection)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
-      toast.undoArchive(sid('two'))
+      archiveDisplay.display({ kind: 'archived', sessionId: sid('two'), seq: 2 }, b.locale.bind('workspace'), toast.dismissToast).actions![0]!.onClick()
       await vi.waitFor(() => { expect(warn).toHaveBeenCalledWith('session unarchive rejected:', rejection) })
     } finally {
       warn.mockRestore()
@@ -690,7 +700,8 @@ describe('ui-workspace apply', () => {
     expect(b.retain).not.toHaveBeenCalled()
     expect(b.selectPanel).not.toHaveBeenCalled()
     toast.dismissToast()
-    toast.openForkSource(sid('source'))
+    ;(faceOf(b.slots.entries('workspace.toast').find(row => row.options.key === 'forkRequiresOpen')!) as ToastDisplayInjected<'forkRequiresOpen'>)
+      .display({ kind: 'forkRequiresOpen', sessionId: sid('source'), seq: 1 }, b.locale.bind('workspace'), toast.dismissToast).actions![0]!.onClick()
     expect(b.retain).toHaveBeenCalledExactlyOnceWith('source', { source: 'mainView' })
     expect(b.selectPanel).toHaveBeenCalledExactlyOnceWith(null)
     expect(b.fork).toHaveBeenCalledOnce()
@@ -717,7 +728,8 @@ describe('ui-workspace apply', () => {
       if (timing === 'after the notice') b.setWorkspaces(workspaceState([], [sid('source')]))
 
       toast.dismissToast()
-      toast.openForkSource(sid('source'))
+      ;(faceOf(b.slots.entries('workspace.toast').find(row => row.options.key === 'forkRequiresOpen')!) as ToastDisplayInjected<'forkRequiresOpen'>)
+        .display({ kind: 'forkRequiresOpen', sessionId: sid('source'), seq: 1 }, b.locale.bind('workspace'), toast.dismissToast).actions![0]!.onClick()
 
       expect(toast.hooks.toast.getSnapshot()).toEqual({ kind: 'archivedNotOpenable', seq: 2 })
       expect(b.retain).not.toHaveBeenCalled()
@@ -872,5 +884,7 @@ describe('ui-workspace apply', () => {
     expect(b.slots.entries(MENU_ITEM)).toHaveLength(0)
     expect(b.slots.entries(ROW_ACTION)).toHaveLength(0)
     expect(b.slots.entries('shell.overlay')).toHaveLength(0)
+    expect(b.slots.entries('workspace.toast')).toHaveLength(0)
+    expect(b.slots.snapshot('factory:workspace.toast.content')).toEqual([])
   })
 })

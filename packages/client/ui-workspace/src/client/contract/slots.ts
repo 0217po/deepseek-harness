@@ -53,6 +53,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { WorkspaceShortcutState } from '../shortcuts.ts'
 import type { StartSessionOptions } from '../navigation.ts'
+import type {} from '../toast/contract.ts'
 import type { createWorkspaceViewStore } from '../stores.ts'
 
 /**
@@ -435,7 +436,7 @@ export interface SessionRenameDialogInjected {
   renameSession: (sessionId: SessionId, title: string) => Promise<void>
 }
 
-/** Row toast share: the notice, dismissal, archive recovery, and explicit source-history opening. */
+/** Existing overlay share: the current notice and its dismissal. */
 export interface RowToastInjected {
   hooks: {
     /** The notice on display, or none. */
@@ -443,6 +444,10 @@ export interface RowToastInjected {
   }
   /** Take the notice down. */
   dismissToast: () => void
+}
+
+/** Business callbacks injected into their keyed Toast presentations. */
+export interface RowToastActions {
   /** Undo an archive from its notice. */
   undoArchive: (sessionId: SessionId) => void
   /** Switch the archived filter to "show" so the archived row is back in view. */
@@ -465,16 +470,11 @@ export type SessionArchiveConfirmProps =
   & Omit<SessionArchiveConfirmInjected, 'hooks'>
   & PropsHooks<SessionArchiveConfirmInjected['hooks']>
 
-/**
- * Props of the row toast entry in `shell.overlay`. The declared viewing store
- * carries the archived filter; the archived notice omits its filter action
- * when archived rows are already visible.
- */
+/** Props of the existing overlay's keyed notice dispatcher. */
 export type RowToastProps =
   PropsRuntime<'shell.overlay'>
-  & PropsLocale<'workspace'>
-  & PropsStore<WorkspaceViewStoreHandle>
-  & Omit<RowToastInjected, 'hooks'>
+  & PropsRenderSlots<'workspace.toast'>
+  & Pick<RowToastInjected, 'dismissToast'>
   & PropsHooks<RowToastInjected['hooks']>
 
 /** Full browser props: shell owner share + viewing store + injected actions + the locale seat. */
