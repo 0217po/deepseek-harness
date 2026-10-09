@@ -362,9 +362,13 @@ pnpm run package:desktop:win:x64:unsigned
 
 先运行 `pnpm install --frozen-lockfile`，再运行 `pnpm run package:desktop:win:x64:unsigned --check` 校验配置和工具，最后执行上面的完整命令。打包自行执行完整构建和隔离的运行时 smoke，不调用在线模型。阶段日志保留在 `.desktop-build/packaging-runs/`；仅构建成功不代表安装包验证通过。依赖安装和运行时准备需要访问 npm、GitHub release 资源和 nodejs.org；网络需要时使用现有 registry 和代理配置。缓存与工具位置属于构建机器配置，不在跟踪文件中固定个人路径。
 
-[Windows 手动工作流](../../.github/workflows/windows-package.yml) 选择带有专用标签 `dsh-win-package-trial` 的自托管 Windows x64 runner，并调用同一个未签名命令。启动 runner 前需准备 PowerShell 7 和上述工具。必须填写策略部署环境和 HTTPS origin；测试部署还需填写逗号分隔的登录 origin。这些公开输入生成临时 `.env.windows`，不包含签名或上传凭据。`build_version` 默认为 `auto`，使用[发布版本](#release-versions)中说明的 CI 标识。显式版本复用现有产品版本校验器。解析后的版本在打包前显示于运行摘要，manifest 保持不变。
+[Windows 手动工作流](../../.github/workflows/windows-package.yml) 选择专用 Windows x64 runner 标签 `dsh-win-package-trial`，并使用机器 preset `test` 或 `production`。选择 `unsigned`（默认）或 `signed`；签名模式复用现有 EV token 预检、签名缓存与失败 interlock，不发布或上传 release。`build_version` 默认为 `auto`，使用[发布版本](#release-versions)中的 CI 标识；显式值可以是源码产品版本，或扩展构建版本，例如产品 `0.2.1-alpha.1` 对应 `0.2.1-alpha.1.20261009.1`。版本前缀必须匹配所选源码；校验错误显示其当前示例。manifest 保持不变。
 
-工作流进入默认分支后，在 Actions 中选择它，选择源码分支、填写输入并点击 Run workflow。它不监听 push 或 PR，不改变现有自动 CI。打包日志和成功生成的 EXE 产物保留 14 天；安装、签名和发布是独立操作。依赖 Actions 打包前，先从默认分支运行一次，并检查保留的日志和安装包。Checkout 会清理 runner 专用源码目录，包括被忽略的文件；不得指向日常开发目录。运行共享一个并发组，不取消正在进行的构建；最多保留一个待运行任务，新的手动触发会替换该待运行任务。仅在成功完成干净检出后上传诊断日志；即使配置准备在写入后失败，也会清理生成的配置。
+在 Actions 选择工作流、源码分支、preset、签名模式和版本，再点击 Run workflow。输入变更合并前，用 `gh workflow run windows-package.yml --ref <branch> -f preset=test -f signing=unsigned -f build_version=auto` 测试已推送分支；合并后验证网页表单。它不监听 push 或 PR。日志和成功生成的 EXE 保留 14 天。依赖打包流程前检查日志和安装包；安装是独立操作。Checkout 清理 runner 专用源码目录，包括被忽略的文件；不得指向日常开发目录。运行共享一个并发组，不取消正在进行的构建；最多保留一个待运行任务，新触发会替换它。仅在成功完成干净检出后上传诊断。机器配置位于 checkout 之外，不作为产物上传。
+
+本地 Windows 命令通过 `DSH_PACKAGING_CONFIG_DIR` 指定机器配置绝对目录，通过 `DSH_PACKAGING_PRESET` 选择 `test` 或 `production`。加载器读取 `presets/<preset>.env`；签名命令另读 `secrets/windows-signing.env`。相对证书和 SignTool 路径以声明它们的文件所在目录为基准。公开 preset 拒绝凭据，签名文件不能覆盖公开配置。配置缺失立即失败，不回退到 `.env.windows`；不选择 preset 的命令保留原 dotenv 行为。未签名 preset 不读取签名文件。签名测试包还需现有下载 origin 和 release ID，但无需上传凭据。
+
+运行 `pwsh -NoProfile -File apps/desktop/scripts/setup-windows-packaging.ps1 -Root <absolute-machine-root>` 创建私有 `packaging/{presets,secrets,certificates}` 和 `cache/windows-signatures` 目录并复制模板，不覆盖现有文件。添加 `-CheckOnly` 只检查不写入。在机器上填写 [preset 模板](config/windows-packaging/test.env.example)和[签名模板](config/windows-packaging/windows-signing.env.example)。从同一 scripts 目录运行 `start-windows-packaging-runner.ps1 -RunnerRoot <registered-runner-directory> -ConfigRoot <machine-root>/packaging -CheckOnly`，检查 runner 的 `tools` 目录下 PowerShell 7.6.6、Node、Python、Git、tar 和 Visual C++ 工具；打包 `--check` 完成其余工具链检查。省略 `-CheckOnly`，以显式配置目录和清理后的继承环境启动现有 runner。注册和工具安装单独进行；这些脚本不创建 token、不改系统安全设置、不清除签名失败记录。修改 preset 缓存路径前，使用下文签名缓存维护命令迁移已有条目。
 
 <a id="windows-uninstall-rules"></a>
 
