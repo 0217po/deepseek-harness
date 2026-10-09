@@ -1752,3 +1752,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   })
   await service.await()
 }
+
+/** JSONL persistence plugin, including its Loader configuration schema. */
+export default { name, Config, apply }

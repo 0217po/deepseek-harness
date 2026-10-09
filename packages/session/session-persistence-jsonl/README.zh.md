@@ -77,7 +77,7 @@ kind: "package-reference"
 
 当前代际扫描器在处理可恢复尾部之前，执行当前编解码器所有者的结构准入检查。已退役的必需 PTC 标签与 `request/header.header.system` 即使出现在较早的畸形行之后也会导致文件被拒绝；恢复绝不将它们作为普通损坏尾部数据截断。
 
-卸载后端时，会先等待经由 `sessionPersistence` 注入所触发的消费者卸载，再移除实时事件监听器、排空并关闭剩余句柄。消费者必须在该注入作用域中注册清理；无依赖关系的作用域，以及显式关闭的 Session 或句柄，各自遵循其生命周期。通过代码挂载时，使用包的 namespace（`import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'`）调用 `ctx.plugin`，并通过 `ctx.sessionPersistence` 访问存储。
+卸载后端时，会先等待经由 `sessionPersistence` 注入所触发的消费者卸载，再移除实时事件监听器、排空并关闭剩余句柄。消费者必须在该注入作用域中注册清理；无依赖关系的作用域，以及显式关闭的 Session 或句柄，各自遵循其生命周期。通过代码挂载时，使用默认插件导出（`import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'`）调用 `ctx.plugin`，并通过 `ctx.sessionPersistence` 访问存储。
 
 ### 读取日志
 
@@ -103,7 +103,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-该后端拥有自己完整的存储运行时（`src/storage.ts`）：`JsonlSessionHandle` 承载逐句柄修改链、带固定批处理窗口与 single-flight 排空的已路由实时事件缓冲、单调读取与幂等 close；一个 tracker 持有进程内单写者认领、teardown 清扫所遍历的打开句柄集合，以及后端自己的会话监听器所路由进的已创建但未实体化待定会话。历史正文读取共享每个 Session 唯一的一次 Decode/Migrate preparation，按 revision 为键的有界 memo 让紧接的观察到恢复交接复用该解析；backend 在 memo 化前只对每个 event graph 深度冻结一次，因此后续 handle read 无需复制或再次冻结。只有写 open 才发布准备好的后继。本包有意只暴露默认插件导出与配置类型——具体类不是具名导出，因此消费方只耦合 `ctx.sessionPersistence`，其可观察行为由共享 seam 测试套件（`runPersistenceContract`/`runLiveWritePathContract`）钉住。物理修订号组合 device、inode、size 与纳秒时间戳，供准备缓存、稳定读取重试及发布检查使用。历史格式的公开修订号还加入所选路径排序后及其物理修订号的 SHA-256 指纹；锁文件与保留但未被选中的代际不参与计算。
+该后端拥有自己完整的存储运行时（`src/storage.ts`）：`JsonlSessionHandle` 承载逐句柄修改链、带固定批处理窗口与 single-flight 排空的已路由实时事件缓冲、单调读取与幂等 close；一个 tracker 持有进程内单写者认领、teardown 清扫所遍历的打开句柄集合，以及后端自己的会话监听器所路由进的已创建但未实体化待定会话。历史正文读取共享每个 Session 唯一的一次 Decode/Migrate preparation，按 revision 为键的有界 memo 让紧接的观察到恢复交接复用该解析；backend 在 memo 化前只对每个 event graph 深度冻结一次，因此后续 handle read 无需复制或再次冻结。只有写 open 才发布准备好的后继。本包暴露插件导出与配置类型——具体类是私有的，因此消费方只耦合 `ctx.sessionPersistence`，其可观察行为由共享 seam 测试套件（`runPersistenceContract`/`runLiveWritePathContract`）钉住。物理修订号组合 device、inode、size 与纳秒时间戳，供准备缓存、稳定读取重试及发布检查使用。历史格式的公开修订号还加入所选路径排序后及其物理修订号的 SHA-256 指纹；锁文件与保留但未被选中的代际不参与计算。
 
 ### 物理编码
 

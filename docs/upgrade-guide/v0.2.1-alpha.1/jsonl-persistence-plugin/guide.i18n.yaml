@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-alpha.1/jsonl-persistence-plugin/guide.md
 /:
-  en: bfa70c835a3ee484
-  zh: 96d7498ef521de6c
-/jsonl-persistence-uses-a-namespace-plugin-import:
-  en: 758b9bedc071d6c7
-  zh: 8bbde76978fa3791
-/jsonl-persistence-uses-a-namespace-plugin-import/change:
-  en: ae72fd2d26600080
-  zh: 9a618b92724cfa1a
-/jsonl-persistence-uses-a-namespace-plugin-import/migration:
-  en: a220187cd899cc5f
-  zh: 2afe0d9f99cc26ce
+  en: 88b687538d1f2b66
+  zh: b8b233fc2711af64
+/mount-jsonl-persistence-through-its-plugin:
+  en: ae3ff407a497cf5c
+  zh: 1b71e651967b8255
+/mount-jsonl-persistence-through-its-plugin/change:
+  en: b2748e1990b95fc3
+  zh: c274bcb571a8fc8c
+/mount-jsonl-persistence-through-its-plugin/migration:
+  en: fcc0bf0faa908d24
+  zh: 0fddf19c4ad6c60b

@@ -334,7 +334,7 @@ describe('one-time V4 migration command', () => {
     const backendUrl = pathToFileURL(join(repository, 'packages/session/session-persistence-jsonl/src/index.ts')).href
     const generationUrl = pathToFileURL(join(repository, 'packages/session/session-persistence-jsonl/src/generation.ts')).href
     await writeFile(entrypoint, `
-      const Backend = await import(${JSON.stringify(backendUrl)});
+      const { default: Backend } = await import(${JSON.stringify(backendUrl)});
       const { Context } = await import(${JSON.stringify(pathToFileURL(join(repository, 'vendor/cordis/src/index.ts')).href)});
       const { JsonlGenerationSourceChangedError } = await import(${JSON.stringify(generationUrl)});
       const ctx = new Context();
