@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for 2026-10-09-cordis-cleanup-dependency-lifetimes.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-10-09-cordis-cleanup-dependency-lifetimes.md
+/agent-note-keep-cleanup-dependencies-usable-until-consumers-finish:
+  en: 5697ed719fc785dc
+  zh: 6752482fc87287bd
+/agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/problem:
+  en: 6e888020a4aa2342
+  zh: 34a0b69c2b6350e6
+/agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/proposal:
+  en: cd7c3cd7a85e3653
+  zh: fe76a2eddddec695
+/agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/p0-findings:
+  en: 630ab3bad5d44193
+  zh: 71d3ba982c6f9a42
+/agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/p0-findings/session-persistence-drops-events-emitted-during-cleanup:
+  en: 768daa2d4923ba75
+  zh: c9b330c97eea4b6e
+/agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/p0-findings/storage-closes-before-schedule-commits-accepted-delivery:
+  en: 0c5cc4df39139e5e
+  zh: edba7ae9b1d37882
+/agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/p0-findings/authorization-loses-required-observation-or-an-accepted-credential-write:
+  en: 11db754f4a82518e
+  zh: 320e40ba82f2edbd
+/agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/p0-findings/ssh-disables-cleanup-requests-before-dependent-process-cleanup-finishes:
+  en: 6bcf52fa7787d074
+  zh: bb0d03d560faf11d
+/agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/p0-findings/windows-sandbox-releases-temporary-process-resources-during-consumer-cleanup:
+  en: 26f69066bae53851
+  zh: 4f3447d068824fd3
+/agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/scope-and-existing-decisions:
+  en: f39906ee5595279e
+  zh: f72402cf6b0f584f
+/agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/alternatives-considered:
+  en: 383a83fd09d3fe0d
+  zh: cf55505415b6f197
+/agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/acceptance-criteria:
+  en: 57057426039f75f4
+  zh: 16dbf1d3ca83783a
+/agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/risks:
+  en: 4520eb132dfe9032
+  zh: 55b01317ecea3d31

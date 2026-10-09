@@ -15,8 +15,8 @@
   en: 33085f2b58bab16c
   zh: be38e69a9c7d3f0e
 /defensive-patterns/dispose-must-reach-quiescence-not-just-request-it:
-  en: 5c906be504b88a65
-  zh: 8f428f59a87bb1a8
+  en: 75c141c9b9429e1f
+  zh: 79decb12b06b79ba
 /defensive-patterns/contain-callback-exceptions-in-the-dispatcher:
   en: ae1788e76190db2c
   zh: a55ab7473bb0c8dd

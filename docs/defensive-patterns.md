@@ -18,7 +18,7 @@ When an implementation receives several representations of one outcome, normaliz
 
 ## Dispose must reach quiescence, not just request it
 
-A teardown that issues kills/aborts but returns before the work stops leaves orphans. Make cleanup async and await the children's exit (kill → await `done`), and close listener/notification registries BEFORE killing so late completions stay silent.
+A teardown that issues kills/aborts but returns before the work stops leaves orphans. Make cleanup async and await the children's exit (kill → await `done`). Keep resources and listeners needed for completion or final persistence usable until consumers settle. Cordis awaits dependent unloading during service withdrawal, but sibling disposers run concurrently: `inject` alone does not order resource release. The [Cordis audit skill](../.agents/skills/cordis-styling-nitpicking/SKILL.md#p0-cleanup-dependency-released-before-consumer-completion) defines the ownership checks.
 
 ## Contain callback exceptions in the dispatcher
 
