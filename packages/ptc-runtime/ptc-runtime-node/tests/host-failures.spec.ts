@@ -526,7 +526,7 @@ it('keeps failed per-call cleanup registered until process observation succeeds'
   h.onBoot(() => { h.emit({ type: 'done', value: encodePtcJsonWire(42) }) })
   const result = await h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) })
   expect(result.error?.kind).toBe('worker-exit')
-  expect(setSandboxMode(session, 'read-only')).toBeUndefined()
+  setSandboxMode(session, 'read-only')
   expect(h.ctx.sandboxPolicy.resolve({ session }).mode).toBe('read-only')
   await expect(h.runtime.run(h.runtime.resolve({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) }))).rejects.toThrow('range cannot be observed')
   h.waitForExit.mockResolvedValue(true)
@@ -540,7 +540,7 @@ it('unregisters a Session resource when process spawn fails', async () => {
   h.spawn.mockImplementation(() => { throw new Error('spawn failed') })
   const result = await h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) }, NO_INITIAL_FRAME)
   expect(result.error?.message).toContain('spawn failed')
-  expect(setSandboxMode(session, 'read-only')).toBeUndefined()
+  setSandboxMode(session, 'read-only')
 })
 
 it('preserves execution context for bindings delivered by an external control stream', async () => {

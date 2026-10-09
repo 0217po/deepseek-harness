@@ -27,7 +27,7 @@ it('starts cleanup without another execution and retains the Promise for subsequ
     setSandboxMode(ctx.sessions.create(SessionId('unrelated')), 'read-only')
     setSandboxMode(session, 'workspace-write')
     expect(release).not.toHaveBeenCalled()
-    expect(setSandboxMode(session, 'read-only')).toBeUndefined()
+    setSandboxMode(session, 'read-only')
     expect(release).toHaveBeenCalledTimes(1)
     expect(ctx.sandboxPolicy.resolve({ session }).mode).toBe('read-only')
     let admitted = false

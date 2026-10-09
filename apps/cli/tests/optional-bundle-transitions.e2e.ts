@@ -144,7 +144,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
       setup: scoped => ctx.agentPresets.mount(scoped, preset).then(() => undefined),
     })
     handles.add(handle)
-    await ctx.permissionPresets.set(handle.agent.session, 'danger-full-access')
+    ctx.permissionPresets.set(handle.agent.session, 'danger-full-access')
     return handle
   }
 

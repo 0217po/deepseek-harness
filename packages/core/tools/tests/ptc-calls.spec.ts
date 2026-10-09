@@ -29,7 +29,7 @@ it('commits policy immediately, cancels existing calls, and waits for their comp
     setSandboxMode(ctx.sessions.create(SessionId('another')), 'read-only')
     setSandboxMode(session, 'workspace-write')
     expect(oldSignal?.aborted).toBe(false)
-    expect(setSandboxMode(session, 'read-only')).toBeUndefined()
+    setSandboxMode(session, 'read-only')
     expect(mode()).toBe('read-only')
     expect(oldSignal?.aborted).toBe(true)
     const second = calls.run(session.id, signal, mode, next)

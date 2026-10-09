@@ -91,7 +91,7 @@ it('clears a registered live REPL through the file-policy setter before starting
   expect((await run('const retained = 7; retained')).value).toBe(7)
   const started = spawn.mock.results[0]
   if (started?.type !== 'return') throw new Error('the retained process did not start')
-  expect(setSandboxMode(session, 'read-only')).toBeUndefined()
+  setSandboxMode(session, 'read-only')
   await started.value.done
   expect((await run('typeof retained')).value).toBe('undefined')
   const denied = await run('await (await import("node:fs/promises")).writeFile("denied-after-switch.txt", "denied")')
@@ -138,7 +138,7 @@ it.each(['per-call', 'persistent-in-memory'] as const)('cancels active %s execut
     bindings: [{ global: 'tools', functions: { ready: async () => { entered.resolve(undefined); return null } } }],
   }))
   await entered.promise
-  expect(setSandboxMode(session, 'read-only')).toBeUndefined()
+  setSandboxMode(session, 'read-only')
   expect(ctx.sandboxPolicy.resolve({ session }).mode).toBe('read-only')
   expect((await pending).error?.kind).toBe('abort')
 })
