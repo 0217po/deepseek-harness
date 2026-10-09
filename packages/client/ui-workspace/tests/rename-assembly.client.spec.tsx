@@ -111,7 +111,7 @@ describe('session rename through the assembled browser', () => {
         },
       )
     }
-    // `order` places plugin rows after the shipped rows (100/200/300/400)
+    // `order` places plugin rows after the shipped rows (100/200/300/400/450)
     // even when the later registration has the lower shadowing priority
     // assigned to dynamic browser packages; the first plugin row opens the
     // plugin group with a hairline.
@@ -123,7 +123,7 @@ describe('session rename through the assembled browser', () => {
     const trigger = within(row as HTMLElement).getByLabelText('会话“Persisted title”的操作')
     fireEvent.click(trigger)
     expect(view.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
-      '置顶会话', '重命名', '分叉会话', '归档会话', 'Export action', 'Last action',
+      '置顶会话', '重命名', '分叉会话', '归档会话', '查看 Session ID', 'Export action', 'Last action',
     ])
     expect(view.getAllByRole('separator')).toHaveLength(1)
     const last = view.getByRole('menuitem', { name: 'Last action' })
@@ -140,6 +140,16 @@ describe('session rename through the assembled browser', () => {
     expect(view.queryByRole('menu')).toBeNull()
     await act(async () => { await Promise.resolve() })
     expect(document.activeElement).toBe(trigger)
+    fireEvent.click(trigger)
+    fireEvent.click(view.getByRole('menuitem', { name: '查看 Session ID' }))
+    expect(view.queryByRole('menu')).toBeNull()
+    const field = await view.findByRole('textbox', { name: 'Session ID' }) as HTMLTextAreaElement
+    expect(field.value).toBe(SID)
+    expect(field.readOnly).toBe(true)
+    fireEvent.focus(field)
+    expect(field.selectionEnd - field.selectionStart).toBe(SID.length)
+    fireEvent.keyDown(field, { key: 'Escape' })
+    await waitFor(() => { expect(view.queryByRole('dialog', { name: 'Session ID' })).toBeNull() })
     await runtime.dispose()
   })
 

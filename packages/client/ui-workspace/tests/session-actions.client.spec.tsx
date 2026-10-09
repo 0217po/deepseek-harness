@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 /**
  * The shipped Session row actions rendered directly with hand-built props:
- * the pin, rename, fork, and archive menu rows, the archive and pin hover
- * buttons, and the two `shell.overlay` surfaces they raise (rename dialog,
- * row notice). Every action reads its own injected hooks and calls its own
- * injected callbacks; what those callbacks do is apply.client.spec's
+ * the menu rows, hover buttons, dialogs, and global notices. Every action
+ * reads its own injected hooks and calls its own injected callbacks;
+ * what those callbacks do is apply.client.spec's
  * subject. The browser and the slot machinery stay out; the assembled
  * chain lives in rename-assembly.client.spec.
  */
@@ -30,6 +29,7 @@ import { ForkSessionMenuItem } from '../src/client/session-actions/ForkSession.t
 import { PinSessionMenuItem, PinSessionRowButton } from '../src/client/session-actions/PinSession.tsx'
 import { RenameSessionMenuItem, SessionRenameDialog } from '../src/client/session-actions/RenameSession.tsx'
 import { RowActionToast } from '../src/client/session-actions/RowActionToast.tsx'
+import { SessionIdDialog, SessionIdMenuItem } from '../src/client/session-actions/SessionId.tsx'
 import { createWorkspaceViewStore } from '../src/client/stores.ts'
 import { en, zh } from '../src/client/locales.ts'
 import { ShortcutRegistry } from '../../shortcuts/src/client/registry.ts'
@@ -108,6 +108,43 @@ function openMenu() {
 function callOrder(fn: { mock: { invocationCallOrder: readonly number[] } }, nth = 0): number {
   return fn.mock.invocationCallOrder[nth] ?? Number.POSITIVE_INFINITY
 }
+
+describe('Session ID action', () => {
+  it.each([t, tEn])('dismisses the menu before requesting the row ID', (translate) => {
+    const { state, setMenuOpen } = openMenu()
+    const requestSessionId = vi.fn()
+    render(<SessionIdMenuItem {...menuRow(state)} t={translate} requestSessionId={requestSessionId} />)
+    fireEvent.click(screen.getByRole('menuitem', { name: translate('menu.sessionId') }))
+    expect(setMenuOpen).toHaveBeenCalledWith(false)
+    expect(requestSessionId).toHaveBeenCalledExactlyOnceWith(ROW.sessionId)
+    expect(callOrder(setMenuOpen)).toBeLessThan(callOrder(requestSessionId))
+  })
+
+  it('renders nothing without an ID request', () => {
+    render(<SessionIdDialog {...overlay} useSessionIdRequest={hook(null)} settleSessionId={vi.fn()} copySessionId={vi.fn()} />)
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it.each([t, tEn])('keeps the full readonly ID selectable after copying', async (translate) => {
+    const sessionId = sid('session-with-a-long-identifier-0123456789-abcdef')
+    const copySessionId = vi.fn(async () => {})
+    const settleSessionId = vi.fn()
+    render(<SessionIdDialog {...overlay} t={translate} useSessionIdRequest={hook(sessionId)}
+      settleSessionId={settleSessionId} copySessionId={copySessionId} />)
+    const field = screen.getByRole('textbox', { name: 'Session ID' }) as HTMLTextAreaElement
+    expect(field.value).toBe(sessionId)
+    expect(field.readOnly).toBe(true)
+    fireEvent.focus(field)
+    expect(field.selectionStart).toBe(0)
+    expect(field.selectionEnd).toBe(sessionId.length)
+    fireEvent.click(screen.getByRole('button', { name: translate('copy') }))
+    await waitFor(() => { expect(copySessionId).toHaveBeenCalledExactlyOnceWith(sessionId) })
+    expect(settleSessionId).not.toHaveBeenCalled()
+    expect(field.value).toBe(sessionId)
+    for (const close of screen.getAllByRole('button', { name: translate('close') })) fireEvent.click(close)
+    expect(settleSessionId).toHaveBeenCalledTimes(2)
+  })
+})
 
 describe('pin action', () => {
   /** The pin share over fixed membership: the bound Set hooks and the two callbacks the entries call. */
@@ -556,6 +593,14 @@ describe('RowActionToast', () => {
     expect(callOrder(dismissToast)).toBeLessThan(callOrder(openForkSource))
     expect(forkSession).toHaveBeenCalledOnce()
     expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it.each([t, tEn])('reports clipboard success and failure through the global toast', (translate) => {
+    const { notify } = toastSurface(undefined, translate)
+    notify({ kind: 'sessionIdCopied' })
+    expect(screen.getByRole('alert').textContent).toBe(translate('toast.sessionIdCopied'))
+    notify({ kind: 'sessionIdCopyFailed' })
+    expect(screen.getByRole('alert').textContent).toBe(translate('toast.sessionIdCopyFailed'))
   })
 
   it('the stopped-and-archived notice offers the same undo and filter actions under its own wording', () => {

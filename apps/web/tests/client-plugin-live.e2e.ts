@@ -71,13 +71,30 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
     await row.hover()
     await trigger.click()
     await menu.waitFor()
-    const remainingNames = ['Pin session', 'Rename', 'Fork session', 'Archive session']
+    const remainingNames = ['Pin session', 'Rename', 'Fork session', 'Archive session', 'View Session ID']
     const remainingItems = menu.getByRole('menuitem')
     expect(await remainingItems.count()).toBe(remainingNames.length)
     for (const [index, name] of remainingNames.entries()) {
       expect(await remainingItems.nth(index).and(menu.getByRole('menuitem', { name, exact: true })).count()).toBe(1)
     }
     expect(await menu.getByRole('separator').count()).toBe(0)
+    await menu.getByRole('menuitem', { name: 'View Session ID', exact: true }).click()
+    await expect.poll(() => menu.count()).toBe(0)
+    const idDialog = page.getByRole('dialog', { name: 'Session ID', exact: true })
+    await idDialog.waitFor()
+    const idField = idDialog.getByRole('textbox', { name: 'Session ID', exact: true })
+    expect(await idField.inputValue()).toBe(sessionId)
+    expect(await idField.getAttribute('readonly')).not.toBeNull()
+    await idField.focus()
+    expect(await idField.evaluate((element: HTMLTextAreaElement) =>
+      element.value.slice(element.selectionStart, element.selectionEnd))).toBe(sessionId)
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+    await idDialog.getByRole('button', { name: 'Copy', exact: true }).click()
+    await page.getByRole('alert').filter({ hasText: 'Session ID copied' }).waitFor()
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(sessionId)
+    expect(await idField.inputValue()).toBe(sessionId)
+    await idField.press('Escape')
+    await expect.poll(() => idDialog.count()).toBe(0)
     expect(console.pageErrors).toEqual([])
     await assertFixtureInventory(EXPECTED, [
       'bootstrap-rebuild.expected.md', 'enabled.expected.md', 'recovered.expected.md',

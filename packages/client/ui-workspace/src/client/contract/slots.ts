@@ -26,8 +26,8 @@
  * row of a Session's "..." menu is an entry of
  * `sidebar.workspaces.session.menu.item`, and every hover button at the row's
  * end is an entry of `sidebar.workspaces.session.row.action`. The shipped
- * actions — pin, rename, fork, archive — are ordinary entries this package
- * registers from `apply`, each carrying its own behavior in its own inject
+ * actions — pin, rename, fork, archive, view ID — are ordinary entries
+ * registered from `apply`, each carrying its own behavior in its own inject
  * face and reading its own Host state through hooks that face injects, so a
  * client plugin's action lands beside them by `order` and needs nothing from
  * the browser beyond the row identity.
@@ -291,6 +291,8 @@ export type SessionRowActionProps<Injected extends object = object> =
 export type RowToast =
   | { kind: 'archived'; sessionId: SessionId }
   | { kind: 'stoppedAndArchived'; sessionId: SessionId }
+  | { kind: 'sessionIdCopied' }
+  | { kind: 'sessionIdCopyFailed' }
   | { kind: 'pinFailed' }
   | { kind: 'unpinFailed' }
   | { kind: 'archivedNotOpenable' }
@@ -391,6 +393,28 @@ export interface RenameSessionInjected {
   /** Ask for the rename dialog, seeded with the row's current title. */
   requestSessionRename: (sessionId: SessionId, currentTitle: string) => void
 }
+
+/** Session ID action share; viewing an id does not open the Session. */
+export interface SessionIdInjected {
+  /** Display the row's complete Session id. */
+  requestSessionId: (sessionId: SessionId) => void
+}
+
+/** Session ID dialog share, independent of Session history and row lifetime. */
+export interface SessionIdDialogInjected {
+  hooks: {
+    /** The Session id on display, or none. */
+    sessionIdRequest: HostObservable<SessionId | null>
+  }
+  /** Dismiss the Session ID dialog. */
+  settleSessionId: () => void
+  /** Copy the complete id and report acceptance or failure through the global toast. */
+  copySessionId: (sessionId: SessionId) => Promise<void>
+}
+
+/** Props of the Session ID dialog in the frame-wide overlay. */
+export type SessionIdDialogProps =
+  PropsRuntime<'shell.overlay'> & PropsLocale<'workspace'> & InjectFace<SessionIdDialogInjected>
 
 /** A Session rename the rename action asked for; the dialog entry opens on it. */
 export interface SessionRenameTarget {

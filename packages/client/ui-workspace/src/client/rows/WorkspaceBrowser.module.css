@@ -552,7 +552,8 @@
 }
 
 /* Rename dialog form (same figma dialog family as the create modals). */
-.renameInput {
+.renameInput,
+.sessionIdValue {
   box-sizing: border-box;
   width: 100%;
   height: 44px;
@@ -565,6 +566,12 @@
   font-weight: 400;
   line-height: 22px;
   color: var(--dsw-alias-label-primary);
+}
+
+.sessionIdValue {
+  height: auto;
+  resize: none;
+  overflow-wrap: anywhere;
 }
 
 .renameInput:disabled {
