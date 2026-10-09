@@ -115,12 +115,6 @@ describe('dsh badge assembled snapshot', () => {
             },
           ],
           "isError": false,
-          "meta": {
-            "skill": {
-              "name": "dsh-badge",
-              "provider": "dsh-badge",
-            },
-          },
           "value": {
             "content": "# dsh Badge
 

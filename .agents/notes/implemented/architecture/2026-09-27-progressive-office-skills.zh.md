@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-[技能注册表](../../../../packages/skill/skill/README.zh.md) 保留可选的 `modelCatalogVisibility` 元数据，并保留全部胜出候选项。模型目录在作用域和同名解析后过滤 `unlisted` 条目；具名加载与调用权限保持独立。文件系统 frontmatter 接受同一字段。已加载技能说明可以指向延后加载的技能，无需注册工具或引入激活状态。
+[技能注册表](../../../../packages/skill/skill/README.zh.md) 保留可选的 `modelCatalogVisibility` 元数据，并保留全部胜出候选项。模型目录在作用域和同名解析后过滤 `unlisted` 条目；具名加载与调用权限保持独立。已加载技能说明可以指向延后加载的技能，无需注册工具或引入激活状态。
 
 [Office 提供者](../../../../packages/skill/skill-office/README.zh.md) 仅展示精简路由。各格式创作以及渲染、重计算、PDF 导出分别作为可具名调用的 unlisted 技能。模型按名称加载；以外观为目标的修改会选择渲染，除非用户明确要求跳过。渲染使用任务工作区内随机命名的私有临时目录，并在检查后删除。技能通过普通 Bash 或 PowerShell 调用 `office-check` 和 `dsoffice`。公共基础组合仅在提供运行时时启用不可变技能、Office 命令插件和通用依赖查询。普通 Web 不提供或下载解释器。Web 预设负责工具展示，minimal 预设仍只保留 shell 工具。
 

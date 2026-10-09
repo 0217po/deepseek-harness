@@ -1,7 +1,6 @@
 ---
 name: office-xlsx
 description: Read, create, edit, and validate Excel workbooks, data, and formulas (.xlsx).
-modelCatalogVisibility: unlisted
 ---
 
 # Excel workbooks

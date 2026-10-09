@@ -366,8 +366,6 @@ describe('FileSystemSkillProvider', () => {
       ['legacy-user', 'userInvocable: false'],
       ['bad-string', 'disable-model-invocation: maybe'],
       ['bad-value', 'user-invocable: null'],
-      ['bad-visibility', 'modelCatalogVisibility: hidden'],
-      ['null-visibility', 'modelCatalogVisibility: null'],
     ] as const
     for (const [name, field] of invalid) {
       await writeFile(join(root, `${name}.md`), `---\nname: ${name}\ndescription: ${name}\n${field}\n---\n\nBad.\n`)
@@ -921,16 +919,4 @@ describe('FileSystemSkillProvider', () => {
       }
     }
   })
-})
-
-it.each(['listed', 'unlisted'])('parses %s catalog visibility independently of invocation permissions', async (visibility) => {
-  const home = await tempDir('skill-visibility')
-  const root = join(home, '.dsh/skills')
-  await mkdir(root, { recursive: true })
-  await writeFile(join(root, 'nested.md'), `---\nname: nested\ndescription: Nested operation\nmodelCatalogVisibility: ${visibility}\n---\nBody.\n`)
-  const ctx = await setupLocal(home)
-  expect((await ctx.skills.list())[0]).toMatchObject({
-    modelCatalogVisibility: visibility, invocation: { modelInvocable: true, userInvocable: true },
-  })
-  expect(await ctx.skills.get('nested')).toMatchObject({ modelCatalogVisibility: visibility, content: 'Body.' })
 })

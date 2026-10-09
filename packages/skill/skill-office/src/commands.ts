@@ -48,21 +48,10 @@ $nativeArgs = @(foreach ($argument in $commandArgs) {
   $value = if ($argument -is [array]) { $argument -join ',' } else { [string]$argument }
   '"' + ($value -replace '(\\*)"', $quoteReplacement -replace '(\\+)$', '$1$1') + '"'
 })`
-    // Framework Process.Start flushes Console.InputEncoding's preamble before PowerShell writes pipeline text.
-    // The private cache avoids the public setter's no-console failure and leaves Console.In's buffered data intact.
-    const inputEncoding = `$inputEncodingField = $null
-if ($MyInvocation.ExpectingInput -and $PSVersionTable.PSVersion.Major -le 5) {
-  $inputEncodingField = [Console].GetField('_inputEncoding', 'NonPublic,Static')
-  if ($null -eq $inputEncodingField) { throw 'office-commands: Windows PowerShell input encoding field is unavailable' }
-  $savedInputEncoding = $inputEncodingField.GetValue($null)
-}`
     writeFileSync(`${script}.ps1`, '\ufeff$PSNativeCommandArgumentPassing = \'Legacy\'\n'
       + '$OutputEncoding = [System.Text.UTF8Encoding]::new($false)\n'
-      + `$commandArgs = @(${args}) + $args\n${nativeArguments}\n${inputEncoding}\n$global:LASTEXITCODE = 127\ntry {\n`
-      + '  if ($null -ne $inputEncodingField) { $inputEncodingField.SetValue($null, $OutputEncoding) }\n'
-      + `  if ($MyInvocation.ExpectingInput) { $input | & ${literal(executable)} @nativeArgs }\n`
-      + `  else { & ${literal(executable)} @nativeArgs }\n`
-      + '} finally {\n  if ($null -ne $inputEncodingField) { $inputEncodingField.SetValue($null, $savedInputEncoding) }\n}\n'
+      + `$commandArgs = @(${args}) + $args\n${nativeArguments}\n$global:LASTEXITCODE = 127\n`
+      + `& ${literal(executable)} @nativeArgs\n`
       + 'exit $LASTEXITCODE\n', { flag: 'wx' })
   }
 }

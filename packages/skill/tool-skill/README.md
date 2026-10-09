@@ -56,7 +56,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 - **Explicit user invocation.** A `/name` token in direct user input that names a user-invocable skill injects that skill's instructions into the step, without the model having to load it.
 - **Live catalog updates.** Later membership, description, or visibility changes append a complete replacement catalog; removing every skill appends an empty catalog that retires older names.
 
-Successful direct loads persist `meta.skill` with the resolved name and provider. `/name` invocations and nested tool loads record the skill name in their `skill-invocation` source; nested loads defer the full instructions until the enclosing result commits.
+`/name` invocations and nested tool loads record the skill name in their `skill-invocation` source; nested loads defer the full instructions until the enclosing result commits.
 
 ### Observable success and failures
 

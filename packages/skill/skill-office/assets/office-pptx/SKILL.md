@@ -1,7 +1,6 @@
 ---
 name: office-pptx
 description: Create, read, edit, and validate PowerPoint presentations (.pptx).
-modelCatalogVisibility: unlisted
 ---
 
 # PowerPoint presentations

@@ -10,7 +10,7 @@ Combined authoring and rendering instructions spend context on operations unrela
 
 ## Decision
 
-The [skill registry](../../../../packages/skill/skill/README.md) preserves optional `modelCatalogVisibility` metadata and retains every winning candidate. Model catalogs filter `unlisted` entries after scope and same-name resolution; named loading and invocation permissions remain independent. Filesystem frontmatter accepts the same field. Loaded skill instructions can name deferred skills without making a tool registration or activation state.
+The [skill registry](../../../../packages/skill/skill/README.md) preserves optional `modelCatalogVisibility` metadata and retains every winning candidate. Model catalogs filter `unlisted` entries after scope and same-name resolution; named loading and invocation permissions remain independent. Loaded skill instructions can name deferred skills without making a tool registration or activation state.
 
 The [Office provider](../../../../packages/skill/skill-office/README.md) advertises only a compact router. Format-specific authoring and rendering, recalculation, and PDF export are separately callable unlisted skills. The model loads them by name and selects rendering for appearance-focused changes unless the user explicitly skips it. Rendering uses a private, randomly named temporary directory inside the task workspace and removes it after inspection. Skills invoke `office-check` and `dsoffice` through ordinary Bash or PowerShell. Common base composition enables immutable skills, the Office command plugin, and the general dependency query only for a supplied runtime. Ordinary Web does not supply or download interpreters. Web presets own tool exposure and minimal presets retain only shell tools.
 

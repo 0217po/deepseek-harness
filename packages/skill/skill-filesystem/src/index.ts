@@ -24,7 +24,6 @@ import {
   isSkillName,
   type SkillCandidate,
   type SkillDefinition,
-  type ModelCatalogVisibility,
   type SkillInvocationPolicy,
   type SkillLookupOptions,
   type SkillProvider,
@@ -113,7 +112,6 @@ interface ParsedSkill extends SkillText {
   description: string
   whenToUse?: string
   invocation: SkillInvocationPolicy
-  modelCatalogVisibility?: ModelCatalogVisibility
   metadata?: Record<string, unknown>
 }
 
@@ -217,7 +215,6 @@ export class FileSystemSkillProvider implements SkillProvider {
       description: parsed.description,
       ...parsed.whenToUse !== undefined ? { whenToUse: parsed.whenToUse } : {},
       invocation: parsed.invocation,
-      ...parsed.modelCatalogVisibility !== undefined ? { modelCatalogVisibility: parsed.modelCatalogVisibility } : {},
       source: candidate.source,
       provider: this.name,
       resourceBase: { kind: 'directory', path: locator.directory },
@@ -748,7 +745,6 @@ async function discoverRoot(root: SkillRoot, ctx: Context, provider: string): Pr
       description: parsed.description,
       ...parsed.whenToUse !== undefined ? { whenToUse: parsed.whenToUse } : {},
       invocation: parsed.invocation,
-      ...parsed.modelCatalogVisibility !== undefined ? { modelCatalogVisibility: parsed.modelCatalogVisibility } : {},
       provider,
       source: root.source,
       rank: root.rank,
@@ -833,13 +829,8 @@ async function parseSkillFile(path: string, ctx: Context, signal?: AbortSignal, 
     return undefined
   }
   let invocation
-  let modelCatalogVisibility
   try {
     invocation = parseInvocationPolicy(parsed.data)
-    modelCatalogVisibility = parsed.data.modelCatalogVisibility
-    if (modelCatalogVisibility !== undefined && modelCatalogVisibility !== 'listed' && modelCatalogVisibility !== 'unlisted') {
-      throw new TypeError('frontmatter field "modelCatalogVisibility" must be listed or unlisted')
-    }
   } catch (error) {
     ctx.logger.warn(`skill file ${path} ignored: invalid invocation frontmatter: ${errorMessage(error)}`)
     return undefined
@@ -849,7 +840,6 @@ async function parseSkillFile(path: string, ctx: Context, signal?: AbortSignal, 
     description,
     ...optionalString(parsed.data, 'whenToUse'),
     invocation,
-    ...modelCatalogVisibility !== undefined ? { modelCatalogVisibility } : {},
     ...optionalMetadata(parsed.data),
     path: raw.path,
     content: parsed.body.trim(),

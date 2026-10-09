@@ -1,7 +1,6 @@
 ---
 name: office-recalculate
 description: Refresh spreadsheet formula caches and verify calculated values with LibreOffice Kit.
-modelCatalogVisibility: unlisted
 ---
 
 # Recalculate spreadsheet formulas

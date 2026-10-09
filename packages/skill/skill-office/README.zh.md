@@ -47,7 +47,7 @@ kind: "package-reference"
 | `checkCommand` | 配置的 Python 检查器 | `office-check` 的可执行程序及固定参数；`false` 不提供该命令。 |
 | `assetRoot` | 载体资源或包内 `assets/` | 包含共享检查器和技能的目录。 |
 
-命令覆盖的首个参数必须是可执行程序的绝对路径。启动器原样接收调用方的其余参数，仅在命令插件挂载期间存在。Windows 启动器在 Windows PowerShell 5.1 和 PowerShell 7 下保留空参数、内嵌引号、末尾反斜杠、Unicode 路径和 shell 管道；作为单个参数传入的 PowerShell 数组会转为逗号分隔文本，管道文本使用不带字节顺序标记的 UTF-8。可执行程序不存在时，命令返回非零退出码。shell 环境将启动器的私有目录前置到每次工具调用的 `PATH`；不修改进程或用户 shell 配置。禁用命令不阻止技能加载。`office-check` 使用所选载体解释器或显式 `checkCommand` 直接运行 Python 检查器；两者均未提供时不注册该命令。检查器只使用 Python 标准库。命令注册和执行均不准备或复制运行时。通用 `load_workspace_dependencies` 工具独立提供创作解释器和库。
+命令覆盖的首个参数必须是可执行程序的绝对路径。启动器原样接收调用方的其余参数，仅在命令插件挂载期间存在。Windows 启动器在 Windows PowerShell 5.1 和 PowerShell 7 下保留空参数、内嵌引号、末尾反斜杠和 Unicode 路径；作为单个参数传入的 PowerShell 数组会转为逗号分隔文本。启动器通过文件路径接收输入，不转发管道输入。可执行程序不存在时，命令返回非零退出码。shell 环境将启动器的私有目录前置到每次工具调用的 `PATH`；不修改进程或用户 shell 配置。禁用命令不阻止技能加载。`office-check` 使用所选载体解释器或显式 `checkCommand` 直接运行 Python 检查器；两者均未提供时不注册该命令。检查器只使用 Python 标准库。命令注册和执行均不准备或复制运行时。通用 `load_workspace_dependencies` 工具独立提供创作解释器和库。
 
 `DSH_PRIMARY_RUNTIME` 选择创作和检查器资源。Kit 命令使用载体提供的 Node.js，否则使用宿主 Node.js，因此支持仅含 Python 的创作载荷。
 
@@ -102,8 +102,6 @@ flowchart TD
 提供者在注册时读取摘要，按需读取正文。只有 `office` 使用 `modelCatalogVisibility: listed`；六个子技能使用 `unlisted`。注册表优先级、作用域和调用权限适用于全部技能。加载结果包含用于解析相对引用的资源目录。卸载提供者会移除全部候选技能。
 
 提供者不注册工具或激活投影。通用技能加载器记录已加载技能的结果。恢复和 fork 使用现有会话历史及工具声明更新机制。命令插件用本地启动器封装载体专属可执行路径，并将其目录注册到 shell 环境；释放时移除该贡献与目录。Windows 启动器目录支持较长的 `DSH_HOME` 路径；`PATH` 条目使用普通绝对路径。可执行程序路径超过 Windows 进程启动长度限制时，插件在系统临时目录下建立通往其父目录的短路径链接，并在释放时移除该链接。
-
-PowerShell 5.1 管道调用临时替换并恢复 .NET Framework 缓存的输入编码，防止其原生进程写入器添加字节顺序标记。通过公开的编码设置器设置 UTF-8 需要控制台并会重置已缓冲的输入；启动器保留现有输入读取器。
 
 | 文件 | 职责 |
 |---|---|

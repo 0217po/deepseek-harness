@@ -194,7 +194,7 @@ it('removes short executable paths without removing the original interpreter', a
 })
 
 it.skipIf(process.platform !== 'win32').each([undefined, 'powershell.exe'])(
-  'preserves native arguments and pipelines through the Windows shell executor: %s', async (pwshPath) => {
+  'preserves native arguments through the Windows shell executor: %s', async (pwshPath) => {
     const { LocalSubprocessRuntime } = await import('@deepseek-ai/dsh-subprocess-local')
     const { PwshLocalExecutor } = await import('@deepseek-ai/dsh-pwsh-local')
     const runtime = join(root, 'runtime 中文', 'a'.repeat(220))
@@ -202,7 +202,7 @@ it.skipIf(process.platform !== 'win32').each([undefined, 'powershell.exe'])(
     const node = join(runtime, 'node.exe'), fixture = join(runtime, 'arguments.mjs')
     expect(node.length).toBeGreaterThan(260)
     await copyFile(process.execPath, toNamespacedPath(node))
-    await writeFile(toNamespacedPath(fixture), "import { readFileSync } from 'node:fs'; process.stdout.write(JSON.stringify({ args: process.argv.slice(2), stdin: readFileSync(0, 'utf8') })); process.stderr.write('fixture stderr'); process.exitCode = 7;\n")
+    await writeFile(toNamespacedPath(fixture), "process.stdout.write(JSON.stringify({ args: process.argv.slice(2) })); process.stderr.write('fixture stderr'); process.exitCode = 7;\n")
     const argumentsToPreserve = ['', 'space and 中文', "apostrophe'value", 'double"quote', 'quote" with space',
       'slash\\" quote', 'trailing\\', 'space trailing\\', '%PATH%', '!literal!', '&<|>']
     const quoted = argumentsToPreserve.map(value => `'${value.replaceAll("'", "''")}'`).join(' ')
@@ -213,25 +213,14 @@ it.skipIf(process.platform !== 'win32').each([undefined, 'powershell.exe'])(
     const commands = await ctx.plugin(Commands, { command: [node, fixture, ...argumentsToPreserve], checkCommand: false })
     const commandDirectory = directory(ctx)
     if (pwshPath === undefined) expect(commandDirectory.length).toBeGreaterThan(260)
-    // Seeding the Framework cache forces its BOM independently of the runner's code page and attached console.
     const result = await (await ctx.shell.execute(ctx.shell.resolve({
-      command: `$OutputEncoding = [System.Text.UTF8Encoding]::new($true)
-if ($PSVersionTable.PSVersion.Major -le 5) {
-  [Console].GetField('_inputEncoding', 'NonPublic,Static').SetValue($null, $OutputEncoding)
-}
-$originalInputEncoding = [Console]::InputEncoding
-$originalInputReader = [Console]::In
-'piped 中文' | dsoffice ${quoted} | Out-String
-if (-not [object]::ReferenceEquals($originalInputEncoding, [Console]::InputEncoding)) { throw 'Input encoding was not restored' }
-if (-not [object]::ReferenceEquals($originalInputReader, [Console]::In)) { throw 'Input reader was replaced' }
-exit $LASTEXITCODE`,
+      command: `dsoffice ${quoted}; exit $LASTEXITCODE`,
       env: { PSExecutionPolicyPreference: 'Restricted' }, dshEnv: ctx.shellEnv.collect(execution),
     }))).result()
     expect(result.exitCode, result.stderr.text).toBe(7)
     expect(result.stderr.text).toContain('fixture stderr')
-    const output = JSON.parse(result.stdout.text) as { args: string[]; stdin: string }
+    const output = JSON.parse(result.stdout.text) as { args: string[] }
     expect(output.args).toEqual([...argumentsToPreserve, ...argumentsToPreserve])
-    expect(output.stdin.trimEnd()).toBe('piped 中文')
     const pages = await (await ctx.shell.execute(ctx.shell.resolve({
       command: 'dsoffice --pages 1,3,4; exit $LASTEXITCODE',
       dshEnv: ctx.shellEnv.collect(execution),

@@ -1153,13 +1153,11 @@ describe('user-explicit invocation injection', () => {
   })
 })
 
-it('records resolved providers and carries nested skill instructions on the enclosing result', async () => {
+it('carries nested skill instructions on the enclosing result', async () => {
   const home = await tempDir('nested-skill')
   const ctx = await setup(home)
   try {
     ctx.skills.register({ name: 'nested-demo', description: 'Nested fixture', source: 'runtime', provider: 'fixture', content: 'Follow these instructions.' })
-    const direct = await ctx.tools.execute({ name: 'skill', callId: ToolCallId('direct'), arguments: { name: 'nested-demo' }, signal: testToolSignal })
-    expect(direct.meta).toEqual({ skill: { name: 'nested-demo', provider: 'fixture' } })
     ctx.tools.register(defineContentToolFixture({
       name: 'nested-loader', description: 'Nested fixture', parameters: {},
       async execute(_args, exec) {

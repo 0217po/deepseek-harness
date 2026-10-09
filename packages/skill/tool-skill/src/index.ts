@@ -124,7 +124,6 @@ export function apply(ctx: Context, config: Config = {}): void {
         },
       },
       render: (_args, value) => [{ type: 'text', text: renderSkillContent(value) }],
-      presentationMeta: (_args, value) => ({ skill: { name: value.name, provider: value.provider } }),
     },
     async execute(args, exec) {
       if (!isSkillName(args.name)) {

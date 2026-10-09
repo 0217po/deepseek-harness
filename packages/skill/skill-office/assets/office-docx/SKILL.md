@@ -1,7 +1,6 @@
 ---
 name: office-docx
 description: Create, read, edit, and validate Word documents (.docx).
-modelCatalogVisibility: unlisted
 ---
 
 # Word documents

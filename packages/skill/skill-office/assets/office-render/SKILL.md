@@ -1,7 +1,6 @@
 ---
 name: office-render
 description: Render requested document images or inspect visual layout with LibreOffice Kit.
-modelCatalogVisibility: unlisted
 ---
 
 # Document images and visual inspection

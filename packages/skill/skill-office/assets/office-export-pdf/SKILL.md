@@ -1,7 +1,6 @@
 ---
 name: office-export-pdf
 description: Convert an Office document to a requested PDF with LibreOffice Kit.
-modelCatalogVisibility: unlisted
 ---
 
 # Export an Office document to PDF
