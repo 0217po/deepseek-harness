@@ -1,0 +1,9 @@
+version: 1
+scenario: subagent-fork-schedule
+profile: headless
+composition: subagent-fork-schedule
+recording: authored
+header:
+  class: subagent-fork-schedule
+  pin: true
+  systemPromptSource: text-turn

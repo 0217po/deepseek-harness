@@ -16,16 +16,16 @@ New subagent requests select an Agent Preset where the provider supports it. Per
 
 Released child descriptors keep their persona and filter fields, parsing, and cold-resume application. The [original composition note](../feature/2026-07-12-subagent-persona-tool-filter-and-depth.md) remains active for these historical semantics and the independent depth policy. The [spawn preset decision](../feature/2026-09-20-spawn-agent-preset-selection.md) continues to own selection and restoration identity.
 
-The shipped child schedule deny lists are absent. Reminder schemas remain visible when inherited from the preset; each executor rejects delegated callers. This avoids that source of parent/fork schema differences. It establishes no measured provider cache-hit improvement and does not promise equality when other request inputs differ.
+The shipped child schedule deny lists are absent. Reminder schemas remain visible when inherited from the preset; each executor rejects delegated callers. This avoids that source of parent/fork schema differences. Children receive four reminder schemas whose executors always refuse them. Neither their prompt cost nor a provider cache-hit improvement has been measured; other request inputs can still differ.
 
 ## Alternatives considered
 
-**Move the filter into each preset.** This preserves two ways to select tool availability and has no shipped consumer after removing the redundant schedule deny lists. Plugin composition supplies the needed choice.
+**Move the filter into each preset.** This preserves the schedule deny lists and independent fork tool trimming, but retains two configuration mechanisms for tool availability. New children use plugin composition; fork deliberately inherits the parent's tools.
 
-**Keep per-request overrides alongside presets.** This retains independent fork overrides, but also retains precedence and provider capability flags for an unused configuration path. The removal deliberately gives up that flexibility for new children.
+**Keep per-request overrides alongside presets.** This retains independent fork overrides, their precedence rules, and provider capability flags. A single composition mechanism is preferred over that flexibility for new children.
 
 **Delete historical descriptor fields with the request fields.** This would change or reject restored sessions. New-request simplification does not authorize rewriting released Session data.
 
 ## Consequences
 
-Preset selection owns new child persona and tools. Fork cannot independently replace persona or trim inherited tools, and JavaScript configuration with the removed keys fails explicitly. Historical restoration retains its previous semantics. Focused tests cover removed-key diagnostics, historical persona/filter restoration, inherited reminder schemas and executor refusal; recorded sessions cover preset-owned tool availability and messaging guidance.
+Preset selection owns new child persona and tools. Fork cannot independently replace persona or trim inherited tools, and JavaScript configuration with the removed keys fails explicitly. Historical restoration retains its previous semantics. Focused tests cover removed-key diagnostics, historical persona/filter restoration, inherited reminder schemas and executor refusal; recorded sessions cover preset-owned tool availability, fork reminder refusals, and messaging guidance.
