@@ -157,9 +157,9 @@ export function childSessionMeta(
 export interface ChildComposition {
   /** Independently mounted preset; omission shares the parent's standing generation. */
   readonly agentPreset?: string | undefined
-  /** Per-child persona shadowing the deployment persona. */
+  /** Historical descriptor persona reapplied only during cold resume. */
   readonly persona?: string | undefined
-  /** Per-child tool scoping. */
+  /** Historical descriptor tool restriction reapplied only during cold resume. */
   readonly toolFilter?: ToolRestriction | undefined
 }
 
@@ -175,12 +175,12 @@ export const SUBAGENT_DELEGATION_CONTEXT
     + 'limitation in your reply so the delegating agent can handle it.'
 
 /**
- * Compose a child before publication and apply its own persona and tool overrides.
+ * Compose a child before publication and restore historical descriptor overrides.
  * Explicit selection mounts the named preset; omission synchronously joins the
  * parent's current generation. Registrations belong to the child's scope.
  * @param childCtx - the child agent's scoped creation context.
  * @param parent - the delegating parent used when no preset is selected.
- * @param composition - independent preset and per-child overrides.
+ * @param composition - independent preset and any overrides read from a historical descriptor.
  * @returns A promise when mounting an independent preset; otherwise completes synchronously.
  */
 export function applyChildComposition(

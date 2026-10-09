@@ -412,14 +412,13 @@ describe('SubagentModelSelectionConfig', () => {
   })
 })
 
-
 it('reads the saved default depth at each delegation without remounting the tool', async () => {
   const ctx = await boot(false)
   const depths: Array<number | undefined> = []
   try {
     ctx.subagents.registerProvider({
       name: 'capture-depth',
-      capabilities: { agentOptions: true, agentPreset: false, outputSchema: true, depthLimit: true, toolFilter: true, persona: true },
+      capabilities: { agentOptions: true, agentPreset: false, outputSchema: true, depthLimit: true },
       inheritsParentContext: false,
       start: async (request) => {
         depths.push(request.maxDepth)

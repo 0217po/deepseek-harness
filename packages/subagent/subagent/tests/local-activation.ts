@@ -52,7 +52,7 @@ export function startPreparedActivation(request: SubagentStartRequest, prepared:
   const unregister = ctx.get('subagents')!.registerProvider({
     name: provider,
     capabilities: {
-      agentOptions: true, agentPreset: prepared.seed === undefined, outputSchema: true, depthLimit: true, toolFilter: true, persona: true,
+      agentOptions: true, agentPreset: prepared.seed === undefined, outputSchema: true, depthLimit: true,
     },
     inheritsParentContext: prepared.seed !== undefined,
     prepareContinuable: () => Promise.resolve(prepared),

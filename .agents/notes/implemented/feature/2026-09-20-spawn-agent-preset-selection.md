@@ -24,7 +24,7 @@ Historical children without this ordering retain the implicit join. A creation h
 
 **Store a preset id in a new descriptor version.** The existing selection event and projection already persist the id. Another field would duplicate it and require a descriptor migration for a distinction the existing event order can express.
 
-**Support a nested preset object.** A second configuration spelling would add precedence and validation rules without serving an existing master caller. Flat configuration and request fields preserve master's persona and toolFilter inputs; fork does not accept independent preset selection.
+**Support a nested preset object.** A second configuration spelling adds precedence and validation rules without serving an existing caller. A flat preset id selects composition; fork does not accept independent preset selection.
 
 ## Consequences
 

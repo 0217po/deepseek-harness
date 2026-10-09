@@ -24,8 +24,6 @@ describe('NO_START_CAPABILITIES', () => {
       agentPreset: false,
       outputSchema: false,
       depthLimit: false,
-      toolFilter: false,
-      persona: false,
     })
     expect(Object.isFrozen(NO_START_CAPABILITIES)).toBe(true)
   })
@@ -72,7 +70,6 @@ describe('child cwd resolution', () => {
       rmSync(tmp, { recursive: true, force: true })
     }
   })
-
 
 
 

@@ -24,7 +24,7 @@ spawn 子 Agent 需要可复用的 persona、工具和技能组合，同时保�
 
 **在新版本 descriptor 中存储 preset id。** 已有选择事件和投影已经持久化该 id。增加字段会重复存储，并为现有事件顺序已能表达的区别引入 descriptor 迁移。
 
-**支持嵌套 preset 对象。** 第二种配置写法会增加优先级与校验规则，却不服务于任何 master 现有调用方。扁平配置和请求字段保留 master 的 persona 与 toolFilter 输入；fork 不接受独立 preset 选择。
+**支持嵌套 preset 对象。** 第二种配置写法会增加优先级与校验规则，却不服务于现有调用方。扁平的 preset id 选择组装；fork 不接受独立 preset 选择。
 
 ## 后果
 

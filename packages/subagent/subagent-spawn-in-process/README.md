@@ -53,7 +53,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 One tool call creates a background child and returns its session id immediately. The child works in its own session; the parent receives its final answer in a completion notice. The child can also send messages through `send_message`. A rejected start leaves no published child. Programmatic callers such as workflows can await the activation result directly.
 
-An explicit `agentPreset` selects the currently registered preset independently; omission joins the parent's active revision. Only spawn supports this choice. Reusable persona and tools belong in the [preset definition](../../preset/agent-preset-registry/README.md); existing per-child overrides still apply. Cold resume follows the shared [child composition rules](../subagent/README.md#restoring-child-composition).
+An explicit `agentPreset` selects the currently registered preset independently; omission joins the parent's active revision. Only spawn supports this choice. Persona and tools belong in the [preset definition](../../preset/agent-preset-registry/README.md). Cold resume follows the shared [child composition rules](../subagent/README.md#restoring-child-composition).
 
 -----
 
@@ -67,7 +67,7 @@ This section explains provider preparation and the activation lifecycle owned by
 
 ### Design concept
 
-This backend registers the provider and prepares a fresh child session. `dsh-subagent` owns activation depth checks, child creation, tool and persona setup, structured output, result collection, and disposal. The caller signal cancels unpublished creation; the published handle cancels and reaches quiescence through `dispose()`.
+This backend registers the provider and prepares a fresh child session. `dsh-subagent` owns activation depth checks, child creation, preset composition, structured output, result collection, and disposal. The caller signal cancels unpublished creation; the published handle cancels and reaches quiescence through `dispose()`.
 
 ### Source map
 
@@ -106,15 +106,15 @@ Read these pages when the package-level contract is not enough; they move from t
 
 #### What the model sees
 
-The fresh child receives the task content verbatim as its only user message in a new empty conversation, with the parent provider, model, reasoning effort, output-token limit, and working directory by default. The inherited or selected preset supplies tools and prompt sections. A configured per-child persona shadows inherited prompt text; a tool filter restricts inherited tools in its schemas, executable lookup, and PTC mode SDK bindings while preserving child-owned registrations and independently registered guidance. No parent conversation message is included; the filter is composition, not an inherited authority grant.
+The fresh child receives the task content verbatim as its only user message in a new empty conversation, with the parent provider, model, reasoning effort, output-token limit, and working directory by default. The inherited or selected preset supplies tools and prompt sections. No parent conversation message is included.
 
 #### Token effect
 
-The child pays for a new independent context and history, and no parent-history token is duplicated. A persona changes the child's repeated prompt cost; a tool filter changes its schema or generated SDK cost.
+The child pays for a new independent context and history, and no parent-history token is duplicated. The preset's prompt and tools determine repeated prompt, schema, and generated SDK costs.
 
 #### KV Cache effect
 
-The child's request cache is independent of the parent's. Child history grows append-only, while preset, persona, tool-filter, generated-SDK, provider, or model changes establish a different child prefix.
+The child's request cache is independent of the parent's. Child history grows append-only, while preset, generated-SDK, provider, or model changes establish a different child prefix.
 
 ### Parent tool result, indirectly
 
@@ -137,7 +137,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 These limits define when the backend is the wrong choice; they are current package constraints.
 
-- **Fresh means no parent transcript** — the child inherits cwd, lineage, provider, model, reasoning effort, output-token limit, and explicitly configured persona or tool restrictions, but none of the parent's conversation; use the fork backend when completed-turn context is required.
+- **Fresh means no parent transcript** — the child inherits cwd, lineage, provider, model, reasoning effort, and output-token limit, but none of the parent's conversation; use the fork backend when completed-turn context is required.
 
 <a id="dev-note"></a>
 ### Dev Note

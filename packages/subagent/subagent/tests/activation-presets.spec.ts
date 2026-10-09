@@ -104,21 +104,6 @@ describe('a child agent composed in-process', () => {
     await run.dispose()
   })
 
-  it('honours a tool filter over the preset tools it inherited', async () => {
-    const { adapter, parent } = await setupPresetHost()
-
-    const run = await startPreparedActivation(
-      { ...spawnRequest(parent), toolFilter: { deny: ['preset_only'] } },
-      {},
-    )
-    await run.result
-
-    // The capability filter is the only thing bounding a delegated child, and
-    // every tool it can name now arrives from the preset rather than the host.
-    expect((adapter.requests.at(-1)?.tools ?? []).map(tool => tool.name)).toEqual([])
-    await run.dispose()
-  })
-
   it('follows a parent that switched preset while blank', async () => {
     const { ctx, adapter, parent } = await setupPresetHost()
     // A DIFFERENT preset, so the assertion below distinguishes reading the
@@ -134,14 +119,13 @@ describe('a child agent composed in-process', () => {
     await run.dispose()
   })
 
-  it('preserves runtime result tools when filtering an independently selected preset', async () => {
+  it('registers runtime result tools alongside an independently selected preset', async () => {
     const { adapter, parent } = await setupPresetHost([
       toolCallResponse('submit-result', 'structured_output', { answer: 42 }),
     ])
     const run = await startPreparedActivation({
       ...spawnRequest(parent),
       agentPreset: 'reviewing',
-      toolFilter: { deny: ['reviewing_only'] },
       outputSchema: {
         type: 'object',
         properties: { answer: { type: 'number' } },
@@ -151,7 +135,7 @@ describe('a child agent composed in-process', () => {
     })
     try {
       expect((await run.result).structured).toEqual({ answer: 42 })
-      expect(adapter.requests[0]?.tools?.map(tool => tool.name)).toEqual(['structured_output'])
+      expect(adapter.requests[0]?.tools?.map(tool => tool.name)).toEqual(['reviewing_only', 'structured_output'])
     } finally {
       await run.dispose()
     }

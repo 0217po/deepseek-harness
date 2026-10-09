@@ -100,7 +100,7 @@ async function settleSubagent(
   const result = Promise.withResolvers<SubagentResult>()
   const disposeProvider = ctx.subagents.registerProvider({
     name: info.provider,
-    capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+    capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false },
     inheritsParentContext: false,
     async start() {
       return {
@@ -712,7 +712,7 @@ describe('HarnessSdkJsonRpcServer', () => {
         name: 'reused',
         capabilities: {
           agentOptions: false, agentPreset: false, outputSchema: false,
-          depthLimit: false, toolFilter: false, persona: false,
+          depthLimit: false,
         },
         inheritsParentContext: false,
         start() {
@@ -811,7 +811,7 @@ describe('HarnessSdkJsonRpcServer', () => {
         name: 'reused-provider',
         capabilities: {
           agentOptions: false, agentPreset: false, outputSchema: false,
-          depthLimit: false, toolFilter: false, persona: false,
+          depthLimit: false,
         },
         inheritsParentContext: false,
         start: () => Promise.resolve({
@@ -831,7 +831,7 @@ describe('HarnessSdkJsonRpcServer', () => {
         name: 'reused-provider',
         capabilities: {
           agentOptions: false, agentPreset: false, outputSchema: false,
-          depthLimit: false, toolFilter: false, persona: false,
+          depthLimit: false,
         },
         inheritsParentContext: false,
         start: () => Promise.resolve({
@@ -915,7 +915,7 @@ describe('HarnessSdkJsonRpcServer', () => {
         name: 'fork',
         capabilities: {
           agentOptions: false, agentPreset: false, outputSchema: false,
-          depthLimit: false, toolFilter: false, persona: false,
+          depthLimit: false,
         },
         inheritsParentContext: true,
         start: () => Promise.resolve({
