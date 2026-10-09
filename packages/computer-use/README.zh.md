@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-计算机操作提供方让模型观察并操作桌面。本组负责提供方的独占注册。各提供方拥有自己的操作、工具和平台要求；原生 CUA 和 Cua Driver 提供方位于 experimental 组。
+计算机操作提供方让模型观察并操作桌面。本组负责提供方的独占注册。各提供方拥有自己的操作、工具和平台要求；实验性 Cua Driver 提供方位于 experimental 组。
 
 ## 目录
 
@@ -32,7 +32,7 @@ kind: "package-group"
 ## 相关文档
 
 - [计算机操作](../../docs/subsystems/computer-use.zh.md) — 能力归属和提供方选择。
-- [实验性包](../experimental/README.zh.md) — 原生 CUA 和 Cua Driver 提供方。
+- [实验性包](../experimental/README.zh.md) — Cua Driver MCP 和原生提供方。
 
 <a id="dev-note"></a>
 ## 开发备注
