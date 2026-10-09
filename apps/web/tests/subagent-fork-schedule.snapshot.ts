@@ -29,7 +29,7 @@ it.skipIf(MODE === 'record')('replays inherited schedule tools and refusals in a
     .map(file => selectedSessionFixture(join(DIR, file))))
   let expected = await Promise.all(paths.map(path => readFile(path, 'utf8')))
   const scaffold = await launchWebScaffold({
-    replayFixture: paths[0], replayChildFixtures: [paths[1]!], compareReplaySession: false,
+    replayFixture: paths[0]!, replayChildFixtures: [paths[1]!], compareReplaySession: false,
   })
   try {
     const sessions: Session[] = []
@@ -48,7 +48,7 @@ it.skipIf(MODE === 'record')('replays inherited schedule tools and refusals in a
     const activation = await scaffold.ctx.subagents.startActivation({
       provider: 'fork', label: 'Check child reminder refusal', delivery: 'caller',
       signal: new AbortController().signal,
-      request: { parent, prompt: childPrompt.data.content },
+      request: { parent, prompt: [...childPrompt.data.content] },
     })
     try {
       await activation.result
