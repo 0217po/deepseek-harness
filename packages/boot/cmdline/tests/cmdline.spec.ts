@@ -220,13 +220,6 @@ describe('parseCmdline', () => {
 })
 
 describe('provideCmdline', () => {
-  it('shares launcher-owned cleanup registration with application plugins', () => {
-    const ctx = new Context()
-    const shutdown = { addDisposer: () => () => {} }
-    provideCmdline(ctx, { args: [], exit: () => {}, shutdown })
-    expect(ctx.get('appShutdown')).toBe(shutdown)
-  })
-
   it('hands the app a snapshot the caller cannot mutate afterwards', () => {
     const ctx = new Context()
     const args = ['--resume', 'abc']

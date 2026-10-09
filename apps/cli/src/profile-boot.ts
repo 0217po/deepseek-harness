@@ -307,7 +307,6 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
       provideCmdline(hostCtx, {
         args: options.args,
         exit: code => void shutdown.shutdown(code),
-        shutdown,
         ready: appReady.service,
       })
     })

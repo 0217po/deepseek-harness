@@ -15,7 +15,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
-import type { Agent, AgentHandle, ModelSelectionRef } from '@deepseek-ai/dsh-agent'
+import type { Agent, ModelSelectionRef } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type {} from '@deepseek-ai/dsh-fs'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
@@ -66,7 +66,7 @@ interface HeadlessIo {
   stdout: { write(chunk: string): unknown }
   stderr: { write(chunk: string): unknown }
   /** Request process exit with `code` after the tree disposes. */
-  exit: (code: number) => void
+  exit(code: number): void
 }
 
 /** Aggregate the last assistant text and turn outcome in one owned interval. */
@@ -241,7 +241,7 @@ function assertAdoptable(header: AdoptableHeader, events: Iterable<SessionEvent>
  * @param agentOptions - provider/model pair for this run.
  * @param setup - per-Agent scope setup installing the model selection.
  * @param cwd - working directory resolved in the mounted filesystem.
- * @returns the resumed Agent and its owned disposal capability.
+ * @returns the resumed Agent.
  */
 async function resolveAgent(
   ctx: Context,
@@ -250,7 +250,7 @@ async function resolveAgent(
   agentOptions: { provider: string; model: string },
   setup: (agentCtx: Context) => void,
   cwd: string,
-): Promise<AgentHandle> {
+): Promise<Agent> {
   // Resuming promises the caller a log a later process can continue. Without a
   // durable log the run would succeed, print the id, and still lose the whole
   // history at exit, so a miscomposed profile fails loud before the resume.
@@ -277,8 +277,12 @@ async function resolveAgent(
   try {
     using observation = await query.observeSession(sessionId)
     assertAdoptable(observation.header, observation.events, sessionId, cwd)
-    // The runner rechecks the acquired log before submitting its task.
-    return await agents.resume({ resumeSessionId: sessionId, agentOptions, setup })
+    const { agent } = await agents.resume({ resumeSessionId: sessionId, agentOptions, setup })
+    // The observation is a snapshot: another writer may have appended a preset
+    // selection before this process took the write lease. Re-check the log
+    // resume actually attached, now that no other process can append.
+    assertAdoptable(agent.session.header, liveEvents(agent.session), sessionId, cwd)
+    return agent
   } catch (error: unknown) {
     if (!(error instanceof SessionQueryError) || error.code !== 'SESSION_QUERY_SESSION_NOT_FOUND') throw error
     // --session-id resumes a conversation that already exists; starting a new
@@ -340,22 +344,14 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
   const sessionId = brandString<SessionId>(config.sessionId ?? `session-${randomUUID()}`)
   const fs = ctx.get('fs')
   const cwd = fs === undefined ? process.cwd() : fs.processPath(await fs.resolve('.'))
-  const shutdown = ctx.get('appShutdown')
-  if (shutdown === undefined) throw new Error('headless-runner: the launcher must provide ctx.appShutdown')
-  const pendingHandle = config.sessionId === undefined
-    ? agents.create({
+  const agent = config.sessionId === undefined
+    ? (await agents.create({
       sessionId,
       meta: { cwd },
       agentOptions,
       setup,
-    })
-    : resolveAgent(ctx, agents, sessionId, agentOptions, setup, cwd)
-  ctx.effect(() => shutdown.addDisposer(async () => {
-    // A failed acquisition owns its own rollback; the run reports the original error.
-    const handle = await pendingHandle.catch((_acquisitionFailed: unknown) => undefined)
-    await handle?.dispose()
-  }))
-  const { agent } = await pendingHandle
+    })).agent
+    : await resolveAgent(ctx, agents, sessionId, agentOptions, setup, cwd)
   await agent.whenIdle()
   if (config.sessionId !== undefined) {
     // The resume-time check read a snapshot; an overlay can still append a

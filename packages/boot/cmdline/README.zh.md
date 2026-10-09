@@ -33,10 +33,7 @@ kind: "package-library"
 
 - `ctx.cmdlineArgs`——本次调用的内层参数。读取它返回一份不可变快照，且绝不会消费或修改它们：`dsh --profile tui --resume abc` 给你的应用 `['--resume', 'abc']`。
 - `ctx.appExit`——在整棵树关闭后请求进程退出的方式，接到启动器的关停控制器上。
-- `ctx.appShutdown`——在正常退出或信号退出时，先于提供方销毁运行已注册的有序清理。
 - `ctx.appReady`——成功启动信号，只在 Loader 树与启动器自有设置成功后提交。
-
-在提供方仍有效时，用 `ctx.appShutdown.addDisposer()` 注册清理。正常退出和信号退出共用启动器已有时限，按注册顺序先运行清理，再销毁提供方树。某个清理拒绝不会跳过后续清理或整棵树。
 
 没有参数的启动会看到空列表——这是诚实的答案，而不是缺失的值。
 
@@ -93,7 +90,7 @@ kind: "package-library"
 
 ### 解析约定
 
-解析流程由两部分负责：`provideCmdline` 冻结宿主参数，并在任何配置树条目挂载前提供 `cmdlineArgs`、`appExit` 与 `appShutdown`；`parseCmdline` 针对不可变参数运行你的 commander program，把每个命令的 help、version 与错误输出都接到启动器上。被拒绝的值、`--help` 或 `--version` 会打印 commander 文本并请求 `ctx.appExit`，且不发布任何内容，因此依赖行绝不会激活；Loader 会把每行的 `!!js` 插值推迟到该行声明的注入全部激活之后。各导出的约定在代码中，不在本 README——见 [`src/index.ts`](src/index.ts)。
+解析流程由两部分负责：`provideCmdline` 冻结宿主参数，并在任何配置树条目挂载前提供 `cmdlineArgs` 与 `appExit`；`parseCmdline` 针对不可变参数运行你的 commander program，把每个命令的 help、version 与错误输出都接到启动器上。被拒绝的值、`--help` 或 `--version` 会打印 commander 文本并请求 `ctx.appExit`，且不发布任何内容，因此依赖行绝不会激活；Loader 会把每行的 `!!js` 插值推迟到该行声明的注入全部激活之后。各导出的约定在代码中，不在本 README——见 [`src/index.ts`](src/index.ts)。
 
 ### 源码地图
 

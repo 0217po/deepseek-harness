@@ -58,7 +58,7 @@ Jobs belong to their owner and backend, not to the producer tool, so producer or
 
 ### Session timing records
 
-Owned jobs record registration and settlement in their original Session, independently of model output collection. SDK consumers receive the same events through `session.event`; the [jobs reference](../../../docs/subsystems/jobs.md#session-lifecycle-records) defines identities, timestamps, and producer settlement reports. These records survive through normal Session persistence; live jobs and output rings are not resumed.
+Owned jobs record registration and settlement in their original Session, independently of model output collection. SDK consumers receive the same events through `session.event`; the [jobs reference](../../../docs/subsystems/jobs.md#session-lifecycle-records) defines identities, timestamps, and producer settlement reports. Events already persisted remain available after process exit; live jobs and output rings are not resumed.
 
 Lifecycle facts are appended synchronously at the registration or settlement commit, before live hub subscribers and completion waiters react. Append failures warn without abandoning execution or blocking cleanup; consumers must retain incomplete histories as incomplete.
 
@@ -142,6 +142,7 @@ No direct invalidation; the named consumers own any request-prefix changes.
 These limits define when the registry is a poor fit. They are current package constraints, not a task backlog.
 
 - **Jobs are process-local** — live execution and output rings die with the harness process; durable or cross-restart execution needs a separate backend implementing the seam.
+- **Final settlement persistence is not guaranteed during teardown** — normal one-shot completion, signal shutdown, or hard exit can stop Session routing or close its writer before the final `job/settled` reaches storage. Consumers must retain the interval as incomplete when settlement is absent; cross-fiber shutdown ordering is outside this journal's contract.
 - **A silently ineffective cancel can stall teardown and hold capacity** — if `cancel` returns without settling `done`, the registry cannot distinguish it from a slow stop; the job keeps one bucket slot for the rest of the service lifetime, and only an explicit throw can be force-failed safely.
 
 <a id="dev-note"></a>

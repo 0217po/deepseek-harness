@@ -40,8 +40,6 @@ interface ObservationStub {
 
 /** Runner invocation options layered over the scripted Agent factory. */
 interface BenchOptions {
-  /** Owned-agent cleanup performed while providers remain available. */
-  onDispose?: () => Promise<void>
   /** Provider-resolved cwd, which can differ from the harness process directory. */
   filesystemCwd?: string
   task?: string
@@ -54,8 +52,6 @@ interface BenchOptions {
   omitSessionQuery?: boolean
   /** Leave the persistence service unmounted to exercise the fail-loud path. */
   omitPersistence?: boolean
-  /** Leave the launcher cleanup registry unavailable. */
-  omitShutdown?: boolean
   /** Register a live Agent under `sessionId` before the runner starts. */
   prelive?: boolean
   /** Header facts for that pre-registered live Agent. */
@@ -181,13 +177,6 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
     return agent
   }
 
-  const disposers = new Set<() => Promise<void>>()
-  if (options.omitShutdown !== true) {
-    ctx.provide('appShutdown', { addDisposer(dispose) {
-      disposers.add(dispose)
-      return () => { disposers.delete(dispose) }
-    } })
-  }
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
@@ -199,13 +188,13 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
       })
       script.before?.(session)
       const agent = await mount(ownerCtx, session, createOptions)
-      return { agent, dispose: options.onDispose ?? (() => Promise.resolve()) }
+      return { agent, dispose: () => Promise.resolve() }
     },
     async resume(ownerCtx: Context, resumeOptions: ResumeAgentOptions): Promise<AgentHandle> {
       const session = ctx.sessions.get(resumeOptions.resumeSessionId)
       if (session === undefined) throw new Error(`no attached Session ${resumeOptions.resumeSessionId}`)
       const agent = await mount(ownerCtx, session, resumeOptions)
-      return { agent, dispose: options.onDispose ?? (() => Promise.resolve()) }
+      return { agent, dispose: () => Promise.resolve() }
     },
   })
   if (options.omitSessionQuery !== true && (options.sessionId !== undefined || options.observe !== undefined)) {
@@ -224,12 +213,7 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
       internals.stderr = { write: (chunk: string) => { err += chunk; return true } }
       if (options.readStdin !== undefined) internals.readStdin = options.readStdin
       const exited = new Promise<number>((resolve) => {
-        ctx.provide('appExit', (code: number) => {
-          void (async () => {
-            for (const dispose of disposers) await dispose()
-            order.push('exit'); resolve(code)
-          })()
-        })
+        ctx.provide('appExit', (code: number) => { order.push('exit'); resolve(code) })
       })
       if (options.prelive === true || options.preliveMeta !== undefined) {
         await ctx.agents.create({
@@ -248,29 +232,6 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
 }
 
 describe('headless runner', () => {
-  it.each([false, true])('releases its owned Agent before tree teardown on a failed run: %s', async (failed) => {
-    const entered = Promise.withResolvers<undefined>()
-    const release = Promise.withResolvers<undefined>()
-    const test = await bench({
-      afterPrompt(session, message) {
-        if (failed) throw new Error('run failed')
-        appendTurn(session, 1, message, 'done', true)
-      },
-    }, {
-      onDispose: async () => { entered.resolve(undefined); await release.promise },
-    })
-    const running = test.run()
-    try {
-      await entered.promise
-      expect(test.output().order).not.toContain('exit')
-      release.resolve(undefined)
-      expect(await running).toMatchObject({ code: failed ? 1 : 0, order: failed ? ['exit'] : ['flush', 'exit'] })
-    } finally {
-      release.resolve(undefined)
-      await running
-      await test.ctx.fiber.dispose()
-    }
-  })
   it('waits for parent awakened between idle and child observation', async () => {
     const cleanup = Promise.withResolvers<undefined>()
     const cleaning = Promise.withResolvers<undefined>()
@@ -1145,7 +1106,6 @@ describe('headless runner', () => {
     internals.stderr = { write: (chunk: string) => { err += chunk; return true } }
     const exited = new Promise<number>((resolve) => {
       ctx.provide('appExit', resolve)
-      ctx.provide('appShutdown', { addDisposer: () => () => {} })
     })
     ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'p', model: 'm' }) } as never)
     ctx.provide('sessions', { flush: () => Promise.resolve(true) } as never)
@@ -1163,7 +1123,6 @@ describe('headless runner', () => {
     internals.stderr = { write: (chunk: string) => { err += chunk; return true } }
     const exited = new Promise<number>((resolve) => {
       ctx.provide('appExit', resolve)
-      ctx.provide('appShutdown', { addDisposer: () => () => {} })
     })
     ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'p', model: 'm' }) } as never)
     ctx.provide('sessions', { flush: () => Promise.resolve(true) } as never)
@@ -1205,17 +1164,6 @@ describe('headless runner', () => {
   it('fails loud without the launcher-provided exit request', () => {
     const ctx = new Context()
     expect(() => { apply(ctx, { task: 't' }) }).toThrow('must provide ctx.appExit')
-  })
-
-  it('fails before creating an Agent when the launcher has no ordered cleanup registry', async () => {
-    const test = await bench({ afterPrompt() { throw new Error('must not prompt without shutdown') } }, { omitShutdown: true })
-    try {
-      await expect(test.run()).resolves.toMatchObject({
-        code: 1, out: '', err: 'dsh: headless-runner: the launcher must provide ctx.appShutdown\n',
-      })
-    } finally {
-      await test.ctx.fiber.dispose()
-    }
   })
 
   it('validates config: the task and run options are optional', () => {

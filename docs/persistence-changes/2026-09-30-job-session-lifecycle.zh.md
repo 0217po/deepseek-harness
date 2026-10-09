@@ -44,7 +44,7 @@ changes:
 <a id="verification"></a>
 ## 验证
 
-注册表、快照归一化、关停与 headless 测试覆盖因果顺序、唯一 JobId，以及正常退出和信号退出的有序清理。CLI 和 SDK 快照验证持久化注册、结算和通知。
+注册表和快照归一化测试覆盖因果顺序与唯一 JobId。CLI 和 SDK 快照验证运行中的注册、结算和通知；[job 生命周期约定](../subsystems/jobs.zh.md#session-lifecycle-records)允许应用销毁时留下不完整的终态历史。
 
 <a id="dev-note"></a>
 ## 开发备注

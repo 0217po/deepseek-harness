@@ -24,14 +24,14 @@ The [registry contract](../../../../packages/jobs/jobs/README.md) and [seam cons
 
 **Keep a reusable control id alongside an execution UUID.** Both values would identify one job. A unique `JobId` serves live controls and historical pairing.
 
-**Pass cleanup only to `appExit`.** Signal exit bypasses the normal exit request and can close persistence before owned jobs settle. Ordered launcher cleanup serves both exit paths.
+**Add a launcher cleanup registry.** A separate pre-exit disposer path duplicates Cordis resource ownership and adds a launcher requirement to headless. Keeping persistence available through the final job teardown requires a separate cross-fiber lifecycle change; this journal retains the existing disposal mechanism.
 
 **Defer publication or propagate recording errors.** Deferral lets a synchronous hub subscriber journal a completion notice before the settlement that caused it. Throwing after the starter succeeds can hide an already-running job from its caller. Synchronous, contained recording preserves causal order without abandoning execution.
 
 ## Consequences
 
-The launcher drains registered resource disposers before providers on both normal and signal exit, within its existing five-second bound. Headless registers its Agent while acquisition is pending so job settlement can reach the Session writer.
+Application teardown can stop Session routing or close its writer before the final job settlement reaches storage. Normal one-shot completion and signal shutdown can therefore leave incomplete history, as can hard process loss. This change does not enforce cross-fiber disposal order or synthesize a missing terminal record.
 
-The log and both SDKs expose execution intervals without changing tool schemas, output cursors, or job scheduling. Model-facing controls and notices carry the unique JobId; a bounded notice points to job_list when the full id cannot fit. These intervals run from registration commit through registry settlement, including the producer work and cleanup between those points; they are neither CPU time nor a directly additive rollout-latency metric. Hard process loss or an append failure can leave incomplete history. Persisted facts do not resume an external process or its output ring.
+The log and both SDKs expose execution intervals without changing tool schemas, output cursors, or job scheduling. Model-facing controls and notices carry the unique JobId; a bounded notice points to job_list when the full id cannot fit. These intervals run from registration commit through registry settlement, including the producer work and cleanup between those points; they are neither CPU time nor a directly additive rollout-latency metric. An append failure can also leave incomplete history. Persisted facts do not resume an external process or its output ring.
 
 Focused tests cover original timestamps, nested call identity, output preservation, delayed cancellation, producer rejection, forced teardown, late completion, unique control ids, causal publication order, and recording-failure containment. SDK snapshots cover the durable and protocol projections.

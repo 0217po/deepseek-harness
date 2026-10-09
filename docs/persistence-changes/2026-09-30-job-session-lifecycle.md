@@ -44,7 +44,7 @@ Adds required job event kinds without changing the Session envelope. New JobIds 
 <a id="verification"></a>
 ## Verification
 
-Registry, snapshot-normalizer, shutdown, and headless tests cover causal order, unique JobIds, and ordered cleanup for normal and signal exit. CLI and SDK snapshots verify durable registration/settlement and notices.
+Registry and snapshot-normalizer tests cover causal order and unique JobIds. CLI and SDK snapshots verify registration, settlement, and notices during execution; the [job lifecycle contract](../subsystems/jobs.md#session-lifecycle-records) allows incomplete terminal history during application teardown.
 
 <a id="dev-note"></a>
 ## Dev Note

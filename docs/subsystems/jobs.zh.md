@@ -28,6 +28,8 @@ interface JobKindMap {
 
 `job/settled` 可能出现在 `turn/end` 之后。SDK run 结果只覆盖自身观测窗口；需要较晚结算的消费方应保留 Session 订阅或读取持久化历史。轮次完成不表示所有有主 job 都已停止。
 
+应用销毁可能在有主 job 的最后一条结算写入存储前停止 Session 事件路由或关闭写句柄。正常的一次性运行结束、信号关停和进程硬退出都可能出现这种情况。即使运行期注册表报告了终止，缺少 `job/settled` 的区间仍不完整；消费方不得虚构结束时间戳。
+
 ```ts type-equiv
 /** Durable identity and registration time of one owned job execution. */
 interface JobRegisteredData {

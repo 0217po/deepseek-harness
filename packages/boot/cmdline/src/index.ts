@@ -35,21 +35,10 @@ export interface CmdlineArgs {
 /** Request bounded process exit; the launcher wires it to its shutdown controller. */
 export interface AppExit {
   /**
-   * Request exit after registered cleanup and whole-tree disposal within the launcher's bound.
+   * Request exit once the tree has been disposed.
    * @param code - the process exit code.
    */
   (code: number): void
-}
-
-/** Ordered resource cleanup shared by normal and signal-triggered process exit. */
-export interface AppShutdown {
-  /**
-   * Register cleanup that runs once before application providers dispose, in registration order.
-   * A failed cleanup does not skip later entries or whole-tree disposal; the exit bound covers all stages.
-   * @param dispose - owned-resource cleanup requiring live application providers.
-   * @returns an unregister function; registrations are refused after shutdown starts.
-   */
-  addDisposer(dispose: () => Promise<void>): () => void
 }
 
 /** Successful application-startup signal owned by the launcher. */
@@ -69,8 +58,6 @@ declare module '@deepseek-ai/cordis' {
     cmdlineArgs?: CmdlineArgs
     /** Bounded process-exit request; provided by a launcher before the tree mounts. */
     appExit?: AppExit
-    /** Ordered cleanup before provider disposal on normal or signal exit. */
-    appShutdown?: AppShutdown
     /** Successful startup signal; provided by a launcher before the tree mounts. */
     appReady?: AppReady
   }
@@ -82,8 +69,6 @@ export interface CmdlineHost {
   args: readonly string[]
   /** Bounded process-exit request. */
   exit: AppExit
-  /** Ordered cleanup registry for normal and signal exit. */
-  shutdown?: AppShutdown
   /** Successful startup signal for lifecycle work that must not mask boot failure. */
   ready?: AppReady
 }
@@ -100,7 +85,6 @@ export function provideCmdline(ctx: Context, host: CmdlineHost): void {
   const snapshot: readonly string[] = Object.freeze([...host.args])
   ctx.provide('cmdlineArgs', { get: () => snapshot })
   ctx.provide('appExit', host.exit)
-  if (host.shutdown !== undefined) ctx.provide('appShutdown', host.shutdown)
   if (host.ready !== undefined) ctx.provide('appReady', host.ready)
 }
 

@@ -77,7 +77,7 @@ runner 是核心 API 载体之上的直接驱动器：它确定 Agent 标识—�
 
 ### 运行流程
 
-runner 等待整个应用结算（`ctx.get('loader')?.await()`），确保已组合的工具与适配器不会半挂载，读取共享的 [`agentDefaultModel`](../../core/agent-default-model/README.zh.md) 选择，从配置或 stdin 解析任务，然后确定 Agent 标识：默认是全新的 `session-<uuid>`，或是 `--session-id` 指名的持久化 Session——通过 [`sessionQuery`](../../session-query/session-query/README.zh.md) 沿用，日志不存在时拒绝。它把任务作为普通用户消息提交。不带 `--json` 时，它把该 Agent 的非空推理增量流式写入 stderr；带 `--json` 时改为投影本次运行。它等待子级工作，并在结束前复核父级仍空闲且 Session 序号未变，让结算通知可以驱动父级生成最终答案。收件箱消息处于停放状态的空闲子级不会延迟完成；进程关闭时丢弃这些未领取消息。随后它对会话执行 flush，并把所属区间（从 `firstSeq` 起）折叠为最后一条非空 `assistant/message` 文本与最终 `turn/end` 原因。runner 在等待取得 Agent 之前将销毁动作注册到 `appShutdown`，随后把最终文本写入 stdout（或 `final` 事件）并请求退出。正常退出与信号退出都会在已有时限内先排空 Agent（包括有所有者的 job 与 Session 写句柄），再销毁提供方。
+runner 等待整个应用结算（`ctx.get('loader')?.await()`），确保已组合的工具与适配器不会半挂载，读取共享的 [`agentDefaultModel`](../../core/agent-default-model/README.zh.md) 选择，从配置或 stdin 解析任务，然后确定 Agent 标识：默认是全新的 `session-<uuid>`，或是 `--session-id` 指名的持久化 Session——通过 [`sessionQuery`](../../session-query/session-query/README.zh.md) 沿用，日志不存在时拒绝。它把任务作为普通用户消息提交。不带 `--json` 时，它把该 Agent 的非空推理增量流式写入 stderr；带 `--json` 时改为投影本次运行。它等待子级工作，并在结束前复核父级仍空闲且 Session 序号未变，让结算通知可以驱动父级生成最终答案。收件箱消息处于停放状态的空闲子级不会延迟完成；进程关闭时丢弃这些未领取消息。随后它对会话执行 flush，并把所属区间（从 `firstSeq` 起）折叠为最后一条非空 `assistant/message` 文本与最终 `turn/end` 原因。最后，它把最终文本写入 stdout（或 `final` 事件）并请求退出。
 
 ### 基于 base 的 patch 内容
 
@@ -133,6 +133,7 @@ runner 不向请求前缀添加任何内容；它只是驱动组合出的配置�
 这些限制告诉你 headless 何时不适用、它需要 `dsh` 启动器提供什么。它们是当前包约束，不是通用的 CLI（命令行界面）对比或任务积压。
 
 - **每次运行一个任务**——任务得到回答后进程即退出；没有交互式后续，因此多步工作请拆成多次运行。
+- **持久化历史可能缺少后台 job 的最后一条结算**——进程销毁可能在有主 job 结算前停止 Session 路由或关闭写句柄，正常结束和信号关停也可能如此；[job 生命周期约定](../../../docs/subsystems/jobs.zh.md#session-lifecycle-records)说明消费方如何保留不完整区间。
 - **通过 `dsh` 启动器运行**——以其他方式启动 headless profile 会在启动时失败，因为只有启动器能请求进程退出。
 - **首个 token 前没有心跳**——默认模式下，提供方发出第一个非空推理增量前，stderr 保持静默；延迟首个 token 的提供方不会更早给出进度信号。
 - **推理进入 stderr 日志**——默认模式下，重定向与监督进程可能保留显著更多且可能敏感的模型输出；需要时应把 stderr 路由到受控位置。

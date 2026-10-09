@@ -1,12 +1,10 @@
 /** Bounded, escalating process shutdown for the long-lived CLI surfaces. */
 
-import type { AppShutdown } from '@deepseek-ai/dsh-cmdline'
-
 /** Maximum grace allowed for the application tree to dispose before process exit. */
 export const PROCESS_SHUTDOWN_TIMEOUT_MS = 5_000
 
 /** Process-exit controller shared by normal completion and Unix signal handlers. */
-export interface ProcessShutdown extends AppShutdown {
+export interface ProcessShutdown {
   /** Start or join graceful disposal before allowing natural completion with `code`. */
   shutdown(code: number): Promise<void>
   /** Start graceful disposal followed by exit, or force exit when shutdown is already running. */
@@ -31,7 +29,6 @@ export function createProcessShutdown(
   let timeout: ReturnType<typeof setTimeout> | undefined
   let completed = false
   let forceExited = false
-  const disposers = new Set<{ dispose: () => Promise<void> }>()
 
   const clearExitTimeout = (): void => {
     /* v8 ignore else -- shutdown() arms the timer before any asynchronous exit path can run. */
@@ -55,15 +52,7 @@ export function createProcessShutdown(
   const start = (code: number, forceAfterDispose: boolean): Promise<void> => {
     if (pending !== undefined) return pending
     timeout = setTimeout(() => { forceExitOnce(code) }, timeoutMs)
-    pending = Promise.resolve().then(async () => {
-      const failures: unknown[] = []
-      for (const entry of disposers) {
-        disposers.delete(entry)
-        try { await entry.dispose() } catch (error) { failures.push(error) }
-      }
-      try { await dispose() } catch (error) { failures.push(error) }
-      if (failures.length > 0) throw new AggregateError(failures, 'process cleanup failed')
-    }).then(
+    pending = Promise.resolve().then(dispose).then(
       () => {
         if (forceAfterDispose) forceExitOnce(code)
         else completeOnce(code)
@@ -74,12 +63,6 @@ export function createProcessShutdown(
   }
 
   return {
-    addDisposer(dispose) {
-      if (pending !== undefined) throw new Error('cannot register cleanup after shutdown starts')
-      const entry = { dispose }
-      disposers.add(entry)
-      return () => { disposers.delete(entry) }
-    },
     shutdown(code) {
       return start(code, false)
     },

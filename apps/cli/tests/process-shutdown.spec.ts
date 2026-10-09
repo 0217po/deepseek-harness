@@ -20,64 +20,6 @@ afterEach(() => {
 })
 
 describe('process shutdown', () => {
-  it.each(['normal', 'signal'] as const)('runs registered cleanup in order for %s exit', async (mode) => {
-    const release = deferred()
-    const entered = deferred()
-    const order: string[] = []
-    const exit = vi.fn()
-    const complete = vi.fn()
-    const shutdown = createProcessShutdown(async () => { order.push('providers') }, exit, complete)
-    shutdown.addDisposer(async () => { order.push('first'); entered.resolve(); await release.promise })
-    const removed = vi.fn(() => Promise.resolve())
-    shutdown.addDisposer(removed)()
-    shutdown.addDisposer(async () => { order.push('second') })
-    if (mode === 'signal') shutdown.interrupt(130)
-    else void shutdown.shutdown(0)
-    await entered.promise
-    expect(order).toEqual(['first'])
-    expect(() => shutdown.addDisposer(() => Promise.resolve())).toThrow('after shutdown starts')
-    release.resolve()
-    await shutdown.shutdown(0)
-    expect(order).toEqual(['first', 'second', 'providers'])
-    expect(removed).not.toHaveBeenCalled()
-    if (mode === 'signal') expect(exit).toHaveBeenCalledWith(130)
-    else expect(complete).toHaveBeenCalledWith(0)
-  })
-
-  it('releases caller-owned work before disposing its providers within the exit bound', async () => {
-    vi.useFakeTimers()
-    const release = deferred()
-    const dispose = vi.fn(() => Promise.resolve())
-    const exit = vi.fn()
-    const complete = vi.fn()
-    const shutdown = createProcessShutdown(dispose, exit, complete)
-    const cleanup = vi.fn(() => release.promise)
-    shutdown.addDisposer(cleanup)
-    const pending = shutdown.shutdown(0)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(cleanup).toHaveBeenCalledOnce()
-    expect(dispose).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(PROCESS_SHUTDOWN_TIMEOUT_MS)
-    expect(exit).toHaveBeenCalledWith(0)
-    release.resolve()
-    await pending
-    expect(dispose).toHaveBeenCalledOnce()
-    expect(complete).not.toHaveBeenCalled()
-  })
-
-  it('still disposes the tree if caller-owned cleanup rejects', async () => {
-    const dispose = vi.fn(() => Promise.resolve())
-    const exit = vi.fn()
-    const shutdown = createProcessShutdown(dispose, exit, vi.fn())
-    shutdown.addDisposer(() => Promise.reject(new Error('cleanup failed')))
-    const later = vi.fn(() => Promise.resolve())
-    shutdown.addDisposer(later)
-    await shutdown.shutdown(1)
-    expect(later).toHaveBeenCalledOnce()
-    expect(dispose).toHaveBeenCalledOnce()
-    expect(exit).toHaveBeenCalledWith(1)
-  })
-
   it('completes naturally after disposal resolves and forces exit when it rejects', async () => {
     const resolvedExit = vi.fn()
     const resolvedComplete = vi.fn()
@@ -100,7 +42,7 @@ describe('process shutdown', () => {
     expect(rejectedComplete).not.toHaveBeenCalled()
   })
 
-  it('uses the process exit defaults for natural completion and signal escalation', async () => {
+  it('uses process.exitCode for default normal completion', async () => {
     const exit = vi.spyOn(process, 'exit').mockImplementation(_code => undefined as never)
     const originalExitCode = process.exitCode
     process.exitCode = undefined
@@ -111,8 +53,6 @@ describe('process shutdown', () => {
 
       expect(process.exitCode).toBe(7)
       expect(exit).not.toHaveBeenCalled()
-      shutdown.interrupt(130)
-      expect(exit).toHaveBeenCalledWith(130)
     } finally {
       process.exitCode = originalExitCode
     }
