@@ -66,7 +66,7 @@ The old examples are historical comparisons of source-export consumers in the de
 
 **Operation owner and strict Host.** Preserve the business signature; leave generated registration to ordinary Typert Loader instead of the Service constructor.
 
-```ts ignore-check
+```text
 // Old source delivery.
 import { TYPERT_REMOTE } from './remote.generated.ts'
 // Constructor: super(ctx, 'sessionController', { namespace: 'session', definitions: TYPERT_REMOTE })
@@ -85,7 +85,7 @@ page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage> {
 
 **Browser and Node invocation.** A source-export consumer changes `/remote-source` to `/remote`; existing ordinary consumers already use this path. The live Context mounts once, without separate Registry registration.
 
-```ts ignore-check
+```text
 import { TYPERT_REMOTE } from '@deepseek-ai/dsh-api-session-controller/remote'
 await ctx.remote.$mount(TYPERT_REMOTE)
 const result = await ctx.remote.session.page(request, signal)
@@ -99,13 +99,13 @@ try {
 
 **Offline CLI and framework metadata.** The old selection reads a source table; the replacement reads the profile-owned Registry before target discovery. The two snippets are alternatives, not simultaneous declarations.
 
-```ts ignore-check
+```text
 // Old selection.
 import { REMOTE_METHODS } from '@deepseek-ai/dsh-api-session-controller/remote-source'
 const page = REMOTE_METHODS['session/page']
 ```
 
-```ts ignore-check
+```text
 // Metadata plugin: inject: ['typert']; no Gateway, Connection, or Host controller.
 import { TYPERT_REMOTE } from '@deepseek-ai/dsh-api-session-controller/remote'
 import { isTypertRemoteMethod } from '@deepseek-ai/dsh-typert-protocol/remote-info'
@@ -120,7 +120,7 @@ The registration belongs to that plugin's fiber. Help uses `description` and `in
 
 **CLI input and dispatch.** After local `current` resolution and attachment preparation, either metadata access path uses the same invocation sequence:
 
-```ts ignore-check
+```text
 if (page.mode === 'stream') throw new Error('session/page must be unary')
 const input = page.input({ strict: true })
 const arguments_ = input.create().parse(raw)
@@ -131,7 +131,7 @@ const output = page.result.create().parse(result.value)
 
 **MCP discovery and calls.** Selection validates tool-specific requirements; generation itself does not require them.
 
-```ts ignore-check
+```text
 const input = page.input({ strict: true })
 if (!page.description) throw new Error('session/page has no tool description')
 if (input.jsonSchema === undefined) throw new Error('session/page has no supported tool input schema')
@@ -147,13 +147,13 @@ This compact object shows only the metadata dependency. The real MCP adapter ret
 
 **Native tools.** Query `ctx.typert.local.get('session/page')` and narrow it with `isTypertRemoteMethod` instead of reading the source table. Native tools can select `method.input({ strict: true })` for matching parsing and input projection. Native registration still requires supported input and result projections, including core Tool's mandatory `output.schema`; optional MCP output projection is not sufficient here. Once the facade obtains a typed request, both designs execute the same local call:
 
-```ts ignore-check
+```text
 const value = await ctx.sessionController.page(request, signal)
 ```
 
 **Independent consumers.** Read the ordinary info instance's typed index; no Registry is required:
 
-```ts ignore-check
+```text
 import { TYPERT_REMOTE } from '@deepseek-ai/dsh-api-session-controller/remote'
 const page = TYPERT_REMOTE.methods['session/page']
 const arguments_ = page.input().create().parse(raw)

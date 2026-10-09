@@ -66,7 +66,7 @@ Host 元数据就绪仍由组合负责。要求严格校验的 Host 必须等待
 
 **操作拥有者与严格 Host。** 保留业务签名；将生成定义注册交给普通 Typert Loader，而非 Service 构造函数。
 
-```ts ignore-check
+```text
 // Old source delivery.
 import { TYPERT_REMOTE } from './remote.generated.ts'
 // Constructor: super(ctx, 'sessionController', { namespace: 'session', definitions: TYPERT_REMOTE })
@@ -85,7 +85,7 @@ page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage> {
 
 **Browser 与 Node 调用。** 源码导出消费方将 `/remote-source` 改为 `/remote`；已有普通消费方本来就使用此路径。实际调用 Context 挂载一次，不额外向 Registry 注册。
 
-```ts ignore-check
+```text
 import { TYPERT_REMOTE } from '@deepseek-ai/dsh-api-session-controller/remote'
 await ctx.remote.$mount(TYPERT_REMOTE)
 const result = await ctx.remote.session.page(request, signal)
@@ -99,13 +99,13 @@ try {
 
 **离线 CLI 与框架元数据。** 旧选择读取源码方法表；替代方式在目标发现之前读取 profile 拥有的 Registry。两个片段是不同选择，不是同时声明。
 
-```ts ignore-check
+```text
 // Old selection.
 import { REMOTE_METHODS } from '@deepseek-ai/dsh-api-session-controller/remote-source'
 const page = REMOTE_METHODS['session/page']
 ```
 
-```ts ignore-check
+```text
 // Metadata plugin: inject: ['typert']; no Gateway, Connection, or Host controller.
 import { TYPERT_REMOTE } from '@deepseek-ai/dsh-api-session-controller/remote'
 import { isTypertRemoteMethod } from '@deepseek-ai/dsh-typert-protocol/remote-info'
@@ -120,7 +120,7 @@ if (page === undefined || !isTypertRemoteMethod(page)) {
 
 **CLI 输入与分发。** 本地 `current` 解析和附件准备之后，两种元数据访问方式使用同样的调用步骤：
 
-```ts ignore-check
+```text
 if (page.mode === 'stream') throw new Error('session/page must be unary')
 const input = page.input({ strict: true })
 const arguments_ = input.create().parse(raw)
@@ -131,7 +131,7 @@ const output = page.result.create().parse(result.value)
 
 **MCP 发现与调用。** 选择时验证工具特有要求；生成过程本身不要求它们。
 
-```ts ignore-check
+```text
 const input = page.input({ strict: true })
 if (!page.description) throw new Error('session/page has no tool description')
 if (input.jsonSchema === undefined) throw new Error('session/page has no supported tool input schema')
@@ -147,13 +147,13 @@ const tool = {
 
 **原生工具。** 查询 `ctx.typert.local.get('session/page')`，并用 `isTypertRemoteMethod` 收窄，而非读取源码方法表。原生工具可以选择 `method.input({ strict: true })`，取得匹配的解析与输入投影。原生注册仍要求受支持的输入与结果投影，包括 core Tool 必需的 `output.schema`；MCP 的可选输出投影在这里并不足够。facade 取得类型化请求后，两种设计执行同样的本地调用：
 
-```ts ignore-check
+```text
 const value = await ctx.sessionController.page(request, signal)
 ```
 
 **独立消费方。** 读取普通 info 实例的类型化索引，不要求 Registry：
 
-```ts ignore-check
+```text
 import { TYPERT_REMOTE } from '@deepseek-ai/dsh-api-session-controller/remote'
 const page = TYPERT_REMOTE.methods['session/page']
 const arguments_ = page.input().create().parse(raw)
