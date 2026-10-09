@@ -45,9 +45,11 @@ it.skipIf(process.platform !== 'win32')('resets only the allocated checkout with
       stdio: 'pipe',
     })
     run(workspace)
-    expect(existsSync(workspace)).toBe(false)
+    expect(existsSync(workspace)).toBe(true)
+    expect(existsSync(resolve(workspace, 'node_modules'))).toBe(false)
     expect(readFileSync(resolve(external, 'keep.txt'), 'utf8')).toBe('keep')
     expect(() => run(external)).toThrow()
+    rmSync(workspace, { recursive: true })
     symlinkSync(external, workspace, 'junction')
     expect(() => run(workspace)).toThrow()
     expect(readFileSync(resolve(external, 'keep.txt'), 'utf8')).toBe('keep')
