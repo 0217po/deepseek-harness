@@ -56,7 +56,7 @@ target package 通过 declaration merge 扩展 snapshot 与 Location data map，
 
 控件组的尺寸、内容、可见性或字体加载状态变化后，composer 测量展开状态下的控件组。若无法排在同一行，控制栏为模型位设置 `--dsh-composer-model-text-display: none` 和 `--dsh-composer-model-icon-display: block`；两者默认值分别为 `block` 和 `none`。若连图标也放不下，仍允许换行。
 
-输入卡片、圆形工具栏按钮与工作区选择状态的轮廓遵循[同心内缩规则](../../../docs/ui-radius.zh.md#nested-hover)。上下文占用率入口遵循[统计胶囊规则](../../../docs/ui-radius.zh.md#shapes)。
+输入卡片、工具栏控件与工作区选择状态的轮廓遵循[输入框几何规则](../../../docs/ui-radius.zh.md#nested-hover)。上下文占用率入口遵循[统计控件圆角规则](../../../docs/ui-radius.zh.md#radius-scale)。
 
 上下文占用按钮在输入卡片下方、会话统计右侧显示圆环和百分比。点击按钮可在视口内的面板查看 token 构成，没有统计项时面板也不会越界；上下文用量和容量尚不可用时，按钮保持隐藏。
 

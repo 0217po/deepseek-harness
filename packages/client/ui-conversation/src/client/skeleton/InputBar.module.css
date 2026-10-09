@@ -63,7 +63,7 @@
   border: 0;
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
   border-radius: calc(var(--dsh-composer-primary-size) / 2 + var(--dsh-composer-control-inset));
-  /* The lower arcs share centers with the circular toolbar buttons. */
+  /* The lower-right arc shares a center with the primary button. */
   corner-shape: round;
   background: var(--dsw-specific-input-major);
   box-shadow: var(--dsw-elevation-soft);
@@ -323,15 +323,12 @@
   flex: none;
   width: var(--dsh-composer-add-size);
   height: var(--dsh-composer-add-size);
-  /* The smaller circle needs the radius difference as extra left inset. */
-  margin-left: calc((var(--dsh-composer-primary-size) - var(--dsh-composer-add-size)) / 2);
   border: none;
   border-radius: 999px;
   corner-shape: round;
   background: var(--dsw-specific-selector);
   color: var(--dsw-alias-label-primary);
   cursor: pointer;
-  transform: translateY(calc(-1 * var(--dsh-composer-row-shift)));
 }
 
 .add:hover:not(:disabled) {
