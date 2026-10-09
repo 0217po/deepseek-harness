@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useDisclosure } from '@deepseek-ai/dsh-client-ui-chat/src/client/chat/use-disclosure.ts'
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { StartedToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
@@ -528,7 +528,7 @@ describe('BashRow terminal card', () => {
   })
 
   it.each([undefined, 'dispatch-parent'])('expands a background launch and its acknowledgement without reporting a job exit (parent: %s)', (parentCallId) => {
-    const command = 'pnpm --filter @deepseek-ai/dsh-client-ui-tool run build --watch --verbose'
+    const command = `  node worker.mjs --trace=${'background-worker-'.repeat(24)}\n\tprintf "done"\n`
     const args = { command, description: 'Wait', run_in_background: true }
     const argsRaw = JSON.stringify(args)
     const inspect = vi.fn()
@@ -564,6 +564,40 @@ describe('BashRow terminal card', () => {
     fireEvent.click(row)
     expect(row.getAttribute('aria-expanded')).toBe('false')
     expect(view.queryByText(acknowledgement)).toBeNull()
+    fireEvent.keyDown(row, { key: ' ' })
+    expect(row.getAttribute('aria-expanded')).toBe('true')
+    expect(view.getByText(acknowledgement)).toBeTruthy()
+  })
+
+  it.each(['BashRow', 'GenericToolCard'] as const)('%s preserves authored command lines and copies only raw output', async (renderer) => {
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    const writeText = vi.fn<Clipboard['writeText']>().mockResolvedValue(undefined)
+    const lines = [`  node worker.mjs --trace=${'command-token-'.repeat(24)}  `, '', '\tprintf "done"']
+    const command = `${lines.join('\n')}\n`
+    const output = '  first\tcolumn\n\nlast \n'
+    const props = rowProps(settled({
+      call: { name: 'bash', argsRaw: shellArgs({ command }) },
+      content: [{ type: 'text', text: `${output}\n[exit code: 0]` }],
+    }))
+    vi.useFakeTimers()
+    try {
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+      const view = render(renderer === 'BashRow' ? <BashRow {...props} /> : <GenericToolCard {...props} />)
+      fireEvent.click(view.container.querySelector('[data-expandable]')!)
+      expect([...view.container.querySelectorAll('[data-command-text]')].map(line => line.textContent)).toEqual(lines)
+      expect(view.getByText('  first\tcolumn', RAW)).toBeTruthy()
+      expect(view.getByText('last ', RAW)).toBeTruthy()
+      await act(async () => { fireEvent.click(view.getByRole('button', { name: '复制' })) })
+      expect(writeText).toHaveBeenCalledOnce()
+      expect(writeText).toHaveBeenCalledWith(output)
+      await act(async () => { await vi.runOnlyPendingTimersAsync() })
+    } finally {
+      cleanup()
+      vi.clearAllTimers()
+      vi.useRealTimers()
+      if (clipboard === undefined) Reflect.deleteProperty(navigator, 'clipboard')
+      else Object.defineProperty(navigator, 'clipboard', clipboard)
+    }
   })
 
   it('keeps malformed shell arguments collapsed even when background execution is requested', () => {
