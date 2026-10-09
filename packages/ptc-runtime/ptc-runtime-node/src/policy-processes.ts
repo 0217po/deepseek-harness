@@ -65,7 +65,7 @@ export class PolicyProcesses {
   private release(process: Process): Promise<void> {
     if (process.cleanup !== undefined) return process.cleanup
     process.cleanup = process.release().then(() => { this.processes.delete(process) }, (error: unknown) => {
-      process.cleanup = undefined
+      delete process.cleanup
       throw error
     })
     return process.cleanup

@@ -147,7 +147,7 @@ export class NodePtcRuntime extends PtcRuntime {
     const stop = (): Promise<boolean> => {
       if (stopping !== undefined) return stopping
       const cleanup = handle === undefined ? Promise.resolve(true) : terminateProcess(handle, this.config.graceMs)
-      stopping = cleanup.then((drained) => { unregister?.(); return drained }, (error: unknown) => {
+      stopping = cleanup.then((drained) => { unregister(); return drained }, (error: unknown) => {
         stopping = undefined
         throw error
       })
@@ -160,15 +160,13 @@ export class NodePtcRuntime extends PtcRuntime {
       signal.removeEventListener('abort', onAbort)
       channel?.close()
       void (async () => {
-        if (handle !== undefined || unregister !== undefined) {
-          try {
-            const drained = await stop()
-            if (!drained && failure === undefined) {
-              failure = { kind: 'worker-exit', message: 'Node process output did not close cleanly' }
-            }
-          } catch (error: unknown) {
-            failure = { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(error)}` }
+        try {
+          const drained = await stop()
+          if (!drained && failure === undefined) {
+            failure = { kind: 'worker-exit', message: 'Node process output did not close cleanly' }
           }
+        } catch (error: unknown) {
+          failure = { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(error)}` }
         }
         const outcome = outputOverflow ? overflowResult ?? output.limit(logs)
           : failure === undefined ? output.success(logs, value) : output.failure(logs, failure)
