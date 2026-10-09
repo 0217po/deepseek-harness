@@ -27,11 +27,6 @@ function argsAfter(draft: string, token: string): string {
   return ''
 }
 
-/** A claimed name may stand alone; arguments require the token's separator. */
-function retainsClaim(draft: string, token: string): boolean {
-  return draft.startsWith(token) || draft === token.trimEnd()
-}
-
 /** The submit-plane slice of the published InputState. */
 export interface SubmitSnapshot {
   readonly phase: InputState['phase']
@@ -75,7 +70,7 @@ export class SubmitMachine {
    */
   dispatch(ev: InputEvent): readonly InputEffect[] {
     switch (ev.type) {
-      case 'draft-changed': return this.onDraftChanged(ev.draft)
+      case 'draft-changed': return this.onDraftChanged(ev.command)
       case 'claim': return this.onClaim(ev.claim)
       case 'enter': return this.onEnter(ev.mode, ev.draft, ev.submission)
       case 'adjudicated': return this.onAdjudicated(ev.attempt, ev.outcome)
@@ -88,16 +83,19 @@ export class SubmitMachine {
     }
   }
 
-  /** The complete command name retains its claim with or without the argument separator. */
-  private onDraftChanged(draft: string): readonly InputEffect[] {
-    if (this.phase === 'claimed' && this.claim !== undefined && !retainsClaim(draft, this.claim.token)) {
-      this.phase = 'plain'
-      this.claim = undefined
-    }
+  /**
+   * Outside a transaction the claim follows the document's leading command
+   * chip: deleting or displacing the chip releases it, and a history restore
+   * of the chip re-enters claimed.
+   */
+  private onDraftChanged(command: CommandClaim | undefined): readonly InputEffect[] {
+    if (this.phase !== 'plain' && this.phase !== 'claimed') return []
+    this.claim = command
+    this.phase = command === undefined ? 'plain' : 'claimed'
     return []
   }
 
-  /** The editor applied a claim-token replacement; busy phases refuse another claim. */
+  /** The editor inserted a command chip; busy phases refuse another claim. */
   private onClaim(claim: CommandClaim): readonly InputEffect[] {
     if (this.phase !== 'plain' && this.phase !== 'claimed') return []
     this.claim = claim
@@ -204,8 +202,7 @@ export class SubmitMachine {
       return effects
     }
     const text = ev.message ?? ev.outcome?.text
-    if (ev.draft === flight.attempt.draftSnapshot
-      && this.claim !== undefined && retainsClaim(ev.draft, this.claim.token)) {
+    if (ev.draft === flight.attempt.draftSnapshot && this.claim !== undefined && ev.command === this.claim) {
       this.phase = 'claimed'
       return text === undefined ? [] : [{ type: 'notice', level: 'error', text }]
     }

@@ -86,6 +86,7 @@ function guardOf(phase: InputState['phase']): 'plain' | 'claimed' | 'frozen' {
 /** Whether two projections differ in content (selection and caret excluded). */
 function projectionContentChanged(prev: EditorProjection, next: EditorProjection): boolean {
   if (prev.clipboardText !== next.clipboardText || prev.detectText !== next.detectText) return true
+  if (prev.command !== next.command) return true
   if (prev.occurrences.length !== next.occurrences.length) return true
   return next.occurrences.some((occ, i) => {
     const old = prev.occurrences[i]
@@ -172,7 +173,6 @@ export class SessionInputShell implements SessionInput {
       onUpdate: () => { this.onEditorUpdate() },
       openReference: (source, reference) =>
         this.deps.inputTriggers?.()?.openReference(source, reference) ?? false,
-      activeClaimToken: () => this.activeClaimToken(),
       lexicon: () => this.lexicon.getSnapshot(),
       resolveLexicon: () => this.deps.inputTriggers?.()?.lexicon,
     })
@@ -183,7 +183,7 @@ export class SessionInputShell implements SessionInput {
 
   // ---- editor plumbing ----
 
-  /** Re-project, run the claim watch, publish, and feed trigger tracking after every editor commit. */
+  /** Re-project, sync the claim with the leading command chip, publish, and feed trigger tracking after every editor commit. */
   private onEditorUpdate(): void {
     const prev = this.draftEditor.refreshProjection()
     // Selection-only commits advance neither the revision nor the published
@@ -196,7 +196,7 @@ export class SessionInputShell implements SessionInput {
         this.failedDetached.clear()
         this.failedRestoreRev = undefined
       }
-      this.dispatchRun(({ type: 'draft-changed', draft: this.projection.clipboardText }))
+      this.dispatchRun(({ type: 'draft-changed', command: this.projection.command }))
     }
     const caret = this.projection.caret
     if (caret !== null) {
@@ -449,8 +449,8 @@ export class SessionInputShell implements SessionInput {
 
   /**
    * Apply one command claim (scoped begin-command event listener body): the
-   * editor replaces [0, span.end) with the claim token, then the machine
-   * enters claimed.
+   * editor replaces [0, span.end) with the command chip and its separator,
+   * then the machine enters claimed.
    * @param claim - the command claim from the pick path.
    * @param span - pick-time span snapshot (detect coordinates).
    * @returns whether the edit applied (phase, span CAS, and leading guard passed).
@@ -460,9 +460,10 @@ export class SessionInputShell implements SessionInput {
     if (phase !== 'plain' && phase !== 'claimed') return false
     if (span.draftRev !== this.rev) return false
     // Leading-trigger contract: only whitespace may precede the span; the
-    // whitespace prefix is dropped so the claimed watch (startsWith) holds.
+    // whitespace prefix is dropped so the chip takes the leading seat.
     if (this.projection.detectText.slice(0, span.start).trim() !== '') return false
-    const applied = this.draftEditor.replaceText({ start: 0, end: span.end }, claim.token)
+    const tail = this.projection.detectText.slice(span.end, span.end + 1)
+    const applied = this.draftEditor.insertCommand({ start: 0, end: span.end }, claim, tail)
     if (!applied) return false
     this.dispatchRun(({ type: 'claim', claim }))
     return true
@@ -616,20 +617,9 @@ export class SessionInputShell implements SessionInput {
 
   // ---- effect executor ----
 
-  /** The claim token the decoration transform styles; null while unclaimed. */
-  private activeClaimToken(): string | null {
-    const core = this.core.state
-    return (core.phase === 'claimed' || core.phase === 'submitting') && core.claim !== undefined
-      ? core.claim.token
-      : null
-  }
-
-  /** Dispatch + execute, refreshing the claim decoration when the styled token flips. */
+  /** Dispatch one machine event and execute its effects. */
   private dispatchRun(ev: Parameters<SubmitMachine['dispatch']>[0]): void {
-    const beforeToken = this.activeClaimToken()
-    const effects = this.core.dispatch(ev)
-    this.run(effects)
-    if (this.activeClaimToken() !== beforeToken) this.draftEditor.refreshClaimDecoration()
+    this.run(this.core.dispatch(ev))
   }
 
   private run(effects: readonly InputEffect[]): void {
@@ -857,7 +847,7 @@ export class SessionInputShell implements SessionInput {
           }
           this.dispatchRun(({
             type: 'submit-settled', attempt, ok: outcome.kind === 'success',
-            draft: this.projection.clipboardText, outcome,
+            draft: this.projection.clipboardText, command: this.projection.command, outcome,
             ...(outcome.kind === 'error' && outcome.text === undefined ? { message: 'command failed' } : {}),
           }))
         },
@@ -866,7 +856,7 @@ export class SessionInputShell implements SessionInput {
           const message = error instanceof Error ? error.message : String(error)
           this.dispatchRun(({
             type: 'submit-settled', attempt, ok: false,
-            draft: this.projection.clipboardText, message,
+            draft: this.projection.clipboardText, command: this.projection.command, message,
           }))
         },
       )
