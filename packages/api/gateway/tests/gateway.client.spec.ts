@@ -5,6 +5,7 @@ import type { Fiber } from '@deepseek-ai/cordis'
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { z } from 'zod'
 import { RemoteMock } from '@deepseek-ai/dsh-remote-mock'
+import { openConnectionWebSocket } from '@deepseek-ai/dsh-client-connection/src/client/socket.ts'
 import {
   apply as applyConnection,
   type ClientTransportHooks,
@@ -348,10 +349,16 @@ async function benchFiber(
   const generation = new GenerationHarness()
   const start = vi.fn<ConnectionHandle['start']>(() => ({ stop: () => {} }))
   ctx.provide('connection', {
+    interactions: 'answer',
+    openWebSocket: openConnectionWebSocket,
+    isLoopback: true,
+    generation: { getSnapshot: () => undefined, subscribe: () => () => {} },
+    state: { getSnapshot: () => undefined, subscribe: () => () => {} },
+    reconnect: () => {},
     rpc,
     registerGenerationSource: generation.register,
     start,
-  } as unknown as ConnectionHandle)
+  } satisfies ConnectionHandle)
   const client = ctx.plugin({ inject, apply })
   await client
   return { ctx, client, generation, start }
@@ -451,10 +458,16 @@ async function loaderReadinessBench(
   const start = vi.fn<ConnectionHandle['start']>(() => ({ stop }))
   const call = vi.fn<ConnectionHandle['rpc']['call']>()
   ctx.provide('connection', {
+    interactions: 'answer',
+    openWebSocket: openConnectionWebSocket,
+    isLoopback: true,
+    generation: { getSnapshot: () => undefined, subscribe: () => () => {} },
+    state: { getSnapshot: () => undefined, subscribe: () => () => {} },
+    reconnect: () => {},
     rpc: carrier === 'web' ? { call } : { call, open: () => unexpectedInProcessStream() },
     registerGenerationSource: generation.register,
     start,
-  } as unknown as ConnectionHandle)
+  } satisfies ConnectionHandle)
   ctx.provide('loader', { await: () => readiness })
   const client = ctx.plugin({ inject, apply })
   await client
@@ -587,16 +600,20 @@ describe('Client Remote transport readiness', () => {
     await ctx.plugin(TypertRegistry)
     const generation = new GenerationHarness()
     const live: { snapshot: ConnectionGeneration | undefined } = { snapshot: undefined }
-    const handle = {
+    const handle: ConnectionHandle = {
+      interactions: 'answer',
+      openWebSocket: openConnectionWebSocket,
       isLoopback: true,
       generation: { getSnapshot: () => live.snapshot, subscribe: () => () => {} },
+      state: { getSnapshot: () => undefined, subscribe: () => () => {} },
+      reconnect: () => {},
       rpc: {
         call: vi.fn<ConnectionHandle['rpc']['call']>(),
         open: () => unexpectedInProcessStream(),
       },
       registerGenerationSource: generation.register,
       start: () => ({ stop: () => {} }),
-    } as unknown as ConnectionHandle
+    }
     const withdraw = ctx.provide('connection', handle)
     const client = ctx.plugin({ inject, apply })
     await client
@@ -3194,10 +3211,12 @@ describe('Remote stream client carrier lifecycle', () => {
         [Symbol.asyncIterator]().next()
       await vi.waitFor(() => { expect(FakeWebSocket.sockets[1]?.sent).toHaveLength(1) })
       const disposedSocket = FakeWebSocket.sockets[1]!
-      await disposedClient.close()
+      const closing = disposedClient.close()
+      const rejected = expect(disposed).rejects.toThrow('Remote stream client disposed')
       disposedSocket.receive({ type: 'end', streamId: 'stale' })
       disposedSocket.drop()
-      await expect(disposed).rejects.toThrow('Remote stream client disposed')
+      await closing
+      await rejected
     })
   })
 })
