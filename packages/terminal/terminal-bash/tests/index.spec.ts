@@ -8,7 +8,7 @@ import SessionStore, { SESSION_FORMAT_VERSION, Session, SessionId } from '@deeps
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import SandboxProvider from '@deepseek-ai/dsh-sandbox'
 import type { ConfinedArgv, SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
-import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
+import SandboxPolicyService, { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import TerminalSessionService, { TerminalBackendCleanupError, TerminalSessionId } from '@deepseek-ai/dsh-terminal'
 import type { TerminalSendRequest, TerminalWaitReason } from '@deepseek-ai/dsh-terminal'
@@ -319,7 +319,7 @@ describe('BashTerminalBackend startup rollback', () => {
       () => session,
     )
     const owner = agent(ctx, '/session-workspace')
-    await ctx.sandboxPolicy.setMode(owner.session, 'workspace-write')
+    setSandboxMode(owner.session, 'workspace-write')
     expect(await backend.spawn(spec(owner))).toBe(session)
 
     expect(spawned).toMatchObject({
@@ -658,7 +658,7 @@ describe('terminal-bash plugin shape', () => {
     expect(() => {
       session.append('turn/start', { turn: 1 })
     }).not.toThrow()
-    await expect(ctx.sandboxPolicy.setMode(session, 'read-only')).resolves.toEqual([])
+    expect(() => { setSandboxMode(session, 'read-only') }).not.toThrow()
   })
 
   it('keeps the owner-lifetime sandbox fence after the local provider unloads', async () => {
@@ -688,15 +688,15 @@ describe('terminal-bash plugin shape', () => {
     const created = await ctx.terminals.spawn(owner, { type: 'stub' })
 
     const unrelated = ctx.sessions.create(SessionId('unrelated-mode'))
-    await expect(ctx.sandboxPolicy.setMode(unrelated, 'read-only')).resolves.toEqual([])
+    expect(() => { setSandboxMode(unrelated, 'read-only') }).not.toThrow()
     expect(() => {
       session.append('turn/start', { turn: 1 })
     }).not.toThrow()
 
-    await expect(ctx.sandboxPolicy.setMode(session, 'danger-full-access')).resolves.toEqual([])
+    expect(() => { setSandboxMode(session, 'danger-full-access') }).not.toThrow()
     await providerFiber.dispose()
     expect(ctx.terminals.listBackends()).toEqual([])
-    await expect(ctx.sandboxPolicy.setMode(session, 'read-only')).rejects.toThrow(
+    expect(() => { setSandboxMode(session, 'read-only') }).toThrow(
       'cannot change sandbox mode from "danger-full-access" to "read-only" while persistent terminal sessions are open or being created; wait for creation to settle and close them first',
     )
     expect(session.snapshotEvents().filter(event => event.type === 'sandbox/mode')).toHaveLength(1)
@@ -704,11 +704,11 @@ describe('terminal-bash plugin shape', () => {
     const replacementFiber = await registerStubLocalBackend(ctx, () => stubLocalSession())
     const second = await ctx.terminals.spawn(owner, { type: 'stub' })
     await replacementFiber.dispose()
-    await expect(ctx.sandboxPolicy.setMode(session, 'read-only')).rejects.toThrow('open or being created')
+    expect(() => { setSandboxMode(session, 'read-only') }).toThrow('open or being created')
 
     await ctx.terminals.kill(owner, created.sessionId)
     await ctx.terminals.kill(owner, second.sessionId)
-    await expect(ctx.sandboxPolicy.setMode(session, 'read-only')).resolves.toEqual([])
+    expect(() => { setSandboxMode(session, 'read-only') }).not.toThrow()
     expect(session.snapshotEvents().filter(event => event.type === 'sandbox/mode')).toHaveLength(2)
   })
 
@@ -740,7 +740,7 @@ describe('terminal-bash plugin shape', () => {
     const spawning = ctx.terminals.spawn(owner, { type: 'stub' })
 
     expect(ctx.terminals.hasOwnerActivity(owner)).toBe(true)
-    await expect(ctx.sandboxPolicy.setMode(session, 'read-only')).rejects.toThrow('open or being created')
+    expect(() => { setSandboxMode(session, 'read-only') }).toThrow('open or being created')
     gate.resolve(undefined)
     const created = await spawning
     await ctx.terminals.kill(owner, created.sessionId)

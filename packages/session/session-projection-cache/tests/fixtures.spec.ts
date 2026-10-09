@@ -124,7 +124,7 @@ async function placeDoc(root: string, id: string, name: string): Promise<Fixture
 }
 
 /**
- * Await a durable write over a recovered session id and assert the archived
+ * Drive a live write over a recovered session id and assert the archived
  * document is replaced by a current-version one: current domain and Session
  * format stamps, lineage, and the freshly folded title.
  */

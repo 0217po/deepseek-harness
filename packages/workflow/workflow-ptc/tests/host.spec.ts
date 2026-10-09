@@ -1,3 +1,4 @@
+import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
@@ -62,12 +63,12 @@ async function setup(execute?: (bindings: HostBindings, spec: PtcRunSpec) => Pro
 
 describe('workflow host callback validation', () => {
   it('runs an unconfined provider under full access without forwarding a sandbox policy', async () => {
-    const { ctx, runtime, parent, start } = await setup(async (_bindings, spec) => {
+    const { runtime, parent, start } = await setup(async (_bindings, spec) => {
       expect(spec.sandboxPolicy).toBeUndefined()
       return completed
     })
     runtime.policyMode = undefined
-    await ctx.sandboxPolicy.setMode(parent.session, 'danger-full-access')
+    setSandboxMode(parent.session, 'danger-full-access')
     const handle = start()
     try {
       expect(await handle.result).toEqual({ value: null, stopReason: 'completed', agentsStarted: 0 })

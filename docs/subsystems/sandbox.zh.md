@@ -93,18 +93,6 @@ interface SandboxPolicy extends SandboxExecutionPolicy {
 }
 ```
 
-`setMode()` 协调 Session 模式切换。调用方通过 `withExecution()` 执行可取消工作，提供方通过 `registerResource()` 登记幂等进程清理。切换会取消操作，等待操作完成及资源清理，再记录模式。操作不能发起会取消自身的模式切换。可选的同步提交回调接收模式写入函数，调用方可以重新验证状态并连续记录相关事件。
-
-```ts type-equiv
-/** A process or retained environment that must stop before its Session changes file policy. */
-interface SandboxPolicyResource {
-  /** Idempotently stop the resource and await cleanup; rejection prevents the policy change. */
-  release(): Promise<void>
-  /** User-facing consequence reported after a successful policy change. */
-  notice?: string
-}
-```
-
 <a id="wrapped-argv-and-classification-dialects"></a>
 
 ## 包装后的 argv 与分类方言
@@ -220,36 +208,6 @@ The sandbox-policy service (`ctx.sandboxPolicy`). Owns the deployment default mo
 resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy
 
 /**
- * Cancel admitted operations and release registered resources before recording a new mode.
- * An unchanged effective mode records the override without clearing resources.
- * @param session - Session whose file policy changes.
- * @param mode - Mode for subsequent executions.
- * @param commit - Optional synchronous commit: validate caller state, invoke the supplied mode writer, then record related changes.
- * @returns Resource-reset notices after the mode event is committed.
- * @throws On concurrent changes, disposal, or cleanup failure; cleanup failures leave the mode unchanged.
- */
-async setMode(session: Session, mode: SandboxMode, commit?: (writeMode: () => void) => void): Promise<string[]>
-
-/**
- * Register an execution resource under its Session's file policy.
- * @param sessionId - Session identity carried in the resolved execution policy.
- * @param resource - Awaited cleanup and optional reset notice.
- * @returns Disposer for an already stopped resource; contributor unload awaits cleanup before detaching.
- * @throws While the Session changes mode or this provider is disposed.
- */
-registerResource(sessionId: SessionId, resource: SandboxPolicyResource): () => void
-
-/**
- * Run one cancellable operation, including asynchronous preparation and final cleanup.
- * @param sessionId - Session whose standing mode applies to the operation.
- * @param signal - Caller-owned cancellation.
- * @param run - Operation that observes the combined signal and awaits its own cleanup before settling.
- * @returns The operation's result; mode changes await its settlement even when it rejects.
- * @throws While the Session changes mode or this provider is disposed.
- */
-async withExecution<T>(sessionId: SessionId, signal: AbortSignal, run: (signal: AbortSignal) => Promise<T>): Promise<T>
-
-/**
  * Read the session override without applying the deployment default.
  * @param session - session whose log supplies the override.
  * @returns the last logged mode, or `undefined` without one.
@@ -257,7 +215,7 @@ async withExecution<T>(sessionId: SessionId, signal: AbortSignal, run: (signal: 
 overrideOf(session: Session): SandboxMode | undefined
 ```
 
-Types: [Session](session.zh.md) · [SessionId](core.zh.md)
+Types: [Session](session.zh.md)
 
 Source: [`packages/sandbox/sandbox-policy/src/index.ts`](../../packages/sandbox/sandbox-policy/src/index.ts)
 <!-- END GENERATED cordis-surface -->

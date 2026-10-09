@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -89,9 +91,7 @@ it('clears a registered live REPL through the file-policy setter before starting
   expect((await run('const retained = 7; retained')).value).toBe(7)
   const started = spawn.mock.results[0]
   if (started?.type !== 'return') throw new Error('the retained process did not start')
-  expect(await ctx.sandboxPolicy.setMode(session, 'read-only')).toEqual([
-    'PTC variables were cleared after the sandbox mode changed. Recreate variables before using them.',
-  ])
+  setSandboxMode(session, 'read-only')
   await started.value.done
   expect((await run('typeof retained')).value).toBe('undefined')
   const denied = await run('await (await import("node:fs/promises")).writeFile("denied-after-switch.txt", "denied")')
@@ -119,30 +119,26 @@ it('keeps a one-shot wider policy separate from standing variables and subsequen
 
 it('preserves the current execution context for bindings in a reused REPL', async () => {
   const { ctx, cwd, runtime, owner } = await setup('workspace-write')
-  const session = ctx.sessions.create(SessionId('reentrant-mode-change'), { meta: { cwd } })
-  const run = (program: string) => ctx.sandboxPolicy.withExecution(session.id, new AbortController().signal, signal =>
-    runtime.run(runtime.resolve({ program, signal, stateOwner: owner,
-      sandboxPolicy: ctx.sandboxPolicy.resolve({ session }),
-      bindings: [{ global: 'tools', functions: { change: () => ctx.sandboxPolicy.setMode(session, 'read-only') } }],
-    })))
-  expect((await run('const retained = 7; retained')).value).toBe(7)
-  const result = await run('await tools.change({})')
-  expect(result.error?.message).toContain('operation that the change must cancel')
-  expect(ctx.sandboxPolicy.resolve({ session }).mode).toBe('workspace-write')
-  expect((await run('retained')).value).toBe(7)
+  const session = ctx.sessions.create(SessionId('binding-context'), { meta: { cwd } })
+  const context = new AsyncLocalStorage<string>()
+  const run = (program: string) => runtime.run(runtime.resolve({ program, stateOwner: owner,
+    sandboxPolicy: ctx.sandboxPolicy.resolve({ session }),
+    bindings: [{ global: 'tools', functions: { current: async () => context.getStore() ?? null } }],
+  }))
+  expect((await context.run('first', () => run('var retained = await tools.current({}); retained'))).value).toBe('first')
+  expect((await context.run('second', () => run('await tools.current({})'))).value).toBe('second')
 })
 
-it.each(['per-call', 'persistent-in-memory'] as const)('waits for canceled %s execution before changing policy', async (executionMode) => {
+it.each(['per-call', 'persistent-in-memory'] as const)('cancels active %s execution after a synchronous policy change', async (executionMode) => {
   const { ctx, cwd, runtime, owner } = await setup('workspace-write', executionMode)
   const session = ctx.sessions.create(SessionId(`active-${executionMode}`), { meta: { cwd } })
   const entered = Promise.withResolvers<undefined>()
-  const pending = ctx.sandboxPolicy.withExecution(session.id, new AbortController().signal, signal =>
-    runtime.run(runtime.resolve({ program: 'await tools.ready({}); await new Promise(() => {})',
-      signal, stateOwner: owner, sandboxPolicy: ctx.sandboxPolicy.resolve({ session }),
-      bindings: [{ global: 'tools', functions: { ready: async () => { entered.resolve(undefined); return null } } }],
-    })))
+  const pending = runtime.run(runtime.resolve({ program: 'await tools.ready({}); await new Promise(() => {})',
+    stateOwner: owner, sandboxPolicy: ctx.sandboxPolicy.resolve({ session }),
+    bindings: [{ global: 'tools', functions: { ready: async () => { entered.resolve(undefined); return null } } }],
+  }))
   await entered.promise
-  await ctx.sandboxPolicy.setMode(session, 'read-only')
-  expect((await pending).error?.kind).toBe('abort')
+  setSandboxMode(session, 'read-only')
   expect(ctx.sandboxPolicy.resolve({ session }).mode).toBe('read-only')
+  expect((await pending).error?.kind).toBe('abort')
 })

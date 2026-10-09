@@ -14,7 +14,7 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SandboxedFileSystem from '@deepseek-ai/dsh-fs-sandbox'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
+import SandboxPolicyService, { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
 import ApprovalService from '@deepseek-ai/dsh-user-approval'
@@ -82,7 +82,7 @@ describe('in-process policy inheritance', () => {
     async (preset) => {
       const { ctx, parent } = await setupWalled([textResponse('child done')])
       parent.session.append('permission/preset', { preset })
-      await ctx.sandboxPolicy.setMode(parent.session, 'danger-full-access')
+      setSandboxMode(parent.session, 'danger-full-access')
       ctx.provide('permissionPresets', {
         current: (session: Session) => session === parent.session ? preset : 'custom',
       } as never)
@@ -108,7 +108,7 @@ describe('in-process policy inheritance', () => {
   ] as const)('captures $preset before child creation and overrides the $seedPreset fork prefix', async ({ seedPreset, preset }) => {
     const { ctx, parent } = await setupWalled([textResponse('child done')])
     parent.session.append('permission/preset', { preset: seedPreset })
-    await ctx.sandboxPolicy.setMode(parent.session, 'danger-full-access')
+    setSandboxMode(parent.session, 'danger-full-access')
     const seed = parent.session.snapshotEvents()
     parent.session.append('permission/preset', { preset })
     let currentPreset: 'auto' | 'danger-full-access' = preset
@@ -136,7 +136,7 @@ describe('in-process policy inheritance', () => {
     const script: Script = []
     const { ctx, parent } = await setupWalled(script)
     const blocked = join(workspace, 'spawn-blocked.txt')
-    await ctx.sandboxPolicy.setMode(parent.session, 'read-only')
+    setSandboxMode(parent.session, 'read-only')
     // No parent approval override: the child pin must not depend on one.
     expect(ctx.approval.overrideOf(parent.session)).toBeUndefined()
     const parentLogLength = parent.session.snapshotEvents().length
@@ -204,9 +204,9 @@ describe('in-process policy inheritance', () => {
     const script: Script = []
     const { ctx, parent } = await setupWalled(script)
     const blocked = join(workspace, 'fork-blocked.txt')
-    await ctx.sandboxPolicy.setMode(parent.session, 'workspace-write')
+    setSandboxMode(parent.session, 'workspace-write')
     const seed = parent.session.snapshotEvents()
-    await ctx.sandboxPolicy.setMode(parent.session, 'read-only')
+    setSandboxMode(parent.session, 'read-only')
     script.push(
       toolCallResponse('write', 'write', { file_path: blocked, content: 'escaped' }),
       textResponse('child done'),
@@ -228,7 +228,7 @@ describe('in-process policy inheritance', () => {
       await expect(readFile(blocked, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
       expect(ctx.sandboxPolicy.overrideOf(child.session)).toBe('read-only')
 
-      await ctx.sandboxPolicy.setMode(child.session, 'danger-full-access')
+      setSandboxMode(child.session, 'danger-full-access')
       expect(ctx.sandboxPolicy.overrideOf(child.session)).toBe('danger-full-access')
     } finally {
       await run.dispose()
@@ -238,10 +238,10 @@ describe('in-process policy inheritance', () => {
   it('captures policy at delegation before asynchronous child creation', async () => {
     const script: Script = [textResponse('child done')]
     const { ctx, parent } = await setupWalled(script)
-    await ctx.sandboxPolicy.setMode(parent.session, 'read-only')
+    setSandboxMode(parent.session, 'read-only')
 
     const starting = startPreparedActivation(spawnRequest(parent), {})
-    await ctx.sandboxPolicy.setMode(parent.session, 'danger-full-access')
+    setSandboxMode(parent.session, 'danger-full-access')
     const run = await starting
     try {
       await run.result
@@ -287,7 +287,7 @@ describe('in-process policy inheritance', () => {
       return Promise.resolve('allowed-once' as const)
     })
     const blocked = join(workspace, 'escalation-blocked.txt')
-    await ctx.sandboxPolicy.setMode(parent.session, 'read-only')
+    setSandboxMode(parent.session, 'read-only')
     script.push(
       toolCallResponse('write', 'write', {
         file_path: blocked,

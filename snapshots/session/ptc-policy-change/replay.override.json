@@ -90,14 +90,14 @@
       {
         "type": "text-delta",
         "index": 0,
-        "text": "The active program was canceled before the file policy changed. The next program could not write a file."
+        "text": "The file policy changed and canceled the active program. The next program could not write a file."
       },
       {
         "type": "block-end",
         "index": 0,
         "block": {
           "type": "text",
-          "text": "The active program was canceled before the file policy changed. The next program could not write a file."
+          "text": "The file policy changed and canceled the active program. The next program could not write a file."
         }
       },
       {

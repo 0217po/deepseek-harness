@@ -3,8 +3,8 @@
 {"type":"sandbox/mode","data":{"mode":"workspace-write"}}
 {"type":"approval/policy","data":{"policy":"ask"}}
 {"type":"command/run","data":{"commandId":"{{command:1}}","name":"permission","args":" read-only","source":{"kind":"user"}}}
-{"type":"sandbox/mode","data":{"mode":"read-only"}}
 {"type":"permission/preset","data":{"preset":"read-only"}}
+{"type":"sandbox/mode","data":{"mode":"read-only"}}
 {"type":"command/done","data":{"commandId":"{{command:1}}","kind":"success","text":"preset read-only"}}
 {"type":"agent/inbox/spliced","data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Can you create or edit a normal file right now under the current policy? Answer directly in one sentence. Do not call a tool just to discover the policy."}],"source":{"kind":"user","rpcId":"{{rpc:1}}","clientTimeZone":"{{clientTimeZone}}"},"role":"user","id":"{{message:1}}"}]}}
 {"type":"turn/start","data":{"turn":1}}
@@ -21,8 +21,8 @@
 {"type":"step/end","data":{"turn":1,"step":1}}
 {"type":"turn/end","data":{"turn":1,"reason":{"kind":"completed"}}}
 {"type":"command/run","data":{"commandId":"{{command:2}}","name":"permission","args":" danger-full-access","source":{"kind":"user"}}}
-{"type":"sandbox/mode","data":{"mode":"danger-full-access"}}
 {"type":"permission/preset","data":{"preset":"danger-full-access"}}
+{"type":"sandbox/mode","data":{"mode":"danger-full-access"}}
 {"type":"approval/policy","data":{"policy":"never"}}
 {"type":"agent/inbox/spliced","data":{"target":"next-step","start":0,"inserted":[{"content":[{"type":"text","text":"The approval policy changed from \"ask\" to \"never\" (changed by the user)."}],"source":{"kind":"user-approval"},"role":"user","id":"{{message:6}}"}]}}
 {"type":"command/done","data":{"commandId":"{{command:2}}","kind":"success","text":"preset danger-full-access"}}
@@ -38,8 +38,8 @@
 {"type":"step/end","data":{"turn":2,"step":1}}
 {"type":"turn/end","data":{"turn":2,"reason":{"kind":"completed"}}}
 {"type":"command/run","data":{"commandId":"{{command:3}}","name":"permission","args":" workspace-write","source":{"kind":"user"}}}
-{"type":"sandbox/mode","data":{"mode":"workspace-write"}}
 {"type":"permission/preset","data":{"preset":"workspace-write"}}
+{"type":"sandbox/mode","data":{"mode":"workspace-write"}}
 {"type":"approval/policy","data":{"policy":"ask"}}
 {"type":"agent/inbox/spliced","data":{"target":"next-step","start":0,"inserted":[{"content":[{"type":"text","text":"The approval policy changed from \"never\" to \"ask\" (changed by the user)."}],"source":{"kind":"user-approval"},"role":"user","id":"{{message:10}}"}]}}
 {"type":"command/done","data":{"commandId":"{{command:3}}","kind":"success","text":"preset workspace-write"}}
@@ -55,8 +55,8 @@
 {"type":"step/end","data":{"turn":3,"step":1}}
 {"type":"turn/end","data":{"turn":3,"reason":{"kind":"completed"}}}
 {"type":"command/run","data":{"commandId":"{{command:4}}","name":"permission","args":" read-only","source":{"kind":"user"}}}
-{"type":"sandbox/mode","data":{"mode":"read-only"}}
 {"type":"permission/preset","data":{"preset":"read-only"}}
+{"type":"sandbox/mode","data":{"mode":"read-only"}}
 {"type":"command/done","data":{"commandId":"{{command:4}}","kind":"success","text":"preset read-only"}}
 {"type":"agent/inbox/spliced","data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Create the relative path policy-neutral.txt in the current workspace containing exactly POLICY_NEUTRAL_OK, verify its contents, then report completion."}],"source":{"kind":"user","rpcId":"{{rpc:4}}","clientTimeZone":"{{clientTimeZone}}"},"role":"user","id":"{{message:14}}"}]}}
 {"type":"turn/start","data":{"turn":4}}

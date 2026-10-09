@@ -1,9 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-sandbox-policy'
+import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-agent'
 
 export const name = 'parent-sandbox-override'
-export const inject = ['sandboxPolicy']
 
 /**
  * Snapshot-only overlay: switch each ROOT session to `read-only` at creation —
@@ -13,8 +12,8 @@ export const inject = ['sandboxPolicy']
  * instead of falling back to the deployment default.
  */
 export function apply(ctx: Context): void {
-  ctx.on('agent/created', async ({ agent }) => {
+  ctx.on('agent/created', ({ agent }) => {
     if (agent.session.header.parentSession !== undefined) return
-    await ctx.sandboxPolicy.setMode(agent.session, 'read-only')
+    setSandboxMode(agent.session, 'read-only')
   })
 }

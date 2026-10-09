@@ -842,12 +842,14 @@ export class ToolRuntime extends Service {
    * Reserved presentation transport, kept outside the filterable registration
    * layers. Built on first need rather than at construction: which agents run
    * a PTC mode is no longer known when the service is constructed, and the
-   * transport is stateless beyond its closures over `this`.
+   * transport owns its PTC call tracking and state-owner registrations.
    */
   private ptcTransport: ToolDefinition | undefined
+  private readonly ptcContext: Context
 
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'tools')
+    this.ptcContext = ctx
     // The schema already defaulted an omitted mode; the ?? narrows the
     // optional-input type for direct (non-Loader) construction in tests.
     this.defaultMode = config.mode ?? 'native'
@@ -944,12 +946,6 @@ export class ToolRuntime extends Service {
    */
   private requirePtcTransport(): ToolDefinition {
     this.ptcTransport ??= createRunCodeTool(this, {
-      runSandboxExecution: (exec, run) => {
-        if (exec.agent === undefined) return run(exec.signal)
-        const policy = this.ctx.get('sandboxPolicy')
-        if (policy === undefined) throw new Error('dsh-tools: confined PTC runtime requires sandboxPolicy')
-        return policy.withExecution(exec.agent.session.id, exec.signal, run)
-      },
       resolveWorkingDirectory: async (exec) => {
         // Only Agent-owned PTC requires directory state; native registries
         // and unowned programs can run without this service.
@@ -971,7 +967,7 @@ export class ToolRuntime extends Service {
       peekRuntime: () => this.ctx.get('ptcRuntime'),
       maxParallel: this.maxParallelSubCalls,
       shapeDispatchLog: dispatch => this.shapeDispatchLog(dispatch),
-    })
+    }, this.ptcContext)
     return this.ptcTransport
   }
 
