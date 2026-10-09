@@ -9,4 +9,4 @@ header:
   systemPromptSource: text-turn
   childSystemPrompts: [1]
   childToolSchemas: [1]
-toolSchemasSource: subagent-tool-filter
+  toolSchemasSource: subagent-tool-filter
