@@ -32,7 +32,7 @@ describe('dsh-skill-badge', () => {
   it('presents the component as DSH with the bundle tag artwork in both locales', async () => {
     expect(JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))).toMatchObject({
       icon: './icon.svg',
-      exports: { './icon': './icon.svg', './locale/*.json': './locale/*.json' },
+      exports: { './locale/*.json': './locale/*.json' },
     })
     for (const language of ['en', 'zh']) {
       expect(JSON.parse(await readFile(new URL(`../locale/${language}.json`, import.meta.url), 'utf8')))

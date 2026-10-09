@@ -110,8 +110,6 @@ The Host entry exposes `pluginRegistryProbe.fastest()` through the generated Rem
 
 The browser plugin registers the `plugins` sidebar entry and its `main` panel through `ctx.slots.inject()`, so both follow late slot declaration, locale changes and teardown. The page is global and belongs to no Session. Display text comes from package metadata and the page's dictionary.
 
-The Plugins list, Experimental plugins page, and detail-page breadcrumb share a 28px header inset. On macOS, each header adds the frame's 48px titlebar clearance, placing its leading content 76px below the viewport top in either sidebar state. Windows uses the frame's 40px caption inset plus the page's 28px, totaling 68px; ordinary browsers use 28px. The page does not redefine `--dsh-frame-top-clearance` or add the Windows caption inset a second time.
-
 The add control reuses `Button`, `Menu`, and `MenuItemButton`. Both installation actions call the same `openInstall` callback and use `InstallDialog` and `PluginManagerController`. The root-scoped list slot `plugins.add.actions` accepts contributed `MenuItemButton` rows after the install action; each contribution receives an `onDismiss()` callback to close the menu before starting its action.
 
 ### The store

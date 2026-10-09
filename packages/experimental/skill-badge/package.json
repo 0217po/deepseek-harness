@@ -19,7 +19,6 @@
       "default": "./lib/index.js"
     },
     "./package.json": "./package.json",
-    "./icon": "./icon.svg",
     "./locale/*.json": "./locale/*.json"
   },
   "icon": "./icon.svg",
