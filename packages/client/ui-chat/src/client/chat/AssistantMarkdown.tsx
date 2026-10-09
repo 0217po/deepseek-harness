@@ -52,7 +52,7 @@ export interface AssistantMarkdownProps extends Pick<PropsRenderSlots<'conversat
   t: ChatViewSlotProps['t']
 }
 
-/** Renders non-empty reasoning blocks as independent disclosures alongside the response. */
+/** Renders non-blank reasoning blocks as independent disclosures alongside the response. */
 export const AssistantMarkdown = memo(function AssistantMarkdown({
   blocks, streaming, interrupted, renderMessageImages, groupPart, useDisclosure,
   reasoningHidden = false, usePresentation, revealProcess, mentions, renderSlot, useGroupAction, t,
@@ -92,7 +92,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
         )
         break
       case 'reasoning':
-        if (block.text === '') break
+        if (block.text.trim() === '') break
         rendered.push(
           <ProcessReasoning
             key={i}

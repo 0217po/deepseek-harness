@@ -27,9 +27,9 @@ describe('AssistantMarkdown reasoning blocks', () => {
     usePresentation: useDetailedPresentation, renderMessageImages, t,
   }
 
-  it.each([false, true])('omits empty blocks without trimming body text when streaming=%s', (streaming) => {
+  it.each([false, true])('omits blank blocks without trimming body text when streaming=%s', (streaming) => {
     const text = '\n  **Visible reasoning**\n\nOriginal body  \n'
-    const texts = ['', '', text, '']
+    const texts = ['', ' \t\r\n', text, '']
     const blocks = Object.freeze(texts.map(text => Object.freeze({ kind: 'reasoning' as const, text })))
     const calls = vi.fn()
     const extension: AssistantMarkdownProps['renderSlot'] = (key, owner, options) => {
@@ -45,16 +45,20 @@ describe('AssistantMarkdown reasoning blocks', () => {
     expect(blocks.map(block => block.text)).toEqual(texts)
   })
 
-  it('renders a row when the first character is whitespace', () => {
-    const view = render(<AssistantMarkdown {...props} blocks={[{ kind: 'reasoning', text: '' }]} streaming />)
+  it.each([false, true])('waits for non-whitespace reasoning when streaming=%s', (streaming) => {
+    const view = render(<AssistantMarkdown {...props} blocks={[{ kind: 'reasoning', text: '' }]} streaming={streaming} />)
     expect(view.queryAllByRole('button')).toHaveLength(0)
-    view.rerender(<AssistantMarkdown {...props} blocks={[{ kind: 'reasoning', text: ' ' }]} streaming />)
+    for (const text of [' ', '\t', '\r\n', ' \t\r\n', '\u00a0']) {
+      view.rerender(<AssistantMarkdown {...props} blocks={[{ kind: 'reasoning', text }]} streaming={streaming} />)
+      expect(view.queryAllByRole('button')).toHaveLength(0)
+    }
+    view.rerender(<AssistantMarkdown {...props} blocks={[{ kind: 'reasoning', text: '\n First thought' }]} streaming={streaming} />)
     expect(view.getAllByRole('button')).toHaveLength(1)
   })
 
-  it('retains an expanded earlier row when an empty streaming tail receives text', () => {
+  it('retains an expanded earlier row when a blank streaming tail receives text', () => {
     const first = { kind: 'reasoning' as const, text: 'First thought\n\nEarlier body' }
-    const blank = { kind: 'reasoning' as const, text: '' }
+    const blank = { kind: 'reasoning' as const, text: ' \t\r\n' }
     const view = render(<AssistantMarkdown {...props} blocks={[first, blank, blank]} streaming />)
     const earlierToggle = view.getByRole('button')
     const earlierRow = earlierToggle.closest('[data-variant="think"]')
@@ -93,21 +97,21 @@ describe('AssistantMarkdown reasoning blocks', () => {
     expect(tailToggle.getAttribute('aria-expanded')).toBe('false')
   })
 
-  it.each(['Partial thought', ''])('retains the stopped marker with empty reasoning around %j', (text) => {
-    const blocks = ['', text, ''].map(text => ({ kind: 'reasoning' as const, text }))
+  it.each(['Partial thought', '', ' \t\r\n'])('retains the stopped marker with blank reasoning around %j', (text) => {
+    const blocks = ['', text, ' \t\r\n'].map(text => ({ kind: 'reasoning' as const, text }))
     const view = render(<AssistantMarkdown {...props} blocks={blocks} groupPart="reasoning" streaming={false} interrupted />)
-    expect(view.queryAllByRole('button')).toHaveLength(text === '' ? 0 : 1)
+    expect(view.queryAllByRole('button')).toHaveLength(text.trim() === '' ? 0 : 1)
     expect(view.getByText(t('message.stopped'))).toBeTruthy()
     expect(view.queryByText('运行中')).toBeNull()
   })
 
-  it('keeps non-empty rows and their expanded bodies across modes, excluding them from the response part', () => {
+  it('keeps non-blank rows and their expanded bodies across modes, excluding them from the response part', () => {
     const mode = createSnapshotStore<TranscriptViewMode>('compact')
     const usePresentation = bindSnapshotSelector(derivePresentationPolicy(mode, createSnapshotStore<CollapseTiming>('completion')))
     const blocks: AssistantMarkdownProps['blocks'] = [
       { kind: 'reasoning', text: '' },
       { kind: 'reasoning', text: 'Mode thought\n\nMode body' },
-      { kind: 'reasoning', text: '' },
+      { kind: 'reasoning', text: ' \t\r\n' },
       { kind: 'text', text: 'Answer' },
     ]
     const view = render(<AssistantMarkdown {...props} usePresentation={usePresentation}

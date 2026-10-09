@@ -8,7 +8,7 @@ import {
   seedSession, watchConsole, webSnapshotMode,
 } from './scaffold.ts'
 import { expandOwningTurnProcess, newEnglishPage } from './support.ts'
-import { expectWrappedCommandText } from './terminal-command-browser.ts'
+import { expectFirstLineTerminalState, expectWrappedCommandText } from './terminal-command-browser.ts'
 
 const COMMAND = 'node ./scripts/start-worker.mjs --workspace=/tmp/diagnostics/long-workspace-name-for-background-command-details --log-level=debug --trace-tag=background-shell-full-command-selection --include=worker,lifecycle,transport,subscriptions --output=/tmp/diagnostics/background-worker.log'
 const ARGS = { command: COMMAND, description: 'Start the diagnostic worker', run_in_background: true }
@@ -106,6 +106,7 @@ it.each([
         await expect.poll(() => page.locator('body').evaluate(element => element.hasAttribute('data-ds-dark-theme'))).toBe(colorScheme === 'dark')
         for (const width of ['', '380px', '']) {
           await card.evaluate((element, value) => { element.style.width = value }, width)
+          if (!background && width === '380px') await expectFirstLineTerminalState(card.locator('[data-terminal]'), 'done')
           await expectWrappedCommandText(page, input, selectableText, inputSection)
           expect(await card.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
           if (name !== 'background') {
@@ -128,6 +129,80 @@ it.each([
       const expected = fileURLToPath(new URL(`./expected/shell-command-details/${name}.expected.md`, import.meta.url))
       await compareOrRefreshGolden(expected,
         await captureStableAria(page, '[data-chat-call-id="shell-command-details-background"]', scaffold.workspaceCwd), webSnapshotMode())
+      expect(tripwire.pageErrors).toEqual([])
+      expect(tripwire.warnings).toEqual([])
+    } finally {
+      await browser.close()
+    }
+  } finally {
+    await scaffold.close()
+  }
+})
+
+it.each(['bash', 'pwsh'] as const)('keeps the %s status dot visible on the first wrapped line through settlement', async (name) => {
+  const scaffold = await launchWebScaffold({})
+  try {
+    const id = await seedSession(scaffold, shellFixture(ARGS, OUTPUT), 'shell-status-dot-browser')
+    const browser = await chromium.launch()
+    try {
+      const page = await newEnglishPage(browser)
+      const tripwire = watchConsole(page)
+      await page.goto(scaffold.authenticatedUrl)
+      await page.getByRole('treeitem').first().click()
+      await page.getByRole('treeitem').nth(1).click()
+      await page.locator('[data-sample="bash"]').waitFor({ state: 'attached' })
+      const session = scaffold.ctx.sessions.get(id)
+      if (session === undefined) throw new Error('Status-dot Session is unavailable')
+      const callId = ToolCallId(`status-dot-${name}`)
+      const args = JSON.stringify({ command: LONG_ARGS.command, description: `Long ${name} command` })
+      session.append('turn/start', { turn: 2 })
+      session.append('user/message', createUserMessage({
+        content: [{ type: 'text', text: 'Show a long running command.' }], source: { kind: 'user' },
+      }), { surfaceOp: 'append' })
+      session.append('step/start', { turn: 2, step: 1 })
+      session.append('assistant/message', {
+        turn: 2, step: 1, stream: [],
+        message: createAssistantMessage({
+          content: [{ type: 'tool-call', id: callId, name, arguments: args }],
+          source: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+        }),
+      }, { surfaceOp: 'append' })
+      const call = session.append('tool/call', { turn: 2, step: 1, callId, name, arguments: args })
+      await scaffold.ctx.sessions.flush(session)
+      const callRow = page.locator(`[data-chat-call-id="${callId}"]`)
+      const toggle = callRow.locator('[data-expandable]').first()
+      await toggle.waitFor({ state: 'attached' })
+      await expandOwningTurnProcess(page, toggle)
+      await toggle.click()
+      const card = callRow.locator('[data-terminal]')
+      await card.waitFor()
+      await card.evaluate((element) => { element.style.width = '380px' })
+      await card.scrollIntoViewIfNeeded()
+      const header = card.locator('[class*="_header_"]')
+      expect(await header.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true)
+      expect(await card.getByRole('button', { name: 'Copy', exact: true }).count()).toBe(0)
+      for (const state of ['ongoing', 'done'] as const) {
+        if (state === 'done') {
+          session.append('tool/result', {
+            turn: 2, step: 1,
+            message: createToolResultMessage({
+              callId, content: [{ type: 'text', text: 'status dot output\n[exit code: 0]' }], isError: false,
+            }),
+          }, { surfaceOp: 'append', sourceEventSeqs: [call.seq] })
+          session.append('step/end', { turn: 2, step: 1 })
+          session.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
+          await scaffold.ctx.sessions.flush(session)
+        }
+        for (const colorScheme of ['light', 'dark'] as const) {
+          await page.emulateMedia({ colorScheme })
+          await expect.poll(() => page.locator('body').evaluate(element =>
+            element.hasAttribute('data-ds-dark-theme'))).toBe(colorScheme === 'dark')
+          await expectFirstLineTerminalState(card, state)
+          expect(await card.locator('[data-command-text]').textContent()).toBe(LONG_ARGS.command)
+        }
+      }
+      expect(await card.getByText('status dot output', { exact: true }).count()).toBe(1)
+      expect(await card.getByRole('button', { name: 'Copy', exact: true }).count()).toBe(1)
       expect(tripwire.pageErrors).toEqual([])
       expect(tripwire.warnings).toEqual([])
     } finally {

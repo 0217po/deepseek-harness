@@ -41,6 +41,7 @@ type CheckpointSource = Extract<MessageSource, { readonly kind: 'compact-checkpo
 type CheckpointCommandId = NonNullable<CheckpointSource['sourceCommandId']>
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/seeded-history', import.meta.url))
+const REASONING_EXPECTED_DIR = fileURLToPath(new URL('./expected/seeded-history', import.meta.url))
 const SEED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/session.v3.jsonl', import.meta.url))
 const UI_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/ui.expected.md', import.meta.url))
 const UI_EXPANDED_EXPECTED = fileURLToPath(
@@ -883,7 +884,7 @@ describe('web e2e: seeded history renders through cold resume', () => {
         content: [
           { type: 'reasoning', text: '' },
           { type: 'reasoning', text: recorded.text },
-          { type: 'reasoning', text: '' },
+          { type: 'reasoning', text: ' \t\r\n' },
           { type: 'reasoning', text: '' },
           { type: 'text', text: answer },
         ],
@@ -905,7 +906,7 @@ describe('web e2e: seeded history renders through cold resume', () => {
     await body.waitFor({ state: 'visible' })
     expect(await body.innerText()).not.toBe('')
     expect(message.data.message.content[1]).toEqual({ type: 'reasoning', text: recorded.text })
-    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'blank-reasoning.expected.md'), [
+    await compareOrRefreshGolden(join(REASONING_EXPECTED_DIR, 'blank-reasoning.expected.md'), [
       await captureStableAria(page, selector, scaffold.workspaceCwd),
       '',
       `- Reasoning rows: ${await rows.count()}`,
@@ -917,8 +918,9 @@ describe('web e2e: seeded history renders through cold resume', () => {
     // stream would have failed the turn loudly. Cleanliness pins the wire.
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
+    await assertFixtureInventory(REASONING_EXPECTED_DIR, ['blank-reasoning.expected.md'])
     await assertFixtureInventory(SNAPSHOT_DIR, [
-      'blank-reasoning.expected.md', 'command-row.expected.md', 'feedback-row.expected.md', 'file-preview.expected.md',
+      'command-row.expected.md', 'feedback-row.expected.md', 'file-preview.expected.md',
       'session.v3.jsonl', 'sticky-geometry.expected.md', 'thinking-expanded.expected.md',
       'ui.expected.md', 'ui-expanded.expected.md',
     ])

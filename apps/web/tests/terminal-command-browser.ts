@@ -171,6 +171,32 @@ export async function expectWrappedTerminalCommand(page: Page, card: Locator, ex
 }
 
 /**
+ * Verify a terminal's status dot remains visible beside the first visual command line.
+ * @param card - Terminal card with its command banner scrolled to the start.
+ * @param state - Expected running or settled state.
+ * @returns Resolves after the dot fits inside the banner and aligns with the first line.
+ */
+export async function expectFirstLineTerminalState(card: Locator, state: 'ongoing' | 'done'): Promise<void> {
+  const dot = card.locator('[class*="_runState_"][data-state]')
+  await expect.poll(() => dot.getAttribute('data-state')).toBe(state)
+  const geometry = await dot.evaluate((element) => {
+    const prompt = element.closest('[class*="_promptLine_"]')
+    const header = element.closest('[class*="_header_"]')
+    if (prompt === null || header === null) throw new Error('Terminal status has no prompt banner')
+    const bounds = element.getBoundingClientRect()
+    const viewport = header.getBoundingClientRect()
+    return {
+      visible: bounds.top >= viewport.top && bounds.bottom <= viewport.bottom
+        && bounds.left >= viewport.left && bounds.right <= viewport.right,
+      center: bounds.top + bounds.height / 2,
+      firstLineCenter: prompt.getBoundingClientRect().top + Number.parseFloat(getComputedStyle(prompt).lineHeight) / 2,
+    }
+  })
+  expect(geometry.visible).toBe(true)
+  expect(geometry.center).toBeCloseTo(geometry.firstLineCenter, 1)
+}
+
+/**
  * Verify a resized command drops its explicit keyboard stop when all text fits.
  * @param container - Width owner of the command.
  * @param command - Mounted command text.
