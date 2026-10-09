@@ -1,5 +1,5 @@
 /** Valid large PNG admission through Loader, MCP projection, disk attachments and a real Node PTC process. */
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -29,6 +29,7 @@ import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 import sharp from 'sharp'
 import { expect, it, onTestFinished } from 'vitest'
 import * as NativeProvider from '../src/index.ts'
+import { installNativeFixture } from './native-fixture.ts'
 
 const WIDTH = 2048
 const HEIGHT = 1024
@@ -53,26 +54,11 @@ it.skipIf(process.platform === 'win32')('delivers a valid PNG larger than 4 MiB 
   await writeFile(sourcePath, source)
   const encodedLength = source.toString('base64').length
 
-  const helperPath = join(root, 'large-image-helper.mjs')
-  await writeFile(helperPath, `#!/usr/bin/env node
-import { readFileSync } from 'node:fs';
-import { createInterface } from 'node:readline';
-let acquired = false;
-createInterface({ input: process.stdin }).on('line', line => {
-  const { id, method, params } = JSON.parse(line);
-  let result;
-  if (method === 'getApp' && params.selector === '9') {
-    acquired = true;
-    result = { appHandle: 'large-image-app', pid: 9, name: 'Generated screenshot', authorization: {"id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "name": "Fixture", "executablePath": "/fixture/app", "persistable": true} };
-  } else if (method === 'screenshot' && acquired && params.appHandle === 'large-image-app' && params.windowId === 7) {
-    result = { mimeType: 'image/png', data: readFileSync(new URL('./generated-screenshot.png', import.meta.url)).toString('base64'),
-      pixelWidth: ${WIDTH}, pixelHeight: ${HEIGHT}, windowId: 7, coordinateSpace: 'window-points',
-      bounds: { x: 0, y: 0, width: 1024, height: 512 } };
-  } else throw new Error('Unexpected fixture request');
-  process.stdout.write(JSON.stringify({ id, result }) + '\\n');
-});
-`)
-  await chmod(helperPath, 0o700)
+  const helperPath = await installNativeFixture(root)
+  await writeFile(join(root, 'fixture-screenshot.json'), JSON.stringify({
+    file: './generated-screenshot.png', pixelWidth: WIDTH, pixelHeight: HEIGHT,
+    bounds: { x: 0, y: 0, width: 1024, height: 512 },
+  }))
   const modules = {
     llm: LlmRuntime, session: SessionStore, projection: SessionProjectionRegistry,
     systemPrompt: SystemPrompt, tools: ToolRuntime, agents: AgentRegistry, agentLoop: AgentLoop,

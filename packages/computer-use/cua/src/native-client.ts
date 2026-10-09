@@ -1,9 +1,11 @@
-/** Byte-bounded JSON-line transport with linear frame assembly for one owned helper. */
+/** Agent-scoped JSONL requests over a connection to the shared native helper. */
 import { randomUUID } from 'node:crypto'
-import type { SubprocessHandle, SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
+import assert from 'node:assert/strict'
+import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
+import { createSharedNativeChannel, type NativeChannel } from './shared-native.ts'
 
 const Reply = z.union([
   z.object({ id: z.string(), result: z.json() }).strict(),
@@ -14,6 +16,7 @@ const screenshotPrefix = '[cua-screenshot] '
 const ScreenshotDiagnostic = z.object({
   requestId: z.string(), stage: z.string(), elapsedMs: z.number().finite().nonnegative(), errorCode: z.string().optional(),
 })
+const WireReply = z.union([Reply, ScreenshotDiagnostic.extend({ type: z.literal('diagnostic') })])
 
 /** Native refusal or transport failure with a stable machine-readable code. */
 export class NativeError extends Error {
@@ -33,6 +36,8 @@ export interface NativeClientConfig {
   helperPath: string
   cwd: string
   timeoutMs: number
+  connectTimeoutMs: number
+  screenshotTimeoutMs: number
   axTimeoutMs: number
   maxRequestBytes: number
   maxResponseBytes: number
@@ -40,14 +45,17 @@ export interface NativeClientConfig {
   textEventIntervalMs: number
 }
 
-/** Serial helper calls retain native handles until helper disposal or replacement. */
+/** One Agent owns this connection and its native handles; other Agents use independent connections. */
 export class NativeClient {
-  private readonly handle: SubprocessHandle
+  private readonly handle: NativeChannel
   private readonly config: NativeClientConfig
   private readonly chunks: Buffer[] = []
   private bufferedBytes = 0
   private failure: NativeError | undefined
   private disposal: Promise<void> | undefined
+  private diagnostics: string[] = []
+  private diagnosticBytes = 0
+  private discardedDiagnostics = false
   private active: { id: string; resolve: (value: JsonValue) => void; reject: (error: NativeError) => void } | undefined
 
   /**
@@ -58,33 +66,23 @@ export class NativeClient {
   constructor(owner: { subprocess: Pick<SubprocessRuntime, 'spawn'> }, config: NativeClientConfig,
     private readonly reportDiagnostic?: (message: string) => void) {
     this.config = config
-    this.handle = owner.subprocess.spawn({
-      argv: [
-        config.helperPath,
-        '--max-request-bytes', String(config.maxRequestBytes),
-        '--max-response-bytes', String(config.maxResponseBytes),
-        '--ax-timeout-ms', String(config.axTimeoutMs),
-        '--shutdown-grace-ms', String(config.graceMs),
-        '--text-event-interval-ms', String(config.textEventIntervalMs),
-      ], cwd: config.cwd, graceMs: config.graceMs,
-      stdio: { stdin: 'pipe', stdout: 'pipe', stderr: { maxBytes: 8192 } },
-    })
-    this.handle.stdout?.on('data', (chunk: Buffer) => { this.receive(chunk) })
-    this.handle.stdout?.on('error', (error: Error) => { this.fail(new NativeError('NATIVE_IO', 'Helper stdout failed', { cause: error })) })
-    this.handle.stdout?.on('end', () => { this.fail(new NativeError('NATIVE_EOF', 'Helper output ended; acquire fresh application handles')) })
-    this.handle.stdout?.on('close', () => { this.fail(new NativeError('NATIVE_EOF', 'Helper output closed; acquire fresh application handles')) })
-    this.handle.stdin?.on('error', (error: Error) => { this.fail(new NativeError('NATIVE_IO', 'Helper stdin failed', { cause: error })) })
+    this.handle = createSharedNativeChannel(owner, config)
+    this.handle.stdout.on('data', (chunk: Buffer) => { this.receive(chunk) })
+    this.handle.stdout.on('error', (error: Error) => { this.fail(new NativeError('NATIVE_IO', `Native connection failed: ${error.message}`, { cause: error })) })
+    this.handle.stdout.on('end', () => { this.fail(new NativeError('NATIVE_EOF', 'Native connection ended; acquire fresh application handles')) })
+    this.handle.stdout.on('close', () => { this.fail(new NativeError('NATIVE_EOF', 'Native connection closed; acquire fresh application handles')) })
+    this.handle.stdin.on('error', (error: Error) => { this.fail(new NativeError('NATIVE_IO', 'Writing native requests failed', { cause: error })) })
     void this.handle.done.then(
-      () => { this.fail(new NativeError('NATIVE_EXITED', 'Helper exited; acquire fresh application handles')) },
-      (error: unknown) => { this.fail(new NativeError('NATIVE_EXITED', 'Helper process failed', { cause: error })) },
+      () => { this.fail(new NativeError('NATIVE_EXITED', 'Native connection closed; acquire fresh application handles')) },
+      (error: unknown) => { this.fail(new NativeError('NATIVE_EXITED', 'Native connection failed', { cause: error })) },
     )
   }
 
   /**
-   * Send one operation. Native refusals preserve the helper; transport failures invalidate it.
+   * Send one operation. Native refusals preserve this connection; transport failures invalidate its handles.
    * @param method - Helper operation name.
    * @param params - JSON operation parameters.
-   * @param signal - Cancellation kills this helper and invalidates its retained handles.
+   * @param signal - Cancellation stops this request; the connection survives when native cleanup acknowledges it.
    * @param callId - Logged tool invocation ID, when this request belongs to a tool execution.
    * @returns The validated helper result, after failure cleanup when needed.
    */
@@ -97,9 +95,13 @@ export class NativeClient {
     if (this.active) throw new NativeError('NATIVE_BUSY', 'Await native operations sequentially')
     const id = callId ?? randomUUID()
     const capture = method === 'screenshot'
-    const diagnosticOffset = capture ? this.handle.collected.stderr?.readFrom(0).nextOffset ?? 0 : 0
+    this.diagnostics = []
+    this.diagnosticBytes = 0
+    this.discardedDiagnostics = false
     const started = performance.now()
     let nativeFailure: NativeError | undefined
+    let interruption: NativeError | undefined
+    let cancellationTimer: ReturnType<typeof setTimeout> | undefined
     const frame = `${JSON.stringify({ id, method, params })}\n`
     if (Buffer.byteLength(frame) > this.config.maxRequestBytes) {
       throw new NativeError('NATIVE_REQUEST_LIMIT', 'Request exceeded the configured byte limit before dispatch')
@@ -107,38 +109,54 @@ export class NativeClient {
     const outcome = Promise.withResolvers<JsonValue>()
     this.active = { id, resolve: outcome.resolve, reject: (error) => { nativeFailure = error; outcome.reject(error) } }
     if (capture) this.diagnostic(screenshotPrefix + JSON.stringify({ requestId: id, stage: 'host.dispatch', elapsedMs: 0 }))
-    const abort = (): void => { this.fail(new NativeError('NATIVE_CANCELLED', 'Operation cancelled; inspect fresh state before retrying input')) }
+    const interrupt = (error: NativeError): void => {
+      if (interruption || this.active?.id !== id) return
+      interruption = error
+      cancellationTimer = setTimeout(() => {
+        this.fail(new NativeError('NATIVE_CLEANUP', 'Native operation did not acknowledge cancellation; acquire fresh application handles', { cause: error }))
+      }, this.config.graceMs)
+      try {
+        this.handle.stdin.write(`${JSON.stringify({ type: 'cancel', id })}\n`, (failure) => {
+          if (failure) this.fail(new NativeError('NATIVE_IO', 'Sending native cancellation failed', { cause: failure }))
+        })
+      } catch (failure) {
+        this.fail(new NativeError('NATIVE_IO', 'Sending native cancellation failed', { cause: failure }))
+      }
+    }
+    const abort = (): void => { interrupt(new NativeError('NATIVE_CANCELLED', 'Operation cancelled; inspect fresh state before retrying input')) }
     signal.addEventListener('abort', abort, { once: true })
+    const timeoutMs = capture ? Math.min(this.config.timeoutMs, this.config.screenshotTimeoutMs) : this.config.timeoutMs
     const timer = setTimeout(() => {
-      this.fail(new NativeError('NATIVE_TIMEOUT', `Operation exceeded ${this.config.timeoutMs}ms`))
-    }, this.config.timeoutMs)
+      interrupt(new NativeError('NATIVE_TIMEOUT', `Operation exceeded ${timeoutMs}ms`))
+    }, timeoutMs)
     try {
-      if (!this.handle.stdin || !this.handle.stdout) {
-        this.fail(new NativeError('NATIVE_IO', 'Helper did not expose the requested protocol pipes'))
-      } else {
-        try {
-          this.handle.stdin.write(frame, (error) => {
-            if (error) this.fail(new NativeError('NATIVE_IO', 'Writing a helper request failed', { cause: error }))
-          })
-        } catch (error) {
-          this.fail(new NativeError('NATIVE_IO', 'Writing a helper request failed', { cause: error }))
-        }
+      try {
+        this.handle.stdin.write(frame, (error) => {
+          if (error) this.fail(new NativeError('NATIVE_IO', 'Writing a helper request failed', { cause: error }))
+        })
+      } catch (error) {
+        this.fail(new NativeError('NATIVE_IO', 'Writing a helper request failed', { cause: error }))
       }
       const result = await outcome.promise
       if (this.failure) throw this.failure
+      if (interruption) throw interruption
       if (capture) this.diagnostic(screenshotPrefix + JSON.stringify({
         requestId: id, stage: 'host.reply', elapsedMs: performance.now() - started,
       }))
       return result
+    } catch (error) {
+      if (interruption && !this.failure) throw interruption
+      throw error
     } finally {
       clearTimeout(timer)
+      clearTimeout(cancellationTimer)
       signal.removeEventListener('abort', abort)
       try {
         if (this.failure !== undefined) await this.dispose()
       } finally {
         if (capture) {
-          const diagnostics = this.screenshotDiagnostics(id, diagnosticOffset)
-          const failure = nativeFailure ?? this.failure
+          const diagnostics = this.screenshotDiagnostics()
+          const failure = this.failure ?? interruption ?? nativeFailure
           if (failure && diagnostics) failure.message += `\nScreenshot diagnostics:\n${diagnostics}`
           if (diagnostics) this.diagnostic(diagnostics)
           this.diagnostic(screenshotPrefix + JSON.stringify({
@@ -149,24 +167,23 @@ export class NativeClient {
     }
   }
 
-  private screenshotDiagnostics(id: string, offset: number): string {
-    const output = this.handle.collected.stderr?.readFrom(offset)
-    if (!output) return ''
-    const records: string[] = []
-    for (const line of output.text.split('\n')) {
-      if (!line.startsWith(screenshotPrefix)) continue
-      let value: unknown
-      try { value = JSON.parse(line.slice(screenshotPrefix.length)) }
-      catch (error) {
-        // A retained tail may begin or end inside one diagnostic record.
-        void error
-        continue
-      }
-      const parsed = ScreenshotDiagnostic.safeParse(value)
-      if (parsed.success && parsed.data.requestId === id) records.push(screenshotPrefix + JSON.stringify(parsed.data))
-    }
-    if (output.lossy) records.unshift('[Earlier screenshot diagnostic bytes were discarded from the bounded stderr tail.]')
+  private screenshotDiagnostics(): string {
+    const records = [...this.diagnostics]
+    if (this.discardedDiagnostics) records.unshift('[Earlier screenshot diagnostic records were discarded from the bounded diagnostic buffer.]')
     return records.join('\n')
+  }
+
+  private retainDiagnostic(value: z.infer<typeof ScreenshotDiagnostic>): void {
+    if (value.requestId !== this.active?.id) return
+    const line = screenshotPrefix + JSON.stringify(ScreenshotDiagnostic.parse(value))
+    this.diagnostics.push(line)
+    this.diagnosticBytes += Buffer.byteLength(line)
+    while (this.diagnosticBytes > 8192) {
+      const discarded = this.diagnostics.shift()
+      assert(discarded !== undefined, 'Diagnostic bytes must belong to retained records')
+      this.diagnosticBytes -= Buffer.byteLength(discarded)
+      this.discardedDiagnostics = true
+    }
   }
 
   private diagnostic(message: string): void {
@@ -177,22 +194,21 @@ export class NativeClient {
     }
   }
 
-  /** Whether this helper has lost its retained native state. */
+  /** Whether this Agent's connection has lost its retained native state. */
   get disposed(): boolean { return this.failure !== undefined }
 
-  /** Invalidate retained handles and request termination; the owner must await dispose before releasing the helper. */
+  /** Invalidate this Agent's handles and close its connection; await dispose for native cleanup. */
   invalidate(): void { this.fail(new NativeError('NATIVE_DISPOSED', 'Helper disposed')) }
 
-  /** Stop pending work and await the entire managed process range before releasing streams. */
+  /** Stop this Agent's pending work and await its native connection cleanup. */
   dispose(): Promise<void> {
     this.invalidate()
     this.disposal ??= (async () => {
       try {
-        const [, range] = await Promise.allSettled([this.handle.done, this.handle.waitForExit()])
-        if (range.status === 'rejected') throw range.reason
+        await this.handle.waitForClose()
       } finally {
-        this.handle.stdout?.destroy()
-        this.handle.stdin?.destroy()
+        this.handle.stdout.destroy()
+        this.handle.stdin.destroy()
       }
     })()
     return this.disposal
@@ -205,29 +221,40 @@ export class NativeClient {
     this.bufferedBytes = 0
     this.active?.reject(error)
     this.active = undefined
-    this.handle.terminate()
+    this.handle.close()
   }
 
   private receive(chunk: Buffer): void {
     if (this.failure) return
-    if (this.bufferedBytes + chunk.length > this.config.maxResponseBytes) {
-      this.fail(new NativeError('NATIVE_RESPONSE_LIMIT', 'Helper response exceeded the configured byte limit'))
-      return
+    let offset = 0
+    while (offset < chunk.length && !this.failure) {
+      const newline = chunk.indexOf(10, offset)
+      const end = newline < 0 ? chunk.length : newline + 1
+      const piece = chunk.subarray(offset, end)
+      if (this.bufferedBytes + piece.length > this.config.maxResponseBytes) {
+        this.fail(new NativeError('NATIVE_RESPONSE_LIMIT', 'Helper response exceeded the configured byte limit'))
+        return
+      }
+      this.chunks.push(piece)
+      this.bufferedBytes += piece.length
+      if (newline >= 0) this.receiveFrame()
+      offset = end
     }
-    if (chunk.length === 0) return
-    this.chunks.push(chunk)
-    this.bufferedBytes += chunk.length
-    const newline = chunk.indexOf(10)
-    if (newline < 0) return
+  }
+
+  private receiveFrame(): void {
     try {
-      if (newline !== chunk.length - 1) throw new Error('One request must produce exactly one response frame')
       const frame = Buffer.concat(this.chunks, this.bufferedBytes)
       const line = new TextDecoder('utf-8', { fatal: true }).decode(frame.subarray(0, frame.length - 1))
-      const reply = Reply.parse(JSON.parse(line))
-      const active = this.active
-      if (!active || reply.id !== active.id) throw new Error('Helper reply has no matching request')
+      const reply = WireReply.parse(JSON.parse(line))
       this.chunks.length = 0
       this.bufferedBytes = 0
+      if ('type' in reply) {
+        this.retainDiagnostic(reply)
+        return
+      }
+      const active = this.active
+      if (!active || reply.id !== active.id) throw new Error('Helper reply has no matching request')
       this.active = undefined
       if ('error' in reply) {
         const error = new NativeError(reply.error.code, reply.error.message)

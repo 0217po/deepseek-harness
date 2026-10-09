@@ -1,47 +1,52 @@
-/** Controlled process streams exercise the platform-independent native protocol client. */
+/** Controlled connection streams exercise the platform-independent native protocol client. */
 import { PassThrough, Writable } from 'node:stream'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import type { SubprocessHandle, SubprocessOutcome, SubprocessOutputReader } from '@deepseek-ai/dsh-subprocess'
+import type { NativeChannel } from '../src/shared-native.ts'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
 import { NativeClient, NativeError } from '../src/native-client.ts'
 
-const Request = z.object({ id: z.string(), method: z.string(), params: z.record(z.string(), z.json()) })
+const shared = vi.hoisted(() => ({ create: vi.fn() }))
+vi.mock('../src/shared-native.ts', () => ({ createSharedNativeChannel: shared.create }))
+
+const Request = z.object({ id: z.string(), method: z.string(), params: z.record(z.string(), z.json()) }).strict()
+const Cancel = z.object({ type: z.literal('cancel'), id: z.string() }).strict()
+const Frame = z.union([Request, Cancel])
 
 function fixture(options: {
   maxRequestBytes?: number
   maxResponseBytes?: number
   timeoutMs?: number
-  stdin?: boolean
-  stdout?: boolean
+  screenshotTimeoutMs?: number
+  graceMs?: number
   writeError?: Error
-  stderr?: SubprocessOutputReader
+  cancelWriteError?: Error
   reportDiagnostic?: (message: string) => void
 } = {}) {
   const requests: z.infer<typeof Request>[] = []
+  const cancellations: z.infer<typeof Cancel>[] = []
   const stdout = new PassThrough()
-  const done = Promise.withResolvers<SubprocessOutcome>()
-  const gone = Promise.withResolvers<boolean>()
+  const done: PromiseWithResolvers<void> = Promise.withResolvers()
+  const gone: PromiseWithResolvers<void> = Promise.withResolvers()
   const stdin = new Writable({ write(chunk, _encoding, callback) {
-    requests.push(Request.parse(JSON.parse(String(chunk))))
-    callback(options.writeError)
+    const frame = Frame.parse(JSON.parse(String(chunk)))
+    if ('type' in frame) { cancellations.push(frame); callback(options.cancelWriteError) }
+    else { requests.push(frame); callback(options.writeError) }
   } })
-  const terminated: PromiseWithResolvers<void> = Promise.withResolvers()
-  const terminate = vi.fn(() => { terminated.resolve() })
-  const waitForExit = vi.fn(() => gone.promise)
-  const handle: SubprocessHandle = {
-    stdin: options.stdin === false ? undefined : stdin,
-    stdout: options.stdout === false ? undefined : stdout,
-    stderr: undefined, control: undefined, collected: options.stderr === undefined ? {} : { stderr: options.stderr },
-    done: done.promise, terminate, waitForExit,
-  }
-  const spawn = vi.fn(() => handle)
-  const client = new NativeClient({ subprocess: { spawn } }, {
+  const closed: PromiseWithResolvers<void> = Promise.withResolvers()
+  const close = vi.fn(() => { closed.resolve() })
+  const waitForClose = vi.fn(() => gone.promise)
+  const channel: NativeChannel = { stdin, stdout, done: done.promise, close, waitForClose }
+  shared.create.mockClear().mockReturnValueOnce(channel)
+  const owner = { subprocess: { spawn: vi.fn() } }
+  const config = {
     helperPath: '/fixture/helper', cwd: '/fixture', axTimeoutMs: 321, timeoutMs: options.timeoutMs ?? 60_000,
+    connectTimeoutMs: 5000, screenshotTimeoutMs: options.screenshotTimeoutMs ?? 5000,
     maxRequestBytes: options.maxRequestBytes ?? 1024,
-    maxResponseBytes: options.maxResponseBytes ?? 1024, graceMs: 10, textEventIntervalMs: 0.5,
-  }, options.reportDiagnostic)
-  function finish() { done.resolve({ exitCode: 0, signal: null }); gone.resolve(true) }
+    maxResponseBytes: options.maxResponseBytes ?? 1024, graceMs: options.graceMs ?? 10, textEventIntervalMs: 0.5,
+  }
+  const client = new NativeClient(owner, config, options.reportDiagnostic)
+  function finish() { done.resolve(); gone.resolve() }
   function reply(value: unknown) { stdout.write(Buffer.from(JSON.stringify(value) + '\n')) }
   function id(index = requests.length - 1) {
     const request = requests[index]
@@ -54,16 +59,14 @@ function fixture(options: {
     stdout.destroy()
     stdin.destroy()
   })
-  return { client, requests, stdout, stdin, spawn, terminate, terminated: terminated.promise, waitForExit, done, gone, finish, reply, id }
+  return { client, requests, cancellations, stdout, stdin, owner, config, connect: shared.create,
+    close, closed: closed.promise, waitForClose, done, gone, finish, reply, id }
 }
 
 describe('native helper transport', () => {
-  it('passes host byte limits and deadlines into the helper process', () => {
+  it('passes transport limits and connection deadlines to the shared channel', () => {
     const f = fixture({ maxRequestBytes: 4096, maxResponseBytes: 8192, timeoutMs: 1234 })
-    expect(f.spawn).toHaveBeenCalledWith(expect.objectContaining({ argv: [
-      '/fixture/helper', '--max-request-bytes', '4096', '--max-response-bytes', '8192',
-      '--ax-timeout-ms', '321', '--shutdown-grace-ms', '10', '--text-event-interval-ms', '0.5',
-    ] }))
+    expect(f.connect).toHaveBeenCalledExactlyOnceWith(f.owner, f.config)
   })
 
   it('uses the logged tool invocation ID for the native request and its matching reply', async () => {
@@ -74,7 +77,7 @@ describe('native helper transport', () => {
     await expect(pending).resolves.toEqual({ dispatched: true, verified: false })
   })
 
-  it('accepts split UTF-8 replies and preserves native refusal codes without replacing the helper', async () => {
+  it('accepts split UTF-8 replies and preserves native refusal codes without closing the connection', async () => {
     const f = fixture()
     const first = f.client.request('listApps', {}, new AbortController().signal)
     const bytes = Buffer.from(JSON.stringify({ id: f.id(), result: [{ name: '编辑器' }] }) + '\n')
@@ -85,14 +88,14 @@ describe('native helper transport', () => {
     f.reply({ id: f.id(), error: { code: 'STALE_SNAPSHOT', message: 'Refresh observation' } })
     await rejected
     expect(f.client.disposed).toBe(false)
-    expect(f.terminate).not.toHaveBeenCalled()
+    expect(f.close).not.toHaveBeenCalled()
     const third = f.client.request('getCapabilities', {}, new AbortController().signal)
     f.reply({ id: f.id(), result: null })
     expect(await third).toBeNull()
-    expect(f.spawn).toHaveBeenCalledTimes(1)
+    expect(f.connect).toHaveBeenCalledTimes(1)
   })
 
-  it.each(['malformed', 'wrong-id', 'both', 'neither', 'empty-code', 'extra-field', 'invalid-utf8', 'extra-frame'] as const)('invalidates the helper on a %s response before releasing the caller', async (kind) => {
+  it.each(['malformed', 'wrong-id', 'both', 'neither', 'empty-code', 'extra-field', 'invalid-utf8', 'extra-frame', 'duplicate-reply'] as const)('invalidates the connection on a %s response before releasing the caller', async (kind) => {
     const f = fixture()
     const pending = f.client.request('listApps', {}, new AbortController().signal)
     const rejected = expect(pending).rejects.toMatchObject({ code: 'NATIVE_PROTOCOL' })
@@ -103,9 +106,10 @@ describe('native helper transport', () => {
     else if (kind === 'empty-code') f.reply({ id: f.id(), error: { code: '', message: 'bad' } })
     else if (kind === 'extra-field') f.reply({ id: f.id(), result: [], extra: true })
     else if (kind === 'invalid-utf8') f.stdout.write(Buffer.concat([Buffer.from(`{"id":"${f.id()}","result":"`), Buffer.from([0xff]), Buffer.from('"}\n')]))
-    else f.stdout.write(JSON.stringify({ id: f.id(), result: [] }) + '\n{}\n')
+    else if (kind === 'extra-frame') f.stdout.write(JSON.stringify({ id: f.id(), result: [] }) + '\n{}\n')
+    else f.stdout.write((JSON.stringify({ id: f.id(), result: [] }) + '\n').repeat(2))
     expect(f.client.disposed).toBe(true)
-    expect(f.terminate).toHaveBeenCalledTimes(1)
+    expect(f.close).toHaveBeenCalledTimes(1)
     f.finish()
     await rejected
     await expect(f.client.request('listApps', {}, new AbortController().signal)).rejects.toMatchObject({ code: 'NATIVE_CLOSED' })
@@ -160,7 +164,7 @@ describe('native helper transport', () => {
     await expect(f.client.request('typeText', { text: text.slice(1) + 'é' }, new AbortController().signal)).rejects.toMatchObject({ code: 'NATIVE_REQUEST_LIMIT' })
     expect(f.requests).toHaveLength(1)
     expect(f.client.disposed).toBe(false)
-    expect(f.terminate).not.toHaveBeenCalled()
+    expect(f.close).not.toHaveBeenCalled()
     const next = f.client.request('listApps', {}, new AbortController().signal)
     f.reply({ id: f.id(), result: [] })
     await expect(next).resolves.toEqual([])
@@ -174,36 +178,40 @@ describe('native helper transport', () => {
     f.stdout.write('late output')
     f.finish()
     await rejected
-    expect(f.terminate).toHaveBeenCalledTimes(1)
+    expect(f.close).toHaveBeenCalledTimes(1)
   })
 
-  it('preserves a producer response-limit diagnostic and awaits helper invalidation', async () => {
+  it('preserves a producer response-limit diagnostic and awaits connection invalidation', async () => {
     const f = fixture()
     const pending = f.client.request('screenshot', {}, new AbortController().signal)
     const rejected = expect(pending).rejects.toMatchObject({ code: 'NATIVE_RESPONSE_LIMIT' })
     f.reply({ id: f.id(), error: { code: 'NATIVE_RESPONSE_LIMIT', message: 'Reply exceeded helper byte limit' } })
     expect(f.client.disposed).toBe(true)
-    expect(f.terminate).toHaveBeenCalledTimes(1)
+    expect(f.close).toHaveBeenCalledTimes(1)
     f.finish()
     await rejected
   })
 
-  it('cancellation waits for the complete managed process range', async () => {
+  it('waits for cancellation acknowledgement and keeps acquired handles on the same connection', async () => {
     const f = fixture()
     const abort = new AbortController()
-    const pending = f.client.request('getState', {}, abort.signal)
+    const pending = f.client.request('screenshot', { appHandle: 'retained-app' }, abort.signal)
     let settled = false
     const observed = pending.then(() => { settled = true }, (error: unknown) => { settled = true; expect(error).toMatchObject({ code: 'NATIVE_CANCELLED' }) })
     abort.abort()
-    f.done.resolve({ exitCode: 0, signal: null })
     await Promise.resolve()
-    await Promise.resolve()
-    expect(f.terminate).toHaveBeenCalledTimes(1)
+    expect(f.cancellations).toEqual([{ type: 'cancel', id: f.id() }])
+    expect(f.close).not.toHaveBeenCalled()
     expect(settled).toBe(false)
-    f.gone.resolve(true)
+    await expect(f.client.request('getState', {}, new AbortController().signal)).rejects.toMatchObject({ code: 'NATIVE_BUSY' })
+    f.reply({ id: f.id(), error: { code: 'NATIVE_CANCELLED', message: 'Capture stopped' } })
     await observed
-    expect(f.stdout.destroyed).toBe(true)
-    expect(f.stdin.destroyed).toBe(true)
+    expect(f.client.disposed).toBe(false)
+    const next = f.client.request('getState', { appHandle: 'retained-app' }, new AbortController().signal)
+    f.reply({ id: f.id(), result: { snapshotId: 'fresh' } })
+    await expect(next).resolves.toEqual({ snapshotId: 'fresh' })
+    expect(f.connect).toHaveBeenCalledTimes(1)
+    expect(f.stdout.destroyed).toBe(false)
   })
 
   it('rejects a pre-cancelled operation without writing or invalidating acquired handles', async () => {
@@ -222,32 +230,93 @@ describe('native helper transport', () => {
     expect(await first).toEqual({ snapshotId: 'one' })
   })
 
-  it('cancellation after a reply but before result delivery still invalidates the helper', async () => {
+  it('preserves a completed reply when cancellation arrives before its promise continuation', async () => {
     const f = fixture()
     const abort = new AbortController()
     const pending = f.client.request('click', {}, abort.signal)
-    const rejected = expect(pending).rejects.toMatchObject({ code: 'NATIVE_CANCELLED' })
     f.reply({ id: f.id(), result: { dispatched: true } })
     abort.abort()
-    f.finish()
-    await rejected
+    await expect(pending).resolves.toEqual({ dispatched: true })
+    expect(f.cancellations).toEqual([])
+    expect(f.client.disposed).toBe(false)
   })
 
-  it('expires the configured operation deadline and waits for shutdown', async () => {
+  it('accepts a successful reply as cancellation acknowledgement when the reply was already in flight', async () => {
+    const f = fixture()
+    const abort = new AbortController()
+    const pending = f.client.request('screenshot', {}, abort.signal)
+    const rejected = expect(pending).rejects.toMatchObject({ code: 'NATIVE_CANCELLED' })
+    abort.abort()
+    f.reply({ id: f.id(), result: { data: 'late-image' } })
+    await rejected
+    expect(f.client.disposed).toBe(false)
+    expect(f.close).not.toHaveBeenCalled()
+  })
+
+  it('expires the operation deadline without closing an acknowledged connection', async () => {
     vi.useFakeTimers()
     try {
       const f = fixture({ timeoutMs: 25 })
       const pending = f.client.request('getState', {}, new AbortController().signal)
       const rejected = expect(pending).rejects.toMatchObject({ code: 'NATIVE_TIMEOUT' })
       await vi.advanceTimersByTimeAsync(25)
-      expect(f.client.disposed).toBe(true)
-      f.finish()
+      expect(f.cancellations).toEqual([{ type: 'cancel', id: f.id() }])
+      expect(f.client.disposed).toBe(false)
+      f.reply({ id: f.id(), error: { code: 'NATIVE_CANCELLED', message: 'Request cancelled' } })
       await rejected
+      expect(f.close).not.toHaveBeenCalled()
       expect(vi.getTimerCount()).toBe(0)
     } finally { vi.useRealTimers() }
   })
 
-  it.each(['stdout-error', 'stdin-error', 'stdout-end', 'stdout-close', 'process-exit', 'process-rejection'] as const)('contains %s while an operation is pending', async (kind) => {
+  it('closes only after the cancellation grace expires without an acknowledgement', async () => {
+    vi.useFakeTimers()
+    try {
+      const f = fixture({ timeoutMs: 25, graceMs: 10 })
+      const pending = f.client.request('screenshot', {}, new AbortController().signal)
+      const rejected = expect(pending).rejects.toMatchObject({ code: 'NATIVE_CLEANUP', cause: { code: 'NATIVE_TIMEOUT' } })
+      await vi.advanceTimersByTimeAsync(25)
+      expect(f.close).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(10)
+      expect(f.close).toHaveBeenCalledTimes(1)
+      f.finish()
+      await rejected
+      expect(f.client.disposed).toBe(true)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally { vi.useRealTimers() }
+  })
+
+  it('sends cancellation once and preserves the first interruption reason', async () => {
+    vi.useFakeTimers()
+    try {
+      const f = fixture({ timeoutMs: 25 })
+      const abort = new AbortController()
+      const pending = f.client.request('screenshot', {}, abort.signal)
+      const rejected = expect(pending).rejects.toMatchObject({ code: 'NATIVE_TIMEOUT' })
+      await vi.advanceTimersByTimeAsync(25)
+      abort.abort()
+      expect(f.cancellations).toEqual([{ type: 'cancel', id: f.id() }])
+      f.reply({ id: f.id(), result: { data: 'late-image' } })
+      await rejected
+      expect(f.client.disposed).toBe(false)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally { vi.useRealTimers() }
+  })
+
+  it.each(['throw', 'callback'] as const)('closes the connection when sending cancellation fails through %s', async (kind) => {
+    const failure = new Error('cancel write failed')
+    const f = fixture(kind === 'callback' ? { cancelWriteError: failure } : {})
+    const abort = new AbortController()
+    const pending = f.client.request('screenshot', {}, abort.signal)
+    const rejected = expect(pending).rejects.toMatchObject({ code: 'NATIVE_IO', cause: failure })
+    if (kind === 'throw') vi.spyOn(f.stdin, 'write').mockImplementation(() => { throw failure })
+    abort.abort()
+    await f.closed
+    f.finish()
+    await rejected
+  })
+
+  it.each(['stdout-error', 'stdin-error', 'stdout-end', 'stdout-close', 'connection-exit', 'connection-rejection'] as const)('contains %s while an operation is pending', async (kind) => {
     const f = fixture()
     const pending = f.client.request('getState', {}, new AbortController().signal)
     const code = kind.endsWith('-error') ? 'NATIVE_IO' : kind.startsWith('stdout-') ? 'NATIVE_EOF' : 'NATIVE_EXITED'
@@ -256,12 +325,12 @@ describe('native helper transport', () => {
     else if (kind === 'stdin-error') f.stdin.emit('error', new Error('write failed'))
     else if (kind === 'stdout-end') f.stdout.emit('end')
     else if (kind === 'stdout-close') f.stdout.emit('close')
-    else if (kind === 'process-exit') f.done.resolve({ exitCode: 1, signal: null })
-    else f.done.reject(new Error('spawn failed'))
-    f.gone.resolve(true)
-    if (!kind.startsWith('process-')) f.done.resolve({ exitCode: 1, signal: null })
+    else if (kind === 'connection-exit') f.done.resolve()
+    else f.done.reject(new Error('connection failed'))
+    f.gone.resolve()
+    if (!kind.startsWith('connection-')) f.done.resolve()
     await rejected
-    expect(f.terminate).toHaveBeenCalledTimes(1)
+    expect(f.close).toHaveBeenCalledTimes(1)
   })
 
   it.each(['throw', 'callback'] as const)('invalidates uncertain dispatch after a write %s failure', async (kind) => {
@@ -270,20 +339,11 @@ describe('native helper transport', () => {
     if (kind === 'throw') vi.spyOn(f.stdin, 'write').mockImplementation(() => { throw failure })
     const pending = f.client.request('click', {}, new AbortController().signal)
     const rejected = expect(pending).rejects.toMatchObject({ code: 'NATIVE_IO', cause: failure })
-    await f.terminated
+    await f.closed
     f.finish()
     await rejected
     expect(f.client.disposed).toBe(true)
-    expect(f.terminate).toHaveBeenCalledTimes(1)
-  })
-
-  it.each([{ stdin: false }, { stdout: false }, { stdin: false, stdout: false }])('cleans up an incomplete process handle %j', async (options) => {
-    const f = fixture(options)
-    const pending = f.client.request('listApps', {}, new AbortController().signal)
-    const rejected = expect(pending).rejects.toMatchObject({ code: 'NATIVE_IO' })
-    f.finish()
-    await rejected
-    expect(f.requests).toEqual([])
+    expect(f.close).toHaveBeenCalledTimes(1)
   })
 
   it('rejects unsolicited replies and shares one quiescent disposal across callers', async () => {
@@ -292,28 +352,24 @@ describe('native helper transport', () => {
     const first = f.client.dispose()
     const second = f.client.dispose()
     expect(second).toBe(first)
-    expect(f.waitForExit).toHaveBeenCalledTimes(1)
+    expect(f.waitForClose).toHaveBeenCalledTimes(1)
     f.finish()
     await first
     expect(() => {
       f.stdout.emit('error', new Error('late read error'))
       f.stdin.emit('error', new Error('late write error'))
     }).not.toThrow()
-    expect(f.terminate).toHaveBeenCalledTimes(1)
+    expect(f.close).toHaveBeenCalledTimes(1)
   })
 
-  it('rejects pending work on disposal and releases streams even when range observation fails', async () => {
+  it('rejects pending work on disposal and releases streams even when connection cleanup fails', async () => {
     const f = fixture()
     const pending = f.client.request('getState', {}, new AbortController().signal)
-    const failure = new Error('cannot observe range')
+    const failure = new Error('cannot close connection')
     const rejected = expect(pending).rejects.toBe(failure)
     const disposing = f.client.dispose()
     const disposalRejected = expect(disposing).rejects.toBe(failure)
     f.gone.reject(failure)
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(f.stdout.destroyed).toBe(false)
-    f.done.resolve({ exitCode: 0, signal: null })
     await disposalRejected
     await rejected
     expect(f.stdout.destroyed).toBe(true)
@@ -326,55 +382,87 @@ describe('native helper transport', () => {
     expect(error.message).toBe('PERMISSION_DENIED: Enable Accessibility')
   })
 
-  it('retains the last screenshot phase after timeout and helper cleanup', async () => {
+  it('uses the shorter screenshot deadline while leaving ordinary operations their configured time', async () => {
     vi.useFakeTimers()
     try {
-      let text = ''
+      const f = fixture({ timeoutMs: 100, screenshotTimeoutMs: 25 })
+      const ordinary = f.client.request('getState', {}, new AbortController().signal)
+      await vi.advanceTimersByTimeAsync(25)
+      expect(f.client.disposed).toBe(false)
+      f.reply({ id: f.id(), result: {} })
+      await ordinary
+      const screenshot = f.client.request('screenshot', {}, new AbortController().signal)
+      const rejected = expect(screenshot).rejects.toMatchObject({ code: 'NATIVE_TIMEOUT', message: 'NATIVE_TIMEOUT: Operation exceeded 25ms' })
+      await vi.advanceTimersByTimeAsync(25)
+      f.reply({ id: f.id(), error: { code: 'NATIVE_CANCELLED', message: 'Capture stopped' } })
+      await rejected
+      expect(f.client.disposed).toBe(false)
+      const next = f.client.request('getState', { appHandle: 'retained-app' }, new AbortController().signal)
+      f.reply({ id: f.id(), result: { snapshotId: 'after-timeout' } })
+      await expect(next).resolves.toEqual({ snapshotId: 'after-timeout' })
+      expect(f.close).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally { vi.useRealTimers() }
+  })
+
+  it('retains the last screenshot phase after timeout and request cancellation', async () => {
+    vi.useFakeTimers()
+    try {
       const reportDiagnostic = vi.fn()
-      const f = fixture({ timeoutMs: 25, reportDiagnostic,
-        stderr: { readFrom: offset => ({ text: text.slice(offset), nextOffset: text.length, lossy: false }) },
-      })
+      const f = fixture({ timeoutMs: 25, reportDiagnostic })
       const pending = f.client.request('screenshot', {}, new AbortController().signal, ToolCallId('capture-timeout'))
       const rejected = expect(pending).rejects.toMatchObject({ code: 'NATIVE_TIMEOUT',
         message: expect.stringContaining('"stage":"capture-image.begin"'),
       })
+      f.reply({ type: 'diagnostic', requestId: 'capture-timeout', stage: 'capture-image.begin', elapsedMs: 2 })
       await vi.advanceTimersByTimeAsync(25)
-      text = '[cua-screenshot] {"requestId":"capture-timeout","stage":"capture-image.begin","elapsedMs":2}\n'
-      f.finish()
+      f.reply({ id: f.id(), error: { code: 'NATIVE_CANCELLED', message: 'Capture stopped' } })
       await rejected
+      expect(f.client.disposed).toBe(false)
       expect(reportDiagnostic.mock.calls.flat().join('\n')).toContain('host.settled')
       expect(vi.getTimerCount()).toBe(0)
     } finally { vi.useRealTimers() }
   })
 
-  it('filters screenshot diagnostics by request and omits unrelated stderr and extra fields', async () => {
-    let text = 'earlier stderr\n'
-    const readFrom = vi.fn((offset: number) => ({ text: text.slice(offset), nextOffset: text.length, lossy: false }))
-    const f = fixture({ stderr: { readFrom } })
+  it('accepts diagnostic and result frames in one chunk and omits unrelated requests and extra fields', async () => {
+    const f = fixture()
     const pending = f.client.request('screenshot', {}, new AbortController().signal, ToolCallId('current'))
-    text += 'private window title\n[cua-screenshot] incomplete\n'
-      + '[cua-screenshot] {"requestId":"previous","stage":"old.begin","elapsedMs":1}\n'
-      + '[cua-screenshot] {"requestId":"current","stage":"bad","elapsedMs":"invalid"}\n'
-      + '[cua-screenshot] {"requestId":"current","stage":"ax-geometry.begin","elapsedMs":3,"title":"private"}\n'
-    f.reply({ id: 'current', error: { code: 'WINDOW_CHANGED', message: 'Window changed' } })
+    f.stdout.write([
+      { type: 'diagnostic', requestId: 'previous', stage: 'old.begin', elapsedMs: 1 },
+      { type: 'diagnostic', requestId: 'current', stage: 'ax-geometry.begin', elapsedMs: 3, title: 'private' },
+      { id: 'current', error: { code: 'WINDOW_CHANGED', message: 'Window changed' } },
+    ].map(frame => JSON.stringify(frame) + '\n').join(''))
     await expect(pending).rejects.toMatchObject({ code: 'WINDOW_CHANGED', message:
       'WINDOW_CHANGED: Window changed\nScreenshot diagnostics:\n'
       + '[cua-screenshot] {"requestId":"current","stage":"ax-geometry.begin","elapsedMs":3}',
     })
-    expect(readFrom).toHaveBeenLastCalledWith('earlier stderr\n'.length)
     expect(f.client.disposed).toBe(false)
   })
 
-  it('marks truncated screenshot diagnostics and keeps successful results out of model text', async () => {
+  it('rejects malformed diagnostic frames through the same protocol failure path', async () => {
+    const f = fixture()
+    const pending = f.client.request('screenshot', {}, new AbortController().signal)
+    const rejected = expect(pending).rejects.toMatchObject({ code: 'NATIVE_PROTOCOL' })
+    f.reply({ type: 'diagnostic', requestId: f.id(), stage: 'capture-image.begin', elapsedMs: 'invalid' })
+    f.finish()
+    await rejected
+    expect(f.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds retained screenshot diagnostics and keeps successful results out of model text', async () => {
     const reportDiagnostic = vi.fn()
-    const readFrom = vi.fn()
-      .mockReturnValueOnce({ text: '', nextOffset: 10, lossy: false })
-      .mockReturnValue({ text: '[cua-screenshot] {"requestId":"capture","stage":"png-encode.end","elapsedMs":4}\n', nextOffset: 200, lossy: true })
-    const f = fixture({ reportDiagnostic, stderr: { readFrom } })
+    const f = fixture({ reportDiagnostic })
     const pending = f.client.request('screenshot', {}, new AbortController().signal, ToolCallId('capture'))
+    for (let index = 0; index < 100; index++) {
+      f.reply({ type: 'diagnostic', requestId: 'capture', stage: `phase-${index}`, elapsedMs: index })
+    }
     f.reply({ id: 'capture', result: { data: 'image' } })
     await expect(pending).resolves.toEqual({ data: 'image' })
-    expect(reportDiagnostic.mock.calls.flat().join('\n')).toContain('Earlier screenshot diagnostic bytes were discarded')
+    const retained = reportDiagnostic.mock.calls.map(call => call[0]).find(value => value.includes('discarded'))
+    expect(retained).toContain('Earlier screenshot diagnostic records were discarded')
+    expect(retained).not.toContain('"stage":"phase-0"')
+    expect(retained).toContain('"stage":"phase-99"')
+    expect(Buffer.byteLength(retained!.split('\n').slice(1).join(''))).toBeLessThanOrEqual(8192)
     expect(reportDiagnostic.mock.calls.flat().join('\n')).toContain('host.reply')
   })
 

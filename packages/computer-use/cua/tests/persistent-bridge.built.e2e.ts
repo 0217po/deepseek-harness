@@ -1,6 +1,6 @@
 /** Built bridge imports and retained objects from a project outside the Harness installation. */
 import { existsSync } from 'node:fs'
-import { chmod, copyFile, mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -18,6 +18,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import Subprocess from '@deepseek-ai/dsh-subprocess-local'
 import { expect, it } from 'vitest'
 import * as Cua from '../src/index.ts'
+import { installNativeFixture } from './native-fixture.ts'
 import { Request } from '../src/protocol.ts'
 
 const bridge = fileURLToPath(new URL('../lib/bridge.js', import.meta.url))
@@ -36,9 +37,7 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
     const cwd = await mkdtemp(join(tmpdir(), 'dsh-cua-external-project-'))
     const ctx = new Context()
     try {
-      const helperPath = join(cwd, 'native-helper.mjs')
-      await copyFile(new URL('../../../../snapshots/session/cua-native/workspace/native-helper.mjs', import.meta.url), helperPath)
-      await chmod(helperPath, 0o700)
+      const helperPath = await installNativeFixture(cwd)
       await mountAgentLoopTestDependencies(ctx)
       await ctx.plugin(FileSystem)
       await ctx.plugin(Subprocess)

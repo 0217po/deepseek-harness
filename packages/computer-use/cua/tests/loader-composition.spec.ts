@@ -1,5 +1,5 @@
 /** Real Loader, AgentLoop and helper-process transport; only desktop and model responses are fixtures. */
-import { chmod, copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -20,6 +20,8 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SubprocessLocal from '@deepseek-ai/dsh-subprocess-local'
 import { z } from 'zod'
 import * as NativeProvider from '../src/index.ts'
+import { createCuaApi } from '../src/api.ts'
+import { installNativeFixture } from './native-fixture.ts'
 
 const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
 const calls = [
@@ -60,13 +62,11 @@ const AuditEvent = z.object({
 })
 
 // The fixture uses a POSIX executable shebang; stream/protocol unit tests run on every host.
-it.skipIf(process.platform === 'win32')('loads the native provider, records verified fixture effects and images, and joins helpers on agent disposal', async () => {
+it.skipIf(process.platform === 'win32')('shares one application between retained Agent objects while isolating native handles and releasing each connection', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-native-composition-'))
   const context = new Context()
   onTestFinished(async () => { await context.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
-  const helperPath = join(root, 'native-helper.mjs')
-  await copyFile(new URL('../../../../snapshots/session/cua-native/workspace/native-helper.mjs', import.meta.url), helperPath)
-  await chmod(helperPath, 0o700)
+  const helperPath = await installNativeFixture(root)
   await writeFile(join(root, 'observe-helper'), '')
   const readEvents = async () => (await readFile(join(root, 'helper-events.jsonl'), 'utf8')).trim().split('\n').map(line => AuditEvent.parse(JSON.parse(line)))
   const modules = {
@@ -148,7 +148,34 @@ it.skipIf(process.platform === 'win32')('loads the native provider, records veri
   }
   const directCalls = (await readEvents()).filter(event => event.event === 'call').slice(-3)
   expect(directCalls.map(event => event.requestId)).toEqual(['programmatic-window', 'activate-first', 'activate-repeat'])
+
+  let objectCall = 0
+  const objectApi = (owner: typeof agent) => createCuaApi(async (operation) => {
+    const result = await context.tools.execute({ agent: owner, signal: new AbortController().signal,
+      callId: ToolCallId(`retained-object-${++objectCall}`), name: 'cua', arguments: operation })
+    if (result.isError) throw new Error(JSON.stringify(result.content))
+    return z.object({ structuredContent: z.json() }).parse(result.value).structuredContent
+  })
+  const retainedApp = await objectApi(agent).getApp('test.fixture')
+  const retainedWindow = await retainedApp.getWindow(7)
+  expect(await retainedWindow.getAXState({ emit: false })).toContain('Count: 1')
+  const peer = await context.agents.create({ sessionId: SessionId('native-loader-peer'), agentOptions: { provider: 'native-fixture', model: 'vision' } })
+  const peerApp = await objectApi(peer.agent).getApp('test.fixture')
+  const peerWindow = await peerApp.getWindow(7)
+  expect(peerApp.appHandle).not.toBe(retainedApp.appHandle)
+  expect(Buffer.from(await peerWindow.getScreenshot({ emit: false })).toString('base64')).toBe(png)
+  await peerWindow.click(0)
+  expect(await retainedWindow.getAXState({ emit: false })).toContain('Count: 2')
+  const sharedEvents = await readEvents()
+  expect(sharedEvents.filter(event => event.event === 'start')).toHaveLength(1)
+  expect(sharedEvents.filter(event => event.event === 'connect')).toHaveLength(2)
+  expect(new Set(sharedEvents.map(event => event.pid)).size).toBe(1)
   await handle.dispose()
+  expect((await readEvents()).filter(event => event.event === 'exit')).toHaveLength(0)
+  expect((await readEvents()).filter(event => event.event === 'disconnect')).toHaveLength(1)
+  await peerWindow.click(0)
+  expect(await peerWindow.getAXState({ emit: false })).toContain('Count: 3')
+  await peer.dispose()
   expect((await readEvents()).filter(event => event.event === 'exit')).toHaveLength(1)
 
   const next = await context.agents.create({ sessionId: SessionId('native-loader-next'), agentOptions: { provider: 'native-fixture', model: 'vision' } })

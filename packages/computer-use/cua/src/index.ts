@@ -1,4 +1,4 @@
-/** macOS computer use over a managed native helper. */
+/** macOS computer use through Agent-scoped connections to a shared native helper. */
 import { isAbsolute, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
@@ -25,7 +25,7 @@ import type {} from '@deepseek-ai/cordis-plugin-loader'
 
 /** Loader plugin identity. */
 export const name = 'cua'
-/** Services required for logged tools and owned native process lifetime. */
+/** Services required for logged tools and native launcher ownership. */
 export const inject = ['computerUse', 'tools', 'systemPrompt', 'subprocess', 'agents']
 
 /** Native executable and per-operation resource bounds. */
@@ -41,6 +41,10 @@ export interface Config {
   buildTimeoutMs: number
   /** Deadline for one native operation, including capture and AX traversal. */
   timeoutMs: number
+  /** Maximum time to connect to or start the shared native helper. */
+  connectTimeoutMs: number
+  /** Screenshot deadline including time queued behind other native operations. */
+  screenshotTimeoutMs: number
   /** Deadline for each individual Accessibility system call. */
   axTimeoutMs: number
   /** Maximum bytes retained for one helper response frame. */
@@ -57,7 +61,7 @@ export interface Config {
   dragSteps: number
   /** Delay in milliseconds after each Unicode key-down or key-up event. */
   textEventIntervalMs: number
-  /** Managed process termination grace in milliseconds. */
+  /** Agent connection cleanup and native launcher termination grace in milliseconds. */
   graceMs: number
   /** Maximum nodes admitted by a native accessibility snapshot. */
   maxElements: number
@@ -74,6 +78,8 @@ export const Config = Schema.object({
   helperPath: Schema.string(),
   buildTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(300_000),
   timeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(30_000),
+  connectTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(5000),
+  screenshotTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(5000),
   axTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(3000),
   maxAppMatches: Schema.number().step(1).min(1).max(1000).default(20),
   maxClipboardBytes: Schema.number().step(1).min(1024).default(32 * 1024 * 1024),
@@ -167,6 +173,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 function mount(ctx: Context, config: Config, helperPath: string): void {
   const native: NativeClientConfig = {
     helperPath, cwd: process.cwd(), timeoutMs: config.timeoutMs, axTimeoutMs: config.axTimeoutMs,
+    connectTimeoutMs: config.connectTimeoutMs, screenshotTimeoutMs: config.screenshotTimeoutMs,
     maxRequestBytes: config.maxRequestBytes, maxResponseBytes: config.maxResponseBytes, graceMs: config.graceMs,
     textEventIntervalMs: config.textEventIntervalMs,
   }
