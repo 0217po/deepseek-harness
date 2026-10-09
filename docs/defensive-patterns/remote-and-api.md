@@ -10,7 +10,7 @@ A new remote business capability is a new service — its own package or its own
 
 - Judged by: which object holds the new remote method. A method for a new business line added to a service that already owns another line is the defect; the fix is a service named for the new capability, with `@Remote` on its concrete methods. A migration is judged the same way — the moved method appears on its new owner, as `SubagentRuntime` does in `packages/subagent/subagent`, not on the object it left.
 - Not covered: a service whose methods all serve one business boundary stays whole, and a new private helper of that capability belongs on it. Data that needs its own protocol does not become a Remote method on the new service either; session event streams, pagination, incremental reduce, projection, and entity substreams keep their separate registration model ([gateway boundaries](../api-gateway.md#boundaries)).
-- Exception: none recorded; a single caller is not a reason to merge. Where the business boundary itself is contested, the domain owner (对应领域专家) settles it as an architecture question before the change lands.
+- Exception: none recorded; a single caller is not a reason to merge. Where the business boundary itself is contested, the domain owner settles it as an architecture question before the change lands.
 - Fix: create the capability's own service object or package, put `@Remote` on its concrete methods, and let callers reach it through `ctx.remote.<namespace>`.
 
 The subagent capability owns its own service, and every remote method is a concrete method of that service:
@@ -48,10 +48,10 @@ One object then answers for both domains, so a change to either capability's act
 
 - **Capability methods.** The annotation goes on the concrete method that performs the operation (`list`, `prompt`, `interruptByParent`), never on a wrapper that forwards to the real implementation. Judged by the decorated method's body: a body that only delegates means the annotation is on the wrong method.
 - **Types from inference.** Client-facing types are aliased from what the generator produces — `type SessionRemote = TypertClientRemote['session']` — instead of being written a second time. Judged by a hand-written declaration whose fields repeat a generated Client type; [typert.md](../subsystems/typert.md) owns the generated maps and their declaration merges.
-- **JSON only, no output-side decode.** A Remote parameter and result are JSON, with binary content expressed field-level. `@Remote` performs no decode on the way out; the generated codec and the Gateway validate the result. Judged by a decode, a stream reassembly, or a whole non-JSON value on a method carrying the decorator; [programming model](../api-gateway.md#programming-model) owns what may cross a Remote method.
+- **JSON on the wire, no output-side decode.** The **wire payload** of a Remote method is JSON, with binary content expressed field-level. The Host signature keeps what the Gateway already supports — lookup arguments resolved to Host objects, a trailing `AbortSignal`, a stream declared with `@Remote({ mode: 'stream' })` — and `@Remote` performs no decode on the way out; the generated codec and the Gateway validate the result. Judged by a decode, a stream reassembly, or a whole non-JSON value in the payload of a method carrying the decorator; [programming model](../api-gateway.md#programming-model) owns what may cross a Remote method.
 - **Existing names are additive.** A migration does not rename a remote method or field that a Client already calls; a new semantic gets a new entry, and a rename is its own change with its own review. Judged by a diff that renames or removes a name already exposed through `ctx.remote.<namespace>`.
 - **Not covered.** A method without the decorator stays an ordinary service method with in-process callers; the four disciplines govern what becomes a Remote method, not what a service may implement.
-- **Exception.** A rename or a new decode path states its benefit and the impact on existing callers first and needs the domain owner's confirmation (对应领域专家); the author never self-approves.
+- **Exception.** A rename or a new decode path states its benefit and the impact on existing callers first and needs the domain owner's confirmation; the author never self-approves.
 
 The generated map is the only source for Client-facing types, the decorator sits on the concrete method, and the payload stays JSON:
 
@@ -62,9 +62,9 @@ import { Remote, TypertRemoteService, type TypertClientRemote } from '@deepseek-
 type SessionRemote = TypertClientRemote['session']
 
 class SessionController extends TypertRemoteService {
-  @Remote('rename')
-  rename(id: string, title: string): SessionRenameValue {
-    return this.applyRename(id, title)
+  @Remote('search')
+  search(query: string): SessionSearchValue {
+    return this.runSearch(query)
   }
 }
 ```

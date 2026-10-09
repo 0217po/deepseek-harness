@@ -21,8 +21,8 @@
   en: 243e275fee74f54e
   zh: a58e04b6e3ac0e7a
 /defensive-patterns/one-value-states-one-fact:
-  en: a3b0f6585a381a1d
-  zh: 6fd57b2181e3009a
+  en: 598d9041ccfaba7c
+  zh: 2ac9f98c97015f66
 /defensive-patterns/a-new-active-current-singleton-is-refused:
   en: 8bf36acf96fa4c33
   zh: bb6db31a63bcf383
@@ -33,8 +33,8 @@
   en: 7588b8dba9279dac
   zh: 2760468ede60220c
 /defensive-patterns/changes-carry-performance-evidence:
-  en: 8ec0e26abfb13e8f
-  zh: ad5cfda4ffe2ec9a
+  en: 0d6855d1ae0ef4ae
+  zh: 0f771999398ce052
 /defensive-patterns/migrations-preserve-behavior:
   en: 6213e051f51437b8
   zh: 853580b3a4fec100

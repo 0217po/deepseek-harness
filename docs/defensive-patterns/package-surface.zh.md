@@ -4,13 +4,13 @@
 
 关于包导出什么、怎么构建、如何声明依赖的规则。布局本身见 [development.zh.md](../development.zh.md#typescript-project-layout)；常设条款见 [packages/AGENTS.md](../../packages/AGENTS.md)。
 
-## 插件包导出 Loader 四件套
+## 插件包导出 Loader 所需的东西
 
-插件包的入口导出 `name`、`inject`、`Config`、`apply`，没有第五个值；`name`、`inject`、`apply` 全小写，`Config` 首字母大写，且同时以 `interface` 与 Schemastery schema 值两种形态出现。跨包引用只携带类型，因此不允许从其他包新增实体值的 import。同包测试通过相对 `../src/...` 路径或 `./src/*` 子路径直接触达内部，测试专用的需要因此永远不会变成常驻导出。这条规则既阻止测试便利被固化成对外 API，也阻止实体值引用跨包扩散——后者会让此后每一次重构都必须跟着它们走。
+插件包的入口取两种形态之一，两者不得混用。**函数插件**具名导出 `name`、`inject`、`Config`、`apply`：`name`、`inject`、`apply` 全小写，`Config` 首字母大写，且同时以 `interface` 与 Schemastery schema 值两种形态出现。**服务插件**默认导出它的服务类，Loader 就是这么加载它的；在四件套旁边再加一个默认导出，会让 Loader 丢弃函数插件的命名空间。除这两者之外，Host 入口可以导出供其他包 `extends` 或 `throw` 的 Service Definition 类与错误类型——能力接缝消费的正是这些——但绝不导出测试便利值。UI 插件包的 `/client` 入口更严，[packages/client/AGENTS.md](../../packages/client/AGENTS.md) 是那条纪律的正家：同包测试用相对 `../src/...` 路径或 `./src/*` 子路径触达内部，测试专用的需要因此永远不会变成常驻导出。
 
 - Loader 四件套及其准确形态见 [cordis-primer.zh.md](../cordis-primer.zh.md#loader-configuration)。
-- 判定条件：插件入口（`src/index.ts`）导出了四件套以外的实体；跨包 import 引用的是实体值而不是类型；fixture 用相对路径引用其他包。
-- 边界：只约束 Loader 插件入口。内部模块、工具函数与 hooks 照常导出值；测试 fixture 也留在本包内——用相对路径伸进别的包的 `src` 会绕过 `exports` 映射与包边界检查。
+- 判定条件：函数插件的入口（`src/index.ts`）导出了四件套以外的实体；在四件套旁边加了默认导出，或两种形态被混用；`/client` 入口导出了实现值、或让另一个功能插件导入了实现值；fixture 用相对路径引用其他包。
+- 边界：只约束 Loader 插件入口。内部模块、工具函数与 hooks 照常导出值；Host 入口的 Service Definition 类与错误类型是应有的导出；测试 fixture 也留在本包内——用相对路径伸进别的包的 `src` 会绕过 `exports` 映射与包边界检查。
 - 例外：无默认例外；确需破例须经对应领域专家确认。
 
 合规的入口——四件套，同包测试路径以注释记录，而不是加出第五个导出。
@@ -35,8 +35,8 @@ export function apply(ctx: Context, config: Config): void { /* … */ }
 // The entry widened so a test could reach one helper
 export { isHeaderLine } from './internal/header.ts'
 
-// A value imported across packages
-import { deriveEventMessage } from '@deepseek-ai/dsh-session'
+// Both plugin forms on one entry: the Loader discards the four
+export default class WebApp {}
 
 // A fixture reaching into another package by relative path
 import { isSurfaceEligibleType } from '../../core/session/src/surface.ts'
@@ -44,10 +44,10 @@ import { isSurfaceEligibleType } from '../../core/session/src/surface.ts'
 
 ## 包只有两类，且两类都是动态插件包
 
-包要么是 Host 包，要么是 Host + Client 包，两类都是动态插件包；新增包只能取这两种形态之一，没有第三种形态，也没有例外。只有真正的双面包才拆编译面，生成物进 `lib`，`include`、`external` 与 roster 清单由扫描 workspace 得出，不手写。手写清单或新造编译面会让构建产物与清单不再一致，此后每个新增包都得各自维护清单。
+新增包要么是 Host 包，要么是 Host + Client 包，两类都是动态插件包；没有第三种形态可选，也没有例外。shell 经 [packages/client/web/src/platform.ts](../../packages/client/web/src/platform.ts) 的 `PLATFORM_MODULES` 播种的静态客户端库——`client-store`、`ui-slots`、`ui-primitives`、`ui-dockkit`——以及 [packages/util/](../../packages/util/) 下的零依赖库先于本条规则存在，且**已关闭**：它们照原样继续工作，新增包永不加入其中。只有真正的双面包才拆编译面，生成物进 `lib`，`include`、`external` 与 roster 清单由扫描 workspace 得出，不手写。手写清单或新造编译面会让构建产物与清单不再一致，此后每个新增包都得各自维护清单。
 
 - 判定条件：新增包未按动态插件包形态构建（static link 打包、手写的全 external 清单）；出现第三种 `tsconfig` 变体；手写 `include`、`external` 或 roster 清单。
-- 对 `packages/*/*` 的实查：330 个包带 `tsconfig.json`，24 个是双面包（`tsconfig.json` 加 `tsconfig.client.json` 与 `tsconfig.host.json`），75 个声明 `dsh.client`，87 个导出 `./client`，330 个把 `main` 指向 `lib/`。
+- 形态不要照抄数字，就地复算：先列 `packages/*/*` 下的 `tsconfig.json`，再列同时带 `tsconfig.client.json` 与 `tsconfig.host.json` 的包，最后列声明 `dsh.client` 的包。
 - 边界：双面包允许被 `include` 或 `exclude`。
 - 例外：无；没有审批通道。包的形态或编译面变更须先改正家文档，并须经对应领域专家确认。
 - 正家：[development.zh.md](../development.zh.md#typescript-project-layout) 管编译面，[packages/README.zh.md](../../packages/README.zh.md) 管包分组，[adding-a-package.zh.md](../cookbook/adding-a-package.zh.md) 管步骤。
@@ -76,7 +76,7 @@ import { isSurfaceEligibleType } from '../../core/session/src/surface.ts'
 
 `package.json` 的 `exports` 只使用标准键集合，集合中每个键在全仓已经只有一个含义，包不得为自己的局部用途开键。只有少数几个包在用、又没有文档正家的键不构成先例：把某个键正式化（包括下面那些未记录在案的键）意味着在同一次改动里改正家文档与检查。键集合小且共享，消费者才能从键名推断用途，扫描也才有可能判定导出映射。
 
-- 标准键及各键在 `packages/*/*/package.json` 与 `apps/*/package.json` 中的包数：`.`（330，包主入口）、`./package.json`（332，工具链读取清单，非语义 export）、`./src/*`（315，测试与工具用的源码直出，其文档地位仍待定）、`./client`（87，浏览器入口，与 `dsh.client` 声明配对）、`./types`（64，类型入口）、`./typert`（28，typert 类型运行时）、`./remote`（28，`@Remote` 调用面）、`./locale/*.json`（26，多语言资源）、`./cordis.patch.yml`（19，`dsh.bundle` 声明的组合包 patch 层）。
+- 标准键，每个键在全仓只有一个含义，统计口径是 `packages/*/*/package.json` 与 `apps/*/package.json`：`.`（包主入口）、`./package.json`（工具链访问，不是语义导出）、`./src/*`（测试与工具的源码透传，文档状态仍待定）、`./client`（浏览器入口，与 `dsh.client` 声明配对）、`./types`（类型入口）、`./typert`（typert 类型运行时）、`./remote`（`@Remote` 调用面）、`./locale/*.json`（本地化资源）、`./cordis.patch.yml`（`dsh.bundle` 声明的 bundle 补丁层）。这里不列各键的包数，因为下一个包就会让它过期；下面的复算命令会打印当前数字。
 - 集合之外的键（`./brand` 5 个包、`./worker` 4 个、`./startup`、`./runner`、`./protocol` 各 2 个，另有大量一次性键）没有文档含义，属待核项，不是可照抄的先例。
 - 判定条件：改动是否新增了标准集合以外的 export 键？
 - 例外：无默认例外；新增键须先改正家文档与检查，并取得对应领域专家确认。
@@ -151,7 +151,7 @@ Restating a required-devDependency package list or the field rules on this page 
 
 - 判定在 [verify-package-dependencies.ts](../../scripts/verify-package-dependencies.ts) 的 `workspaceRange()`：`@deepseek-ai/dsh` 与 `@deepseek-ai/dsh-*` 包族取 `workspace:*`，其余内部包取 `workspace:~`；扫描遍历受管清单，比对同一依赖名的每一处声明。
 - 边界：同命名空间但不是 workspace 成员的包按普通第三方版本范围声明，不受包族规则约束——`@deepseek-ai/libreoffice-kit` 在 `apps/desktop-host/package.json`（dependencies）、`packages/bundle/web-app/package.json`（devDependencies）、`packages/document/office-to-pdf/package.json`（dependencies）、`packages/skill/skill-office/package.json`（dependencies）中声明为 `^0.1.5`。
-- 分布（下面的命令打印当前数字）：`workspace:*` 4216 处、`workspace:~` 1034 处、`workspace:^` 0 处，另有上面四处 `^0.1.5` 声明。
+- 分布不在此复述；下面的复算命令会打印 `workspace:*`、`workspace:~`、`workspace:^` 的当前数量，以及族规则之外的精确版本声明。
 - 例外：门禁机械判定；确需例外意味着修改扫描与策略文件，并须经对应领域专家确认、在改动上说明理由。
 - 复算：
 

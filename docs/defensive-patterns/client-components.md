@@ -6,26 +6,34 @@ Rules for client components, their state, and their effects. [packages/client/AG
 
 ## State arrives through injection
 
-A Slot's component receives everything it renders through the Injection face bound at its render site — owner props, hook seats, and actions — and never reads one large global state at the top of the tree to hand values down. Keeping every live value on that face is what makes a prop that did not change keep its identity, and what lets a component subscribe only to the sub-state it reads. Without it any unrelated field change re-renders the whole subtree, which is how a long session under streaming events loses frames while the user scrolls or types.
+A Slot's component receives everything it renders through the inject face of its own registration — plain data, action callbacks, and the reserved `hooks` compartment the renderer binds to `use<Name>` hooks — while the parent's render site passes owner data through the derived `renderSlot`. It never reads one large global state at the top of the tree to hand values down. Keeping every live value on that face is what makes a prop that did not change keep its identity, and what lets a component subscribe only to the sub-state it reads. Without it any unrelated field change re-renders the whole subtree, which is how a long session under streaming events loses frames while the user scrolls or types.
 
-- Judged by: at every `slots.render` site the author must be able to name which sub-states the rendered component subscribes to and which of its incoming props keep a stable identity across renders. Watch the mutability of every prop: a value rebuilt each render — a fresh object, array, or inline callback — propagates re-renders even when nothing in it changed.
+- Judged by: at the registration and at its render site, the author must be able to name which sub-states the rendered component subscribes to and which of its incoming props keep a stable identity across renders. Watch the mutability of every prop: a value rebuilt each render — a fresh object, array, or inline callback — propagates re-renders even when nothing in it changed.
 - Not covered: the component's own local state (`useState` for a fold, a hover, a draft) is not injection content, and a component that subscribes to nothing outside React needs no new seat.
-- Exception: a new injection face or hook seat changes the Slot contract, so that change states its impact — which components subscribe to what — in review; using an existing face needs no per-component approval.
+- Exception: a new hook seat changes the Slot contract, so that change states its impact — which components subscribe to what — in review; using an existing face needs no per-component approval.
 - Fix: narrow the injection to what the view renders, expose one field per read through a hook seat, and pass a narrow action set instead of a store or service handle. [Component inputs](../subsystems/slots.md#component-inputs) owns the inject factory, the standard hook seats, and how each becomes a prop.
 
-The render site injects one hook seat and a narrow action set, and the component reads only the field it renders:
+The registration carries plain data, a narrow action set, and one hook seat; the render site passes owner data, and the component reads only the field it renders:
 
 ```tsx
-// Render site: plain owner data, one hook seat, a narrow action set.
-slots.render('sidebar.right', {
-  props: { id },
-  useHooks: SidebarHooks,
-  action: { rename, archive },
-})
+// The inject factory returns plain data and callbacks; hooks is the reserved compartment.
+ctx.slots.register(
+  {
+    name: 'sidebar.right',
+    inject: () => ({
+      rename,
+      hooks: { info: infoSource },   // bound by the renderer as useInfo()
+    }),
+  },
+  SidebarRight,
+)
 
-function SidebarRight({ id, useInfo, action }: Props) {
+// The parent's render site passes owner data through the derived renderSlot.
+{renderSlot('sidebar.right', { id })}
+
+function SidebarRight({ id, useInfo, rename }: Props) {
   const { title } = useInfo()   // subscribes to title only
-  return <button onClick={() => action.rename(id)}>{title}</button>
+  return <button onClick={() => rename(id)}>{title}</button>
 }
 ```
 
@@ -86,39 +94,40 @@ The card's Slot contract stops describing what it renders, the call site keeps r
 
 ## A slot registration is a stable function component
 
-The value registered into a slot is a stable function component declared at module scope, or a plain string when the seat renders fixed text. A component function created during render is a new component type on every pass, and React treats a changed type as a different component: it unmounts the subtree and mounts a fresh one, which resets expanded rows, input focus, and scroll position. Registration-time parameters reach the component through props rather than by closing over render-time variables.
+The value registered into a slot is a stable function component declared at module scope. A component function created during render is a new component type on every pass, and React treats a changed type as a different component: it unmounts the subtree and mounts a fresh one, which resets expanded rows, input focus, and scroll position. Registration-time parameters reach the component through props rather than by closing over render-time variables.
 
-- Judged by: where the registered value is created. An inline arrow in the registration call, a component defined inside a render body, and a `useCallback` wrapper around an inline component all fail; a module-scope `function` declaration or a string passes.
-- Not covered: the rule constrains the identity of the registered value, not its complexity. A stable component may still read injected props, hooks, and callbacks, and a fixed-text seat may stay a string.
+- Judged by: where the registered value is created. An inline arrow in a registration or render call, a component defined inside a render body, and a `useCallback` wrapper around an inline component all fail; a module-scope `function` declaration passes.
+- Not covered: the rule constrains the identity of the registered value, not its complexity. A stable component may still read injected props, hooks, and callbacks.
 - Exception: creating a component during render is correct only when the caller wants the remount, and an ordinary change needs no separate approval; a change to the form of the Slot contract follows the injection-face review described under State arrives through injection.
 - Fix: move the component to module scope, type its props from the registration's shares, and pass the varying value through the inject face instead of the closure.
 
-The registration holds one stable reference to a module-scope component, and the varying value arrives injected:
+The registration holds one stable reference to a module-scope component, and the varying value arrives injected; the render site supplies the local component:
 
 ```tsx
 function PanelTitle({ title, count }: Props) {
   return <span>{title} ({count})</span>
 }
 
-// The registration holds one stable reference to the module-scope component.
+// Registration: the local slot's scope is declared, never a component.
 ctx.slots.registerFactory(
   {
     name: 'panel',
-    slots: { title: PanelTitle },
+    scope: 'root',
+    slots: { title: { scope: 'root' } },
     inject: () => ({ title: 'Sessions', count: 3 }),
   },
   Panel,
 )
+
+// The render site passes the local component, keeping its identity stable.
+renderFactorySlot('panel', { /* owner data */ }, { slots: { title: PanelTitle } })
 ```
 
-An inline arrow inside the registration call creates a new component type whenever the registration runs:
+An inline arrow at the render site creates a new component type whenever that render runs:
 
 ```tsx
-// A new component type each time this registration runs.
-ctx.slots.registerFactory(
-  { name: 'panel', slots: { title: (p) => <span>{p.title}</span> } },
-  Panel,
-)
+// A new component type each time this render runs.
+renderFactorySlot('panel', { /* owner data */ }, { slots: { title: (p) => <span>{p.title}</span> } })
 ```
 
 React sees a different type than the previous registration, remounts the seat, and resets its local state — expanded, focused, or scrolled position — on an otherwise unrelated update.
@@ -185,18 +194,19 @@ An element that shows a resource reads it through the injected `useResource` hoo
 - Exception: reshaping the snapshot is free, but a wrapper that hides protocol differences behind conditional branches states its ownership in review, and a new protocol's hook comes from that protocol's owner.
 - Fix: call `useResource` inside the domain hook, map its result onto what the component renders, and delete the bespoke cache.
 
-The domain hook wraps `useResource` and only reshapes its result, so the bottom layer stays single:
+The domain wrapper takes the injected hook as an argument and only reshapes its result, so the bottom layer stays single:
 
 ```tsx
-// The bottom layer is the standard hook; the wrapper only reshapes it.
-export function useChatResource(id: string) {
-  const { status, value } = useResource<ChatData>(`dsh-resource://chat/${id}`)
-  if (status !== 'live' || value === undefined) return { messages: [], loading: true }
-  return { messages: value.messages, loading: false }
+// The bottom layer is the standard hook, reached through the component's inject face.
+function useChatMessages(useResource: UseResource, id: string) {
+  const resource = useResource<'chat'>(`dsh-resource://chat/${id}`)
+  return resource.status === 'live' && resource.value !== undefined
+    ? { messages: resource.value.messages, loading: false }
+    : { messages: [], loading: true }
 }
 
 function ChatBody({ id, useResource }: Props) {
-  const { messages } = useChatResource(id)
+  const { messages } = useChatMessages(useResource, id)
   return <ol>{messages.map((message) => <li key={message.id}>{message.text}</li>)}</ol>
 }
 ```
@@ -218,44 +228,47 @@ Every protocol grows its own fetch and invalidation logic, cache entries and ref
 
 ## Store usage is narrow and explicit
 
-A front-end store carries shared viewing or interaction state, and a single-instance store is expected to support persistence through its own `persist()` and `hydrate()`. A multi-instance store is marked as not persisted, with that design still open. The store's attributes and the actions that mutate them are encapsulated and injected as a narrow interface, so a component receives those and the selectors it needs and never the whole view store. Business data lives in the object layer rather than in a store, and a setting change goes through the settings interface, not through store state.
+A front-end store carries shared viewing or interaction state. Its spec declares the initial state, the actions that mutate it, and — when the value should survive a reload — a persistence key the framework runs mechanically, with a session-scope instance suffixing that key so per-session instances persist independently. The store's attributes and the actions that mutate them are encapsulated and injected as a narrow interface, so a component receives those and the selectors it needs and never the whole view store. Business data lives in the object layer rather than in a store, and a setting change goes through the settings interface, not through store state.
 
-- Judged by: whether the injected face is a narrow interface or the store object itself, and whether the store has one instance or several.
-- Persistence: one instance means `persist()`/`hydrate()`; several mean an explicit "not persisted" note. Rollback consumers are few, so multi-instance persistence carries no hard requirement yet, and forcing a persistence key onto a multi-instance store is the violation.
+- Judged by: whether the injected face is a narrow interface or the store object itself, and whether the handle is built inside `apply` or at module level.
+- Persistence: the spec's `persist` key is the whole mechanism, run by the framework; the engine instance exposes `getSnapshot`, `subscribe`, the baked actions, and `clearPersisted`, and nothing hydrates it by hand.
 - Not covered: render state in a store is fine while it does not change a setting, and component-local state is not store content. [Store contracts](../subsystems/slots.md#component-inputs) own how a declared store becomes props, and [Web Client architecture](../subsystems/web-client.md) owns where business data lives.
-- Exception: the multi-instance persistence design is unconfirmed, so a change there needs the owning domain expert's sign-off; restructuring an injection face into a narrow one needs no separate approval.
+- Exception: a store handle exported at module level is forbidden — module-cache identity is a disguised singleton across plugin reloads; restructuring an injection face into a narrow one needs no separate approval.
 - Fix: replace the store handle in the inject return with the fields and action callbacks the component renders, and keep the handle inside `apply`.
 
-One handle inside `apply` persists itself, and the inject face carries only the fields and actions the view renders:
+One handle is built inside `apply` and passed to the registration, and the inject face carries only the fields and actions the view renders:
 
 ```tsx
-// Inside apply: one handle, persistence through the store's own methods.
-const store = createSidebarStore().create()
-store.hydrate(savedSidebar)
+// The handle is built in apply; persistence is the spec's own key.
+const sidebarStore = createSidebarStore()   // defineStore({ init, actions, persist: 'sidebar' })
 
-// The inject face carries only what the view renders.
-const inject = () => ({ title: store.title, onSelect: store.select })
+ctx.slots.register(
+  { name: 'sidebar.header', store: sidebarStore, inject: () => ({ onSelect: selectPanel }) },
+  SidebarHeader,
+)
 
-function SidebarHeader({ title, onSelect }: Props) {
+// The component reads through the framework-bound seat and writes through the actions.
+function SidebarHeader({ useStore, actions, onSelect }: Props) {
+  const { title } = useStore()
   return <button onClick={onSelect}>{title}</button>
 }
 ```
 
-The whole view store is injected for the component to pick fields from, and a multi-instance store is given one shared persistence key:
+The whole view store is injected for the component to pick fields from, and a module-level handle takes instance lifecycle away from the framework:
 
 ```tsx
-// The component receives the store and picks its own fields.
+// The component receives the store itself and picks its own fields.
 const inject = () => ({ viewStore })
 
 function SidebarHeader({ viewStore }: Props) {
   return <button onClick={viewStore.select}>{viewStore.activePanel.title}</button>
 }
 
-// One key for several pane instances.
-createPaneStore({ persistKey: 'pane' })
+// Module-level handle: one identity shared by every plugin load.
+export const paneStore = createPaneStore()
 ```
 
-The component's dependency face stops being auditable, and the shared key makes two pane instances overwrite each other's state on hydrate.
+The component's dependency face stops being auditable, and the shared module identity outlives every scope teardown: two panes end up on one instance instead of one each.
 
 ## Identity and initial state are deliberate
 

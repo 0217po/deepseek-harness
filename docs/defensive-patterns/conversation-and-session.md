@@ -87,9 +87,7 @@ Every miss now reads the whole log in the foreground, so a slow Session is slow 
 A client holds a Session through an explicit reference (`SessionReference`), and the reference count reaching zero releases it. Idle reclamation follows the one lifecycle rule — no references and nothing in flight — and never enumerates which Sessions may be reclaimed from business state, because that list has to be maintained by every feature that adds one. An implicit holder is invisible, so reclamation cannot tell who still uses the Session.
 
 - Judged condition: the predicate is `refCount == 0 && inflight == 0`. Does the code hold the Session across its acquire → use window through a reference that retain and release can be audited against? A module-level Session object or a global current id is the violation.
-- Current design, not a hard requirement: reference count zero releases the Session today, and that is the rule in force, but the exact release trigger is checked by hand and is not by itself a rejection reason. The enforced parts are the unified predicate and the absence of business-state enumeration.
-- Backend status: Session references are not implemented on the backend yet; once they exist they use the same explicit references and lifecycle management. Code that assumes an implicit backend hold is premature.
-- Evidence: the predicate is recorded as secondary evidence, so re-read the retention contract before citing it. Do not weaken the two parts it does establish — an explicit reference, and no business-state enumeration.
+- Boundary: the enforced parts are the unified predicate and the absence of business-state enumeration; the release trigger itself is checked by hand, so hand-checking alone is not a rejection reason.
 - Ownership: `retain`, `release`, `ready`, and teardown ordering belong to [the Session Controller's client references](../../packages/api/session-controller/README.md#client-references). A source-session mention carried in a message is a different type, owned by [session-reference.md](../subsystems/session-reference.md).
 
 A view that retains through an explicit reference and releases it on teardown complies:
@@ -132,7 +130,7 @@ Nobody can count who still uses the Session, and the next state added to the Ses
 A new node computation states its complexity, and high-frequency streaming chunks never publish immediately and never recompute in full. A per-chunk full rebuild published at once puts the whole node collection on the frame budget, and the transcript stalls behind the stream. The append-path cost — with `D` registered Definitions, `D` matches and one constant-time Context-key lookup — and the publication vocabulary (`none`, `animation-frame`, `immediate`) are owned by [conversation.md](../subsystems/conversation.md#definition-and-typed-chat-payload).
 
 - Judged condition: how much one chunk computes — the increment on the affected subtree, not the event window — and when its result is published — a batching policy, not one publication per chunk.
-- Development requirement, not a review rejection: the implementation must follow this rule; a reviewer does not reject a change for its cadence alone.
+- Boundary: this rule binds the implementation; cadence alone is not a rejection reason, so a change is judged on the cadence it states and the published path it uses.
 - Forbidden on the high-frequency path: `immediate` publication, and a full recomputation per chunk.
 - Boundary: a structural or terminal change may publish `immediate`, because the cadence is chosen per publication. Only the high-frequency delta path is bound to batching.
 
@@ -166,7 +164,7 @@ Each chunk costs a full-window rebuild inside the frame budget, so grouping and 
 Business rules never enter the grouping engine, and a business requirement never reshapes the built payload. `ProcessState`, the group product hierarchy, and the set of group semantics in `conversation-nodes/process-groups.ts` are infrastructure: the engine understands enum placement values such as grouped, standalone, and reply, and the caller computes which one applies. A special case inside the engine changes the produced structure for every consumer and puts a business condition on the group computation path.
 
 - Judged condition: does the engine contain a business condition? A diff that adds a `ProcessState` field, adds or removes a group level, or changes group semantics for one business fails; the placement decision belongs to the caller that computes the enum value.
-- Design status: the build and grouping design cannot be substantially reworked. The layering, its cost, and existing business expectations are the reason.
+- Boundary: the layering, its cost, and existing business expectations are the reason a business does not rework the grouping design.
 - Boundary: a new enum value carrying a new placement meaning is the supported extension, wherever the caller computes it.
 - Exception and approver: none by default. A change to this infrastructure needs the corresponding domain expert's confirmation. [conversation.md](../subsystems/conversation.md#group-definitions) owns the group Definition types.
 
@@ -244,18 +242,24 @@ One feature's condition now decides how every node renders, and the shared seat 
 - Boundary: generic Markdown capability — syntax support, performance — is not a business modification.
 - Exception and approver: none by default; the corresponding domain expert confirms any exception.
 
-A contribution that registers on the existing chain, and a host that keeps the official fallback:
+A contribution that registers into the existing single seat, and reuses the published Factory instead of re-rendering the standard content:
 
 ```tsx
-// The business registers a renderer; AssistantMarkdown itself stays generic.
-ctx.slots.inject('conversation.chat.reasoning-body', () => ctx.slots.register(
-  { name: 'conversation.chat.reasoning-body', locale: NS, select: owner => owner },
-  ({ text, running }) => <TranslatedReasoning text={text} running={running} />,
+// The business contributes its own body into the seat the host already renders.
+ctx.slots.inject('conversation.chat.reasoning.body', () => ctx.slots.register(
+  { name: 'conversation.chat.reasoning.body', scope: 'session', locale: NS },
+  TranslatedReasoningBody,
 ))
 
-// The host invokes the chain at the position it owns and keeps the official fallback.
-{renderReasoningBody('conversation.chat.reasoning-body', { text, running, setHeaderAction },
-  { fallback: <MarkdownText text={text} variant="compact" /> })}
+// The contribution keeps the standard rendering by calling the published Factory.
+function TranslatedReasoningBody({ text, running, renderFactorySlot, t }: ReasoningBodyProps) {
+  return (
+    <>
+      <p>{t('reasoning.translated')}</p>
+      {renderFactorySlot('conversation.chat.reasoning.content', { text, running })}
+    </>
+  )
+}
 ```
 
 A business branch inside the shared Markdown pipeline:

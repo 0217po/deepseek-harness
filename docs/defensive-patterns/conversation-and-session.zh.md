@@ -87,9 +87,7 @@ function readListing(header: SessionHeader, session: Session): ListingView {
 客户端经显式引用（`SessionReference`）持有 Session，引用计数归零即释放。闲置回收只看那一条生命周期判据——零引用且无在途——绝不按业务状态枚举「哪些 Session 可以回收」，因为那份清单要靠每个新增状态的业务功能自己去维护。隐式持有者不可见，回收便判断不了谁还在使用该 Session。
 
 - 判定条件：判据 = `refCount == 0 && inflight == 0`。代码是否在「获取 → 使用」的时间窗口内通过一份可审计 retain / release 的引用来持有 Session？模块级 Session 对象或全局 current id 都属违规。
-- 现行设计，非硬性要求：引用计数归零即释放 Session，这是当前生效的规则，但确切释放时机靠人工检查，本身不作为打回理由。被强制执行的是统一判据与「不按业务状态枚举」这两点。
-- 后端状态：后端 session reference 尚未实现；实现后一律走同样的显式 reference 与生命周期管理。假定后端存在隐式持有的代码为时过早。
-- 证据强度：该判据属次要证据，引用前须回读 retainer 契约。它确实确立的两点不得弱化——显式引用，以及不按业务状态枚举。
+- 边界：强制的是统一判据与不做业务状态枚举这两点；释放触发本身靠人工核对，因此仅凭人工核对不构成打回理由。
 - 归口：`retain`、`release`、`ready` 与 teardown 顺序归 [Session Controller 的 client references](../../packages/api/session-controller/README.zh.md#client-references)。消息里携带的 source session mention 是另一种类型，归 [session-reference.zh.md](../subsystems/session-reference.zh.md)。
 
 经显式引用持有并在 teardown 释放的视图合规：
@@ -132,7 +130,7 @@ export function reclaimIdle(): void {
 新增节点计算要说明其复杂度；高频流式 chunk 绝不立即发布、也不做全量计算。每个 chunk 全量重算并立即发布，等于把整个节点集合压进帧预算，转写区便会堵在流后面。追加速路径的开销——在 `D` 个已注册 Definition 下执行 `D` 次匹配与一次常量级 Context key 查找——以及发布节拍取值（`none`、`animation-frame`、`immediate`）归 [conversation.zh.md](../subsystems/conversation.zh.md#definition-and-typed-chat-payload)。
 
 - 判定条件：单个 chunk 计算了多少——受影响子树的增量，而不是事件窗口——以及结果何时发布——合批策略，而不是每个 chunk 发布一次。
-- 属开发要求，不作 review 打回依据：实现必须遵守本条；评审不单凭节拍选择打回改动。
+- 边界：本条约束实现；节拍本身不构成打回理由，改动按它声明的节拍与所用的已发布路径评判。
 - 高频路径上禁止：`immediate` 发布，以及每个 chunk 做一次全量重算。
 - 边界：结构性或终态变化可以 `immediate` 发布，因为节拍是按单次发布选择的。只有高频 delta 路径受合批约束。
 
@@ -166,7 +164,7 @@ function onChunk(chunk: AssistantLiveChunk): void {
 业务规则绝不进入分组引擎，业务诉求也绝不改变构建产物的形态。`ProcessState`、分组产物层级，以及 `conversation-nodes/process-groups.ts` 里的分组语义集合都属基础设施：引擎只认枚举化的落位语义（如成组 / 独立 / 回复），由调用方算出该用哪一个。引擎内的业务特判会改变所有使用方共享的产物结构，并把业务条件带上分组计算路径。
 
 - 判定条件：引擎内部是否存在业务条件？新增 `ProcessState` 字段、增删分组产物层级、为某个业务改变分组语义，都属违规；落位判定归算出枚举值的调用方。
-- 设计状态：当前构建与分组设计不能大改。架构分层、其开销与既有业务预期就是原因。
+- 边界：架构分层、其开销与既有业务预期，就是业务不得重做分组设计的原因。
 - 边界：携带新落位含义的新枚举值才是受支持的扩展，无论调用方在哪里算出它。
 - 例外与批准人：无默认例外。改动该基础设施须经对应领域专家确认。分组 Definition 类型归 [conversation.zh.md](../subsystems/conversation.zh.md#group-definitions)。
 
@@ -244,18 +242,24 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({ node, handoffFlag }: Ch
 - 边界：通用 Markdown 能力——语法支持、性能优化——不属于为业务诉求修改。
 - 例外与批准人：无默认例外；任何例外须经对应领域专家确认。
 
-在既有链上注册的 contribution，与保留官方 fallback 的宿主：
+注册进既有单席位、并复用已发布 Factory（而不是自己重渲标准内容）的 contribution：
 
 ```tsx
-// The business registers a renderer; AssistantMarkdown itself stays generic.
-ctx.slots.inject('conversation.chat.reasoning-body', () => ctx.slots.register(
-  { name: 'conversation.chat.reasoning-body', locale: NS, select: owner => owner },
-  ({ text, running }) => <TranslatedReasoning text={text} running={running} />,
+// The business contributes its own body into the seat the host already renders.
+ctx.slots.inject('conversation.chat.reasoning.body', () => ctx.slots.register(
+  { name: 'conversation.chat.reasoning.body', scope: 'session', locale: NS },
+  TranslatedReasoningBody,
 ))
 
-// The host invokes the chain at the position it owns and keeps the official fallback.
-{renderReasoningBody('conversation.chat.reasoning-body', { text, running, setHeaderAction },
-  { fallback: <MarkdownText text={text} variant="compact" /> })}
+// The contribution keeps the standard rendering by calling the published Factory.
+function TranslatedReasoningBody({ text, running, renderFactorySlot, t }: ReasoningBodyProps) {
+  return (
+    <>
+      <p>{t('reasoning.translated')}</p>
+      {renderFactorySlot('conversation.chat.reasoning.content', { text, running })}
+    </>
+  )
+}
 ```
 
 业务分支写进共享 Markdown 管线：

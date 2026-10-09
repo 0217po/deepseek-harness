@@ -72,7 +72,7 @@ The wrong form keeps the contract vague and swallows the error, so the next call
 
 An unknown value, an empty collection or string, and a genuinely absent field are three different facts and take three representations. One `undefined` or `null` never stands for several of them, and a consumer that must act differently on each discriminates explicitly instead of collapsing them at the boundary.
 
-The judged condition is whether a single "no value" carries more than one semantic: not yet queried, queried and empty, and cannot be determined. A discriminated union or an explicit enum value is the ordinary implementation, documented where the type is defined in [core.md](../subsystems/core.md#repo-wide-type-patterns). One named exception: `catalog` membership reporting is a specific development requirement, not a general pattern to copy.
+The judged condition is whether a single "no value" carries more than one semantic: not yet queried, queried and empty, and cannot be determined. A discriminated union or an explicit enum value is the ordinary implementation, documented where the type is defined in [core.md](../subsystems/core.md#repo-wide-type-patterns).
 
 ```ts
 type ValueState<T> = { kind: 'unknown' } | { kind: 'empty' } | { kind: 'value'; value: T }
@@ -150,16 +150,20 @@ The wrong form makes every new capability edit the center layer, which becomes t
 
 A change that can move the cost of a hot path measures the code it touched before and after and reports the numbers with their conditions. The three metrics are runtime, peak memory, and steady-state memory, measured in one environment on one input; the granularity is the changed path, not a whole-machine score. Reporting that "nothing got slower overall" is not evidence, and a path that improved elsewhere does not excuse a regression here — an optimised first paint still has to answer for `append`.
 
-The baseline is the native implementation with no hook attached, not the previous implementation. Comparing old against new with the same hook attached on both sides dilutes the difference until it disappears: both sides pay the same overhead, so the measurement reports "no change" while both are slow. CI benchmark output is an alert, not a pass — a regression there is located by profiling segments locally to find which part slowed and which change introduced it.
-
-Boundaries: edits that touch no runtime path — comments, documentation, test-only code — need no measurement, and production performance code is not benchmark instrumentation to be deleted opportunistically (`performance.now()` and `scheduler.yield()` are part of production decode and encode chunk scheduling). An architectural change that genuinely costs performance states the measured cost and the reason, and the domain owner approves it; "the layering needed it" is not a self-service reason. Record the command, the numbers, the environment, and the input size so the baseline can be rebuilt.
-
 The judged condition: under one environment and one input, any of the three metrics is significantly worse on the changed path.
 
+The baseline is the same path without the change under measurement — normally the native implementation that carries no measurement hook, not the previous implementation. Comparing old against new with the same hook attached on both sides dilutes the difference until it disappears: both sides pay the same overhead, so the measurement reports "no change" while both are slow.
+
+Measurement is owned by [benchmarks/](../../benchmarks/AGENTS.md), one directory per measured user path, and its scenarios are the entry point:
+
 ```sh
-# Before and after, same environment and input; the numbers go into the PR.
-pnpm run bench --filter <pkg> -- --scenario <name>
+# Run the owning scenario before and after the change; the numbers go into the PR.
+pnpm run test:bench
 ```
+
+Package-local diagnostics stay beside their owner with the `.perf.ts` suffix and do not join `test:bench`. The CI gate is `pnpm run check:ci:bench` (job `node 24 / benchmarks`), which publishes a scaled report — that gate is an alert, not a pass: a regression there is located by re-running the owning scenario and profiling segments locally to find which part slowed and which change introduced it. Retained-memory claims use `pnpm run test:bench:memory 4g|8g`, which reruns its listed files under an unchanged budget in a swapless cgroup.
+
+Boundaries: edits that touch no runtime path — comments, documentation, test-only code — need no measurement, and production performance code is not benchmark instrumentation to be deleted opportunistically (`performance.now()` and `scheduler.yield()` are part of production decode and encode chunk scheduling). An architectural change that genuinely costs performance states the measured cost and the reason, and the domain owner approves it; "the layering needed it" is not a self-service reason. Record the command, the numbers, the environment, and the input size so the baseline can be rebuilt.
 
 ```text
 CI benchmark reported green, so the change is accepted as performance-neutral.

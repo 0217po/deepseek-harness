@@ -48,7 +48,7 @@ class ApiProxy {
 
 - **标能力方法。** 标注落在执行该操作的具体方法上（`list`、`prompt`、`interruptByParent`），绝不落在转发给真正实现的壳方法上。判定看被标注方法的函数体：函数体只做转发，标注就标错了方法。
 - **类型靠推断。** 面向 Client 的类型从生成结果取别名——`type SessionRemote = TypertClientRemote['session']`——而不是重写一份。判定看是否出现字段与生成的 Client 类型重复的手写声明；生成映射及其声明合并的正家是 [typert.zh.md](../subsystems/typert.zh.md)。
-- **只 JSON、不做输出侧 decode。** Remote 的参数与结果都是 JSON，二进制在字段级表达。`@Remote` 不做输出侧 decode；结果由生成的 codec 与 Gateway 校验。判定看带该标注的方法上是否出现 decode、流重组或整体非 JSON 值；可跨越 Remote 方法的内容正家是 [编程模型](../api-gateway.zh.md#programming-model)。
+- **线上载荷只承载 JSON、不做输出侧 decode。** Remote 方法的**线上载荷**是 JSON，二进制在字段级表达。Host 签名保留 Gateway 已支持的形式——经解析变成 Host 对象的 lookup 参数、末尾的 `AbortSignal`、以 `@Remote({ mode: 'stream' })` 声明的流式返回；`@Remote` 不做输出侧 decode，结果由生成的 codec 与 Gateway 校验。判定看带该标注的方法上是否出现 decode、流重组或整体非 JSON 值；可跨越 Remote 方法的内容正家是 [编程模型](../api-gateway.zh.md#programming-model)。
 - **存量名只增不改。** 迁移不改 Client 已在调用的远程方法名或字段名；新语义新增条目，改名是独立的一刀、单独评审。判定看 diff 是否改名或删除了已经经 `ctx.remote.<namespace>` 暴露的名字。
 - **不覆盖。** 不带该标注的方法仍是有进程内调用者的普通 service 方法；这四项纪律约束的是什么成为 Remote 方法，而不是 service 可以实现什么。
 - **例外。** 确需改名或新增 decode 路径，须先说明收益与对既有调用方的影响，并取得对应领域专家的确认；作者不得自行批准。
@@ -62,9 +62,9 @@ import { Remote, TypertRemoteService, type TypertClientRemote } from '@deepseek-
 type SessionRemote = TypertClientRemote['session']
 
 class SessionController extends TypertRemoteService {
-  @Remote('rename')
-  rename(id: string, title: string): SessionRenameValue {
-    return this.applyRename(id, title)
+  @Remote('search')
+  search(query: string): SessionSearchValue {
+    return this.runSearch(query)
   }
 }
 ```

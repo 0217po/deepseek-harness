@@ -4,13 +4,13 @@ English | [中文](package-surface.zh.md)
 
 Rules for what a package exports, how it is built, and how it declares dependencies. [development.md](../development.md#typescript-project-layout) describes the layout itself; [packages/AGENTS.md](../../packages/AGENTS.md) carries the standing orders.
 
-## A plugin package exports the Loader four
+## A plugin package exports what the Loader loads
 
-A plugin package's entry point exports `name`, `inject`, `Config`, and `apply`, and no other value; `name`, `inject`, and `apply` are lower-case, while `Config` is upper-case and appears both as an `interface` and as its Schemastery schema value. Cross-package references carry types only, so a new import of a value from another package is not allowed. A same-package test reaches internals directly through a relative `../src/...` path or the `./src/*` subpath, so a test-only need never becomes a permanent export. The rule stops a test convenience from freezing into published API and stops value references from spreading across package boundaries, where every later refactor has to follow them.
+A plugin package's entry point takes one of two forms, and they are not mixed. A **function plugin** named-exports `name`, `inject`, `Config`, and `apply`: `name`, `inject`, and `apply` are lower-case, while `Config` is upper-case and appears both as an `interface` and as its Schemastery schema value. A **service plugin** default-exports its service class, which is how the Loader loads it; a default export beside the four makes the Loader discard the function plugin's namespace. Beyond those, a Host entry may export the Service Definition classes and error types that other packages extend or throw — the capability seam consumes exactly those — and never a test-convenience value. The `/client` entry of a UI plugin package is stricter, and [packages/client/AGENTS.md](../../packages/client/AGENTS.md) owns that discipline: a same-package test reaches internals through a relative `../src/...` path or the `./src/*` subpath, so a test-only need never becomes a permanent export. The rule stops a test convenience from freezing into published API.
 
 - The Loader four and its exact form are defined in [cordis-primer.md](../cordis-primer.md#loader-configuration).
-- Judged condition: the plugin entry (`src/index.ts`) exports an entity beyond the four; a cross-package import names a value instead of a type; a fixture reaches another package by relative path.
-- Boundary: only Loader plugin entry points are constrained. Internal modules, helper functions, and hooks keep exporting values, and a test fixture stays inside its own package — a relative path into another package's `src` bypasses the `exports` map and the package-boundary checks.
+- Judged condition: a function plugin's entry (`src/index.ts`) exports an entity beyond the four; a default export is added beside the four, or the two forms are mixed; a `/client` entry exports an implementation value or lets another feature plugin import one; a fixture reaches another package by relative path.
+- Boundary: only Loader plugin entry points are constrained. Internal modules, helper functions, and hooks keep exporting values; a Host entry's Service Definition classes and error types are expected exports; and a test fixture stays inside its own package — a relative path into another package's `src` bypasses the `exports` map and the package-boundary checks.
 - Exception: none by default; an exception that is genuinely needed requires the domain owner's confirmation.
 
 The compliant entry — the four exports, with the same-package test path recorded as a comment rather than as a fifth export.
@@ -35,8 +35,8 @@ Three ways the entry gains an export it must not have; all three are visible in 
 // The entry widened so a test could reach one helper
 export { isHeaderLine } from './internal/header.ts'
 
-// A value imported across packages
-import { deriveEventMessage } from '@deepseek-ai/dsh-session'
+// Both plugin forms on one entry: the Loader discards the four
+export default class WebApp {}
 
 // A fixture reaching into another package by relative path
 import { isSurfaceEligibleType } from '../../core/session/src/surface.ts'
@@ -44,10 +44,10 @@ import { isSurfaceEligibleType } from '../../core/session/src/surface.ts'
 
 ## Two package shapes, and both are dynamic plugin packages
 
-A package is either a Host package or a Host + Client package, and both are dynamic plugin packages; a new package takes one of those two forms, with no third form and no exception. Only a genuine both-face package splits its compiler faces, build output goes to `lib`, and the `include`, `external`, and roster lists are derived by scanning the workspace rather than hand-written. A hand-written list or an invented compiler face makes build output and the manifest disagree, and every later package would have to maintain its own list.
+A new package is either a Host package or a Host + Client package, and both are dynamic plugin packages; no third form is available and there is no exception. The static client libraries the shell seeds through `PLATFORM_MODULES` in [packages/client/web/src/platform.ts](../../packages/client/web/src/platform.ts) — `client-store`, `ui-slots`, `ui-primitives`, `ui-dockkit` — and the zero-dependency libraries under [packages/util/](../../packages/util/) predate this rule and are closed: they keep working as they are, and a new package never joins them. Only a genuine both-face package splits its compiler faces, build output goes to `lib`, and the `include`, `external`, and roster lists are derived by scanning the workspace rather than hand-written. A hand-written list or an invented compiler face makes build output and the manifest disagree, and every later package would have to maintain its own list.
 
 - Judged condition: a new package built as anything but a dynamic plugin package (static-link bundling, a hand-written all-external list); a third `tsconfig` variant; a hand-written `include`, `external`, or roster list.
-- Census over `packages/*/*`: 330 packages carry a `tsconfig.json`, 24 are both-face (`tsconfig.json` plus `tsconfig.client.json` and `tsconfig.host.json`), 75 declare `dsh.client`, 87 export `./client`, and 330 point `main` at `lib/`.
+- Recompute the shapes instead of trusting a number here: list the `tsconfig.json` files under `packages/*/*`, then the packages that also carry `tsconfig.client.json` and `tsconfig.host.json`, then those declaring `dsh.client`.
 - Boundary: a both-face package may appear in `include` or `exclude`.
 - Exception: none; there is no approval path. A change to a package's shape or compiler faces starts with the owning documents and needs the domain owner's confirmation.
 - Owners: [development.md](../development.md#typescript-project-layout) for the compiler faces, [packages/README.md](../../packages/README.md) for the package groups, and [adding-a-package.md](../cookbook/adding-a-package.md) for the steps.
@@ -76,7 +76,7 @@ A hand-written `external` list — and a `tsconfig.foo.json` invented beside it 
 
 A `package.json` `exports` map uses only the standard key set, in which every key already has one meaning across the repository, and a package never opens a key for its own local purpose. A key that only a handful of packages use without a documenting owner is not a precedent: formalizing a key, including one of the undocumented keys below, means changing the owning document and the check in the same change. The small shared key set is what lets a consumer infer a key's purpose from its name and lets a scan judge the export map at all.
 
-- Standard keys, with the number of packages using each across `packages/*/*/package.json` and `apps/*/package.json`: `.` (330, the package entry), `./package.json` (332, toolchain access, not a semantic export), `./src/*` (315, source passthrough for tests and tools, whose documented status is still open), `./client` (87, the browser entry, paired with the `dsh.client` declaration), `./types` (64, the type entry), `./typert` (28, the typert type runtime), `./remote` (28, the `@Remote` call surface), `./locale/*.json` (26, locale resources), `./cordis.patch.yml` (19, the bundle patch layer declared by `dsh.bundle`).
+- Standard keys, each with one meaning repo-wide, across `packages/*/*/package.json` and `apps/*/package.json`: `.` (the package entry), `./package.json` (toolchain access, not a semantic export), `./src/*` (source passthrough for tests and tools, whose documented status is still open), `./client` (the browser entry, paired with the `dsh.client` declaration), `./types` (the type entry), `./typert` (the typert type runtime), `./remote` (the `@Remote` call surface), `./locale/*.json` (locale resources), `./cordis.patch.yml` (the bundle patch layer declared by `dsh.bundle`). Counts are not listed here because they rot on the next package; the recompute command below prints them.
 - Keys outside that set (`./brand` in 5 packages, `./worker` in 4, `./startup`, `./runner`, and `./protocol` in 2 each, plus many one-off keys) have no documented meaning; they are pending review, not a pattern to copy.
 - Judged condition: does a change add an export key outside the standard set?
 - Exception: none by default; a new key changes the owning document and the check first, with the domain owner's confirmation.
@@ -151,7 +151,7 @@ Internal dependency syntax follows the package family: `@deepseek-ai/dsh` and `@
 
 - Judged by `workspaceRange()` in [verify-package-dependencies.ts](../../scripts/verify-package-dependencies.ts): the `@deepseek-ai/dsh` and `@deepseek-ai/dsh-*` families get `workspace:*`, every other internal package gets `workspace:~`; the scan walks the managed manifests and compares every declaration of the same dependency name.
 - Boundary: a same-namespace package that is not a workspace member declares an ordinary third-party range and is outside the family rule — `@deepseek-ai/libreoffice-kit` is declared `^0.1.5` in `apps/desktop-host/package.json` (dependencies), `packages/bundle/web-app/package.json` (devDependencies), `packages/document/office-to-pdf/package.json` (dependencies), and `packages/skill/skill-office/package.json` (dependencies).
-- Distribution (the command below prints the current numbers): `workspace:*` 4216, `workspace:~` 1034, `workspace:^` 0, plus the four `^0.1.5` declarations above.
+- Distribution is not restated here; the recompute command below prints the current counts of `workspace:*`, `workspace:~`, `workspace:^`, and any exact-range declaration outside the family rule.
 - Exception: the scan decides mechanically; a genuine exception means changing the scan and the policy file with the domain owner's confirmation and the reason on the change.
 - Recompute:
 

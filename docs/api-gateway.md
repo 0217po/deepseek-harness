@@ -166,6 +166,4 @@ Lookup policy is configured per key, so all `agent` or `session` parameters shar
 
 ### Business ownership
 
-`packages/api` owns transport, call shape, and session lifecycle. A business rule — a state-dependent decision, a feature-specific handling path, or a per-feature filter — belongs to an independent business package and reaches this layer through a registration surface or projected data. A new business branch here needs an independent-package review.
-
-A new remote capability declares its own service instead of growing an existing one, marks the capability method with `@Remote`, and leaves client-facing types to inference. Remote payloads stay JSON with no output-side decode, and existing method and field names are additive.
+`packages/api` owns transport, call shape, and session lifecycle; a business rule belongs to an independent business package and reaches this layer through a registration surface or projected data. The requirements a change here must satisfy — the four `@Remote` disciplines, the additive-names rule, and the boundary this layer keeps — are owned by [Remote and API rules](defensive-patterns/remote-and-api.md), which is where a review checks them.

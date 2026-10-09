@@ -6,26 +6,34 @@
 
 ## 状态经 Injection 到达
 
-Slot 的组件经其渲染点绑定的 Injection 面获得它渲染所需的一切——owner props、hook 席位与 action——绝不先在顶层读一棵大全局状态再逐层手工传下去。把每个活值都放在这个面上，props 才能在没变时保持引用不变，组件也才能只订阅自己读取的那部分子状态。缺了这条，任何一个无关字段变化都会重渲整棵子树——长会话在流式事件下的掉帧、滚动与输入卡顿就是这么来的。
+Slot 的组件经**自己注册项**的 inject 面获得它渲染所需的一切——普通数据、action 回调，以及渲染器绑定成 `use<Name>` hook 的保留 `hooks` 隔间——而父组件的渲染点经派生的 `renderSlot` 传 owner 数据。它绝不先在顶层读一棵大全局状态再逐层手工传下去。把每个活值都放在那个面上，props 才能在没变时保持引用不变，组件也才能只订阅自己读取的那部分子状态。缺了这条，任何一个无关字段变化都会重渲整棵子树——长会话在流式事件下的掉帧、滚动与输入卡顿就是这么来的。
 
-- 判定方式：每个 `slots.render` 点上的作者都必须能回答两件事——被渲染组件订阅了哪些子状态，以及它收到的哪些 props 在多次渲染之间保持引用稳定。要盯住每个 prop 的可变性：每次渲染都重建的值（新对象、新数组、内联回调）即使内容没变也会向下传播重渲。
+- 判定方式：在注册项与其渲染点上，作者都必须能回答两件事——被渲染组件订阅了哪些子状态，以及它收到的哪些 props 在多次渲染之间保持引用稳定。要盯住每个 prop 的可变性：每次渲染都重建的值（新对象、新数组、内联回调）即使内容没变也会向下传播重渲。
 - 不在范围内：组件自己的局部状态（折叠、悬停、草稿用的 `useState`）不属于注入内容；不订阅 React 之外任何东西的组件也不需要新席位。
-- 例外：新增注入面或 hook 席位会改动 Slot 契约，因此该改动要在 review 中说明影响面——哪些组件订阅什么；使用既有注入面不需要逐组件批准。
+- 例外：新增 hook 席位会改动 Slot 契约，因此该改动要在 review 中说明影响面——哪些组件订阅什么；使用既有注入面不需要逐组件批准。
 - 修法：把注入收窄到该视图真正渲染的内容，每个读取项经一个 hook 席位暴露一个字段，用窄 action 集合取代 store 或 service 句柄。[组件输入](../subsystems/slots.zh.md#component-inputs) 正家负责 inject 工厂、标准 hook 席位，以及它们各自如何成为 prop。
 
-渲染点只注入一个 hook 席位与一组窄 action，组件只读它渲染的那个字段：
+注册项承载普通数据、一组窄 action 与一个 hook 席位；渲染点只传 owner 数据，组件只读它渲染的那个字段：
 
 ```tsx
-// Render site: plain owner data, one hook seat, a narrow action set.
-slots.render('sidebar.right', {
-  props: { id },
-  useHooks: SidebarHooks,
-  action: { rename, archive },
-})
+// The inject factory returns plain data and callbacks; hooks is the reserved compartment.
+ctx.slots.register(
+  {
+    name: 'sidebar.right',
+    inject: () => ({
+      rename,
+      hooks: { info: infoSource },   // bound by the renderer as useInfo()
+    }),
+  },
+  SidebarRight,
+)
 
-function SidebarRight({ id, useInfo, action }: Props) {
+// The parent's render site passes owner data through the derived renderSlot.
+{renderSlot('sidebar.right', { id })}
+
+function SidebarRight({ id, useInfo, rename }: Props) {
   const { title } = useInfo()   // subscribes to title only
-  return <button onClick={() => action.rename(id)}>{title}</button>
+  return <button onClick={() => rename(id)}>{title}</button>
 }
 ```
 
@@ -86,39 +94,40 @@ type ToolCardProps = {
 
 ## slot 注册物是稳定的 function component
 
-注册进 slot 的值是在模块作用域声明的稳定 function component；席位渲染固定文本时也可以是纯字符串。渲染期创建的组件函数每一轮都是新的组件类型，而 React 把变化的类型当作另一个组件：它卸载这棵子树并挂载一棵新的，展开的行、输入焦点与滚动位置随之重置。注册期参数经 props 到达组件，而不是靠闭包捕获渲染期变量。
+注册进 slot 的值是在模块作用域声明的稳定 function component。渲染期创建的组件函数每一轮都是新的组件类型，而 React 把变化的类型当作另一个组件：它卸载这棵子树并挂载一棵新的，展开的行、输入焦点与滚动位置随之重置。注册期参数经 props 到达组件，而不是靠闭包捕获渲染期变量。
 
-- 判定方式：注册物在哪里创建。注册调用里的内联箭头、渲染函数体内定义的组件、以及用 `useCallback` 包住内联组件的写法都不合格；模块作用域的 `function` 声明或字符串合格。
-- 不在范围内：本条约束的是注册物的身份，不是它的复杂度。稳定组件照样可以读取注入的 props、hooks 与回调，固定文本席位也可以保持为字符串。
+- 判定方式：注册物在哪里创建。注册调用或渲染调用里的内联箭头、渲染函数体内定义的组件、以及用 `useCallback` 包住内联组件的写法都不合格；模块作用域的 `function` 声明合格。
+- 不在范围内：本条约束的是注册物的身份，不是它的复杂度。稳定组件照样可以读取注入的 props、hooks 与回调。
 - 例外：只有调用方确实想要这次重挂载时，渲染期创建组件才是对的，普通改动无需单独批准；Slot 契约形态的变更按「状态经 Injection 到达」一节描述的注入面 review 走。
 - 修法：把组件移到模块作用域，用注册面的各个 share 给它的 props 定型，让变化的值经 inject 面传入而不是走闭包。
 
-注册物持有对模块作用域组件的稳定引用，变化的值经注入到达：
+注册项持有对模块作用域组件的稳定引用，变化的值经注入到达；局部组件由渲染点传入：
 
 ```tsx
 function PanelTitle({ title, count }: Props) {
   return <span>{title} ({count})</span>
 }
 
-// The registration holds one stable reference to the module-scope component.
+// Registration: the local slot's scope is declared, never a component.
 ctx.slots.registerFactory(
   {
     name: 'panel',
-    slots: { title: PanelTitle },
+    scope: 'root',
+    slots: { title: { scope: 'root' } },
     inject: () => ({ title: 'Sessions', count: 3 }),
   },
   Panel,
 )
+
+// The render site passes the local component, keeping its identity stable.
+renderFactorySlot('panel', { /* owner data */ }, { slots: { title: PanelTitle } })
 ```
 
-注册调用里的内联箭头会在注册每次运行时产生新的组件类型：
+渲染调用里的内联箭头会在该次渲染运行时产生新的组件类型：
 
 ```tsx
-// A new component type each time this registration runs.
-ctx.slots.registerFactory(
-  { name: 'panel', slots: { title: (p) => <span>{p.title}</span> } },
-  Panel,
-)
+// A new component type each time this render runs.
+renderFactorySlot('panel', { /* owner data */ }, { slots: { title: (p) => <span>{p.title}</span> } })
 ```
 
 React 看到的类型与上一次注册不同，于是重挂载该席位，并在一次无关更新中重置它的局部状态——展开态、焦点或滚动位置。
@@ -187,18 +196,19 @@ const activeTabId = globalThis.__activeTabId   // every tab reads the same value
 - 例外：重塑快照自由，但把协议差异藏进条件分支的包装要在 review 中说明归属；新协议的 hook 由该协议的拥有者提供。
 - 修法：在领域 hook 内调用 `useResource`，把结果映射成组件要渲染的内容，删掉自建缓存。
 
-领域 hook 包装 `useResource` 且只重塑其结果，底层因此保持唯一：
+领域包装接收注入的 hook 作为参数，并且只重塑其结果，底层因此保持唯一：
 
 ```tsx
-// The bottom layer is the standard hook; the wrapper only reshapes it.
-export function useChatResource(id: string) {
-  const { status, value } = useResource<ChatData>(`dsh-resource://chat/${id}`)
-  if (status !== 'live' || value === undefined) return { messages: [], loading: true }
-  return { messages: value.messages, loading: false }
+// The bottom layer is the standard hook, reached through the component's inject face.
+function useChatMessages(useResource: UseResource, id: string) {
+  const resource = useResource<'chat'>(`dsh-resource://chat/${id}`)
+  return resource.status === 'live' && resource.value !== undefined
+    ? { messages: resource.value.messages, loading: false }
+    : { messages: [], loading: true }
 }
 
 function ChatBody({ id, useResource }: Props) {
-  const { messages } = useChatResource(id)
+  const { messages } = useChatMessages(useResource, id)
   return <ol>{messages.map((message) => <li key={message.id}>{message.text}</li>)}</ol>
 }
 ```
@@ -220,44 +230,47 @@ export function useTabStream(id: string) {
 
 ## Store 用法窄而明确
 
-前端 store 承载共享的查看或交互状态，单实例 store 原则上经自己的 `persist()` 与 `hydrate()` 支持持久化。多实例 store 标注为不持久化，该设计仍待定。store 的属性与改动这些属性的 action 被封装成窄接口注入，因此组件拿到的是这些以及它需要的选择器，绝不拿整个 view store。业务数据住在对象层而不是 store 里，设置变更走设置接口，不走 store 状态。
+前端 store 承载共享的查看或交互状态。它的 spec 声明初始状态、改动这些状态的 action，以及在值需要跨重载存活时由框架机械执行的持久化键——session 作用域的实例会在该键上追加 scope key，因此每个会话的实例各自独立持久化。store 的属性与改动这些属性的 action 被封装成窄接口注入，组件只拿到这些以及它需要的选择器，绝不拿整个 view store。业务数据住在对象层而不是 store 里，设置变更走设置接口，不走 store 状态。
 
-- 判定方式：注入面是窄接口还是 store 对象本身，以及该 store 是一个实例还是多个实例。
-- 持久化：一个实例就用 `persist()`/`hydrate()`；多个实例就明确标注「不持久化」。需要 rollback 的使用者不多，多实例持久化目前没有硬性要求，给多实例 store 强加持久化键才是违规形态。
-- 不在范围内：不改设置时，渲染状态放 store 没问题；组件局部状态也不是 store 内容。[Store 契约](../subsystems/slots.zh.md#component-inputs) 正家负责声明的 store 如何变成 props，[Web Client 架构](../subsystems/web-client.zh.md) 正家负责业务数据住在哪里。
-- 例外：多实例持久化方案尚未确认，那里的改动需要对应领域专家确认；把注入面改成窄接口不需要单独批准。
+- 判定方式：注入面是窄接口还是 store 对象本身，以及句柄是在 `apply` 内构建还是在模块级构建。
+- 持久化：spec 的 `persist` 键就是全部机制，由框架执行；引擎实例暴露 `getSnapshot`、`subscribe`、烘焙好的 actions 与 `clearPersisted`，没有任何一方手工 hydrate。
+- 不在范围内：不改设置时，渲染状态放 store 没问题；组件局部状态也不是 store 内容。[Store 契约](../subsystems/slots.zh.md#component-inputs) 正家负责声明的 store 如何变成 props，[Web 客户端架构](../subsystems/web-client.zh.md) 正家负责业务数据住在哪里。
+- 例外：在模块级导出 store 句柄一律禁止——模块缓存的身份在插件重载之间是一个伪装的单例；把注入面收窄成窄接口不需要单独批准。
 - 修法：把 inject 返回值里的 store 句柄换成组件渲染所需的字段与 action 回调，句柄留在 `apply` 内。
 
-`apply` 内的一个句柄自行持久化，inject 面只带视图渲染所需的字段与 action：
+一个句柄在 `apply` 内构建并传给注册项，inject 面只带视图渲染所需的字段与 action：
 
 ```tsx
-// Inside apply: one handle, persistence through the store's own methods.
-const store = createSidebarStore().create()
-store.hydrate(savedSidebar)
+// The handle is built in apply; persistence is the spec's own key.
+const sidebarStore = createSidebarStore()   // defineStore({ init, actions, persist: 'sidebar' })
 
-// The inject face carries only what the view renders.
-const inject = () => ({ title: store.title, onSelect: store.select })
+ctx.slots.register(
+  { name: 'sidebar.header', store: sidebarStore, inject: () => ({ onSelect: selectPanel }) },
+  SidebarHeader,
+)
 
-function SidebarHeader({ title, onSelect }: Props) {
+// The component reads through the framework-bound seat and writes through the actions.
+function SidebarHeader({ useStore, actions, onSelect }: Props) {
+  const { title } = useStore()
   return <button onClick={onSelect}>{title}</button>
 }
 ```
 
-整个 view store 被注入给组件自行挑选字段，多实例 store 又被赋了一个共享的持久化键：
+整个 view store 被注入给组件自行挑选字段，模块级句柄则把实例生命周期从框架手里拿走：
 
 ```tsx
-// The component receives the store and picks its own fields.
+// The component receives the store itself and picks its own fields.
 const inject = () => ({ viewStore })
 
 function SidebarHeader({ viewStore }: Props) {
   return <button onClick={viewStore.select}>{viewStore.activePanel.title}</button>
 }
 
-// One key for several pane instances.
-createPaneStore({ persistKey: 'pane' })
+// Module-level handle: one identity shared by every plugin load.
+export const paneStore = createPaneStore()
 ```
 
-组件的依赖面不再可审计，而共享的键会让两个 pane 实例在 hydrate 时互相覆盖状态。
+组件的依赖面不再可审计，而共享的模块身份活得比任何一次 scope 清理都久：两个 pane 会落到同一个实例上，而不是各自一个。
 
 ## 身份与初始状态都是刻意的
 
