@@ -32,7 +32,7 @@ function fixture(options: {
   const handle: SubprocessHandle = {
     stdin: options.stdin === false ? undefined : stdin,
     stdout: options.stdout === false ? undefined : stdout,
-    stderr: undefined, control: undefined, collected: { stderr: options.stderr },
+    stderr: undefined, control: undefined, collected: options.stderr === undefined ? {} : { stderr: options.stderr },
     done: done.promise, terminate, waitForExit,
   }
   const spawn = vi.fn(() => handle)

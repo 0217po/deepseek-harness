@@ -105,7 +105,7 @@ export class NativeClient {
       throw new NativeError('NATIVE_REQUEST_LIMIT', 'Request exceeded the configured byte limit before dispatch')
     }
     const outcome = Promise.withResolvers<JsonValue>()
-    this.active = { id, ...outcome }
+    this.active = { id, resolve: outcome.resolve, reject: (error) => { nativeFailure = error; outcome.reject(error) } }
     if (capture) this.diagnostic(screenshotPrefix + JSON.stringify({ requestId: id, stage: 'host.dispatch', elapsedMs: 0 }))
     const abort = (): void => { this.fail(new NativeError('NATIVE_CANCELLED', 'Operation cancelled; inspect fresh state before retrying input')) }
     signal.addEventListener('abort', abort, { once: true })
@@ -130,9 +130,6 @@ export class NativeClient {
         requestId: id, stage: 'host.reply', elapsedMs: performance.now() - started,
       }))
       return result
-    } catch (error) {
-      if (error instanceof NativeError) nativeFailure = error
-      throw error
     } finally {
       clearTimeout(timer)
       signal.removeEventListener('abort', abort)
@@ -141,7 +138,8 @@ export class NativeClient {
       } finally {
         if (capture) {
           const diagnostics = this.screenshotDiagnostics(id, diagnosticOffset)
-          if (nativeFailure && diagnostics) nativeFailure.message += `\nScreenshot diagnostics:\n${diagnostics}`
+          const failure = nativeFailure ?? this.failure
+          if (failure && diagnostics) failure.message += `\nScreenshot diagnostics:\n${diagnostics}`
           if (diagnostics) this.diagnostic(diagnostics)
           this.diagnostic(screenshotPrefix + JSON.stringify({
             requestId: id, stage: 'host.settled', elapsedMs: performance.now() - started,
