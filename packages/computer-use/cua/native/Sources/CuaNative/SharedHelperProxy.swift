@@ -18,7 +18,7 @@ enum SharedHelperProxy {
             "screenshotTimeoutMs": .number(configuration.screenshotTimeoutSeconds * 1000), "timeoutMs": .number(configuration.timeoutSeconds * 1000),
             "graceMs": .number(configuration.shutdownGraceSeconds * 1000),
         ])])
-        try channel.write(JSONEncoder().encode(hello) + Data([10]))
+        try channel.write(JSONEncoder().encode(hello) + Data([10]), timeout: configuration.timeoutSeconds)
         let frames = Frames(channel: channel, limit: configuration.maxResponseBytes)
         guard let handshake = try frames.next(timeout: configuration.timeoutSeconds),
               try JSONDecoder().decode(JSONValue.self, from: handshake)["type"] == .string("ready") else {
@@ -49,7 +49,7 @@ enum SharedHelperProxy {
 
     private static func exchange(_ data: Data, channel: SharedSocket, frames: Frames, configuration: HelperConfiguration) throws {
         guard data.count + 1 <= configuration.maxRequestBytes else { throw NativeFailure(code: "NATIVE_REQUEST_LIMIT", message: "Request exceeded helper byte limit") }
-        try channel.write(data + Data([10]))
+        try channel.write(data + Data([10]), timeout: configuration.timeoutSeconds)
         while let frame = try frames.next(timeout: configuration.timeoutSeconds) {
             if try diagnostic(frame) { continue }
             try FileHandle.standardOutput.write(contentsOf: frame + Data([10]))

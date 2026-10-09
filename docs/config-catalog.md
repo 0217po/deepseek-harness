@@ -833,7 +833,7 @@ export interface Config {
   dragSteps: number
   /** Delay in milliseconds after each Unicode key-down or key-up event. */
   textEventIntervalMs: number
-  /** Agent connection cleanup and native launcher termination grace in milliseconds. */
+  /** Native connection cleanup, socket-write and launcher termination budget in milliseconds. */
   graceMs: number
   /** Maximum nodes admitted by a native accessibility snapshot. */
   maxElements: number

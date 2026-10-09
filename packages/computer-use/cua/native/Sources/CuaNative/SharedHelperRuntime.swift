@@ -112,23 +112,55 @@ final class SharedSocket: @unchecked Sendable {
         _ = setsockopt(descriptor, SOL_SOCKET, SO_NOSIGPIPE, &enabled, socklen_t(MemoryLayout<Int32>.size))
         _ = fcntl(descriptor, F_SETFD, FD_CLOEXEC)
     }
-    deinit { close(descriptor) }
-    func stopReading() { _ = Darwin.shutdown(descriptor, SHUT_RD) }
+    deinit { if !stopped { close(descriptor) } }
+    func stopReading() { lock.withLock { if !stopped { _ = Darwin.shutdown(descriptor, SHUT_RD) } } }
     func shutdown() {
         lock.withLock {
             guard !stopped else { return }
             stopped = true
             _ = Darwin.shutdown(descriptor, SHUT_RDWR)
+            // macOS can reject shutdown after peer EOF; close must not wait for retained callbacks.
+            close(descriptor)
         }
     }
-    func write(_ data: Data) throws {
+    func read(into bytes: UnsafeMutableRawBufferPointer) throws -> Int {
+        let retained: Int32? = try lock.withLock {
+            guard !stopped else { return nil }
+            let retained = fcntl(descriptor, F_DUPFD_CLOEXEC, 0)
+            guard retained >= 0 else { throw Self.failure("Retaining helper socket read") }
+            return retained
+        }
+        guard let retained else { return 0 }
+        defer { close(retained) }
+        while true {
+            let count = Darwin.read(retained, bytes.baseAddress, bytes.count)
+            if count < 0 && errno == EINTR { continue }
+            guard count >= 0 else { throw Self.failure("Reading helper socket") }
+            return count
+        }
+    }
+    func write(_ data: Data, timeout: Double) throws {
+        let started = DispatchTime.now().uptimeNanoseconds
         try data.withUnsafeBytes { bytes in
             var offset = 0
             while offset < bytes.count {
-                let count = Darwin.write(descriptor, bytes.baseAddress!.advanced(by: offset), bytes.count - offset)
-                if count < 0 && errno == EINTR { continue }
-                guard count > 0 else { throw Self.failure("Writing helper socket") }
-                offset += count
+                let (count, error): (Int, Int32) = try lock.withLock {
+                    guard !stopped else { throw NativeFailure(code: "NATIVE_IO", message: "Helper socket is closed") }
+                    // A nonblocking send keeps close independent of a client that stopped reading.
+                    let count = Darwin.send(descriptor, bytes.baseAddress!.advanced(by: offset), bytes.count - offset, MSG_DONTWAIT)
+                    return (count, errno)
+                }
+                if count > 0 { offset += count; continue }
+                if count < 0 && error == EINTR { continue }
+                guard count < 0, error == EAGAIN || error == EWOULDBLOCK else {
+                    throw NativeFailure(code: "NATIVE_IO", message: "Writing helper socket failed (errno \(error))")
+                }
+                let remaining = timeout - Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000
+                guard remaining > 0 else { throw NativeFailure(code: "NATIVE_IO", message: "Helper socket write timed out") }
+                var item = pollfd(fd: descriptor, events: Int16(POLLOUT), revents: 0)
+                let ready = poll(&item, 1, Int32(min(remaining * 1000, Double(Int32.max)).rounded(.up)))
+                if ready < 0 && errno == EINTR { continue }
+                guard ready > 0 else { throw NativeFailure(code: "NATIVE_IO", message: "Helper socket write timed out") }
             }
         }
     }

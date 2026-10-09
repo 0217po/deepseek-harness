@@ -34,6 +34,7 @@ class Connection:
         self.reader = self.socket.makefile("rb")
         self.sequence = 0
         self.diagnostics = []
+        self.cleanup_timeout = overrides.get("graceMs", CONFIG["graceMs"]) / 1000
         self.send({"type": "hello", "protocol": 1, "runtimeKey": key, "config": {**CONFIG, **overrides}})
         self.ready = self.read()
         assert self.ready["type"] == "ready", self.ready
@@ -68,6 +69,7 @@ class Connection:
         if self.socket.fileno() < 0:
             return
         try:
+            self.socket.settimeout(self.cleanup_timeout)
             self.socket.shutdown(socket.SHUT_WR)
             while self.reader.readline():
                 pass
@@ -133,6 +135,23 @@ def main():
             assert coalesced["id"] == "coalesced", coalesced
             assert "result" in coalesced or coalesced.get("error", {}).get("code") == "NATIVE_CANCELLED", coalesced
             a.call("protocol-after-cancel", {}, error="UNSUPPORTED")
+            queued = Connection(socket_path, key)
+            clients.append(queued)
+            queued.socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
+            identifier = "shared-call"
+            queued.send({"id": identifier, "method": "unsupported-" + "x" * (512 * 1024), "params": {}})
+            assert select.select([queued.socket], [], [], 5)[0], "First reply did not begin"
+            # The large unread reply holds the writer while a same-ID operation and cancellation arrive.
+            queued.socket.sendall(json.dumps({"id": identifier, "method": "getCapabilities", "params": {}}).encode() + b"\n"
+                                  + json.dumps({"type": "cancel", "id": identifier}).encode() + b"\n")
+            first_reply = queued.read()
+            assert first_reply.get("id") == identifier and first_reply.get("error", {}).get("code") == "UNSUPPORTED"
+            second_reply = queued.read()
+            assert second_reply.get("id") == identifier and second_reply.get("error", {}).get("code") == "NATIVE_CANCELLED", second_reply
+            queued.send({"type": "cancel", "id": identifier})
+            queued.call("protocol-after-late-cancel", {}, error="UNSUPPORTED")
+            queued.close()
+            clients.remove(queued)
             if not args.without_desktop:
                 executable = root / "fixture"
                 state = root / "state.json"
@@ -157,6 +176,17 @@ def main():
                 window = primary["windowId"]
                 observed = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
                 b.call("click", {"appHandle": app_b, "snapshotId": observed["snapshotId"], "elementIndex": 0}, error="STALE_SNAPSHOT")
+                own_observation = b.call("getState", {"appHandle": app_b, "windowId": window, "maxElements": 300, "maxDepth": 20})
+                button = next(element for element in own_observation["elements"]
+                              if element["role"] == "AXButton" and element["title"] == "Increment primary")
+                before = json.loads(state.read_text())["count"]
+                b.call("click", {"appHandle": app_b, "snapshotId": own_observation["snapshotId"], "elementIndex": button["index"]})
+                changed_until = time.monotonic() + 5
+                while json.loads(state.read_text())["count"] != before + 1:
+                    assert time.monotonic() < changed_until, "B input did not update the fixture exactly once"
+                    time.sleep(0.025)
+                after = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
+                assert f"Count: {before + 1}" in after["tree"], "A retained handle did not observe B's input"
 
                 def capture(pair):
                     client, handle = pair
@@ -180,6 +210,9 @@ def main():
             clients.remove(a)
             b.call("protocol-still-open", {}, error="UNSUPPORTED")
             assert b.ready["pid"] == owner_pid
+            if not args.without_desktop:
+                assert b.call("listWindows", {"appHandle": app_b})
+                capture((b, app_b))
             b.close()
             clients.remove(b)
             wait_released(lock_path, owner_pid)

@@ -59,7 +59,7 @@ import Darwin
         if let control = try? JSONDecoder().decode(JSONValue.self, from: data).object,
            Set(control.keys) == ["type", "id"], control["type"] == .string("cancel"), let id = control["id"]?.string {
             if id == activeRequestID { cancelRequest(NativeFailure(code: "NATIVE_CANCELLED", message: "Native operation cancelled")) }
-            else if let nextFrame, (try? NativeRequest(data: nextFrame).id) == id { nextCancelled = true }
+            if let nextFrame, (try? NativeRequest(data: nextFrame).id) == id { nextCancelled = true }
             return
         }
         if active != nil, replying, nextFrame == nil { nextFrame = data; return }
@@ -96,6 +96,7 @@ import Darwin
             do {
                 let request = try NativeRequest(data: data)
                 requestID = .string(request.id)
+                if request.method == "screenshot" { try self.capture.requireAvailable() }
                 let result = try await self.scheduler.perform(cancellation: self.cancellation) {
                     try await self.execute(request, trace: trace)
                 }

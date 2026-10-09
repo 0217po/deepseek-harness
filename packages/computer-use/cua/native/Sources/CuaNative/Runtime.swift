@@ -103,11 +103,7 @@ final class JSONLInput: Sendable {
                     guard buffer.count <= self.limit else { throw NativeFailure(code: "NATIVE_REQUEST_LIMIT", message: "Request exceeded helper byte limit") }
                     // POSIX read returns available socket bytes without waiting for full capacity.
                     var chunk = [UInt8](repeating: 0, count: min(65536, self.limit + 1 - buffer.count))
-                    let count = chunk.withUnsafeMutableBytes { bytes in
-                        Darwin.read(self.channel.descriptor, bytes.baseAddress, bytes.count)
-                    }
-                    if count < 0 && errno == EINTR { continue }
-                    guard count >= 0 else { throw NativeFailure(code: "NATIVE_IO", message: "Reading helper socket failed (errno \(errno))") }
+                    let count = try chunk.withUnsafeMutableBytes { try self.channel.read(into: $0) }
                     if count == 0 {
                         if !buffer.isEmpty { onFrame(buffer) }
                         onEOF()
@@ -126,7 +122,10 @@ final class JSONLWriter: Sendable {
     private let queue = DispatchQueue(label: "dsh.cua.socket-output")
     let limit: Int
     private let channel: SharedSocket
-    init(limit: Int, channel: SharedSocket) { self.limit = limit; self.channel = channel }
+    private let writeTimeout: Double
+    init(limit: Int, channel: SharedSocket, writeTimeout: Double) {
+        self.limit = limit; self.channel = channel; self.writeTimeout = writeTimeout
+    }
 
     func diagnostic(_ value: JSONValue) {
         queue.async { [self] in
@@ -141,7 +140,7 @@ final class JSONLWriter: Sendable {
         var frame = try encoder.encode(value)
         frame.append(10)
         guard frame.count <= limit else { throw NativeFailure(code: "NATIVE_RESPONSE_LIMIT", message: "Reply exceeded helper byte limit") }
-        try channel.write(frame)
+        try channel.write(frame, timeout: writeTimeout)
     }
     func write(_ response: JSONValue, trace: ScreenshotTrace? = nil) async throws {
         let limit = self.limit
@@ -160,7 +159,7 @@ final class JSONLWriter: Sendable {
                     guard frame.count <= limit else { throw NativeFailure(code: "NATIVE_RESPONSE_LIMIT", message: "Reply exceeded helper byte limit") }
                     mark("response.encode.end")
                     mark("response.write.begin")
-                    try self.channel.write(frame)
+                    try self.channel.write(frame, timeout: self.writeTimeout)
                     mark("response.write.end")
                     continuation.resume()
                 } catch let error as NativeFailure { continuation.resume(throwing: error) }

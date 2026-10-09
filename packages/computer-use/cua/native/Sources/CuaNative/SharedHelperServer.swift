@@ -142,7 +142,7 @@ final class NativeSignals {
             } catch {
                 let failure = error as? NativeFailure ?? NativeFailure(code: "NATIVE_PROTOCOL", message: "Invalid shared helper hello")
                 let response = JSONValue.object(["type": .string("error"), "code": .string(failure.code), "message": .string(failure.message)])
-                if let data = try? JSONEncoder().encode(response) { try? channel.write(data + Data([10])) }
+                if let data = try? JSONEncoder().encode(response) { try? channel.write(data + Data([10]), timeout: options.startupTimeout) }
                 channel.shutdown()
                 Task { @MainActor in self?.disconnected(id) }
             }
@@ -152,7 +152,7 @@ final class NativeSignals {
     private func connected(_ id: UUID, channel: SharedSocket, cancellation: CancellationLatch, configuration: HelperConfiguration) async {
         guard !lifetime.isStopping else { channel.shutdown(); disconnected(id); return }
         lifetime.configure(id, grace: configuration.shutdownGraceSeconds)
-        let writer = JSONLWriter(limit: configuration.maxResponseBytes, channel: channel)
+        let writer = JSONLWriter(limit: configuration.maxResponseBytes, channel: channel, writeTimeout: configuration.shutdownGraceSeconds)
         do { try await writer.write(options.ready(pid: getpid(), instanceID: instanceID)) }
         catch { channel.shutdown(); disconnected(id); return }
         let lifetime = self.lifetime
