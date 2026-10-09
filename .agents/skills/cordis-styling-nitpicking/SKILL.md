@@ -42,6 +42,18 @@ The current [fiber unload](../../../vendor/cordis/src/fiber.ts) starts sibling d
 
 Require explicit ownership and awaited sequencing: stop admission, settle admitted consumers while their dependencies remain usable, then drain and release the resources. Scope new-admission rejection separately from completion of accepted operations. Use an explicitly composed effect or a resource-owning parent with an awaited consumer/service child; verify the actual captured disposer identities. `ctx.effect(function* ...)` serializes the disposers it collects, but a wrapper around an independently registered effect does not transfer ownership of the original effect. Top-level plugin generator yields are not a general promise of serial sibling disposal. Check failure paths as well: one cleanup error must not skip required abort, settlement, or resource release.
 
+### Current workaround: function plugin with yielded effects
+
+Use a function-style provider plugin with one `ctx.effect(function* () { ... })` to compose service publication and resource effects. Yield the exact disposers returned by the registrations so the composed effect takes ownership of them:
+
+1. Acquire the resources and required completion listeners, then `yield` each registration's returned disposer. Register resource cleanup with `ctx.effect()` and yield that exact returned disposer too.
+2. Publish the service last with `yield ctx.provide(name, service)`. Reverse disposal then withdraws the service and awaits the dependent consumers still registered with Cordis before disposing the earlier resource effects.
+3. If the provider needs a separate admission gate, yield its cleanup last so disposal stops new admission before withdrawing the service. Keep accepted cleanup operations usable while consumers finish.
+
+This orders provider withdrawal while its consumers remain registered; it is not a complete enclosing-owner shutdown fix. Consumer disposal removes a fiber from the registry before its cleanup finishes, so service withdrawal can miss an already-disposing consumer. For root or enclosing-owner disposal and independently started consumer cleanup, retain and await the actual consumer disposal tasks through an explicit owner before releasing their resources.
+
+Put these yields inside the composed `ctx.effect()` generator, even when the plugin itself is a generator. Top-level plugin yields alone leave disposers as concurrent siblings in the current implementation. Do not yield replacement wrappers around already registered disposers: the original effects would remain independently owned and could still close early. This workaround orders the captured effects; it does not repair uncaptured consumer-owned listeners or remove the need to handle cleanup failures.
+
 Do not report missing injection alone, a merely possible late call with no reachable consumer, or intentional suppression of optional notifications. Required persistence and completion observers must not be treated as optional notifications.
 
 For a regression, pause the consumer immediately before its last dependency use, start provider or enclosing-owner disposal, verify the resource and required listeners remain usable, then release the consumer. Assert its actual terminal result and durable output, and assert disposal stays pending until completion. Cover provider unload or replacement as well as consumer-only cleanup; call counts and idle happy-path disposal are insufficient.
