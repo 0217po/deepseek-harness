@@ -25,7 +25,7 @@ it('commits policy immediately, cancels existing calls, and waits for their comp
   const first = calls.run(session.id, signal, mode, async (current) => { oldSignal = current; await cleanup.promise })
   const next = vi.fn(async () => mode())
   try {
-    session.append('session/title', { title: 'unrelated' })
+    session.append('turn/start', { turn: 1 })
     setSandboxMode(ctx.sessions.create(SessionId('another')), 'read-only')
     setSandboxMode(session, 'workspace-write')
     expect(oldSignal?.aborted).toBe(false)

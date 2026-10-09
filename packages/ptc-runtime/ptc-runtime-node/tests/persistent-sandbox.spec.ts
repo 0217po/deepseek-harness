@@ -123,7 +123,7 @@ it('preserves the current execution context for bindings in a reused REPL', asyn
   const context = new AsyncLocalStorage<string>()
   const run = (program: string) => runtime.run(runtime.resolve({ program, stateOwner: owner,
     sandboxPolicy: ctx.sandboxPolicy.resolve({ session }),
-    bindings: [{ global: 'tools', functions: { current: () => context.getStore() ?? null } }],
+    bindings: [{ global: 'tools', functions: { current: async () => context.getStore() ?? null } }],
   }))
   expect((await context.run('first', () => run('var retained = await tools.current({}); retained'))).value).toBe('first')
   expect((await context.run('second', () => run('await tools.current({})'))).value).toBe('second')

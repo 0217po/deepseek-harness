@@ -23,7 +23,7 @@ it('starts cleanup without another execution and retains the Promise for subsequ
   const release = vi.fn(() => cleanup.promise)
   processes.register(policy, release)
   try {
-    session.append('session/title', { title: 'unrelated' })
+    session.append('turn/start', { turn: 1 })
     setSandboxMode(ctx.sessions.create(SessionId('unrelated')), 'read-only')
     setSandboxMode(session, 'workspace-write')
     expect(release).not.toHaveBeenCalled()
@@ -60,7 +60,7 @@ it('retries failed cleanup before admission without reverting the committed poli
   const { ctx, session, processes, policy } = await setup()
   const warning = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
   const failure = new Error('process observation failed')
-  const release = vi.fn(async () => { throw failure })
+  const release = vi.fn(async (): Promise<void> => { throw failure })
   const detach = processes.register(policy, release)
   try {
     setSandboxMode(session, 'read-only')

@@ -554,7 +554,7 @@ it('preserves execution context for bindings delivered by an external control st
   })
   const context = new AsyncLocalStorage<string>()
   const pending = context.run('binding context', () => h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }),
-    bindings: [{ global: 'tools', functions: { test: () => context.getStore() ?? null } }],
+    bindings: [{ global: 'tools', functions: { test: async () => context.getStore() ?? null } }],
   }))
   await booted.promise
   h.emit(call(1))
