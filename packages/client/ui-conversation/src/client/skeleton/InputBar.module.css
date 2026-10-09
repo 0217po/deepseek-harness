@@ -43,10 +43,6 @@
 }
 
 .card {
-  --dsh-composer-primary-size: 34px;
-  --dsh-composer-add-size: 28px;
-  --dsh-composer-control-inset: 8px;
-  --dsh-composer-row-shift: 2px;
   box-sizing: border-box;
   position: relative; /* overlay anchor positioning context */
   display: flex;
@@ -62,9 +58,7 @@
      soft elevation tier. Fill: the input surface token (elevated in dark). */
   border: 0;
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
-  border-radius: calc(var(--dsh-composer-primary-size) / 2 + var(--dsh-composer-control-inset));
-  /* The lower-right arc shares a center with the primary button. */
-  corner-shape: round;
+  border-radius: var(--dsw-radius-panel);
   background: var(--dsw-specific-input-major);
   box-shadow: var(--dsw-elevation-soft);
   /* The draft text follows the Settings font-size preference (the textarea,
@@ -96,8 +90,7 @@
   inset: 0;
   box-sizing: border-box;
   border: 1px dashed currentColor;
-  border-radius: inherit;
-  corner-shape: inherit;
+  border-radius: var(--dsw-radius-panel);
   color: var(--dsw-alias-border-l4);
   transition: color 100ms ease;
   pointer-events: none;
@@ -261,9 +254,10 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  /* Smaller controls sit below the primary button's vertical center. */
-  padding: var(--dsh-composer-row-shift) var(--dsh-composer-control-inset)
-    calc(var(--dsh-composer-control-inset) - var(--dsh-composer-row-shift));
+  /* 2px moved from the bottom pad to the top: the whole control row sits 2px
+     lower in the card (it read too high against the textarea) while the
+     controls' own centering stays untouched. */
+  padding: 2px 8px 6px;
   min-width: 0;
   /* Size container so the chips inside can collapse to icon-only when the
      card runs out of row width (PermissionSelect @container rule). Anonymous
@@ -321,8 +315,8 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: var(--dsh-composer-add-size);
-  height: var(--dsh-composer-add-size);
+  width: 28px;
+  height: 28px;
   border: none;
   border-radius: 999px;
   corner-shape: round;
@@ -379,8 +373,8 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: var(--dsh-composer-primary-size);
-  height: var(--dsh-composer-primary-size);
+  width: 34px;
+  height: 34px;
   border: none;
   border-radius: 999px;
   corner-shape: round;
@@ -390,8 +384,10 @@
   color: #fff;
   cursor: pointer;
   transition: background-color 100ms ease;
-  /* Cancel the row shift to preserve equal right and bottom insets. */
-  transform: translateY(calc(-1 * var(--dsh-composer-row-shift)));
+  /* Opts out of the row's 2px downward shift (.row top pad): the send circle
+     keeps its original seat while the smaller chips sit lower. Transform, not
+     margin, so flex centering math is untouched. */
+  transform: translateY(-2px);
 }
 
 .primary:hover:not(:disabled) {
