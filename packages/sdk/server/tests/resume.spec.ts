@@ -7,7 +7,7 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import type { JsonRpcTransportPeer } from '@deepseek-ai/dsh-sdk-protocol'
+import type { JsonRpcTransportPeer, SessionEventNotification } from '@deepseek-ai/dsh-sdk-protocol'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { HarnessSdkJsonRpcServer } from '../src/index.ts'
 
@@ -30,13 +30,16 @@ async function runtime(root: string, persistence = true) {
   await ctx.plugin(AgentLoop, { agents: [] })
   const adapter = new MockAdapter([textResponse('remembered')])
   ctx.llm.registerAdapter(['mock'], adapter)
+  const events: SessionEventNotification[] = []
   const transport: JsonRpcTransportPeer = {
     request: async () => { throw new Error('unexpected server request') },
-    notify: () => {},
+    notify: (method, params) => {
+      if (method === 'session.event') events.push(params as SessionEventNotification)
+    },
   }
   const server = new HarnessSdkJsonRpcServer(ctx, transport)
   cleanups.push(() => server.shutdown().then(() => {}))
-  return { ctx, server, adapter }
+  return { ctx, server, adapter, events }
 }
 
 async function initialized(root: string) {
@@ -58,14 +61,17 @@ describe('SDK persisted session resume', () => {
     const second = await runtime(root)
     await second.server.initialize({ cwd: tmpdir(), provider: 'mock', model: 'resumed-model', maxTokens: 123 })
     await expect(second.server.handleRequest('session/resume', { sessionId: 'saved-session' }))
-      .resolves.toEqual({ sessionId: 'saved-session' })
+      .resolves.toEqual({})
     const restored = second.ctx.agents.get(SessionId('saved-session'))!.session
     expect(restored.header.cwd).toBe(root)
     expect(restored.snapshotEvents().slice(0, original.length)).toEqual(original)
     expect(restored.snapshotEvents().at(-1)).toMatchObject({ type: 'session/end-seed' })
     expect(second.adapter.requests).toHaveLength(0)
+    expect(second.events).toEqual([])
     await second.server.prompt({ sessionId: 'saved-session', contentBlocks: [{ type: 'text', text: 'what did I say?' }] })
     await second.server.wait({ sessionId: 'saved-session' })
+    expect(second.events.length).toBeGreaterThan(0)
+    expect(second.events.every(notification => notification.event.seq > original.at(-1)!.seq)).toBe(true)
     const request = JSON.stringify(second.adapter.requests[0])
     expect(request).toContain('remember kiwi')
     expect(request).toContain('remembered')

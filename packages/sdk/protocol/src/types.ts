@@ -64,12 +64,6 @@ export interface SessionResumeParams {
   sessionId: string
 }
 
-/** Identity of the session successfully restored into the SDK runtime. */
-export interface SessionResumeResult {
-  /** The same persisted identity requested by the caller. */
-  sessionId: string
-}
-
 /** Wait for an existing SDK session and its managed descendants to finish. */
 export interface SessionWaitParams {
   /** An SDK-owned session id; waiting never creates a session. */
@@ -151,7 +145,7 @@ export interface HarnessSdkNotificationMap {
 export interface HarnessSdkRequestMap {
   'initialize': { params: InitializeParams; result: InitializeResult }
   'session/prompt': { params: SessionPromptParams; result: SessionPromptResult }
-  'session/resume': { params: SessionResumeParams; result: SessionResumeResult }
+  'session/resume': { params: SessionResumeParams; result: Record<string, never> }
   'session/wait': { params: SessionWaitParams; result: Record<string, never> }
   'session/working-directory/get': { params: SessionWorkingDirectoryParams; result: SessionWorkingDirectoryResult }
   'session/working-directory/set': { params: SessionWorkingDirectorySetParams; result: SessionWorkingDirectoryResult }

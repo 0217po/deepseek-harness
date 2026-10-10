@@ -70,11 +70,9 @@ describe('DeepSeekHarness', () => {
     expect((await session.run('continue')).sessionId).toBe('saved-session')
   })
 
-  it('propagates resume failures and rejects mismatched response identities', async () => {
+  it('propagates resume failures', async () => {
     await expect(harnessWith({ FAKE_RESUME_ERROR: '1' }).resumeSession('missing'))
       .rejects.toThrow('session not found')
-    await expect(harnessWith({ FAKE_MALFORMED_RESUME: '1' }).resumeSession('saved'))
-      .rejects.toThrow('unexpected session id')
   })
 
   it('reads and changes directories independently for each lazy Session', async () => {

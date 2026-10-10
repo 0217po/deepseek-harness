@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from deepseek_harness import DeepSeekHarness, SdkProtocolError
+from deepseek_harness import DeepSeekHarness
 from deepseek_harness.errors import JsonRpcError
 
 
-@pytest.mark.parametrize("outcome", ["restored", "missing", "wrong-id"])
-def test_resume_checks_identity_and_propagates_failure(tmp_path: Path, outcome: str) -> None:
+@pytest.mark.parametrize("outcome", ["restored", "missing"])
+def test_resume_preserves_identity_and_propagates_failure(tmp_path: Path, outcome: str) -> None:
     script = tmp_path / "runtime.py"
     requests = tmp_path / "requests.jsonl"
     script.write_text(
@@ -33,7 +33,7 @@ for line in sys.stdin:
         if outcome == "missing":
             response["error"] = {"code": -32603, "message": "session not found"}
         else:
-            response["result"] = {"sessionId": "saved" if outcome == "restored" else "wrong"}
+            response["result"] = {}
     else:
         response["result"] = {}
     print(json.dumps(response), flush=True)
@@ -50,11 +50,8 @@ for line in sys.stdin:
             session = harness.resume_session("saved")
             assert session.id == "saved"
             assert session.harness is harness
-        elif outcome == "missing":
-            with pytest.raises(JsonRpcError, match="session not found"):
-                harness.resume_session("saved")
         else:
-            with pytest.raises(SdkProtocolError, match="unexpected session id"):
+            with pytest.raises(JsonRpcError, match="session not found"):
                 harness.resume_session("saved")
     frames = [json.loads(line) for line in requests.read_text(encoding="utf-8").splitlines()]
     assert [frame["method"] for frame in frames] == ["initialize", "session/resume", "shutdown"]

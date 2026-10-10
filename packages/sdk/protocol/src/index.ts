@@ -23,7 +23,6 @@ export type {
   SessionPromptParams,
   SessionPromptResult,
   SessionResumeParams,
-  SessionResumeResult,
   SessionWaitParams,
   SessionWorkingDirectoryParams,
   SessionWorkingDirectorySetParams,

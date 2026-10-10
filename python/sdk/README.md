@@ -50,6 +50,14 @@ print(result.final_response)
 
 `DeepSeekHarness` starts lazily and reuses its runtime until `close()` or context-manager exit. The initial profile handshake has an independent 30-second default bound through `initialize_timeout_seconds`; ordinary turns remain unbounded unless `request_timeout_seconds` is set. A timeout names the selected profile and includes retained runtime diagnostics. `cwd` is the agent workspace; `runtime_cwd` independently selects the subprocess working directory. Both become absolute before launch. `provider`, `model`, optional `reasoning_effort`, and optional positive `max_tokens` are sent during JSON-RPC initialization. `base_url` and `api_key` explicitly override `DEEPSEEK_BASE_URL` and `DEEPSEEK_API_KEY` in the child environment.
 
+`harness.resume_session(saved_session_id)` restores persisted history and returns a `Session` ready for `run()`. Save the original session id and reuse its `dsh_home` and workspace. Restoration preserves the stored directory, repairs an interrupted final turn, and sends no new input. Missing, unreadable, incompatible, or occupied sessions raise without creating a replacement. `start_session(id)` only opens a lazy handle; it does not request persisted restoration. This API does not restore shell, browser, or other external processes.
+
+```py
+with DeepSeekHarness(dsh_home="/absolute/path/to/saved-home") as harness:
+    session = harness.resume_session(saved_session_id)
+    result = session.run("Continue the task.")
+```
+
 ## Customize plugins
 
 Persistent customization belongs to a `dsh` profile. Initialize the shipped SDK profile and install an external bundle with the runtime wheel's `dsh` command:
@@ -78,14 +86,6 @@ with DeepSeekHarness(
 `provider` selects a provider route registered by the chosen Cordis composition; `model` is the model id resolved by that adapter. `reasoning_effort` is an optional non-empty adapter-owned identifier for that exact route; omission preserves the model's own default. `max_tokens` is an optional positive per-request output-token cap for the root agent and its in-process descendants; omission leaves the provider default in control. Initialization rejects a missing adapter, unavailable model, or unsupported effort before a prompt runs. Compaction summaries keep the separate limit configured by their compaction plugin. The bundled default composition registers `deepseek-official`. A custom composition can mount `llm-pi-ai`, configure provider-specific credentials/endpoints there, and select any provider/model present in pi-ai's installed catalog.
 
 The shipped `sdk-minimal` profile is a standalone explicit tree rather than an overlay on `dsh-base`. Select it with `profile="sdk-minimal"`; the ordinary `model` argument is the sole runtime model selection, including for model ids outside the adapter's advisory catalog. It provides only a platform-selected persistent shell, local execution, and JSONL sessions; filesystem tools, settings, managed credentials, telemetry, Web tools, and the full default tool roster remain available through the separate full `sdk` and `web` profiles.
-
-`harness.resume_session(saved_session_id)` restores persisted history and returns a `Session` ready for `run()`. Save the original session id and reuse its `dsh_home` and workspace. Restoration preserves the stored directory, repairs an interrupted final turn, and sends no new input. Missing, unreadable, incompatible, or occupied sessions raise without creating a replacement. `start_session(id)` only opens a lazy handle; it does not request persisted restoration. The low-level client also exposes `resume_session(id)`, returning the restored identity. This API does not restore shell, browser, or other external processes.
-
-```py
-with DeepSeekHarness(dsh_home="/absolute/path/to/saved-home") as harness:
-    session = harness.resume_session(saved_session_id)
-    result = session.run("Continue the task.")
-```
 
 ## Results and notifications
 

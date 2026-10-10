@@ -287,7 +287,7 @@ reader.on('line', (line) => {
       if (env.FAKE_RESUME_ERROR !== undefined) {
         write({ jsonrpc: '2.0', id: frame.id, error: { code: -32603, message: 'session not found' } })
       } else {
-        respond({ sessionId: env.FAKE_MALFORMED_RESUME === undefined ? sessionIdOf(frame.params) : 'wrong-session' })
+        respond({})
       }
       return
     case 'session/working-directory/get':

@@ -101,8 +101,6 @@ function dirOf(url: string): string {
 }
 
 interface SdkAssertions {
-  /** Reap the runtime between user turns and restore the same persisted Session. */
-  restartBetweenTurns?: boolean
   /** Additional profile patches applied after the shared composition. */
   patches?: readonly string[]
   /** Wait for the recorded provider title before sending each subsequent prompt. */
@@ -129,7 +127,6 @@ interface SdkAssertions {
 }
 
 const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
-  'session-resume': { restartBetweenTurns: true },
   'session-title-stability': { waitForProviderTitle: true },
   'dynamic-tool-updates': {
     expectedFinalResponse: 'DONE',
@@ -603,7 +600,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
   })
   const [parentFixture, ...childFixtures] = replayFixtures
   const actions = turnActions(primaryFixture)
-  const resumeReplayFile = assertions.restartBetweenTurns === true && !recording
+  const resumeReplayFile = scenario.name === 'session-resume' && !recording
     ? join(patchRoot, 'resume-replay.json') : undefined
   const prepareTurnReplay = async (turn: number): Promise<void> => {
     if (resumeReplayFile === undefined || parentFixture === undefined) return
@@ -681,7 +678,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
           )
           continue
         }
-        if (assertions.restartBetweenTurns === true && results.length > 0) {
+        if (scenario.name === 'session-resume' && results.length > 0) {
           subscription.close()
           await harness.close()
           await prepareTurnReplay(action.turn)

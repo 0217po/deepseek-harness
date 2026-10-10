@@ -25,7 +25,6 @@ import type {
   SessionPromptParams,
   SessionPromptResult,
   SessionResumeParams,
-  SessionResumeResult,
   SessionWaitParams,
   SessionWorkingDirectoryParams,
   SessionWorkingDirectorySetParams,
@@ -218,9 +217,9 @@ export class HarnessSdkJsonRpcServer {
    * Uses the initialized model route while preserving the stored session identity and directory.
    * Rejects missing, unreadable, or already owned sessions; never creates a replacement.
    * @param params - persisted session identity in the configured persistence store.
-   * @returns the restored identity after the Agent is ready for prompts.
+   * @returns an empty result after the Agent is ready for prompts.
    */
-  async resume(params: SessionResumeParams): Promise<SessionResumeResult> {
+  async resume(params: SessionResumeParams): Promise<Record<string, never>> {
     if (!this.initialized) throw new Error('SDK server is not initialized')
     if (this.shuttingDown) throw new Error('SDK server is shutting down')
     const sessionId = params.sessionId
@@ -228,7 +227,7 @@ export class HarnessSdkJsonRpcServer {
       throw new Error(`SDK session is already open or opening: ${sessionId}`)
     }
     await this.openSession(sessionId, true)
-    return { sessionId }
+    return {}
   }
 
   /**

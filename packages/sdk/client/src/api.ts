@@ -112,8 +112,8 @@ export class DeepSeekHarness implements AsyncDisposable {
    */
   async resumeSession(sessionId: string): Promise<HarnessSession> {
     await this.start()
-    const restoredId = await this.client.resumeSession(sessionId)
-    return new HarnessSession(this, restoredId)
+    await this.client.resumeSession(sessionId)
+    return new HarnessSession(this, sessionId)
   }
 
   /**
