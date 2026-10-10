@@ -53,7 +53,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { WorkspaceShortcutState } from '../shortcuts.ts'
 import type { StartSessionOptions } from '../navigation.ts'
-import type {} from '../toast/contract.ts'
+import type {} from './toast.ts'
 import type { createWorkspaceViewStore } from '../stores.ts'
 
 /**
@@ -137,8 +137,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     /**
      * The rows of one Session's "..." menu, in ascending `order`. ui-workspace
      * registers the shipped rows here — `pin` (100), `rename` (200), `fork`
-     * (300), `archive` (400) — so a plugin row is placed by its own `order`
-     * among them. Use a package-namespaced `id`; reusing a shipped id at
+     * (300), `archive` (400), and `session-id` (450) — so a plugin row is placed
+     * by its own `order` among them. Use a package-namespaced `id`; reusing a shipped id at
      * another `priority` shadows that row. Each entry renders one
      * `role="menuitem"` `<button>` (the shipped rows use ui-primitives'
      * `MenuItemButton`, which adds the host styling and `separatorBefore`),
@@ -150,14 +150,17 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * return {
      *   inject: ['slots'],
      *   apply(ctx) {
-     *     const copyLabel = 'Copy Session ID' // Localize in the contributing package.
+     *     const copyLabel = 'Copy session title' // Localize in the contributing package.
      *     ctx.slots.inject('sidebar.workspaces.session.menu.item', () => ctx.slots.register(
-     *       { name: 'sidebar.workspaces.session.menu.item', id: 'copy-session-id', order: 500 },
-     *       ({ sessionId, useMenuOpenState }) => {
+     *       { name: 'sidebar.workspaces.session.menu.item', id: 'copy-session-title', order: 500 },
+     *       ({ displayTitle, useMenuOpenState }) => {
      *         const [, setMenuOpen] = useMenuOpenState()
      *         return React.createElement(
      *           'button',
-     *           { type: 'button', role: 'menuitem', onClick: () => { setMenuOpen(false); void navigator.clipboard.writeText(sessionId) } },
+     *           {
+     *             type: 'button', role: 'menuitem',
+     *             onClick: () => { setMenuOpen(false); void navigator.clipboard.writeText(displayTitle) },
+     *           },
      *           copyLabel,
      *         )
      *       },

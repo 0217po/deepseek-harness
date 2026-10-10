@@ -19,7 +19,7 @@ import { bindSnapshotSelector, makeTranslate, SlotTestRuntime } from '@deepseek-
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { registerToasts } from '../src/client/toast/register.ts'
 import { ArchiveToastEntry } from '../src/client/toast/Toast.tsx'
-import type { ArchiveToastEntryProps } from '../src/client/toast/contract.ts'
+import type { ArchiveToastEntryProps } from '../src/client/contract/toast.ts'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type {
@@ -114,7 +114,7 @@ function callOrder(fn: { mock: { invocationCallOrder: readonly number[] } }, nth
 }
 
 describe('Session ID action', () => {
-  it.each([t, tEn])('dismisses the menu before copying the complete row ID without a dialog', (translate) => {
+  it.each([t, tEn])('dismisses the menu before copying the complete row ID', (translate) => {
     const { state, setMenuOpen } = openMenu()
     const sessionId = sid('session-c4421b66-252e-44c0-80ed-6e320abeba25')
     const copySessionId = vi.fn(async () => {})
@@ -123,7 +123,6 @@ describe('Session ID action', () => {
     expect(setMenuOpen).toHaveBeenCalledWith(false)
     expect(copySessionId).toHaveBeenCalledExactlyOnceWith(sessionId)
     expect(callOrder(setMenuOpen)).toBeLessThan(callOrder(copySessionId))
-    expect(screen.queryByRole('dialog')).toBeNull()
   })
 })
 

@@ -2,14 +2,13 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RowToastActions, WorkspaceViewStoreHandle } from '../contract/slots.ts'
-import type { ToastDisplayInjected, ToastKind } from './contract.ts'
+import type { ArchiveToastInjected, ToastDisplayInjected } from '../contract/toast.ts'
 import { ArchiveToastEntry, ToastEntry, WorkspaceToast } from './Toast.tsx'
 
-/**
- * Register notice presentations without changing the notification state or its lifetime.
+/** Register notice presentations with their business-owned display fields and actions.
  * @param ctx - Workspace plugin context.
- * @param viewStore - Existing viewing store, read only by archive notices.
- * @param actions - Existing archive and source-opening callbacks.
+ * @param viewStore - Viewing store, read only by archive notices.
+ * @param actions - Archive and source-opening callbacks.
  */
 export function registerToasts(
   ctx: Context,
@@ -18,21 +17,42 @@ export function registerToasts(
 ): void {
   ctx.slots.registerFactory({ name: 'workspace.toast.content', scope: 'root' }, WorkspaceToast)
   ctx.slots.inject('workspace.toast', function* () {
-    const simple = {
-      sessionIdCopied: ['toast.sessionIdCopied', 'success'],
-      sessionIdCopyFailed: ['toast.sessionIdCopyFailed', 'warning'],
-      pinFailed: ['toast.pinFailed', 'warning'],
-      unpinFailed: ['toast.unpinFailed', 'warning'],
-      archivedNotOpenable: ['toast.archivedNotOpenable', 'warning'],
-      defaultWorkspaceFailed: ['defaultWorkspace.failed', 'warning'],
-    } as const
-    for (const key of Object.keys(simple) as (keyof typeof simple)[]) {
-      const [text, tone] = simple[key]
-      yield ctx.slots.register({
-        name: 'workspace.toast', key, locale: 'workspace',
-        inject: (): ToastDisplayInjected<keyof typeof simple> => ({ display: (_notice, t) => ({ text: t(text), tone }) }),
-      }, ToastEntry<PropsRuntime<'workspace.toast', keyof typeof simple>>)
-    }
+    yield ctx.slots.register({
+      name: 'workspace.toast', key: 'sessionIdCopied', locale: 'workspace',
+      inject: (): ToastDisplayInjected<'sessionIdCopied'> => ({
+        display: (_notice, t) => ({ text: t('toast.sessionIdCopied'), tone: 'success' }),
+      }),
+    }, ToastEntry<PropsRuntime<'workspace.toast', 'sessionIdCopied'>>)
+    yield ctx.slots.register({
+      name: 'workspace.toast', key: 'sessionIdCopyFailed', locale: 'workspace',
+      inject: (): ToastDisplayInjected<'sessionIdCopyFailed'> => ({
+        display: (_notice, t) => ({ text: t('toast.sessionIdCopyFailed'), tone: 'warning' }),
+      }),
+    }, ToastEntry<PropsRuntime<'workspace.toast', 'sessionIdCopyFailed'>>)
+    yield ctx.slots.register({
+      name: 'workspace.toast', key: 'pinFailed', locale: 'workspace',
+      inject: (): ToastDisplayInjected<'pinFailed'> => ({
+        display: (_notice, t) => ({ text: t('toast.pinFailed'), tone: 'warning' }),
+      }),
+    }, ToastEntry<PropsRuntime<'workspace.toast', 'pinFailed'>>)
+    yield ctx.slots.register({
+      name: 'workspace.toast', key: 'unpinFailed', locale: 'workspace',
+      inject: (): ToastDisplayInjected<'unpinFailed'> => ({
+        display: (_notice, t) => ({ text: t('toast.unpinFailed'), tone: 'warning' }),
+      }),
+    }, ToastEntry<PropsRuntime<'workspace.toast', 'unpinFailed'>>)
+    yield ctx.slots.register({
+      name: 'workspace.toast', key: 'archivedNotOpenable', locale: 'workspace',
+      inject: (): ToastDisplayInjected<'archivedNotOpenable'> => ({
+        display: (_notice, t) => ({ text: t('toast.archivedNotOpenable'), tone: 'warning' }),
+      }),
+    }, ToastEntry<PropsRuntime<'workspace.toast', 'archivedNotOpenable'>>)
+    yield ctx.slots.register({
+      name: 'workspace.toast', key: 'defaultWorkspaceFailed', locale: 'workspace',
+      inject: (): ToastDisplayInjected<'defaultWorkspaceFailed'> => ({
+        display: (_notice, t) => ({ text: t('defaultWorkspace.failed'), tone: 'warning' }),
+      }),
+    }, ToastEntry<PropsRuntime<'workspace.toast', 'defaultWorkspaceFailed'>>)
     yield ctx.slots.register({
       name: 'workspace.toast', key: 'shortcutForkFailed', locale: 'workspace',
       inject: (): ToastDisplayInjected<'shortcutForkFailed'> => ({
@@ -56,21 +76,31 @@ export function registerToasts(
         }),
       }),
     }, ToastEntry<PropsRuntime<'workspace.toast', 'forkRequiresOpen'>>)
-    const archiveKeys = ['archived', 'stoppedAndArchived'] as const satisfies readonly ToastKind[]
-    for (const key of archiveKeys) {
-      yield ctx.slots.register({
-        name: 'workspace.toast', key, locale: 'workspace', store: viewStore,
-        inject: () => ({
-          display: ((notice, t, dismiss) => ({
-            text: t(key === 'archived' ? 'toast.archived' : 'toast.stoppedAndArchived'), tone: 'success', holdMs: 6000,
-            actions: [{ label: t('toast.archivedUndo'), onClick: () => { dismiss(); actions.undoArchive(notice.sessionId) } }],
-          })) satisfies ToastDisplayInjected<typeof key>['display'],
-          filterAction: (t: Parameters<ToastDisplayInjected<typeof key>['display']>[1], dismiss: () => void) => ({
-            prefix: t('toast.archivedOr'), label: t('toast.archivedFilter'),
-            onClick: () => { dismiss(); actions.showArchived() },
-          }),
+    yield ctx.slots.register({
+      name: 'workspace.toast', key: 'archived', locale: 'workspace', store: viewStore,
+      inject: (): ArchiveToastInjected => ({
+        display: (notice, t, dismiss) => ({
+          text: t('toast.archived'), tone: 'success', holdMs: 6000,
+          actions: [{ label: t('toast.archivedUndo'), onClick: () => { dismiss(); actions.undoArchive(notice.sessionId) } }],
         }),
-      }, ArchiveToastEntry)
-    }
+        filterAction: (t, dismiss) => ({
+          prefix: t('toast.archivedOr'), label: t('toast.archivedFilter'),
+          onClick: () => { dismiss(); actions.showArchived() },
+        }),
+      }),
+    }, ArchiveToastEntry)
+    yield ctx.slots.register({
+      name: 'workspace.toast', key: 'stoppedAndArchived', locale: 'workspace', store: viewStore,
+      inject: (): ArchiveToastInjected => ({
+        display: (notice, t, dismiss) => ({
+          text: t('toast.stoppedAndArchived'), tone: 'success', holdMs: 6000,
+          actions: [{ label: t('toast.archivedUndo'), onClick: () => { dismiss(); actions.undoArchive(notice.sessionId) } }],
+        }),
+        filterAction: (t, dismiss) => ({
+          prefix: t('toast.archivedOr'), label: t('toast.archivedFilter'),
+          onClick: () => { dismiss(); actions.showArchived() },
+        }),
+      }),
+    }, ArchiveToastEntry)
   })
 }

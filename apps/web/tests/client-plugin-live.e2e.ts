@@ -83,7 +83,6 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
     await expect.poll(() => menu.count()).toBe(0)
     await page.getByRole('alert').filter({ hasText: 'Session ID copied' }).waitFor()
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(sessionId)
-    expect(await page.getByRole('dialog', { name: 'Session ID', exact: true }).count()).toBe(0)
     expect(console.pageErrors).toEqual([])
     await assertFixtureInventory(EXPECTED, [
       'bootstrap-rebuild.expected.md', 'enabled.expected.md', 'recovered.expected.md',

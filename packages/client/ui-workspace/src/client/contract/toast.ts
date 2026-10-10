@@ -2,7 +2,7 @@
 import type {
   FactoryComponentPropsOf, InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime, PropsStore,
 } from '@deepseek-ai/dsh-client-ui-slots'
-import type { RowToastState, WorkspaceViewStoreHandle } from '../contract/slots.ts'
+import type { RowToastState, WorkspaceViewStoreHandle } from './slots.ts'
 
 /** Business key of one existing Workspace notice. */
 export type ToastKind = RowToastState['kind']
@@ -41,13 +41,19 @@ export type ArchiveToastEntryProps =
 /** Complete props of the shared Workspace Toast Factory. */
 export type WorkspaceToastProps = FactoryComponentPropsOf<'workspace.toast.content'>
 
+/** Owner operations available to every keyed Workspace notice. */
+export interface WorkspaceToastOwnerProps {
+  /** Dismiss the displayed notice. */
+  dismissToast: () => void
+}
+
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /** Workspace notices selected by their existing business discriminator. */
     'workspace.toast': {
       kind: 'keyed'
       scope: 'root'
-      owner: { dismissToast: () => void }
+      owner: WorkspaceToastOwnerProps
       keyProps: { [K in ToastKind]: ToastNotice<K> }
     }
   }

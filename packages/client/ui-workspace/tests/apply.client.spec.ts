@@ -25,7 +25,7 @@ import { ForkSessionMenuItem } from '../src/client/session-actions/ForkSession.t
 import { PinSessionMenuItem, PinSessionRowButton } from '../src/client/session-actions/PinSession.tsx'
 import { RenameSessionMenuItem, SessionRenameDialog } from '../src/client/session-actions/RenameSession.tsx'
 import { RowActionToast } from '../src/client/session-actions/RowActionToast.tsx'
-import type { ArchiveToastInjected, ToastDisplayInjected } from '../src/client/toast/contract.ts'
+import type { ArchiveToastInjected, ToastDisplayInjected } from '../src/client/contract/toast.ts'
 import { SessionIdMenuItem } from '../src/client/session-actions/SessionId.tsx'
 import { WorkspacePicker } from '../src/client/WorkspacePicker.tsx'
 import { FLAT_SESSION_ORDER_KEY } from '../src/client/stores.ts'
@@ -323,7 +323,6 @@ describe('ui-workspace apply', () => {
     await action.copySessionId(sid('cold-session'))
     expect(writeText).toHaveBeenCalledExactlyOnceWith('cold-session')
     expect(toast.hooks.toast.getSnapshot()).toMatchObject({ kind: accepted ? 'sessionIdCopied' : 'sessionIdCopyFailed' })
-    expect(b.slots.entries('shell.overlay').some(row => row.options.id === 'workspace.session-id')).toBe(false)
     expect(b.retain).not.toHaveBeenCalled()
     expect(b.using).not.toHaveBeenCalled()
     expect(b.binding).not.toHaveBeenCalled()

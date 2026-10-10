@@ -1,6 +1,6 @@
 /** The existing overlay dispatches the latest Workspace notice to its keyed presentation. */
 import type { RowToastProps } from '../contract/slots.ts'
-import type {} from '../toast/contract.ts'
+import type {} from '../contract/toast.ts'
 
 /**
  * Dispatch the current notice without interpreting its business payload.

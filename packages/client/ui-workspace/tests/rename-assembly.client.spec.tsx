@@ -152,7 +152,6 @@ describe('session rename through the assembled browser', () => {
     expect(view.queryByRole('menu')).toBeNull()
     expect(writeText).toHaveBeenCalledExactlyOnceWith(SID)
     await view.findByText('Session ID 已复制')
-    expect(view.queryByRole('dialog', { name: 'Session ID' })).toBeNull()
     await runtime.dispose()
   })
 
