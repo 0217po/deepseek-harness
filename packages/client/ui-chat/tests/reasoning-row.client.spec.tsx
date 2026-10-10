@@ -21,6 +21,119 @@ afterEach(() => {
 const t = makeTranslate(zh, commonZh)
 const renderMessageImages: AssistantMarkdownProps['renderMessageImages'] = () => null
 
+describe('AssistantMarkdown reasoning blocks', () => {
+  const props = {
+    renderSlot, useDisclosure, useGroupAction: useSearchableHidden,
+    usePresentation: useDetailedPresentation, renderMessageImages, t,
+  }
+
+  it.each([false, true])('omits blank blocks without trimming body text when streaming=%s', (streaming) => {
+    const text = '\n  **Visible reasoning**\n\nOriginal body  \n'
+    const texts = ['', ' \t\r\n', text, '']
+    const blocks = Object.freeze(texts.map(text => Object.freeze({ kind: 'reasoning' as const, text })))
+    const calls = vi.fn()
+    const extension: AssistantMarkdownProps['renderSlot'] = (key, owner, options) => {
+      calls(key, owner)
+      return renderSlot(key, owner, options)
+    }
+    const view = render(<AssistantMarkdown {...props} renderSlot={extension} blocks={blocks} streaming={streaming} />)
+    expect(view.getAllByRole('button')).toHaveLength(1)
+    expect(view.container.querySelectorAll('[data-variant="think"]')).toHaveLength(1)
+    fireEvent.click(view.getByRole('button'))
+    expect(calls).toHaveBeenCalledWith('conversation.chat.reasoning.body', { text, running: false })
+    expect(view.getByText('Visible reasoning').tagName).toBe('STRONG')
+    expect(blocks.map(block => block.text)).toEqual(texts)
+  })
+
+  it.each([false, true])('waits for non-whitespace reasoning when streaming=%s', (streaming) => {
+    const view = render(<AssistantMarkdown {...props} blocks={[{ kind: 'reasoning', text: '' }]} streaming={streaming} />)
+    expect(view.queryAllByRole('button')).toHaveLength(0)
+    for (const text of [' ', '\t', '\r\n', ' \t\r\n', '\u00a0']) {
+      view.rerender(<AssistantMarkdown {...props} blocks={[{ kind: 'reasoning', text }]} streaming={streaming} />)
+      expect(view.queryAllByRole('button')).toHaveLength(0)
+    }
+    view.rerender(<AssistantMarkdown {...props} blocks={[{ kind: 'reasoning', text: '\n First thought' }]} streaming={streaming} />)
+    expect(view.getAllByRole('button')).toHaveLength(1)
+  })
+
+  it('retains an expanded earlier row when a blank streaming tail receives text', () => {
+    const first = { kind: 'reasoning' as const, text: 'First thought\n\nEarlier body' }
+    const blank = { kind: 'reasoning' as const, text: ' \t\r\n' }
+    const view = render(<AssistantMarkdown {...props} blocks={[first, blank, blank]} streaming />)
+    const earlierToggle = view.getByRole('button')
+    const earlierRow = earlierToggle.closest('[data-variant="think"]')
+    expect(earlierRow?.getAttribute('data-state')).toBe('ok')
+    expect(view.queryByText('运行中')).toBeNull()
+    fireEvent.click(earlierToggle)
+    const earlierBody = view.getByText('Earlier body')
+
+    const tail = { kind: 'reasoning' as const, text: 'An unfinished tail' }
+    const blocks = [first, blank, tail]
+    view.rerender(<AssistantMarkdown {...props} blocks={blocks} streaming />)
+    const toggles = view.getAllByRole('button')
+    expect(toggles).toHaveLength(2)
+    expect(toggles[0]).toBe(earlierToggle)
+    expect(view.getByText('Earlier body')).toBe(earlierBody)
+    expect(earlierToggle.getAttribute('aria-expanded')).toBe('true')
+    expect(earlierRow?.getAttribute('data-state')).toBe('ok')
+    const tailToggle = toggles[1]!
+    const tailRow = tailToggle.closest('[data-variant="think"]')
+    expect(tailRow?.getAttribute('data-state')).toBe('running')
+    expect(view.queryByText(tail.text)).toBeNull()
+    fireEvent.click(tailToggle)
+    expect(view.getByText(tail.text)).toBeTruthy()
+    expect(earlierToggle.getAttribute('aria-expanded')).toBe('true')
+
+    view.rerender(<AssistantMarkdown {...props} blocks={blocks} streaming={false} />)
+    const settledToggles = view.getAllByRole('button')
+    expect(settledToggles).toHaveLength(2)
+    expect(settledToggles[0]).toBe(earlierToggle)
+    expect(settledToggles[1]).toBe(tailToggle)
+    expect(view.getByText('Earlier body')).toBe(earlierBody)
+    expect(tailRow?.getAttribute('data-state')).toBe('ok')
+    expect(tailToggle.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(tailToggle)
+    expect(earlierToggle.getAttribute('aria-expanded')).toBe('true')
+    expect(tailToggle.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it.each(['Partial thought', '', ' \t\r\n'])('retains the stopped marker with blank reasoning around %j', (text) => {
+    const blocks = ['', text, ' \t\r\n'].map(text => ({ kind: 'reasoning' as const, text }))
+    const view = render(<AssistantMarkdown {...props} blocks={blocks} groupPart="reasoning" streaming={false} interrupted />)
+    expect(view.queryAllByRole('button')).toHaveLength(text.trim() === '' ? 0 : 1)
+    expect(view.getByText(t('message.stopped'))).toBeTruthy()
+    expect(view.queryByText('运行中')).toBeNull()
+  })
+
+  it('keeps non-blank rows and their expanded bodies across modes, excluding them from the response part', () => {
+    const mode = createSnapshotStore<TranscriptViewMode>('compact')
+    const usePresentation = bindSnapshotSelector(derivePresentationPolicy(mode, createSnapshotStore<CollapseTiming>('completion')))
+    const blocks: AssistantMarkdownProps['blocks'] = [
+      { kind: 'reasoning', text: '' },
+      { kind: 'reasoning', text: 'Mode thought\n\nMode body' },
+      { kind: 'reasoning', text: ' \t\r\n' },
+      { kind: 'text', text: 'Answer' },
+    ]
+    const view = render(<AssistantMarkdown {...props} usePresentation={usePresentation}
+      blocks={blocks} groupPart="reasoning" streaming={false} />)
+    const toggle = view.getByRole('button')
+    fireEvent.click(toggle)
+    const body = view.getByText('Mode body')
+    for (const next of ['standard', 'detailed', 'verbose', 'compact'] as const) {
+      act(() => { mode.set(next) })
+      expect(view.getAllByRole('button')).toHaveLength(1)
+      expect(view.getByRole('button')).toBe(toggle)
+      expect(toggle.getAttribute('aria-expanded')).toBe('true')
+      expect(view.getByText('Mode body')).toBe(body)
+      expect(view.queryByText('Answer')).toBeNull()
+    }
+    view.rerender(<AssistantMarkdown {...props} usePresentation={usePresentation}
+      blocks={blocks} groupPart="response" streaming={false} />)
+    expect(view.queryAllByRole('button')).toHaveLength(0)
+    expect(view.getByText('Answer')).toBeTruthy()
+  })
+})
+
 describe('ReasoningRow', () => {
   it('offers only text and streaming state to the standard Body Slot after expansion', () => {
     const calls = vi.fn()

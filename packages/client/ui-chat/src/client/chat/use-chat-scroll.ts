@@ -64,6 +64,7 @@ export function useChatScroll(input: ChatScrollInput): ChatScrollState {
     cancelFollow.current = null
   }, [])
   const cancelPendingFollow = useCallback(() => {
+    viewport.motion.cancelInput()
     clearPendingFollow()
     // Retain a cancelled wait until this fold ends, so resize cannot reacquire follow ownership.
     if (viewport.motion.foldActive()) {
@@ -71,7 +72,7 @@ export function useChatScroll(input: ChatScrollInput): ChatScrollState {
     }
   }, [clearPendingFollow, viewport])
   const followAfterFold = useCallback(() => {
-    if (cancelFollow.current !== null) return
+    if (cancelFollow.current !== null || viewport.motion.inputActive()) return
     reading.interruptFollow()
     cancelFollow.current = viewport.motion.onFoldIdle(() => {
       cancelFollow.current = null
@@ -100,8 +101,8 @@ export function useChatScroll(input: ChatScrollInput): ChatScrollState {
     if (ownInput) {
       clearPendingFollow()
       navigation.cancel()
-      if (current.deferCompletedTurns && viewport.motion.foldActive()) followAfterFold()
-      else reading.followTail(current.deferCompletedTurns ? 'smooth' : 'instant')
+      if (current.deferCompletedTurns && reading.followInputFold()) return
+      reading.followTail(current.deferCompletedTurns ? 'smooth' : 'instant')
       return
     }
     if (navigation.contentCommitted()) {

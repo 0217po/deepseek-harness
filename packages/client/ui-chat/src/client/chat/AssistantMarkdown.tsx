@@ -52,7 +52,7 @@ export interface AssistantMarkdownProps extends Pick<PropsRenderSlots<'conversat
   t: ChatViewSlotProps['t']
 }
 
-/** Reasoning block as the Think variant summary row (figma 39:28304). */
+/** Renders non-blank reasoning blocks as independent disclosures alongside the response. */
 export const AssistantMarkdown = memo(function AssistantMarkdown({
   blocks, streaming, interrupted, renderMessageImages, groupPart, useDisclosure,
   reasoningHidden = false, usePresentation, revealProcess, mentions, renderSlot, useGroupAction, t,
@@ -92,6 +92,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
         )
         break
       case 'reasoning':
+        if (block.text.trim() === '') break
         rendered.push(
           <ProcessReasoning
             key={i}
