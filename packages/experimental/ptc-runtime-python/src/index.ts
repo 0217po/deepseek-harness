@@ -1124,7 +1124,7 @@ export class PythonPtcRuntime extends PtcRuntime {
       // child can dispatch. `namespace.functions` is caller-supplied, so it may
       // expose members through getters or a Proxy; reading one of them inside
       // the fd-3 `data` callback would throw OUTSIDE the dispatcher's try and
-      // terminate the host (defensive-patterns contain-callback-exceptions).
+      // terminate the host (docs/defensive-patterns/general.md contain-callback-exceptions).
       // Reading every member here, in run()'s synchronous validation segment,
       // turns that throw into the seam-misuse rejection run() reserves for
       // malformed bindings. The snapshot is also the single key set the boot

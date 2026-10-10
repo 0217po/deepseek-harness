@@ -184,10 +184,12 @@ describe('client bundle purity gate', () => {
       neverBundle: (specifier: string) => boolean
     }
 
-    expect(requesting.neverBundle('react')).toBe(true)
-    expect(requesting.neverBundle('zod')).toBe(false)
-    expect(plain.neverBundle('react')).toBe(true)
-    expect(plain.neverBundle('@deepseek-ai/dsh-client-store')).toBe(true)
+    for (const bundle of [requesting, plain]) {
+      for (const specifier of ['react', 'zod', '@tanstack/react-virtual', '@deepseek-ai/dsh-client-store']) {
+        expect(bundle.neverBundle(specifier)).toBe(true)
+      }
+      expect(bundle.neverBundle('zod/v3')).toBe(false)
+    }
   })
 })
 

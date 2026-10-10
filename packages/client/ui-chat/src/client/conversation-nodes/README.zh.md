@@ -131,7 +131,7 @@ description: "Chat 过程分组与活动摘要的明细业务规则。"
 - 旧值 `normal` 和 `expanded` 均按 `detailed` 展示，不自动改写磁盘中的值。
 - 未配置、值为 `null` 或无效时，Desktop 使用 `standard`，非 Desktop Web 使用 `detailed`。Host 设置到达前也使用各自的默认值；其他设置的无效值仍会校验失败。
 
-读取默认值不会自动保存配置。用户切换模式时，通过 Host 设置保存所选值；内存模式不写磁盘。Desktop onboarding 完成或跳过时，按引导规则写入偏好。
+读取默认值不会自动保存配置。用户切换模式时，通过 Host 设置保存所选值；设置无法持久化写入时仅在当前进程内生效。Desktop onboarding 完成或跳过时，按引导规则写入偏好。
 
 <a id="collapse-timing"></a>
 ### 收起时机
