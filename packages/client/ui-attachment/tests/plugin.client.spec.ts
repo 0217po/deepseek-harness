@@ -4,7 +4,9 @@ import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { TestSessions } from '@deepseek-ai/dsh-client-test-runtime'
 import { UiConversation } from '@deepseek-ai/dsh-client-ui-conversation/src/client/conversation/assembly.ts'
-import { AttachmentReference } from '../src/client/AttachmentReference.tsx'
+import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import { SessionId } from '@deepseek-ai/dsh-session/types'
+import { AttachmentReference, type AttachmentReferenceInjected } from '../src/client/AttachmentReference.tsx'
 import { apply as applyHost } from '../src/index.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { ComposerAttachments } from '../src/client/ComposerAttachments.tsx'
@@ -40,6 +42,22 @@ async function bench() {
 describe('attachment plugin', () => {
   it('keeps the host half empty', () => {
     expect(() => { applyHost() }).not.toThrow()
+  })
+
+  it('binds image reads and cache peeks to the reference Session', async () => {
+    const { ctx } = await bench()
+    const attachment = { attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`), mediaType: 'image/png' as const, bytes: 68, width: 1, height: 1 }
+    const imageUrl = vi.spyOn(ctx.uiConversation, 'imageUrl').mockResolvedValue('blob:loaded')
+    const peekImageUrl = vi.spyOn(ctx.uiConversation, 'peekImageUrl').mockReturnValue('blob:cached')
+    const entry = ctx.slots.entries('conversation.user.text.node')[0]!
+    const factory = entry.inject as NonNullable<typeof entry.inject> & ((id: SessionId) => AttachmentReferenceInjected)
+    const first = factory(SessionId('first'))
+    const second = factory(SessionId('second'))
+    expect(first.loadImage.peek?.(attachment)).toBe('blob:cached')
+    await expect(first.loadImage(attachment)).resolves.toBe('blob:loaded')
+    await expect(second.loadImage(attachment)).resolves.toBe('blob:loaded')
+    expect(peekImageUrl).toHaveBeenCalledWith('first', attachment)
+    expect(imageUrl.mock.calls).toEqual([['first', attachment], ['second', attachment]])
   })
 
   it('registers all entries and removes them with the plugin fiber', async () => {

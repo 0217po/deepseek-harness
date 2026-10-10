@@ -1,7 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { UserTextRegistry } from '@deepseek-ai/dsh-client-ui-conversation/src/client/conversation/user-text-registry.ts'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { UserTextNode, UserTextRule } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { UserTextFacts, UserTextNode, UserTextRule } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { goalCommandReferenceRule } from '../src/client/user-text-rules.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
@@ -63,6 +63,47 @@ describe('goalCommandReferenceRule', () => {
     expect(JSON.parse(JSON.stringify(matches))).toEqual(matches)
     expect(evaluate({ text, facts: {} }).filter(node => node.id === 'command')).toEqual([])
     expect(evaluate({ text, facts: { commands: [] } }).filter(node => node.id === 'command')).toEqual([])
+  })
+
+  it('orders confirmed ranges, ignores overlap, and preserves unclaimed nodes by identity', () => {
+    const first: UserTextNode<'text'> = { id: 'text', start: 0, end: 5, data: { text: '/goal' } }
+    const blocker: UserTextNode<'test.command.blocker'> = {
+      id: 'test.command.blocker', start: 5, end: 6, data: { label: 'claimed' },
+    }
+    const tail: UserTextNode<'text'> = { id: 'text', start: 6, end: 17, data: { text: '/goal /goal' } }
+    const plain: UserTextNode<'text'> = { id: 'text', start: 17, end: 23, data: { text: ' plain' } }
+    const segments = [first, blocker, tail, plain]
+    const commands = [
+      { start: 12, end: 17, name: 'goal' },
+      { start: 6, end: 17, name: 'goal' },
+      { start: 0, end: 5, name: 'goal' },
+      { start: 6, end: 11, name: 'goal' },
+    ]
+    const facts: Partial<UserTextFacts> = { commands }
+    const result = goalCommandReferenceRule.transform(Object.freeze(segments), { read: key => facts[key] })
+    expect(result).toEqual([
+      { id: 'command', start: 0, end: 5, data: { name: 'goal' } },
+      blocker,
+      { id: 'command', start: 6, end: 11, data: { name: 'goal' } },
+      { id: 'text', start: 11, end: 12, data: { text: ' ' } },
+      { id: 'command', start: 12, end: 17, data: { name: 'goal' } },
+      plain,
+    ])
+    expect(result[1]).toBe(blocker)
+    expect(result.at(-1)).toBe(plain)
+    expect(segments).toEqual([first, blocker, tail, plain])
+  })
+
+  it.each([
+    [' /goalx', 1, 6],
+    [' /other x/goal', 9, 14],
+    [' /goal', 1, 7],
+    [' /goal', 20, 25],
+  ] as const)('keeps unmatched confirmed ranges plain in %s', (text, start, end) => {
+    const segments: UserTextNode[] = [{ id: 'text', start: 0, end: text.length, data: { text } }]
+    const facts: Partial<UserTextFacts> = { commands: [{ start, end, name: 'goal' }] }
+    const result = goalCommandReferenceRule.transform(segments, { read: key => facts[key] })
+    expect(result).toBe(segments)
   })
 
   it('uses caller-provided UTF-16 ranges instead of searching or guessing names', () => {

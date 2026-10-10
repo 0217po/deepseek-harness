@@ -2,6 +2,8 @@
 
 Status: implemented
 
+[English](<2026-10-10-user-text-json-nodes.md>) | 中文
+
 ## 问题
 
 用户文本包含普通文字和不同业务的结构化引用。业务需要独立扩展识别逻辑、JSON 数据与显示方式；某个事实字段更新时，无关业务不能重复匹配。处理结果必须确定，且文本处理、缓存和依赖记录不能与 React 组件生命周期耦合。
@@ -23,6 +25,8 @@ Status: implemented
 注册项包含唯一注册 ID、顺序和变换函数。新增业务节点使用该规则 ID；仅加工 Text 显示值的规则不需要对应的业务节点或 renderer。所有规则使用同一套原文覆盖和业务节点保护约束。核心接口为：
 
 ```ts
+import type { UserTextFacts, UserTextNode } from '@deepseek-ai/dsh-client-ui-conversation/client'
+
 interface UserTextTransformContext {
   read<K extends keyof UserTextFacts>(
     key: K,
@@ -117,6 +121,12 @@ UserContent 保留附件、正文容器、未知内容和引用摘要，消息�
 - 冻结输入的测试能发现数组或 payload 原地修改；节点输出有序、完整覆盖原文、无重叠并可作 JSON round-trip。
 - 顺序仅由 `order/id` 决定；内置显示变换的普通注册顺序、独立开关、相邻分段空白、文档边缘 trim、emoji 字素和引用原子性均由变换单测覆盖。
 - 文本处理不执行 UI 操作；preview 不因 Slot 注入了操作能力而变成可点击；注册与卸载不泄漏求值状态或订阅。
+
+## 备选方案
+
+**全文独立匹配后全局仲裁。** 它不能表达前置规则消费文本后各阶段的实际输入。
+
+**React 组件变换链。** 文本处理、依赖记录和缓存不能绑定显示生命周期。
 
 ## 影响
 

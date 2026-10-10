@@ -34,7 +34,10 @@ export class UserTextRegistry extends ConversationDefinitionRegistry<UserTextRul
     return input => document.evaluate(input, this.rules)
   }
 
-  /** @returns monotonic revision, stable until a successful registration or disposal. */
+  /**
+   * Read the observable rule revision.
+   * @returns monotonic revision, stable until a successful registration or disposal.
+   */
   getSnapshot(): number {
     return this.revision
   }

@@ -13,13 +13,6 @@ declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
   }
 }
 
-function textSlice(segment: UserTextNode<'text'>, start: number, end: number): UserTextNode<'text'> {
-  return {
-    id: 'text', start, end,
-    data: { text: segment.data.text.slice(start - segment.start, end - segment.start) },
-  }
-}
-
 /** Replace exact confirmed command ranges; facts are read only for Text with a slash-token candidate. */
 export const goalCommandReferenceRule: UserTextRule<'command'> = {
   id: 'command',
@@ -35,25 +28,24 @@ export const goalCommandReferenceRule: UserTextRule<'command'> = {
         output?.push(segment)
         continue
       }
-      const text = segment.data.text
-      let cursor = segment.start
+      let remainder = segment
       for (const { start, end, name } of ordered) {
-        if (start >= segment.end) break
-        if (start < cursor || end > segment.end) continue
-        const localStart = start - segment.start
-        const localEnd = end - segment.start
+        if (start >= remainder.end) break
+        if (start < remainder.start || end > remainder.end) continue
+        const text = remainder.data.text
+        const localStart = start - remainder.start
+        const localEnd = end - remainder.start
         if (text.slice(localStart, localEnd) !== `/${name}`
           || (localStart !== 0 && !/\s/u.test(text.slice(localStart - 1, localStart)))
           || (localEnd !== text.length && !/\s/u.test(text.slice(localEnd, localEnd + 1)))) continue
         output ??= segments.slice(0, index)
-        if (cursor < start) output.push(textSlice(segment, cursor, start))
+        if (localStart > 0) output.push({
+          id: 'text', start: remainder.start, end: start, data: { text: text.slice(0, localStart) },
+        })
         output.push({ id: 'command', start, end, data: { name } })
-        cursor = end
+        remainder = { id: 'text', start: end, end: remainder.end, data: { text: text.slice(localEnd) } }
       }
-      if (output !== undefined) {
-        if (cursor === segment.start) output.push(segment)
-        else if (cursor < segment.end) output.push(textSlice(segment, cursor, segment.end))
-      }
+      if (remainder.start < remainder.end) output?.push(remainder)
     }
     return output ?? segments
   },

@@ -18,13 +18,7 @@ export const GoalCommandInputView = memo(function GoalCommandInputView({
   node, t, renderFactorySlot,
 }: GoalCommandInputViewProps) {
   const data: GoalCommandInputData = node.data
-  // Only the leading token is the executed command; the rest of the line is
-  // the objective, where a further `/goal` is prose.
-  const split = data.text.search(/\s/u)
-  const head = split === -1 ? data.text : data.text.slice(0, split)
-  const commands = head === `/${GOAL_COMMAND}`
-    ? [{ start: 0, end: head.length, name: GOAL_COMMAND }]
-    : []
+  const commands = [{ start: 0, end: GOAL_COMMAND.length + 1, name: GOAL_COMMAND }]
   return (
     <div
       className={css.row}

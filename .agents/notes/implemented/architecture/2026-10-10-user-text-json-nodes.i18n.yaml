@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for 2026-10-10-user-text-json-nodes.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-10-user-text-json-nodes.md
+/agent-note-linear-user-text-transforms-facts-dependencies-and-business-node-rendering:
+  en: d206fe00ab0edcf0
+  zh: 7045d9b97bf8a5bd
+/agent-note-linear-user-text-transforms-facts-dependencies-and-business-node-rendering/problem:
+  en: bc3b48352e9fcc8d
+  zh: 9c1902b877dd11f5
+/agent-note-linear-user-text-transforms-facts-dependencies-and-business-node-rendering/decision:
+  en: 5e6d27b060c6b5fe
+  zh: 6d789c4b88452539
+/agent-note-linear-user-text-transforms-facts-dependencies-and-business-node-rendering/decision/linear-pipeline:
+  en: efae164e3e9da1b4
+  zh: 604a087ab28f25d7
+/agent-note-linear-user-text-transforms-facts-dependencies-and-business-node-rendering/decision/transform-and-read-context:
+  en: f688c8c68c7e3fc7
+  zh: 91df6f6f9b74b0ed
+/agent-note-linear-user-text-transforms-facts-dependencies-and-business-node-rendering/decision/actual-read-dependencies:
+  en: 5f6724855432a217
+  zh: 8ce392304ae55890
+/agent-note-linear-user-text-transforms-facts-dependencies-and-business-node-rendering/decision/incremental-updates-and-caching:
+  en: fe4eeb8e8b664e89
+  zh: 12ca0841b31e5550
+/agent-note-linear-user-text-transforms-facts-dependencies-and-business-node-rendering/decision/reference-reuse-and-determinism:
+  en: 4d654ad1f0045060
+  zh: 9fe36047370b3fc1
+/agent-note-linear-user-text-transforms-facts-dependencies-and-business-node-rendering/decision/facts-and-display-props:
+  en: 070761de46ce492a
+  zh: 8013b575f40b6ea7
+/agent-note-linear-user-text-transforms-facts-dependencies-and-business-node-rendering/decision/rendering-and-interaction-ownership:
+  en: 928254237025d31a
+  zh: d7288468104226fc
+/agent-note-linear-user-text-transforms-facts-dependencies-and-business-node-rendering/decision/publication-and-failure:
+  en: c1577c8ddfa447bc
+  zh: 9233dab4e8eb4b3b
+/agent-note-linear-user-text-transforms-facts-dependencies-and-business-node-rendering/decision/scope:
+  en: dc106896de5ccb57
+  zh: 224d2db274d2df84
+/agent-note-linear-user-text-transforms-facts-dependencies-and-business-node-rendering/verification-requirements:
+  en: de75b3dbcb42056f
+  zh: 3b02843d14909a46
+/agent-note-linear-user-text-transforms-facts-dependencies-and-business-node-rendering/alternatives-considered:
+  en: fa52b4ce828182ff
+  zh: 311d37b799b67b04
+/agent-note-linear-user-text-transforms-facts-dependencies-and-business-node-rendering/consequences:
+  en: 32f0d31c90a9bcf7
+  zh: efa9eaed223ec912

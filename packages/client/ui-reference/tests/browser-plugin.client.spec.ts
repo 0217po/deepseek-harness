@@ -9,7 +9,7 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { UiConversation } from '@deepseek-ai/dsh-client-ui-conversation/src/client/conversation/assembly.ts'
-import { FileReference, FolderReference } from '../src/client/FileReference.tsx'
+import { FileReference, FolderReference, type FileReferenceInjected } from '../src/client/FileReference.tsx'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { RemoteError, TestSessions } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionFixture } from '@deepseek-ai/dsh-client-test-runtime'
@@ -678,6 +678,19 @@ describe('pick and codec', () => {
 })
 
 describe('reference preview', () => {
+  it('binds each inline file action to its originating Session', async () => {
+    const { ctx } = await bench()
+    const entry = ctx.slots.entries('conversation.user.text.node').find(candidate => candidate.options.key === 'file')!
+    const factory = entry.inject as NonNullable<typeof entry.inject> & ((id: SessionId) => FileReferenceInjected)
+    const openResource = vi.spyOn(ctx.sidebarRight, 'openResource')
+    factory(session.sessionId).openFile('docs/a b.md')
+    factory(sid('other')).openFile('notes.md')
+    expect(openResource.mock.calls).toEqual([
+      ['dsh-resource://file/session/target/docs/a%20b.md'],
+      ['dsh-resource://file/session/other/notes.md'],
+    ])
+  })
+
   it('opens plain and quoted file references without treating folders or sessions as files', async () => {
     const { ctx, source, fiber } = await bench()
     const openResource = vi.spyOn(ctx.sidebarRight, 'openResource')
