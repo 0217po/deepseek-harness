@@ -1,12 +1,12 @@
 /** Public plugin management records shared with clients. */
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { PluginLocalizedMeta } from '@deepseek-ai/dsh-package-manifest'
-import type { PluginInventoryEntry, AgentPresetPluginRow } from '@deepseek-ai/dsh-host-plugin-inventory/types'
+import type { PluginInventoryEntry } from '@deepseek-ai/dsh-host-plugin-inventory/types'
 export type { PluginEntryId } from '@deepseek-ai/dsh-host-plugin-inventory/types'
 import type { PluginEntryId } from '@deepseek-ai/dsh-host-plugin-inventory/types'
 
 /** Reasons a profile control cannot modify its target. */
-export type ReadOnlyReason = 'management-required' | 'unaddressable' | 'preset-managed'
+export type ReadOnlyReason = 'management-required' | 'unaddressable'
 
 /** A package whose declared DSH peers reject the running DSH version, without an exemption for the exact pair. */
 export interface IncompatiblePlugin {
@@ -33,14 +33,8 @@ export type PluginInfo = PluginInventoryEntry & (
 
 /** One row a bundle's patch declares, with its live entry while the bundle contributes it. */
 export interface BundleRowInfo {
-  /** Declared row id, or an internal identity for an anonymous scoped insertion. */
+  /** The row id as the patch declares it. */
   rowId: string
-  /** Outer preset row id; together with rowId identifies a scoped declaration. */
-  preset?: string
-  /** Why direct row controls are unavailable; scoped rows are configured through their preset or bundle. */
-  readOnlyReason?: ReadOnlyReason
-  /** Current preset composition state; scoped rows have no editable root Loader entry. */
-  composition?: Pick<AgentPresetPluginRow, 'enabled' | 'fiberPhase'>
   /** The module the row names. */
   moduleName: string
   /** Local package display metadata, including rows whose bundle is disabled. */

@@ -554,6 +554,26 @@ describe('UiWorkspaceService', () => {
     expect(b.sessions.retained[0]!.release).not.toHaveBeenCalled()
   })
 
+  it.each([undefined, false, true])('forwards migration permission %s without retaining or selecting a Session', async (allowMigration) => {
+    const b = bench()
+    const onCreated = vi.fn<(childId: SessionId) => void>()
+    b.sessions.fork.mockImplementationOnce(async (options) => {
+      options.onCreated?.(sid('forked'))
+      return sid('forked')
+    })
+    const options = allowMigration === undefined ? undefined : { allowMigration }
+
+    await expect(b.uiWorkspace.forkSession(sid('source'), onCreated, options)).resolves.toBe(sid('forked'))
+
+    expect(b.sessions.fork).toHaveBeenCalledExactlyOnceWith({
+      sessionId: sid('source'), increaseTitle: true, onCreated,
+      ...allowMigration === undefined ? {} : { allowMigration },
+    })
+    expect(onCreated).toHaveBeenCalledExactlyOnceWith(sid('forked'))
+    expect(b.sessions.retain).not.toHaveBeenCalled()
+    expect(b.selectPanel).not.toHaveBeenCalled()
+  })
+
   it('does not supersede a pending Workspace selection when a sidebar fork completes', async () => {
     const b = bench({ workspaces: workspaceState([workspace('a')]) })
     const created = Promise.withResolvers<SessionId>()

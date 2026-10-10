@@ -6,8 +6,6 @@
 
 ## 管理记录
 
-`ProfilePatch` 在原生 Include patch 字段上增加可选的字面量 `preset` 条目 id；此时 `id` 指向该 preset 内的子条目。[App-boot](../../packages/boot/app-boot/README.zh.md#profiles) 定义编译、顺序、校验与路径解析规则。
-
 `PluginEntryId` 标识一个 Loader 条目；调用方从 `listPlugins` 获取，不自行拼接 patch id。
 
 `PluginInfo` 包含模块标识、实际启停状态、fiber 阶段和可选的展示 `meta`，以及唯一的 `patchId` 或 `readOnlyReason`。
@@ -32,7 +30,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.configEditor` — `ConfigEditor`
 
-Persist Host entry configs without changing preset-scoped operations, then reconcile through Loader.
+Persist complete raw configs and apply them through the normal Loader path.
 
 ```ts cordis-catalog
 /** Addressable profile rows; nested Includes have independent configuration ownership.
@@ -116,7 +114,7 @@ Manage profile files and apply their declared reload lifecycle.
  * @returns Package versions, manifest descriptions, the installable spec of profile dependencies, rows, optional
  * display metadata, activation selections, whether the installation offers the bundle, and removal availability.
  */
-@Remote async listBundles(): Promise<BundleInfo[]>
+@Remote listBundles(): Promise<BundleInfo[]>
 
 /** Read the registries this manager asks: the configured first one, its fallbacks in order, and what pnpm's own configuration names.
  * @returns The registries in pnpm's comparison form; null is the one pnpm's own configuration names, `resolved` as pnpm reads it now.

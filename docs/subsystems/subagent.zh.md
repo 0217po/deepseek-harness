@@ -184,7 +184,7 @@ interface ContinuableCreateSpec {
 sendMessage 根据确切的在线发送者实例授权，仅允许相邻本地代理通信。运行中的子代理接收引导输入；不在线的可继续子代理从持久化恢复。外部执行拒绝后续消息。本地与外部执行都会通过父级结束通知自动回传最终文本、结构化结果、诊断和状态。本地子代理也可以通过 send_message 发送消息。caller 回传会抑制结束通知。drainDescendants 与 drainChildren 对本地和外部 activation 都等待所属任务清理完成。
 
 ```ts type-equiv
-/** Durable attribution for one model-authored message between adjacent Agents. */
+/** Durable attribution for one model-authored message between Agents. */
 interface AgentMessageSource {
   readonly kind: 'agent-message'
   /** A message another agent addressed to this one (`relay` context form). */

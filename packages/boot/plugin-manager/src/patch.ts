@@ -4,9 +4,9 @@ import { isMap, isSeq, parseDocument } from 'yaml'
 import { loadOptionalPatches } from '@deepseek-ai/dsh-app-boot'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 
-/** Replace the last matching Host override or append one, preserving preset-scoped operations.
+/** Replace the last matching override or append one after existing insertions.
  * @param filename Current profile patch file.
- * @param id Unique Host composition entry id.
+ * @param id Unique composition entry id.
  * @param name Module name used to match name-qualified overrides.
  * @param enabled Desired entry enablement.
  * @returns Whether the file changed.
@@ -28,7 +28,7 @@ export async function writePluginEnabled(filename: string, id: string, name: str
   loadOptionalPatches('dsh', filename)
   const items = document.contents.items
   const target = items.findLast((item, index) => {
-    if (!isMap(item) || document.getIn([index, 'id']) !== id || item.has('insert') || item.has('preset')) return false
+    if (!isMap(item) || document.getIn([index, 'id']) !== id || item.has('insert')) return false
     const expectedName = document.getIn([index, 'name'])
     return !expectedName || expectedName === name
   })
