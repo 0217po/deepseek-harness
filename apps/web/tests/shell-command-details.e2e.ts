@@ -159,8 +159,9 @@ it.each([
       await page.getByRole('treeitem').first().click()
       await page.getByRole('treeitem').nth(1).click()
       await page.locator('[data-sample="bash"]').waitFor({ state: 'attached' })
-      const session = scaffold.ctx.sessions.get(id)
-      if (session === undefined) throw new Error('Status-dot Session is unavailable')
+      const resolved = await scaffold.ctx.sessionController.resolveAgent(id)
+      if ('error' in resolved) throw resolved.error
+      const session = resolved.agent.session
       const callId = ToolCallId(`status-dot-${name}-${background ? 'background' : 'foreground'}`)
       const args = JSON.stringify({ command: LONG_ARGS.command, description: `Long ${name} command`, run_in_background: background })
       session.append('turn/start', { turn: 2 })
