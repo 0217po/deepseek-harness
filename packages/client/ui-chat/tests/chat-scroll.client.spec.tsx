@@ -26,7 +26,7 @@ function ScrollHarness({ input, onMotion }: {
   const state = useChatScroll(input)
   useLayoutEffect(() => { onMotion(state.motion) }, [onMotion, state.motion])
   return <>
-    <div ref={state.listRef} data-testid="scrollport">
+    <div ref={state.listRef} data-testid="scrollport" data-initialized={state.initialized}>
       <div ref={state.columnRef} data-testid="column" data-chat-flow="" />
       <div data-chat-turn-spacer="" />
     </div>
@@ -34,7 +34,7 @@ function ScrollHarness({ input, onMotion }: {
   </>
 }
 
-function mountScroll(deferCompletedTurns = true) {
+function mountScroll(deferCompletedTurns = true, initial: Partial<ChatScrollInput> = {}) {
   let input: ChatScrollInput = {
     ready: true,
     order: [],
@@ -45,12 +45,14 @@ function mountScroll(deferCompletedTurns = true) {
     submissionId: null,
     running: false,
     deferCompletedTurns,
+    transcriptView: 'verbose',
     loadedTurns: [],
     hasMore: false,
     loadingOlder: false,
     loadOlder: vi.fn(),
     loadThrough: vi.fn(async () => {}),
     chatScroll: { read: () => null, save: vi.fn() },
+    ...initial,
   }
   const callbacks: { motion?: FlowMotionRows; resize?: () => void } = {}
   class Observer implements ResizeObserver {
@@ -99,6 +101,29 @@ function mountScroll(deferCompletedTurns = true) {
 }
 
 describe('Chat scroll collapse timing', () => {
+  it.each(['resize', 'scroll', 'history', 'input', 'preference'] as const)(
+    'waits for initial history before initializing a running view after %s', (change) => {
+      const h = mountScroll(true, { ready: false, running: true })
+      expect(h.scroller.dataset.initialized).toBe('false')
+      if (change === 'resize') h.resize()
+      else if (change === 'scroll') fireEvent.scroll(h.scroller)
+      else if (change === 'history') h.update({ order: ['history'], lastKey: 'history' })
+      else if (change === 'input') h.update({ submissionId: 'pending-input' })
+      else h.update({ transcriptView: 'standard' })
+      expect(h.scroller.dataset.initialized).toBe('false')
+      expect(h.scroller.scrollTop).toBe(0)
+      expect(h.scrollTo).not.toHaveBeenCalled()
+
+      h.update({ ready: true })
+      expect(h.scroller.dataset.initialized).toBe('true')
+      expect(h.scroller.scrollTop).toBe(600)
+      expect(h.scrollTo).not.toHaveBeenCalled()
+      h.grow(1_200)
+      h.resize()
+      expect(h.scroller.scrollTop).toBe(800)
+    },
+  )
+
   it('does not defer one viewport\'s submitted input behind another viewport\'s fold', () => {
     const first = mountScroll()
     const second = mountScroll()
@@ -154,6 +179,56 @@ describe('Chat scroll collapse timing', () => {
     expect(h.scroller.scrollTop).toBe(600)
     expect(h.scrollTo).not.toHaveBeenCalled()
     expect(h.scroller.querySelector<HTMLElement>('[data-chat-turn-spacer]')?.style.height).toBe('20px')
+  })
+
+  it.each([false, true])('clears mode-change bottom space after the fold (reader interrupts=%s)', async (interrupt) => {
+    const h = mountScroll()
+    h.resize()
+    h.startFold()
+    h.update({ transcriptView: 'standard' })
+    await act(async () => { await Promise.resolve() })
+    const spacer = h.scroller.querySelector<HTMLElement>('[data-chat-turn-spacer]')!
+    expect(spacer.style.height).toBe('80px')
+    h.grow(920)
+    if (interrupt) {
+      fireEvent.wheel(h.scroller, { deltaY: -100 })
+      h.scroller.scrollTop = 400
+      fireEvent.scroll(h.scroller)
+    }
+    h.finishFold()
+    expect(spacer.style.height).toBe('')
+    expect(h.scroller.scrollHeight).toBe(920)
+    expect(h.scroller.scrollTop).toBe(interrupt ? 400 : 520)
+    expect(h.row.hidden).toBe(true)
+    h.resize()
+    expect(spacer.style.height).toBe('')
+  })
+
+  it('clears a previous fold reservation on an idle mode change', async () => {
+    const h = mountScroll()
+    h.resize()
+    h.startFold()
+    await act(async () => { await Promise.resolve() })
+    h.grow(920)
+    h.finishFold()
+    h.resize()
+    expect(h.scroller.querySelector<HTMLElement>('[data-chat-turn-spacer]')!.style.height).toBe('80px')
+    h.update({ transcriptView: 'standard' })
+    expect(h.scroller.querySelector<HTMLElement>('[data-chat-turn-spacer]')!.style.height).toBe('')
+    expect(h.scroller.scrollTop).toBe(520)
+  })
+
+  it('keeps the latest mode reset when preferences change before a fold finishes', async () => {
+    const h = mountScroll()
+    h.resize()
+    h.startFold()
+    h.update({ transcriptView: 'standard' })
+    await act(async () => { await Promise.resolve() })
+    h.update({ transcriptView: 'detailed' })
+    h.grow(920)
+    h.finishFold()
+    expect(h.scroller.querySelector<HTMLElement>('[data-chat-turn-spacer]')!.style.height).toBe('')
+    expect(h.scroller.scrollTop).toBe(520)
   })
 
   it('follows only the distance left after a smaller fold', async () => {

@@ -68,6 +68,7 @@ export function ChatView({
     ?? order.map(key => ({ kind: 'node', key: key as NodeKey })), [groupedEntries, order])
   const nodeStore = useChat(s => s.nodes)
   const deferCompletedTurns = usePresentation(policy => policy.collapseTiming === 'next-input')
+  const transcriptView = usePresentation(policy => policy.mode)
   // The rail's items are accumulated in the Chat snapshot, so this selector is
   // both the data and its change signal: the array identity moves only when a
   // Turn enters, leaves, or changes its preview.
@@ -189,6 +190,7 @@ export function ChatView({
     steeringId,
     submissionId: visibleSubmissions.at(-1)?.requestId ?? null,
     loadedTurns: turnNavigationItems,
+    transcriptView,
   })
   const flowContext = useMemo<ChatFlowHookContext>(() => ({ motion: scroll.motion }), [scroll.motion])
 
@@ -231,7 +233,7 @@ export function ChatView({
                 (ApprovalPanel) both take over the composer, so a flow card would
                 double-render the same wait. */}
           </div>
-          {/* Room added when rows above the reader close, given back only as content grows (use-chat-viewport). */}
+          {/* Fold room is reclaimed by viewport scroll, content-growth, and display-mode policies. */}
           <div className={css.turnSpacer} data-chat-turn-spacer aria-hidden="true" />
         </div>
       </div>

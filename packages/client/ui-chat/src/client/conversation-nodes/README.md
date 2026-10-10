@@ -131,12 +131,12 @@ Work details uses the Host setting `ui-chat.transcriptView`. The client reads it
 - Legacy `normal` and `expanded` values display as `detailed`, without automatically rewriting the saved values on disk.
 - When the setting is missing, `null`, or invalid, Desktop uses `standard` and non-Desktop Web uses `detailed`. Each client also uses its default before Host settings arrive; invalid values in other settings still fail validation.
 
-Reading a default does not automatically save configuration. When the user changes modes, the selected value is saved through Host settings; memory mode does not write to disk. Desktop onboarding writes preferences according to its rules when completed or skipped.
+Reading a default does not automatically save configuration. When the user changes modes, the selected value is saved through Host settings and stays process-local when settings cannot persist writes. Desktop onboarding writes preferences according to its rules when completed or skipped.
 
 <a id="collapse-timing"></a>
 ### Collapse timing
 
-Settings → General → Collapse work details appears directly below Work details and is independent of the display mode. On completion is the default and retains immediate folding and tail positioning. On next message enables delayed folding and its coordinated transitions. The choice lasts for the current Client instance: closing Settings preserves it; reloading or reopening the app resets it to On completion. It never writes Host settings, browser storage, or Session data.
+Settings → General → Collapse work details appears directly below Work details and is independent of the display mode. On completion is the default and retains immediate folding and tail positioning. On next message enables delayed folding and its coordinated transitions. The choice is saved as `ui-chat.collapseTiming` through the same Host profile settings as Work details and is restored after reload or reopening the app. Profiles without a saved value use On completion without writing that default. It does not write browser storage or Session data.
 
 With On next message, the latest Turn keeps its running presentation after completion: Compact and Standard retain their process headers, and Detailed retains its flat process rows. A pending ordinary transcript submission or a newer Turn ends this exemption without clearing the reader's manual whole-Turn choice. Inner disclosures reset only when their outer process actually hides. Queued input and steering alone do not end it. The latest Turn of a reopened Session also receives the exemption; manual whole-Turn choices still take precedence. Switching back to On completion ends the exemption immediately.
 

@@ -160,6 +160,12 @@ export class ChatViewport {
     this.setSpacer(this.spacerHeight() + px)
   }
 
+  /** Clear fold reservations after a display-mode change, allowing the scroll range to shrink. */
+  resetBelow(): void {
+    this.setSpacer(0)
+    this.invalidate()
+  }
+
   /**
    * Give reserved room back after acknowledged scrolling or content growth without clamping the reader.
    * Holds still during folds and unsampled movement; following includes the room that remains.
