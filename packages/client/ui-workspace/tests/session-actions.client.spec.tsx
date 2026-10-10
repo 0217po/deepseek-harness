@@ -674,11 +674,20 @@ describe('RowActionToast', () => {
   })
 
   it('the stopped-and-archived notice offers the same undo and filter actions under its own wording', async () => {
-    const { undoArchive, notify } = await toastSurface()
+    const { dismissToast, undoArchive, showArchived, notify } = await toastSurface()
     notify({ kind: 'stoppedAndArchived', sessionId: sid('one') })
     expect(screen.getByRole('alert').textContent).toBe('已停止并归档，可撤销或筛选已归档会话')
     fireEvent.click(screen.getByRole('button', { name: '撤销' }))
     expect(undoArchive).toHaveBeenCalledWith(sid('one'))
+    expect(callOrder(dismissToast)).toBeLessThan(callOrder(undoArchive))
+
+    notify({ kind: 'stoppedAndArchived', sessionId: sid('two') })
+    fireEvent.click(screen.getByRole('button', { name: '筛选已归档会话' }))
+    expect(dismissToast).toHaveBeenCalledTimes(2)
+    expect(showArchived).toHaveBeenCalledOnce()
+    expect(callOrder(dismissToast, 1)).toBeLessThan(callOrder(showArchived))
+    expect(undoArchive).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('the archived notice takes itself down, then undoes the archive or shows the archived rows', async () => {

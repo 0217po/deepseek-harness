@@ -15,6 +15,10 @@ export function registerToasts(
   viewStore: WorkspaceViewStoreHandle,
   actions: Pick<RowToastActions, 'undoArchive' | 'showArchived' | 'openForkSource'>,
 ): void {
+  const archiveFilterAction: ArchiveToastInjected['filterAction'] = (t, dismiss) => ({
+    prefix: t('toast.archivedOr'), label: t('toast.archivedFilter'),
+    onClick: () => { dismiss(); actions.showArchived() },
+  })
   ctx.slots.registerFactory({ name: 'workspace.toast.content', scope: 'root' }, WorkspaceToast)
   ctx.slots.inject('workspace.toast', function* () {
     yield ctx.slots.register({
@@ -83,10 +87,7 @@ export function registerToasts(
           text: t('toast.archived'), tone: 'success', holdMs: 6000,
           actions: [{ label: t('toast.archivedUndo'), onClick: () => { dismiss(); actions.undoArchive(notice.sessionId) } }],
         }),
-        filterAction: (t, dismiss) => ({
-          prefix: t('toast.archivedOr'), label: t('toast.archivedFilter'),
-          onClick: () => { dismiss(); actions.showArchived() },
-        }),
+        filterAction: archiveFilterAction,
       }),
     }, ArchiveToastEntry)
     yield ctx.slots.register({
@@ -96,10 +97,7 @@ export function registerToasts(
           text: t('toast.stoppedAndArchived'), tone: 'success', holdMs: 6000,
           actions: [{ label: t('toast.archivedUndo'), onClick: () => { dismiss(); actions.undoArchive(notice.sessionId) } }],
         }),
-        filterAction: (t, dismiss) => ({
-          prefix: t('toast.archivedOr'), label: t('toast.archivedFilter'),
-          onClick: () => { dismiss(); actions.showArchived() },
-        }),
+        filterAction: archiveFilterAction,
       }),
     }, ArchiveToastEntry)
   })
