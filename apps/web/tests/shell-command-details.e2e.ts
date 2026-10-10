@@ -65,7 +65,7 @@ it.each([
     args: { ...LONG_ARGS, command: `${LONG_ARGS.command}\necho done\n`, run_in_background: false },
     output: 'done\n[exit code: 0]',
   },
-])('expands $name to wrapped selectable input and its original result', async ({ name, args, output }) => {
+])('expands $name to wrapped commands with only foreground output', async ({ name, args, output }) => {
   const scaffold = await launchWebScaffold({})
   try {
     await seedSession(scaffold, shellFixture(args, output), 'shell-command-details-browser')
@@ -89,12 +89,15 @@ it.each([
       const input = commands.first()
       await input.waitFor()
       const background = args.run_in_background
-      const selectableText = background ? JSON.stringify(args, null, 2) : args.command.split('\n')[0]!
-      const inputSection = background ? input.locator('..') : card.locator('[data-terminal] [class*="_header_"]')
+      const selectableText = args.command.split('\n')[0]!
+      const inputSection = card.locator('[data-terminal] [class*="_header_"]')
       expect(await input.textContent()).toBe(selectableText)
       if (background) {
-        expect(await card.getByText(OUTPUT, { exact: true }).count()).toBe(1)
-        expect(await card.locator('[data-terminal]').count()).toBe(0)
+        expect(await commands.allTextContents()).toEqual([args.command])
+        expect(await card.locator('[data-terminal]').count()).toBe(1)
+        expect(await card.getByText(OUTPUT, { exact: true }).count()).toBe(0)
+        expect(await card.locator('[data-terminal][data-body], [data-terminal][data-running], [data-terminal] [data-state]').count()).toBe(0)
+        expect(await card.getByRole('button', { name: 'Copy', exact: true }).count()).toBe(0)
       } else {
         expect(await commands.allTextContents()).toEqual([selectableText, 'echo done'])
         expect(await card.locator('[data-terminal]').count()).toBe(1)
@@ -139,7 +142,12 @@ it.each([
   }
 })
 
-it.each(['bash', 'pwsh'] as const)('keeps the %s status dot visible on the first wrapped line through settlement', async (name) => {
+it.each([
+  { name: 'bash', background: false },
+  { name: 'pwsh', background: false },
+  { name: 'bash', background: true },
+  { name: 'pwsh', background: true },
+] as const)('keeps the $name command mounted through settlement (background=$background)', async ({ name, background }) => {
   const scaffold = await launchWebScaffold({})
   try {
     const id = await seedSession(scaffold, shellFixture(ARGS, OUTPUT), 'shell-status-dot-browser')
@@ -153,8 +161,8 @@ it.each(['bash', 'pwsh'] as const)('keeps the %s status dot visible on the first
       await page.locator('[data-sample="bash"]').waitFor({ state: 'attached' })
       const session = scaffold.ctx.sessions.get(id)
       if (session === undefined) throw new Error('Status-dot Session is unavailable')
-      const callId = ToolCallId(`status-dot-${name}`)
-      const args = JSON.stringify({ command: LONG_ARGS.command, description: `Long ${name} command` })
+      const callId = ToolCallId(`status-dot-${name}-${background ? 'background' : 'foreground'}`)
+      const args = JSON.stringify({ command: LONG_ARGS.command, description: `Long ${name} command`, run_in_background: background })
       session.append('turn/start', { turn: 2 })
       session.append('user/message', createUserMessage({
         content: [{ type: 'text', text: 'Show a long running command.' }], source: { kind: 'user' },
@@ -179,6 +187,8 @@ it.each(['bash', 'pwsh'] as const)('keeps the %s status dot visible on the first
       await card.evaluate((element) => { element.style.width = '380px' })
       await card.scrollIntoViewIfNeeded()
       const header = card.locator('[class*="_header_"]')
+      const mountedCard = await card.elementHandle()
+      if (mountedCard === null) throw new Error('Running command card is not mounted')
       expect(await header.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true)
       expect(await card.getByRole('button', { name: 'Copy', exact: true }).count()).toBe(0)
       for (const state of ['ongoing', 'done'] as const) {
@@ -186,7 +196,7 @@ it.each(['bash', 'pwsh'] as const)('keeps the %s status dot visible on the first
           session.append('tool/result', {
             turn: 2, step: 1,
             message: createToolResultMessage({
-              callId, content: [{ type: 'text', text: 'status dot output\n[exit code: 0]' }], isError: false,
+              callId, content: [{ type: 'text', text: background ? OUTPUT : 'status dot output\n[exit code: 0]' }], isError: false,
             }),
           }, { surfaceOp: 'append', sourceEventSeqs: [call.seq] })
           session.append('step/end', { turn: 2, step: 1 })
@@ -197,12 +207,20 @@ it.each(['bash', 'pwsh'] as const)('keeps the %s status dot visible on the first
           await page.emulateMedia({ colorScheme })
           await expect.poll(() => page.locator('body').evaluate(element =>
             element.hasAttribute('data-ds-dark-theme'))).toBe(colorScheme === 'dark')
-          await expectFirstLineTerminalState(card, state)
+          if (background && state === 'done') {
+            expect(await card.evaluate((element, previous) => element === previous, mountedCard)).toBe(true)
+            expect(await toggle.getAttribute('aria-expanded')).toBe('true')
+            expect(await card.getAttribute('data-body')).toBeNull()
+            expect(await card.getAttribute('data-running')).toBeNull()
+            expect(await card.locator('[data-state]').count()).toBe(0)
+          } else await expectFirstLineTerminalState(card, state)
           expect(await card.locator('[data-command-text]').textContent()).toBe(LONG_ARGS.command)
         }
       }
-      expect(await card.getByText('status dot output', { exact: true }).count()).toBe(1)
-      expect(await card.getByRole('button', { name: 'Copy', exact: true }).count()).toBe(1)
+      expect(await card.getByText('status dot output', { exact: true }).count()).toBe(background ? 0 : 1)
+      expect(await card.getByText(OUTPUT, { exact: true }).count()).toBe(0)
+      expect(await card.getByRole('button', { name: 'Copy', exact: true }).count()).toBe(background ? 0 : 1)
+      expect(await callRow.getByRole('button', { name: 'Inspect', exact: true }).count()).toBe(1)
       expect(tripwire.pageErrors).toEqual([])
       expect(tripwire.warnings).toEqual([])
     } finally {

@@ -264,8 +264,35 @@ describe('terminalCardModel', () => {
     }))).not.toBeNull()
   })
 
-  it('returns null for background, errors, malformed args, unsupported tools, and non-text results', () => {
-    expect(terminalCardModel(running({ argsRaw: shellArgs({ run_in_background: true }) }))).toBeNull()
+  it.each(['bash', 'pwsh'])('derives %s background launch commands without treating acknowledgement as output', (name) => {
+    const argsRaw = shellArgs({ run_in_background: true, workdir: '/requested' })
+    for (const parentCallId of [undefined, 'parent']) {
+      const parent = parentCallId === undefined ? {} : { parentCallId }
+      expect(terminalCardModel(running({ name, argsRaw, ...parent }))).toEqual({
+        copy: { kind: 'shell', command: 'ls -la', description: 'List files' },
+        card: { cwd: '/requested', running: true, background: true, output: undefined, exitCode: undefined, signal: undefined },
+      })
+      for (const content of [[], [{ type: 'text' as const, text: 'started background job bash-1\n[exit code: 7]' }]]) {
+        const block = settled({ call: { name, argsRaw }, ...parent, meta: { cwd: '/recorded' }, content })
+        const model = terminalCardModel(block)!
+        expect(model).toEqual({
+          copy: { kind: 'shell', command: 'ls -la', description: 'List files' },
+          card: { cwd: '/recorded', running: false, background: true },
+        })
+        expect(terminalFailed(model)).toBe(false)
+        expect(localizeTerminalCardModel(model, t).card).toEqual({
+          command: 'ls -la', cwd: '/recorded', running: false, background: true,
+        })
+        expect(terminalCardModel({ ...block, isError: true })).toBeNull()
+        expect(block.content).toBe(content)
+      }
+    }
+  })
+
+  it('returns null for background terminal sends, errors, malformed args, unsupported tools, and non-text results', () => {
+    expect(terminalCardModel(running({ name: 'terminal_send', argsRaw: JSON.stringify({
+      sessionId: 'pty-3', text: 'make', run_in_background: true,
+    }) }))).toBeNull()
     expect(terminalCardModel(settled({ isError: true }))).toBeNull()
     expect(terminalCardModel(running({ argsRaw: '{' }))).toBeNull()
     expect(terminalCardModel(running({ name: 'read' }))).toBeNull()
@@ -405,12 +432,13 @@ describe('chat row terminal body', () => {
     expect(view.getByText(command)).toBeTruthy()
   })
 
-  it('a non-terminal call keeps the args-JSON text body', () => {
+  it('a background terminal_send keeps the args-JSON text body', () => {
     const view = render(<GenericToolCard {...ownerProps(settled({
-      call: { name: 'bash', argsRaw: shellArgs({ run_in_background: true }) },
-    }))} />)
+      call: { name: 'terminal_send', argsRaw: JSON.stringify({ sessionId: 'pty-3', text: 'make', run_in_background: true }) },
+    }))} toolName="terminal_send" />)
     toggleRow(view)
-    expect(view.getByText(/"command"/)).toBeTruthy()
+    expect(view.getByText(/"sessionId"/)).toBeTruthy()
+    expect(view.container.querySelector('[data-terminal]')).toBeNull()
   })
 
   it('malformed empty args use the generic output body', () => {
@@ -527,46 +555,79 @@ describe('BashRow terminal card', () => {
     expect(view.container.querySelectorAll('[class*="_ioText_"]')[1]?.textContent).toBe(output)
   })
 
-  it.each([undefined, 'dispatch-parent'])('expands a background launch and its acknowledgement without reporting a job exit (parent: %s)', (parentCallId) => {
+  it.each([
+    ['bash', undefined], ['bash', 'dispatch-parent'], ['pwsh', undefined], ['pwsh', 'dispatch-parent'],
+  ] as const)('keeps the %s background command open after launch without reporting job status (parent: %s)', (name, parentCallId) => {
     const command = `  node worker.mjs --trace=${'background-worker-'.repeat(24)}\n\tprintf "done"\n`
-    const args = { command, description: 'Wait', run_in_background: true }
-    const argsRaw = JSON.stringify(args)
+    const argsRaw = shellArgs({ command, description: 'Wait', workdir: '/workspace/app', run_in_background: true })
     const inspect = vi.fn()
     const parent = parentCallId === undefined ? {} : { parentCallId }
-    const view = render(<BashRow {...rowProps(running({ argsRaw, ...parent }))} inspect={inspect} />)
-    const row = view.container.querySelector('[data-sample="bash"]')!
+    const renderRow = (block: StartedToolCall | ToolResultNode) => {
+      const props = { ...rowProps(block), toolName: name, inspect }
+      return name === 'bash' ? <BashRow {...props} /> : <GenericToolCard {...props} />
+    }
+    const view = render(renderRow(running({ name, argsRaw, ...parent })))
+    const row = view.getByRole('button')
     expect(view.getByText('Wait')).toBeTruthy()
     expect(row.getAttribute('aria-expanded')).toBe('false')
-
-    fireEvent.keyDown(row, { key: 'Enter' })
-
-    expect(row.getAttribute('aria-expanded')).toBe('true')
-    expect(view.container.querySelector('[data-command-text]')?.textContent)
-      .toBe(JSON.stringify(args, null, 2))
-    expect(view.container.querySelector('[data-command-text]')?.hasAttribute('tabindex')).toBe(false)
-    expect(view.queryByText('输出')).toBeNull()
-    expect(view.container.querySelector('[data-terminal]')).toBeNull()
+    if (name === 'bash') fireEvent.keyDown(row, { key: 'Enter' })
+    else fireEvent.click(row)
+    const terminal = view.container.querySelector('[data-terminal]')
+    const firstCommand = view.container.querySelector('[data-command-text]')
+    expect(terminal).not.toBeNull()
+    expect(runStateOf(view.container)).toBe('ongoing')
+    expect([...view.container.querySelectorAll('[data-command-text]')].map(line => line.textContent))
+      .toEqual(command.slice(0, -1).split('\n'))
+    expect(view.getByText('app')).toBeTruthy()
+    expect(view.queryByText('无输出')).toBeNull()
+    expect(view.queryByRole('button', { name: '复制' })).toBeNull()
 
     const acknowledgement = 'started background job job-1'
-    view.rerender(<BashRow {...rowProps(settled({
-      call: { name: 'bash', argsRaw }, ...parent,
-      content: [{ type: 'text', text: acknowledgement }],
-    }))} inspect={inspect} />)
-
+    const result = settled({ call: { name, argsRaw }, ...parent, meta: { cwd: '/workspace/app' },
+      content: [{ type: 'text', text: acknowledgement }] })
+    view.rerender(renderRow(result))
     expect(row.getAttribute('aria-expanded')).toBe('true')
-    expect(view.container.querySelector('[data-command-text]')?.textContent)
-      .toBe(JSON.stringify(args, null, 2))
-    expect(view.getByText(acknowledgement)).toBeTruthy()
-    expect(view.container.querySelector('[data-terminal], [data-state="done"]')).toBeNull()
+    expect(view.container.querySelector('[data-terminal]')).toBe(terminal)
+    expect(view.container.querySelector('[data-command-text]')).toBe(firstCommand)
+    expect(view.container.querySelector('[data-terminal] [data-state], [data-running]')).toBeNull()
+    expect(view.queryByText('运行中')).toBeNull()
+    expect(view.queryByText('已完成')).toBeNull()
+    expect(view.queryByText('无输出')).toBeNull()
+    expect(view.queryByText(acknowledgement)).toBeNull()
+    expect(view.queryByRole('button', { name: '复制' })).toBeNull()
+    expect(result.call?.argsRaw).toBe(argsRaw)
+    expect(result.content).toEqual([{ type: 'text', text: acknowledgement }])
     fireEvent.click(view.getByRole('button', { name: t('row.inspect') }))
     expect(inspect).toHaveBeenCalledOnce()
 
     fireEvent.click(row)
     expect(row.getAttribute('aria-expanded')).toBe('false')
-    expect(view.queryByText(acknowledgement)).toBeNull()
-    fireEvent.keyDown(row, { key: ' ' })
+    if (name === 'bash') fireEvent.keyDown(row, { key: ' ' })
+    else fireEvent.click(row)
     expect(row.getAttribute('aria-expanded')).toBe('true')
-    expect(view.getByText(acknowledgement)).toBeTruthy()
+    expect(view.container.querySelector('[data-command-text]')?.textContent).toBe(command.split('\n')[0])
+    expect(view.queryByText(acknowledgement)).toBeNull()
+  })
+
+  it.each([
+    ['bash', false], ['bash', true], ['pwsh', false], ['pwsh', true],
+  ] as const)('keeps %s launch failures on the original generic body (interrupted: %s)', (name, interrupted) => {
+    const argsRaw = shellArgs({ run_in_background: true })
+    const renderRow = (block: StartedToolCall | ToolResultNode) => {
+      const props = { ...rowProps(block), toolName: name }
+      return name === 'bash' ? <BashRow {...props} /> : <GenericToolCard {...props} />
+    }
+    const view = render(renderRow(running({ name, argsRaw })))
+    const row = view.getByRole('button')
+    fireEvent.click(row)
+    view.rerender(renderRow(settled({ call: { name, argsRaw }, isError: true,
+      ...interrupted ? { error: { name: 'Interrupted', code: 'interrupted' } } : {},
+      content: [{ type: 'text', text: 'Launch did not finish' }] })))
+    expect(row.getAttribute('aria-expanded')).toBe('true')
+    expect(view.container.querySelector('[data-terminal]')).toBeNull()
+    expect(view.getByText(/"run_in_background": true/)).toBeTruthy()
+    expect(view.getAllByText('Launch did not finish').length).toBeGreaterThan(0)
+    expect(view.container.querySelector(`[data-state="${interrupted ? 'stopped' : 'error'}"]`)).not.toBeNull()
   })
 
   it.each(['BashRow', 'GenericToolCard'] as const)('%s preserves authored command lines and copies only raw output', async (renderer) => {
