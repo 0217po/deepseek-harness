@@ -298,6 +298,19 @@ export class HarnessClient {
   }
 
   /**
+   * Restore persisted history without sending a prompt; failures propagate without creating a session.
+   * @param sessionId - persisted identity in this runtime's configured persistence store.
+   * @returns the restored session identity.
+   */
+  async resumeSession(sessionId: string): Promise<string> {
+    const result = await this.request('session/resume', { sessionId })
+    if (!isRecord(result) || result.sessionId !== sessionId) {
+      throw new SdkProtocolError(`session/resume returned an unexpected session id: ${JSON.stringify(result)}`)
+    }
+    return sessionId
+  }
+
+  /**
    * Read a Session's effective working directory, recovering it if missing.
    * @param sessionId - target Session; an unknown id creates it.
    * @returns the absolute effective directory.

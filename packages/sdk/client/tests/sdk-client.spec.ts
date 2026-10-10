@@ -63,6 +63,20 @@ async function tempDir(prefix: string): Promise<string> {
 }
 
 describe('DeepSeekHarness', () => {
+  it('returns a restored handle that can run followups on the same identity', async () => {
+    const harness = harnessWith()
+    const session = await harness.resumeSession('saved-session')
+    expect(session.id).toBe('saved-session')
+    expect((await session.run('continue')).sessionId).toBe('saved-session')
+  })
+
+  it('propagates resume failures and rejects mismatched response identities', async () => {
+    await expect(harnessWith({ FAKE_RESUME_ERROR: '1' }).resumeSession('missing'))
+      .rejects.toThrow('session not found')
+    await expect(harnessWith({ FAKE_MALFORMED_RESUME: '1' }).resumeSession('saved'))
+      .rejects.toThrow('unexpected session id')
+  })
+
   it('reads and changes directories independently for each lazy Session', async () => {
     const harness = harnessWith()
     const first = harness.session('directory-first')

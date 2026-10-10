@@ -14,7 +14,7 @@ from typing import Callable, TypeAlias, TypeVar
 
 from pydantic import BaseModel
 
-from .errors import JsonRpcError, TransportClosedError
+from .errors import JsonRpcError, SdkProtocolError, TransportClosedError
 from .models import IncomingRequest, InitializeResponse, JsonObject, JsonValue, Notification
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
@@ -187,6 +187,17 @@ class HarnessClient:
             notification_subscription=notification_subscription,
         )
         return response.messageId
+
+    def resume_session(self, session_id: str) -> str:
+        """Restore a persisted session without sending a prompt; propagate restoration failures."""
+        response = self.request(
+            "session/resume",
+            {"sessionId": session_id},
+            response_model=_SessionResumeResponse,
+        )
+        if response.sessionId != session_id:
+            raise SdkProtocolError("session/resume returned an unexpected session id")
+        return response.sessionId
 
     def get_working_directory(self, session_id: str) -> str:
         """Read the effective directory, recovering a missing directory to the Session origin."""
@@ -597,6 +608,10 @@ class NotificationSubscription:
 
 class _SessionPromptResponse(BaseModel):
     messageId: str
+
+
+class _SessionResumeResponse(BaseModel):
+    sessionId: str
 
 
 class _WorkingDirectoryResponse(BaseModel):
