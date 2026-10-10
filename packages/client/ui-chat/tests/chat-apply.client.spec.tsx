@@ -200,7 +200,7 @@ describe('Chat apply wiring', () => {
     expect(face.hooks.transcriptView.getSnapshot()).toBe('compact')
   })
 
-  it('resets in-memory collapse timing when the Chat plugin remounts', async () => {
+  it('restores saved collapse timing when the Chat plugin remounts', async () => {
     const b = await bench()
     try {
       const row = b.runtime.slots.entries('settings.general.item')
@@ -211,8 +211,8 @@ describe('Chat apply wiring', () => {
       expect(hooks.collapseTiming.getSnapshot()).toBe('completion')
       setCollapseTiming('next-input')
       expect(hooks.collapseTiming.getSnapshot()).toBe('next-input')
-      expect(b.chatSettings.set).not.toHaveBeenCalled()
-      b.chatSettings.publish({ status: 'ready', value: { linkOpening: 'sidebar', transcriptView: 'standard', performanceUsage: 'detailed' }, revision: 1, writable: true })
+      expect(b.chatSettings.set).toHaveBeenCalledExactlyOnceWith('collapseTiming', 'next-input')
+      b.chatSettings.publish({ status: 'ready', value: { linkOpening: 'sidebar', transcriptView: 'standard', performanceUsage: 'detailed', collapseTiming: 'next-input' }, revision: 1, writable: true })
       expect(hooks.transcriptView.getSnapshot()).toBe('standard')
       expect(hooks.collapseTiming.getSnapshot()).toBe('next-input')
       expect(b.runtime.slots.entries('settings.general.item').map(entry => entry.options.id))
@@ -226,9 +226,9 @@ describe('Chat apply wiring', () => {
       const remounted = remountedRow.inject!()
       const remountedHooks = remounted.hooks as TranscriptViewRowInjected['hooks']
       expect(remountedHooks.collapseTiming).not.toBe(hooks.collapseTiming)
-      expect(remountedHooks.collapseTiming.getSnapshot()).toBe('completion')
+      expect(remountedHooks.collapseTiming.getSnapshot()).toBe('next-input')
       expect(remountedHooks.transcriptView.getSnapshot()).toBe('standard')
-      expect(b.chatSettings.set).not.toHaveBeenCalled()
+      expect(b.chatSettings.set).toHaveBeenCalledExactlyOnceWith('collapseTiming', 'next-input')
       expect(b.runtime.slots.entries('settings.general.item').map(entry => entry.options.id))
         .toEqual(['transcript-view', 'link-opening', 'composer-enter', 'performance-usage'])
     } finally {

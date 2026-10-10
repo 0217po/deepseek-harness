@@ -137,7 +137,7 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
 }
 
 describe('Chat inject API', () => {
-  it('projects independent Settings choices without saving timing to Host settings', async () => {
+  it('projects independent Settings choices and saves timing to Host settings', async () => {
     const b = await bench()
     try {
       const row = b.runtime.slots.entries('settings.general.item')
@@ -149,12 +149,12 @@ describe('Chat inject API', () => {
       expect(presentation.getSnapshot()).toMatchObject({ mode: 'detailed', collapseTiming: 'completion' })
       setCollapseTiming('next-input')
       expect(presentation.getSnapshot()).toMatchObject({ mode: 'detailed', collapseTiming: 'next-input' })
-      expect(b.chatSettings.set).not.toHaveBeenCalled()
-      b.chatSettings.publish({ status: 'ready', value: { linkOpening: 'sidebar', transcriptView: 'standard', performanceUsage: 'detailed' }, revision: 1, writable: true })
+      expect(b.chatSettings.set).toHaveBeenCalledWith('collapseTiming', 'next-input')
+      b.chatSettings.publish({ status: 'ready', value: { linkOpening: 'sidebar', transcriptView: 'standard', performanceUsage: 'detailed', collapseTiming: 'next-input' }, revision: 1, writable: true })
       expect(presentation.getSnapshot()).toMatchObject({ mode: 'standard', collapseTiming: 'next-input' })
       setCollapseTiming('completion')
       expect(presentation.getSnapshot()).toMatchObject({ mode: 'standard', collapseTiming: 'completion' })
-      expect(b.chatSettings.set).not.toHaveBeenCalled()
+      expect(b.chatSettings.set).toHaveBeenLastCalledWith('collapseTiming', 'completion')
       expect(b.session.prompt).not.toHaveBeenCalled()
       expect(b.session.cancel).not.toHaveBeenCalled()
     } finally {
