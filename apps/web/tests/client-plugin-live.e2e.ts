@@ -2,7 +2,7 @@
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { cp, mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import { cp, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { chromium, type Page } from 'playwright'
 import { expect, it, onTestFailed, onTestFinished } from 'vitest'
 import {
@@ -71,79 +71,19 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
     await row.hover()
     await trigger.click()
     await menu.waitFor()
-    const remainingNames = ['Pin session', 'Rename', 'Fork session', 'Archive session', 'View Session ID']
+    const remainingNames = ['Pin session', 'Rename', 'Fork session', 'Archive session', 'Copy Session ID']
     const remainingItems = menu.getByRole('menuitem')
     expect(await remainingItems.count()).toBe(remainingNames.length)
     for (const [index, name] of remainingNames.entries()) {
       expect(await remainingItems.nth(index).and(menu.getByRole('menuitem', { name, exact: true })).count()).toBe(1)
     }
     expect(await menu.getByRole('separator').count()).toBe(0)
-    await menu.getByRole('menuitem', { name: 'View Session ID', exact: true }).click()
-    await expect.poll(() => menu.count()).toBe(0)
-    const idDialog = page.getByRole('dialog', { name: 'Session ID', exact: true })
-    await idDialog.waitFor()
-    const idText = idDialog.getByText(sessionId, { exact: true })
-    expect(await idDialog.getByRole('textbox').count()).toBe(0)
-    const copyButton = idDialog.getByRole('button', { name: 'Copy', exact: true })
-    const evidenceRoot = fileURLToPath(new URL('../../../.artifacts/screenshots/session-id-text/', import.meta.url))
-    await mkdir(evidenceRoot, { recursive: true })
-    const evidence = await mkdtemp(join(evidenceRoot, 'run-'))
-    for (const colorScheme of ['light', 'dark'] as const) {
-      await page.emulateMedia({ colorScheme })
-      await expect.poll(() => page.locator('body').getAttribute('data-ds-dark-theme')).toBe(colorScheme === 'dark' ? '' : null)
-      for (const width of [1440, 320]) {
-        await page.setViewportSize({ width, height: 1000 })
-        const layout = await idText.evaluate((element) => {
-          const range = document.createRange()
-          range.selectNodeContents(element)
-          const rect = element.getBoundingClientRect()
-          const style = getComputedStyle(element)
-          return {
-            text: element.textContent,
-            selectable: style.userSelect,
-            overflow: style.overflow,
-            textOverflow: style.textOverflow,
-            lineTops: [...new Set(Array.from(range.getClientRects(), line => line.top))],
-            contained: Array.from(range.getClientRects()).every(line => line.left >= rect.left - 1 && line.right <= rect.right + 1),
-            fits: element.scrollWidth <= element.clientWidth + 1 && element.scrollHeight <= element.clientHeight + 1,
-          }
-        })
-        expect(layout.text).toBe(sessionId)
-        expect(layout.selectable).toBe('text')
-        expect(layout.overflow).toBe('visible')
-        expect(layout.textOverflow).not.toBe('ellipsis')
-        expect(layout.contained).toBe(true)
-        expect(layout.fits).toBe(true)
-        if (width === 1440) expect(layout.lineTops).toHaveLength(1)
-        else expect(layout.lineTops.length).toBeGreaterThan(1)
-        const textBox = (await idText.boundingBox())!
-        const copyBox = (await copyButton.boundingBox())!
-        const dialogBox = (await idDialog.boundingBox())!
-        expect(copyBox.x).toBeGreaterThanOrEqual(textBox.x + textBox.width)
-        expect(Math.abs(copyBox.y + copyBox.height / 2 - textBox.y - textBox.height / 2)).toBeLessThan(2)
-        expect(dialogBox.x).toBeGreaterThanOrEqual(24)
-        expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(width - 24)
-        expect(dialogBox.width).toBeLessThanOrEqual(640)
-        await page.screenshot({ path: join(evidence, `${colorScheme}-${width}.png`) })
-        await writeFile(join(evidence, `${colorScheme}-${width}.json`), JSON.stringify({ layout, textBox, copyBox, dialogBox }, null, 2))
-      }
-    }
-    await page.setViewportSize({ width: 1440, height: 1000 })
-    await idText.evaluate((element) => {
-      const range = document.createRange()
-      range.selectNodeContents(element)
-      const selection = window.getSelection()!
-      selection.removeAllRanges()
-      selection.addRange(range)
-    })
-    expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(sessionId)
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
-    await idDialog.getByRole('button', { name: 'Copy', exact: true }).click()
+    await menu.getByRole('menuitem', { name: 'Copy Session ID', exact: true }).click()
+    await expect.poll(() => menu.count()).toBe(0)
     await page.getByRole('alert').filter({ hasText: 'Session ID copied' }).waitFor()
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(sessionId)
-    expect(await idText.textContent()).toBe(sessionId)
-    await copyButton.press('Escape')
-    await expect.poll(() => idDialog.count()).toBe(0)
+    expect(await page.getByRole('dialog', { name: 'Session ID', exact: true }).count()).toBe(0)
     expect(console.pageErrors).toEqual([])
     await assertFixtureInventory(EXPECTED, [
       'bootstrap-rebuild.expected.md', 'enabled.expected.md', 'recovered.expected.md',

@@ -14,7 +14,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
  * (session.spec.ts#rename), the entries' own arms with
  * session-actions.client.spec, the row's list rendering with rows.client.spec.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, waitFor, within } from '@testing-library/react'
 import type { ISession } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
@@ -123,7 +123,7 @@ describe('session rename through the assembled browser', () => {
     const trigger = within(row as HTMLElement).getByLabelText('会话“Persisted title”的操作')
     fireEvent.click(trigger)
     expect(view.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
-      '置顶会话', '重命名', '分叉会话', '归档会话', '查看 Session ID', 'Export action', 'Last action',
+      '置顶会话', '重命名', '分叉会话', '归档会话', '复制 Session ID', 'Export action', 'Last action',
     ])
     expect(view.getAllByRole('separator')).toHaveLength(1)
     const last = view.getByRole('menuitem', { name: 'Last action' })
@@ -140,15 +140,19 @@ describe('session rename through the assembled browser', () => {
     expect(view.queryByRole('menu')).toBeNull()
     await act(async () => { await Promise.resolve() })
     expect(document.activeElement).toBe(trigger)
+    const writeText = vi.fn(async () => {})
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    onTestFinished(() => {
+      if (clipboard === undefined) Reflect.deleteProperty(navigator, 'clipboard')
+      else Object.defineProperty(navigator, 'clipboard', clipboard)
+    })
     fireEvent.click(trigger)
-    fireEvent.click(view.getByRole('menuitem', { name: '查看 Session ID' }))
+    fireEvent.click(view.getByRole('menuitem', { name: '复制 Session ID' }))
     expect(view.queryByRole('menu')).toBeNull()
-    const value = await view.findByText(SID, { exact: true })
-    expect(value.tagName).toBe('CODE')
-    expect(value.textContent).toBe(SID)
-    expect(view.queryByRole('textbox', { name: 'Session ID' })).toBeNull()
-    fireEvent.keyDown(view.getByRole('dialog', { name: 'Session ID' }), { key: 'Escape' })
-    await waitFor(() => { expect(view.queryByRole('dialog', { name: 'Session ID' })).toBeNull() })
+    expect(writeText).toHaveBeenCalledExactlyOnceWith(SID)
+    await view.findByText('Session ID 已复制')
+    expect(view.queryByRole('dialog', { name: 'Session ID' })).toBeNull()
     await runtime.dispose()
   })
 

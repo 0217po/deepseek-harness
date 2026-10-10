@@ -7,7 +7,7 @@
  * own `single` directory-flow child hole for the composed picker package's
  * client half. WorkspaceBrowser additionally declares the two Session row
  * action lists, and this apply registers the shipped actions — pin, rename,
- * fork, archive, view ID — into them the way any client plugin would, each
+ * fork, archive, copy ID — into them the way any client plugin would, each
  * with its own behavior, plus the dialogs and the row-action notice into
  * `shell.overlay` (see the contract module doc). It also declares two
  * Session-row seats: the leading decoration a row renders only while its own
@@ -40,7 +40,7 @@ import {
   type ArchiveSessionInjected, type ForkSessionInjected, menuOpenStateFactory, type PinSessionInjected,
   type SessionArchiveConfirmInjected, type SessionArchiveConfirmRequest,
   type RenameSessionInjected, type RowToast, type RowToastInjected, type RowToastState, type SessionRenameDialogInjected,
-  type SessionIdDialogInjected, type SessionIdInjected, type WorkspaceBrowserInjected, type WorkspacePickerInjected,
+  type SessionIdInjected, type WorkspaceBrowserInjected, type WorkspacePickerInjected,
 } from './contract/slots.ts'
 import { createWorkspaceShortcutControls, installWorkspaceShortcuts } from './shortcuts.ts'
 import { UiWorkspaceService } from './navigation.ts'
@@ -53,7 +53,7 @@ import { PinSessionMenuItem, PinSessionRowButton } from './session-actions/PinSe
 import { RenameSessionMenuItem, SessionRenameDialog } from './session-actions/RenameSession.tsx'
 import { RowActionToast } from './session-actions/RowActionToast.tsx'
 import { registerToasts } from './toast/register.ts'
-import { SessionIdDialog, SessionIdMenuItem } from './session-actions/SessionId.tsx'
+import { SessionIdMenuItem } from './session-actions/SessionId.tsx'
 import { WorkspacePicker } from './WorkspacePicker.tsx'
 import { en, zh, type WorkspaceKey } from './locales.ts'
 
@@ -223,13 +223,7 @@ export function apply(ctx: Context): void {
       })
     },
   })
-  const sessionIdRequest = createSnapshotStore<SessionId | null>(null)
   const sessionIdInjected = (): SessionIdInjected => ({
-    requestSessionId: (sessionId) => { sessionIdRequest.set(sessionId) },
-  })
-  const sessionIdDialogInjected = (): SessionIdDialogInjected => ({
-    hooks: { sessionIdRequest },
-    settleSessionId: () => { sessionIdRequest.set(null) },
     copySessionId: async (sessionId) => {
       const copied = await writeClipboard(sessionId)
       notify({ kind: copied ? 'sessionIdCopied' : 'sessionIdCopyFailed' })
@@ -323,9 +317,6 @@ export function apply(ctx: Context): void {
   // The surfaces the actions raise live in the frame-wide layer: they must
   // outlive the row menu the action sat in.
   ctx.slots.inject('shell.overlay', function* () {
-    yield ctx.slots.register({
-      name: 'shell.overlay', id: 'workspace.session-id', locale: NS, inject: sessionIdDialogInjected,
-    }, SessionIdDialog)
     yield ctx.slots.register({
       name: 'shell.overlay', id: 'workspace.session-rename', locale: NS, inject: renameDialogInjected,
     }, SessionRenameDialog)

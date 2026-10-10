@@ -3,4 +3,4 @@
   - menuitem "Rename"
   - menuitem "Fork session"
   - menuitem "Archive session"
-  - menuitem "View Session ID"
+  - menuitem "Copy Session ID"

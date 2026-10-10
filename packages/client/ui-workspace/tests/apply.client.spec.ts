@@ -17,7 +17,7 @@ import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from '@deepsee
 import {
   type ArchiveSessionInjected, type ForkSessionInjected, menuOpenStateFactory, type PinSessionInjected,
   type RenameSessionInjected, type RowToastInjected, type SessionArchiveConfirmInjected, type SessionRenameDialogInjected,
-  type SessionIdDialogInjected, type SessionIdInjected, type WorkspaceViewStoreHandle,
+  type SessionIdInjected, type WorkspaceViewStoreHandle,
 } from '../src/client/contract/slots.ts'
 import { WorkspaceBrowser } from '../src/client/rows/WorkspaceBrowser.tsx'
 import { ArchiveSessionMenuItem, ArchiveSessionRowButton, SessionArchiveConfirmDialog } from '../src/client/session-actions/ArchiveSession.tsx'
@@ -26,7 +26,7 @@ import { PinSessionMenuItem, PinSessionRowButton } from '../src/client/session-a
 import { RenameSessionMenuItem, SessionRenameDialog } from '../src/client/session-actions/RenameSession.tsx'
 import { RowActionToast } from '../src/client/session-actions/RowActionToast.tsx'
 import type { ArchiveToastInjected, ToastDisplayInjected } from '../src/client/toast/contract.ts'
-import { SessionIdDialog, SessionIdMenuItem } from '../src/client/session-actions/SessionId.tsx'
+import { SessionIdMenuItem } from '../src/client/session-actions/SessionId.tsx'
 import { WorkspacePicker } from '../src/client/WorkspacePicker.tsx'
 import { FLAT_SESSION_ORDER_KEY } from '../src/client/stores.ts'
 import { UNGROUPED_KEY } from '../src/client/tree.ts'
@@ -251,7 +251,7 @@ describe('ui-workspace apply', () => {
     // The row actions follow the browser's own declaration, whenever it lands.
     expect(after.slots.entries(MENU_ITEM)).toHaveLength(5)
     expect(after.slots.entries(ROW_ACTION)).toHaveLength(2)
-    expect(after.slots.entries('shell.overlay')).toHaveLength(4)
+    expect(after.slots.entries('shell.overlay')).toHaveLength(3)
   })
 
   it('declares the two Session row lists and registers the shipped actions and overlay surfaces into them', async () => {
@@ -279,7 +279,6 @@ describe('ui-workspace apply', () => {
       ['pin', 200, PinSessionRowButton, 'workspace'],
     ])
     expect(rows('shell.overlay')).toEqual([
-      ['workspace.session-id', undefined, SessionIdDialog, 'workspace'],
       ['workspace.session-rename', undefined, SessionRenameDialog, 'workspace'],
       ['workspace.session-archive', undefined, SessionArchiveConfirmDialog, 'workspace'],
       ['workspace.row-toast', undefined, RowActionToast, undefined],
@@ -309,32 +308,22 @@ describe('ui-workspace apply', () => {
     }
   })
 
-  it.each([true, false])('views and copies an ID without loading its Session (clipboard accepted: %s)', async (accepted) => {
+  it.each([true, false])('copies an ID directly without loading its Session (clipboard accepted: %s)', async (accepted) => {
     const b = await bench()
     onTestFinished(() => b.ctx.fiber.dispose())
     declare(b.slots, 'sidebar.workspaces', 'shell.overlay')
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     const action = faceOf(entry(b.slots, MENU_ITEM, 'session-id')) as SessionIdInjected
-    const dialog = faceOf(entry(b.slots, 'shell.overlay', 'workspace.session-id')) as SessionIdDialogInjected
     const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
     const writeText = vi.fn(async () => {
       if (!accepted) throw new Error('clipboard denied')
     })
     vi.stubGlobal('navigator', { clipboard: { writeText } })
     onTestFinished(() => { vi.unstubAllGlobals() })
-    expect(dialog.hooks.sessionIdRequest.getSnapshot()).toBeNull()
-    const requested = vi.fn()
-    const unsubscribe = dialog.hooks.sessionIdRequest.subscribe(requested)
-    onTestFinished(unsubscribe)
-    action.requestSessionId(sid('cold-session'))
-    expect(dialog.hooks.sessionIdRequest.getSnapshot()).toBe('cold-session')
-    expect(requested).toHaveBeenCalledOnce()
-    await dialog.copySessionId(sid('cold-session'))
+    await action.copySessionId(sid('cold-session'))
     expect(writeText).toHaveBeenCalledExactlyOnceWith('cold-session')
     expect(toast.hooks.toast.getSnapshot()).toMatchObject({ kind: accepted ? 'sessionIdCopied' : 'sessionIdCopyFailed' })
-    expect(dialog.hooks.sessionIdRequest.getSnapshot()).toBe('cold-session')
-    dialog.settleSessionId()
-    expect(dialog.hooks.sessionIdRequest.getSnapshot()).toBeNull()
+    expect(b.slots.entries('shell.overlay').some(row => row.options.id === 'workspace.session-id')).toBe(false)
     expect(b.retain).not.toHaveBeenCalled()
     expect(b.using).not.toHaveBeenCalled()
     expect(b.binding).not.toHaveBeenCalled()
@@ -874,7 +863,7 @@ describe('ui-workspace apply', () => {
     await fiber.await()
     expect(b.slots.entries(MENU_ITEM)).toHaveLength(5)
     expect(b.slots.entries(ROW_ACTION)).toHaveLength(2)
-    expect(b.slots.entries('shell.overlay')).toHaveLength(4)
+    expect(b.slots.entries('shell.overlay')).toHaveLength(3)
     await fiber.dispose()
     expect(b.slots.entries('sidebar.workspaces')).toHaveLength(0)
     expect(b.slots.entries('conversation.hero.workspace')).toHaveLength(0)

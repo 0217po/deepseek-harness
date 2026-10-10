@@ -33,7 +33,7 @@ import { ForkSessionMenuItem } from '../src/client/session-actions/ForkSession.t
 import { PinSessionMenuItem, PinSessionRowButton } from '../src/client/session-actions/PinSession.tsx'
 import { RenameSessionMenuItem, SessionRenameDialog } from '../src/client/session-actions/RenameSession.tsx'
 import { RowActionToast } from '../src/client/session-actions/RowActionToast.tsx'
-import { SessionIdDialog, SessionIdMenuItem } from '../src/client/session-actions/SessionId.tsx'
+import { SessionIdMenuItem } from '../src/client/session-actions/SessionId.tsx'
 import { createWorkspaceViewStore } from '../src/client/stores.ts'
 import { en, zh } from '../src/client/locales.ts'
 import { ShortcutRegistry } from '../../shortcuts/src/client/registry.ts'
@@ -114,40 +114,16 @@ function callOrder(fn: { mock: { invocationCallOrder: readonly number[] } }, nth
 }
 
 describe('Session ID action', () => {
-  it.each([t, tEn])('dismisses the menu before requesting the row ID', (translate) => {
+  it.each([t, tEn])('dismisses the menu before copying the complete row ID without a dialog', (translate) => {
     const { state, setMenuOpen } = openMenu()
-    const requestSessionId = vi.fn()
-    render(<SessionIdMenuItem {...menuRow(state)} t={translate} requestSessionId={requestSessionId} />)
-    fireEvent.click(screen.getByRole('menuitem', { name: translate('menu.sessionId') }))
-    expect(setMenuOpen).toHaveBeenCalledWith(false)
-    expect(requestSessionId).toHaveBeenCalledExactlyOnceWith(ROW.sessionId)
-    expect(callOrder(setMenuOpen)).toBeLessThan(callOrder(requestSessionId))
-  })
-
-  it('renders nothing without an ID request', () => {
-    render(<SessionIdDialog {...overlay} useSessionIdRequest={hook(null)} settleSessionId={vi.fn()} copySessionId={vi.fn()} />)
-    expect(screen.queryByRole('dialog')).toBeNull()
-  })
-
-  it.each([t, tEn])('keeps the complete ID as ordinary text beside its copy action', async (translate) => {
     const sessionId = sid('session-c4421b66-252e-44c0-80ed-6e320abeba25')
     const copySessionId = vi.fn(async () => {})
-    const settleSessionId = vi.fn()
-    render(<SessionIdDialog {...overlay} t={translate} useSessionIdRequest={hook(sessionId)}
-      settleSessionId={settleSessionId} copySessionId={copySessionId} />)
-    const value = screen.getByText(sessionId, { exact: true })
-    const copy = screen.getByRole('button', { name: translate('copy') })
-    expect(value.tagName).toBe('CODE')
-    expect(screen.queryByRole('textbox')).toBeNull()
-    expect(value.nextElementSibling).toBe(copy)
-    expect(screen.getAllByRole('button', { name: translate('copy') })).toHaveLength(1)
-    expect(value.textContent).toBe(sessionId)
-    fireEvent.click(screen.getByRole('button', { name: translate('copy') }))
-    await waitFor(() => { expect(copySessionId).toHaveBeenCalledExactlyOnceWith(sessionId) })
-    expect(settleSessionId).not.toHaveBeenCalled()
-    expect(value.textContent).toBe(sessionId)
-    for (const close of screen.getAllByRole('button', { name: translate('close') })) fireEvent.click(close)
-    expect(settleSessionId).toHaveBeenCalledTimes(2)
+    render(<SessionIdMenuItem {...menuRow(state)} sessionId={sessionId} t={translate} copySessionId={copySessionId} />)
+    fireEvent.click(screen.getByRole('menuitem', { name: translate('menu.sessionId') }))
+    expect(setMenuOpen).toHaveBeenCalledWith(false)
+    expect(copySessionId).toHaveBeenCalledExactlyOnceWith(sessionId)
+    expect(callOrder(setMenuOpen)).toBeLessThan(callOrder(copySessionId))
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 })
 
