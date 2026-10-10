@@ -24,10 +24,11 @@ import { zh } from '../src/client/locales.ts'
 
 afterEach(cleanup)
 
-function textFactories(): PropsRenderFactories['renderFactorySlot'] {
+function textFactories(onInput?: (input: UserTextInput) => void): PropsRenderFactories['renderFactorySlot'] {
   const renderText = createUserTextFixture()
   return (name, input) => {
     if (name !== 'conversation.user.text') throw new Error(`Unexpected Goal Factory: ${name}`)
+    onInput?.(input as UserTextInput)
     return renderText(input as UserTextInput)
   }
 }
@@ -147,6 +148,21 @@ describe('goal command input projection', () => {
     // The executed command token reads as a reference chip; the objective stays plain text.
     const chips = [...bubble.querySelectorAll('[data-ref-chip]')]
     expect(chips.map(chip => [chip.getAttribute('data-ref-chip'), chip.textContent])).toEqual([['command', '/goal']])
+  })
+
+  it('keeps command facts stable when the input row rerenders', () => {
+    const commands: UserTextInput['facts']['commands'][] = []
+    const props = {
+      node: { key: 'goal-command-input:stable', data: { commandId: 'command-goal', text: '/goal ship it', time: 1 } },
+      t: makeTranslate(zh, commonZh),
+      renderFactorySlot: textFactories((input) => { commands.push(input.facts.commands) }),
+    } as Parameters<typeof GoalCommandInputView>[0]
+    const view = render(<GoalCommandInputView {...props} />)
+    view.rerender(<GoalCommandInputView {...props} node={{ ...props.node }} />)
+    expect(commands).toHaveLength(2)
+    expect(commands[0]).toEqual([{ start: 0, end: 5, name: 'goal' }])
+    expect(commands[1]).toBe(commands[0])
+    expect(view.getByRole('group', { name: '指令输入' }).textContent).toBe('/goal ship it')
   })
 
   it('renders a bare /goal as one command chip and nothing else', () => {

@@ -67,7 +67,7 @@ The document's data-layer evaluation instance owns its cache. The registry creat
 
 ### Reference reuse and determinism
 
-Input arrays, nodes, and Facts are readonly. Rules must not `splice` input in place, mutate node payloads, or use retained references to modify later results. Unchanged input nodes remain shared; entirely unchanged results retain the array reference instead of using full deep copies for isolation.
+Input arrays, nodes, and Facts use readonly TypeScript types; the runner borrows values without freezing or copying them. Rules must not `splice` input in place, mutate node payloads, or use retained references to modify later results. Unchanged input nodes remain shared; entirely unchanged results retain the array reference instead of using full deep copies for isolation.
 
 The runner retains its previous output internally to align recomputed results. When new business nodes are equivalent to old nodes in ID, original-text range, and JSON data, the old objects can be reused; when all result elements are identical, the old array is reused. Comparison occurs only in stages that need recomputation, with a reference-equality fast path first, rather than serializing the whole pipeline on every refresh.
 
@@ -81,9 +81,9 @@ Each node has `{ id, start, end, data }`. `id` is the business type and the node
 
 Nodes and Facts contain no functions, ReactNode, service handles, DOM, observables, Date, or Map. `UserTextDataMap` and `UserTextFacts` are extensible declarations on the public `/client` entry point, and internal types reference those same declarations; business declaration merging must survive in published type files. Type constraints and unit tests ensure JSON compatibility, without repeatedly serializing and validating entire trees of trusted same-process input.
 
-Callers supply business Facts; the runner does not query global state for them. Skills use confirmed names, session references use associated labels, commands use actual execution ranges, and attachments use explicit ranges and resource references. Ordinary file paths can be recognized from text alone; an attachment display name is not a file path and must not be used to guess an attachmentId.
+Callers supply business Facts; the runner does not query global state for them. Skills use confirmed names, session references use associated labels, commands use actual execution ranges. Ordinary file paths can be recognized from text alone; an attachment display name is not a file path and must not be used to guess an attachmentId.
 
-`stripEmoji`, `collapseWhitespace`, and `trimWhitespace` each control one text-display transform and are disabled by default. Each rule reads only its own switch and uses the preceding stage's display result. Emoji handling uses complete graphemes; whitespace collapsing continues across consecutive Text segments but not business nodes; trimming affects only the document's two ends without removing normal spaces between references. Built-in rules use ordinary `order` values to place these transforms after existing reference recognition, preserving characters and identity within references; there is no additional category priority.
+`collapseWhitespace` and `trimWhitespace` each control one text-display transform and are disabled by default. Each rule reads only its own switch and uses the preceding stage's display result. Whitespace collapsing continues across consecutive Text segments but not business nodes; trimming affects only the document's two ends without removing normal spaces between references. Built-in rules use ordinary `order` values to place these transforms after existing reference recognition, preserving characters and identity within references; there is no additional category priority.
 
 `interactive` and CSS `ellipsis` are React Props, not Facts. Ellipsis neither removes original text nor limits the number of input characters. The queue enables whitespace collapsing and trimming through Facts and ellipsis through display Props; message bodies and Goal retain full display. Callers retain no `previewOf`, 200-character pre-truncation, or concatenated unknown-block placeholders; nontext attachments continue through the existing attachment display.
 
@@ -91,11 +91,11 @@ Reference summaries obtain display data from `UserContentData.referenceLabels`, 
 
 ### Rendering and interaction ownership
 
-`conversation.user.text` is a session-scoped Factory that independently owns the session/keyed `conversation.user.text.node`. UserText traverses final nodes in order and selects each renderer by node ID, without centralized skill, file, or attachment rendering branches. Default entries use `priority: 100`; external businesses override the corresponding keys through the existing Slot mechanism.
+`conversation.user.text` is a session-scoped Factory that independently owns the session/keyed `conversation.user.text.node`. UserText traverses final nodes in order and selects each renderer by node ID, without centralized skill or file rendering branches. Default entries use `priority: 100`; external businesses override the corresponding keys through the existing Slot mechanism.
 
-`ui-conversation` provides `text` and session labels; `ui-skill` provides skills; `ui-reference` provides ordinary file and directory references; `ui-attachment` provides explicit attachment references; `ui-goal` provides Goal command markers. Each business's own Slot registration declares its action dependencies. Parsed data carries no callbacks, and parent layouts do not forward node-specific actions.
+`ui-conversation` provides `text` and session labels; `ui-skill` provides skills; `ui-reference` provides ordinary file and directory references; `ui-goal` provides Goal command markers. Each business's own Slot registration declares its action dependencies. Parsed data carries no callbacks, and parent layouts do not forward node-specific actions.
 
-The display layer passes the `interactive` Prop and original-text fragment `raw` to node renderers; these are ordinary data, not execution capabilities. Reference actions may appear only when `interactive` is true. Queues, submission echoes, and pending incoming input remain nonclickable; sessions, directories, and commands remain labels by default. File attachments retain their name and size presentation, and image reads occur in the display layer upon user action through the existing Session authorization cache.
+The display layer passes the `interactive` Prop and original-text fragment `raw` to node renderers; these are ordinary data, not execution capabilities. Reference actions may appear only when `interactive` is true. Queues, submission echoes, and pending incoming input remain nonclickable; sessions, directories, and commands remain labels by default. Native attachments remain outside the text pipeline: file cards retain their name and size, and image galleries use the existing Session-authorized loader.
 
 The file-reference business handles file-navigation failures rather than returning them to the Chat action aggregator. A local Modal provides retry and close actions; synchronous navigation adds neither request sequence numbers nor fictitious aborts. Document previews still handle file-read errors, and Sidebar retains its existing public location semantics. Existing Assistant Markdown feedback and component responsibilities remain separate.
 
@@ -118,8 +118,8 @@ UserContent retains attachments, the body container, unknown content, and refere
 - Changes to unread Facts fields do not execute a stage; reading an absent field allows its later appearance to trigger recomputation; conditional read dependencies can be added or removed.
 - When a stage's Facts change but its output remains equivalent, old node and array references are reused and unrelated downstream stages do not execute; later stages that directly depend on other changed fields still execute.
 - Original-text changes run the entire pipeline; incremental results match a newly created evaluation instance with the same input.
-- Frozen-input tests detect in-place array or payload mutation; node output is ordered, fully covers the original text without overlaps, and survives a JSON round-trip.
-- Only `order/id` determines sequence; transform unit tests cover ordinary registration order for built-in display transforms, independent switches, whitespace across adjacent segments, document-edge trimming, emoji graphemes, and reference atomicity.
+- Readonly type assertions cover arrays and payloads; node output is ordered, fully covers the original text without overlaps, and survives a JSON round-trip.
+- Only `order/id` determines sequence; transform unit tests cover ordinary registration order for built-in display transforms, independent switches, whitespace across adjacent segments, document-edge trimming, emoji preservation, and reference atomicity.
 - Text processing executes no UI actions; Slot-injected actions do not make previews clickable; registration and unloading leak no evaluation state or subscriptions.
 
 ## Alternatives considered

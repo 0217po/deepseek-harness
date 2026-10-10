@@ -5,11 +5,11 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { UserTextRegistry } from '../src/client/conversation/user-text-registry.ts'
 import {
-  collapseWhitespaceRule, stripEmojiRule, trimWhitespaceRule,
+  collapseWhitespaceRule, trimWhitespaceRule,
 } from '../src/client/user-text/display-rules.ts'
 import { sessionReferenceRule } from '../src/client/user-text/session-reference-rule.ts'
 
-const displayRules = [trimWhitespaceRule, collapseWhitespaceRule, stripEmojiRule]
+const displayRules = [trimWhitespaceRule, collapseWhitespaceRule]
 
 function track(rule: UserTextRule) {
   return vi.fn((segments: readonly UserTextNode[], context: UserTextTransformContext) => rule.transform(segments, context))
@@ -33,8 +33,6 @@ function assertSource(text: string, nodes: readonly UserTextNode[]): void {
     expect(node.start).toBe(cursor)
     expect(node.end).toBeGreaterThan(cursor)
     if (node.id === 'text') expect(node.data.text).toBe(text.slice(node.start, node.end))
-    expect(Object.isFrozen(node)).toBe(true)
-    expect(Object.isFrozen(node.data)).toBe(true)
     cursor = node.end
   }
   expect(cursor).toBe(text.length)
@@ -59,7 +57,6 @@ describe('user-text display facts', () => {
   it('declares independent boolean facts and an optional display string without new node kinds', () => {
     expectTypeOf<UserTextFacts['collapseWhitespace']>().toEqualTypeOf<boolean>()
     expectTypeOf<UserTextFacts['trimWhitespace']>().toEqualTypeOf<boolean>()
-    expectTypeOf<UserTextFacts['stripEmoji']>().toEqualTypeOf<boolean>()
     expectTypeOf<UserTextFacts>().not.toHaveProperty('ellipsis')
     expectTypeOf<UserTextFacts>().not.toHaveProperty('interactive')
     expectTypeOf<UserTextFacts['sessionLabels']>().toEqualTypeOf<readonly string[]>()
@@ -76,13 +73,12 @@ describe('user-text display facts', () => {
     expect(evaluate({ text, facts: {} })).toBe(nodes)
     expect(nodes).toEqual([{ id: 'text', start: 0, end: text.length, data: { text } }])
     expect(evaluate({ text: '', facts: {} })).toBe(first.mock.lastCall?.[0])
-    expect(evaluate({ text: '', facts: { stripEmoji: true, collapseWhitespace: true, trimWhitespace: true } })).toEqual([])
+    expect(evaluate({ text: '', facts: { collapseWhitespace: true, trimWhitespace: true } })).toEqual([])
   })
 
   it.each([
     ['collapseWhitespace', collapseWhitespaceRule, ' \t甲\r\n乙\u00a0 ', ' 甲 乙 '],
     ['trimWhitespace', trimWhitespaceRule, ' \t甲\r\n乙\u00a0 ', '甲\r\n乙'],
-    ['stripEmoji', stripEmojiRule, ' 甲🙂乙 ', ' 甲乙 '],
   ] as const)('reads only %s, recomputes missing-to-true and restores the source when withdrawn', (flag, rule, text, display) => {
     const reads: (keyof UserTextFacts)[] = []
     const transform = vi.fn((segments: readonly UserTextNode[], context: UserTextTransformContext) => rule.transform(segments, {
@@ -116,22 +112,22 @@ describe('user-text display facts', () => {
   })
 
   it('orders default display rules after the existing reference rule and preserves its atoms', () => {
-    expect([stripEmojiRule.order, collapseWhitespaceRule.order, trimWhitespaceRule.order]).toEqual([1000, 1010, 1020])
-    expect(sessionReferenceRule.order).toBeLessThan(stripEmojiRule.order)
+    expect([collapseWhitespaceRule.order, trimWhitespaceRule.order]).toEqual([1010, 1020])
+    expect(sessionReferenceRule.order).toBeLessThan(collapseWhitespaceRule.order)
     const content = track(sessionReferenceRule)
     const registry = setup([...displayRules, { ...sessionReferenceRule, transform: content }])
     const evaluate = registry.createEvaluator()
     const wire = '@[🧑‍🚀  引用](dsh-session:abc)'
     const text = ` \t🙂甲\n ${wire} \r\n乙🇨🇳 \t`
     const original = evaluate({ text, facts: {} })
-    const nodes = evaluate({ text, facts: { stripEmoji: true, collapseWhitespace: true, trimWhitespace: true } })
-    expect(visible(nodes)).toBe('甲 [session] 乙')
+    const nodes = evaluate({ text, facts: { collapseWhitespace: true, trimWhitespace: true } })
+    expect(visible(nodes)).toBe('🙂甲 [session] 乙🇨🇳')
     expect(nodes[1]).toBe(original[1])
     expect(nodes[1]).toEqual({ id: 'session', start: text.indexOf(wire), end: text.indexOf(wire) + wire.length,
       data: { label: '🧑‍🚀  引用' } })
     expect(content).toHaveBeenCalledOnce()
     assertSource(text, nodes)
-    expect(registry.createEvaluator()({ text, facts: { stripEmoji: true, collapseWhitespace: true, trimWhitespace: true } })).toEqual(nodes)
+    expect(registry.createEvaluator()({ text, facts: { collapseWhitespace: true, trimWhitespace: true } })).toEqual(nodes)
   })
 
   it('allows a display rule to run before reference matching when its ordinary order is lower', () => {
@@ -141,21 +137,21 @@ describe('user-text display facts', () => {
         observed.push(visible(segments))
         return sessionReferenceRule.transform(segments, context)
       } },
-      { ...stripEmojiRule, order: -1 },
+      { ...collapseWhitespaceRule, order: -1 },
     ])
-    const text = '@[🙂ref](dsh-session:x)'
-    const input = { text, facts: { stripEmoji: true } }
+    const text = '@[two  words](dsh-session:x)'
+    const input = { text, facts: { collapseWhitespace: true } }
     const nodes = registry.createEvaluator()(input)
-    expect(observed).toEqual(['@[ref](dsh-session:x)'])
-    expect(nodes).toEqual([{ id: 'session', start: 0, end: text.length, data: { label: '🙂ref' } }])
+    expect(observed).toEqual(['@[two words](dsh-session:x)'])
+    expect(nodes).toEqual([{ id: 'session', start: 0, end: text.length, data: { label: 'two  words' } }])
     assertSource(text, nodes)
   })
 
-  it('allows custom transforms between and after the default display orders', () => {
+  it('allows custom transforms before and after the default display orders', () => {
     const observed: string[] = []
     const registry = setup([
       ...displayRules,
-      { id: 'custom.between', order: 1005, transform: (segments) => {
+      { id: 'custom.before', order: 1005, transform: (segments) => {
         observed.push(visible(segments))
         return segments.map(node => node.id === 'text'
           ? { ...node, data: { ...node.data, display: `${node.data.display ?? node.data.text}\t乙  ` } } : node)
@@ -166,51 +162,50 @@ describe('user-text display facts', () => {
       } },
     ])
     const text = ' 🙂 甲 '
-    const facts = { stripEmoji: true, collapseWhitespace: true, trimWhitespace: true }
+    const facts = { collapseWhitespace: true, trimWhitespace: true }
     const nodes = registry.createEvaluator()({ text, facts })
-    expect(observed).toEqual(['  甲 ', '甲 乙'])
-    expect(visible(nodes)).toBe('甲 乙')
+    expect(observed).toEqual([' 🙂 甲 ', '🙂 甲 乙'])
+    expect(visible(nodes)).toBe('🙂 甲 乙')
     assertSource(text, nodes)
   })
 
-  it('applies strip, collapse and document trim to the preceding display value in ordinary order', () => {
+  it('composes whitespace transforms without removing emoji', () => {
     const evaluate = setup().createEvaluator()
     const text = ' \t🙂 \n甲  👨‍👩‍👧‍👦\t 乙🇨🇳 \t'
-    const facts = { stripEmoji: true, collapseWhitespace: true, trimWhitespace: true }
-    expect(visible(evaluate({ text, facts }))).toBe('甲 乙')
-    expect(visible(evaluate({ text, facts: { ...facts, stripEmoji: false } }))).toBe('🙂 甲 👨‍👩‍👧‍👦 乙🇨🇳')
-    expect(visible(evaluate({ text, facts: { ...facts, collapseWhitespace: false } }))).toBe('甲  \t 乙')
-    expect(visible(evaluate({ text, facts: { ...facts, trimWhitespace: false } }))).toBe(' 甲 乙 ')
+    const facts = { collapseWhitespace: true, trimWhitespace: true }
+    expect(visible(evaluate({ text, facts }))).toBe('🙂 甲 👨‍👩‍👧‍👦 乙🇨🇳')
+    expect(visible(evaluate({ text, facts: { trimWhitespace: true } }))).toBe(text.trim())
+    expect(visible(evaluate({ text, facts: { collapseWhitespace: true } }))).toBe(' 🙂 甲 👨‍👩‍👧‍👦 乙🇨🇳 ')
     expect(visible(evaluate({ text, facts: {} }))).toBe(text)
   })
 
   it.each([
     { parts: ['a ', ' \nb'], expected: 'a b' },
-    { parts: ['a ', '😀', ' b'], expected: 'a b' },
-    { parts: ['a ', '😀', '\t', '😀', '  b'], expected: 'a b' },
+    { parts: ['a ', '\t', ' b'], expected: 'a b' },
+    { parts: ['a ', '\n', '\t', ' ', '  b'], expected: 'a b' },
     { parts: ['\t', '\n', 'a'], expected: ' a' },
-    { parts: ['a ', '\n', '😀'], expected: 'a ' },
-    { parts: ['a', '😀', 'b'], expected: 'ab' },
+    { parts: ['a ', '\n', '\t'], expected: 'a ' },
+    { parts: ['a', '😀', 'b'], expected: 'a😀b' },
   ])('collapses contiguous display whitespace across adjacent Text nodes: $parts', ({ parts, expected }) => {
-    const registry = setup([splitText(parts), stripEmojiRule, collapseWhitespaceRule])
+    const registry = setup([splitText(parts), collapseWhitespaceRule])
     const evaluate = registry.createEvaluator()
     const text = parts.join('')
-    const original = evaluate({ text, facts: { stripEmoji: true } })
-    const nodes = evaluate({ text, facts: { stripEmoji: true, collapseWhitespace: true } })
+    const original = evaluate({ text, facts: {} })
+    const nodes = evaluate({ text, facts: { collapseWhitespace: true } })
     expect(visible(nodes)).toBe(expected)
     expect(nodes).toHaveLength(parts.length)
     if (parts[0]?.startsWith('a')) expect(nodes[0]).toBe(original[0])
-    expect(evaluate({ text, facts: { stripEmoji: true } })).toBe(original)
+    expect(evaluate({ text, facts: {} })).toBe(original)
     assertSource(text, nodes)
   })
 
   it('resets whitespace collapsing at each atomic reference and keeps spaces on both sides', () => {
     const parts = ['a ', '@[😀  ref](dsh-session:x)', ' ', ' \nb ', '@[tail](dsh-session:y)', ' ', '\tc']
-    const registry = setup([splitText(parts), sessionReferenceRule, stripEmojiRule, collapseWhitespaceRule])
+    const registry = setup([splitText(parts), sessionReferenceRule, collapseWhitespaceRule])
     const evaluate = registry.createEvaluator()
     const text = parts.join('')
-    const original = evaluate({ text, facts: { stripEmoji: true } })
-    const nodes = evaluate({ text, facts: { stripEmoji: true, collapseWhitespace: true } })
+    const original = evaluate({ text, facts: {} })
+    const nodes = evaluate({ text, facts: { collapseWhitespace: true } })
     expect(visible(nodes)).toBe('a [session] b [session] c')
     expect(nodes).toHaveLength(original.length)
     expect(nodes[0]).toBe(original[0])
@@ -221,15 +216,15 @@ describe('user-text display facts', () => {
   })
 
   it.each([
-    { parts: [' \t', '🙂', '\n ', '甲 ', ' 乙', ' \t', '🙂', '\n '], expected: '甲  乙' },
-    { parts: [' \t', '🙂', '\n '], expected: '' },
+    { parts: [' \t', '\t', '\n ', '甲 ', ' 乙', ' \t', '\t', '\n '], expected: '甲  乙' },
+    { parts: [' \t', '\t', '\n '], expected: '' },
     { parts: ['甲 ', ' 乙'], expected: '甲  乙' },
   ])('trims only document edges across empty text displays: $parts', ({ parts, expected }) => {
-    const registry = setup([splitText(parts), stripEmojiRule, trimWhitespaceRule])
+    const registry = setup([splitText(parts), trimWhitespaceRule])
     const text = parts.join('')
     const evaluate = registry.createEvaluator()
-    const original = evaluate({ text, facts: { stripEmoji: true } })
-    const nodes = evaluate({ text, facts: { stripEmoji: true, trimWhitespace: true } })
+    const original = evaluate({ text, facts: {} })
+    const nodes = evaluate({ text, facts: { trimWhitespace: true } })
     expect(visible(nodes)).toBe(expected)
     expect(nodes).toHaveLength(parts.length)
     for (let index = 0; index < parts.length; index++) {
@@ -239,28 +234,14 @@ describe('user-text display facts', () => {
   })
 
   it.each([
-    [' \n🙂@[a](dsh-session:x) \t @[b](dsh-session:y)🙂 \t', '[session] \t [session]'],
+    [' \n@[a](dsh-session:x) \t @[b](dsh-session:y) \t', '[session] \t [session]'],
     ['@[a](dsh-session:x) \t 甲 \n @[b](dsh-session:y)', '[session] \t 甲 \n [session]'],
     ['@[a](dsh-session:x) \t 甲 \n', '[session] \t 甲'],
     [' \t 甲 \n @[b](dsh-session:y)', '甲 \n [session]'],
   ])('does not trim through visible business nodes or remove reference spacing: %s', (text, expected) => {
-    const registry = setup([sessionReferenceRule, stripEmojiRule, trimWhitespaceRule])
-    const nodes = registry.createEvaluator()({ text, facts: { stripEmoji: true, trimWhitespace: true } })
+    const registry = setup([sessionReferenceRule, trimWhitespaceRule])
+    const nodes = registry.createEvaluator()({ text, facts: { trimWhitespace: true } })
     expect(visible(nodes)).toBe(expected)
-    assertSource(text, nodes)
-  })
-
-  it('removes whole emoji graphemes without losing Han, ASCII numbers, combining text or joiners in ordinary text', () => {
-    const text = '甲0 123 #* e\u0301 क्‍ष 👨‍👩‍👧‍👦👍🏽🇨🇳🇺🇳1️⃣2⃣#️⃣*️⃣🏳️‍🌈❤️🧑🏾‍🚀乙'
-    const nodes = setup().createEvaluator()({ text, facts: { stripEmoji: true } })
-    expect(visible(nodes)).toBe('甲0 123 #* e\u0301 क्‍ष 乙')
-    assertSource(text, nodes)
-  })
-
-  it('does not classify enclosing-keycap marks on Han or letters as emoji sequences', () => {
-    const text = '甲\u20e3 e\u20e3 123 7\ufe0f 1️⃣'
-    const nodes = setup().createEvaluator()({ text, facts: { stripEmoji: true } })
-    expect(visible(nodes)).toBe('甲\u20e3 e\u20e3 123 7\ufe0f ')
     assertSource(text, nodes)
   })
 
@@ -270,7 +251,7 @@ describe('user-text display facts', () => {
     const evaluate = registry.createEvaluator()
     const text = '甲 乙123'
     const original = evaluate({ text, facts: {} })
-    expect(evaluate({ text, facts: { stripEmoji: true, collapseWhitespace: true, trimWhitespace: true } })).toBe(original)
+    expect(evaluate({ text, facts: { collapseWhitespace: true, trimWhitespace: true } })).toBe(original)
     expect(original).toBe(first.mock.lastCall?.[0])
   })
 

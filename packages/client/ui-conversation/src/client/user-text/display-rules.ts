@@ -6,36 +6,6 @@ function withDisplay(node: UserTextNode<'text'>, display: string): UserTextNode<
   return { ...node, data: { ...node.data, display } }
 }
 
-function mapTextDisplay(
-  segments: readonly UserTextNode[], transform: (display: string) => string,
-): readonly UserTextNode[] {
-  let result: UserTextNode[] | undefined
-  for (const [index, node] of segments.entries()) {
-    const updated = node.id === 'text' ? withDisplay(node, transform(node.data.display ?? node.data.text)) : node
-    if (updated !== node) result ??= segments.slice(0, index)
-    result?.push(updated)
-  }
-  return result ?? segments
-}
-
-/** Remove whole emoji graphemes only when `stripEmoji` is true; ordinary letters and digits are preserved. */
-export const stripEmojiRule: UserTextRule<'text.strip-emoji'> = {
-  id: 'text.strip-emoji',
-  order: 1000,
-  transform(segments, context) {
-    if (!context.read('stripEmoji')) return segments
-    const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' })
-    const emoji = /[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Presentation}]|^[0-9#*]\ufe0f?\u20e3/u
-    return mapTextDisplay(segments, (display) => {
-      let result = ''
-      for (const { segment } of segmenter.segment(display)) {
-        if (!emoji.test(segment)) result += segment
-      }
-      return result
-    })
-  },
-}
-
 /** Collapse whitespace across adjacent Text displays when enabled; business nodes separate runs. */
 export const collapseWhitespaceRule: UserTextRule<'text.collapse-whitespace'> = {
   id: 'text.collapse-whitespace',

@@ -16,7 +16,7 @@ import type { ShortcutCommandId, ShortcutFixedCommand } from '@deepseek-ai/dsh-c
 import { UiConversation } from './conversation/assembly.ts'
 import { UserText, PlainUserText, SessionReference } from './user-text/UserText.tsx'
 import { sessionReferenceRule } from './user-text/session-reference-rule.ts'
-import { collapseWhitespaceRule, stripEmojiRule, trimWhitespaceRule } from './user-text/display-rules.ts'
+import { collapseWhitespaceRule, trimWhitespaceRule } from './user-text/display-rules.ts'
 import type { ViewTab } from './contract/views.ts'
 import type {
   ComposerBarInjected, ConversationInjected, ConversationSessionHeaderInjected,
@@ -160,7 +160,6 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   const workspaceNavigation = ctx.get('uiWorkspace') as unknown as WorkspaceNavigation
   const uiConversation = new UiConversation(ctx, sessions)
   uiConversation.userText.register(sessionReferenceRule)
-  uiConversation.userText.register(stripEmojiRule)
   uiConversation.userText.register(collapseWhitespaceRule)
   uiConversation.userText.register(trimWhitespaceRule)
   slots.registerFactory({

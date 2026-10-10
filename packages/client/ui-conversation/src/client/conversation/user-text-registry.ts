@@ -5,7 +5,7 @@ import { UserTextDocument } from './user-text-document.ts'
 
 /** Observable rule revision with no retained documents or document subscriptions. */
 export class UserTextRegistry extends ConversationDefinitionRegistry<UserTextRule> {
-  private rules: readonly UserTextRule[] = Object.freeze([])
+  private rules: readonly UserTextRule[] = []
   private revision = 0
 
   /**
@@ -19,7 +19,7 @@ export class UserTextRegistry extends ConversationDefinitionRegistry<UserTextRul
     if (!Number.isFinite(rule.order)) throw new Error(`user-text rule "${rule.id}" order must be finite`)
     return this.registerDefinition(
       rule.id,
-      Object.freeze(rule),
+      rule,
       `user-text rule "${rule.id}" is already registered`,
       `uiConversation.userText.register(${JSON.stringify(rule.id)})`,
     )
@@ -43,8 +43,8 @@ export class UserTextRegistry extends ConversationDefinitionRegistry<UserTextRul
   }
 
   protected override refresh(): void {
-    this.rules = Object.freeze([...this.definitions.values()].sort((a, b) =>
-      a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)))
+    this.rules = [...this.definitions.values()].sort((a, b) =>
+      a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     this.revision++
     super.refresh()
   }

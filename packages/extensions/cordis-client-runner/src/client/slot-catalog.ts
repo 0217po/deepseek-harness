@@ -1710,12 +1710,11 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'useProjection: UseProjection',
       'useTrajectory: UseTrajectory',
     ],
-    keyDomain: 'fixed by the owner\'s key table { [Id in UserTextId]: { node: UserTextNode<Id> } }, already taken: attachment, command, file, folder, session, skill, text',
+    keyDomain: 'fixed by the owner\'s key table { [Id in UserTextId]: { node: UserTextNode<Id> } }, already taken: command, file, folder, session, skill, text',
     hookContext: '',
     slotInject: '',
     declaredBy: 'factory \'conversation.user.text\' (client-ui-conversation), so it exists while that definition is registered',
     occupants: [
-      'client-ui-attachment AttachmentReference key \'attachment\'',
       'client-ui-conversation PlainUserText key \'text\'',
       'client-ui-conversation SessionReference key \'session\'',
       'client-ui-goal GoalCommandReference key \'command\'',

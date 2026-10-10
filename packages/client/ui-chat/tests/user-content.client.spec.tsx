@@ -16,7 +16,7 @@ import type { UserTextInjected } from '@deepseek-ai/dsh-client-ui-conversation/c
 import { UserTextRegistry } from '../../ui-conversation/src/client/conversation/user-text-registry.ts'
 import { UserText, PlainUserText, SessionReference } from '../../ui-conversation/src/client/user-text/UserText.tsx'
 import { sessionReferenceRule } from '../../ui-conversation/src/client/user-text/session-reference-rule.ts'
-import { collapseWhitespaceRule, stripEmojiRule, trimWhitespaceRule } from '../../ui-conversation/src/client/user-text/display-rules.ts'
+import { collapseWhitespaceRule, trimWhitespaceRule } from '../../ui-conversation/src/client/user-text/display-rules.ts'
 import { fileReferenceRule, folderReferenceRule } from '../../ui-reference/src/client/user-text-rules.ts'
 import { FileReference, FolderReference } from '../../ui-reference/src/client/FileReference.tsx'
 import { en as referenceEn, zh as referenceZh } from '../../ui-reference/src/client/locales.ts'
@@ -57,7 +57,7 @@ async function bench() {
     const userText = new UserTextRegistry(ctx)
     for (const rule of [
       sessionReferenceRule, fileReferenceRule, folderReferenceRule, skillReferenceRule,
-      stripEmojiRule, collapseWhitespaceRule, trimWhitespaceRule,
+      collapseWhitespaceRule, trimWhitespaceRule,
     ]) {
       userText.register(rule)
     }

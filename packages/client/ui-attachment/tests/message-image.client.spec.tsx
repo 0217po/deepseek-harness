@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { useState } from 'react'
+import type { PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
@@ -264,6 +266,44 @@ describe('ImageGallery', () => {
       <ImageGallery images={[{ attachment }, { attachment }, { attachment }]} load={load} align="end" labels={labels} />,
     )
     expect(several.container.querySelectorAll('[data-variant="tile"]')).toHaveLength(3)
+  })
+
+  it('uses complete Factory labels unchanged and restores defaults without remounting the image', async () => {
+    const runtime = await SlotTestRuntime.create()
+    onTestFinished(() => runtime.dispose())
+    const locale = new LocaleRuntime(runtime.ctx)
+    locale.register('conversation', { en, zh })
+    locale.setLocale('en')
+    runtime.ctx.provide('locale', locale)
+    runtime.slots.installLocale(locale)
+    await runtime.mount(attachmentPlugin)
+    const images = [{ preview: { url: 'blob:labels', name: 'preview.png' } }]
+    const loadImage = vi.fn(async () => 'blob:unused')
+    await runtime.root.declare({}, ({ renderFactorySlot }: PropsRuntime<'root'> & PropsRenderFactories) => {
+      const [custom, setCustom] = useState(true)
+      return <>
+        <button onClick={() => { setCustom(false) }}>Default labels</button>
+        {renderFactorySlot('conversation.images.content', {
+          images, loadImage, align: 'start', ...(custom ? { labels } : {}),
+        })}
+      </>
+    })
+    const view = runtime.renderRoot()
+    const image = view.getByAltText('preview.png')
+    const frame = view.getByRole('button', { name: 'preview.png，点击查看原图' })
+    expect(frame.getAttribute('title')).toBe(labels.open)
+    fireEvent.click(frame)
+    expect(view.getByRole('dialog', { name: labels.lightbox.dialog })).toBeTruthy()
+    fireEvent.click(view.getByRole('button', { name: labels.lightbox.close }))
+    fireEvent.click(view.getByRole('button', { name: 'Default labels' }))
+    const defaultFrame = view.getByRole('button', { name: 'preview.png, click to view original' })
+    expect(defaultFrame).toBe(frame)
+    expect(view.getByAltText('preview.png')).toBe(image)
+    expect(defaultFrame.getAttribute('title')).toBe('View original')
+    fireEvent.click(defaultFrame)
+    expect(view.getByRole('dialog', { name: 'Original image preview' })).toBeTruthy()
+    fireEvent.click(view.getByRole('button', { name: 'Close original image preview' }))
+    expect(loadImage).not.toHaveBeenCalled()
   })
 
   it('renders the conversation slot entry with translated labels', async () => {

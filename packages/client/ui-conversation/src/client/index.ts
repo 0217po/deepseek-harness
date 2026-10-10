@@ -17,8 +17,6 @@ export interface UserTextFacts {
   readonly collapseWhitespace: boolean
   /** Remove display whitespace only at the document's outer edges, without crossing business nodes. */
   readonly trimWhitespace: boolean
-  /** Remove complete emoji graphemes from ordinary display text. */
-  readonly stripEmoji: boolean
 }
 
 export type {

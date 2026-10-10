@@ -28,6 +28,7 @@ declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
   interface UserTextFacts {
     readonly testEnabled: boolean
     readonly testLabel: string
+    readonly testNested: NonNullable<AnnotationData['nested']>
     readonly testOther: number
     readonly skillNames: readonly string[]
   }
@@ -477,21 +478,30 @@ describe('UserTextRegistry linear transforms', () => {
     expect(() => registry.createEvaluator()({ text: 'abc', facts: {} })).toThrow(/test\.z/)
   })
 
-  it.each(['array', 'node', 'payload'] as const)('freezes %s input against mutation', (target) => {
+  it('keeps nodes readonly in types without freezing borrowed payloads', () => {
+    expectTypeOf<Parameters<UserTextRule['transform']>[0]>().toEqualTypeOf<readonly UserTextNode[]>()
+    expectTypeOf<UserTextNode<'text'>>().toEqualTypeOf<Readonly<UserTextNode<'text'>>>()
+    expectTypeOf<UserTextNode<'text'>['data']>().toEqualTypeOf<{ readonly text: string; readonly display?: string }>()
+    expectTypeOf<NonNullable<AnnotationData['nested']>['values']>().toEqualTypeOf<readonly (string | number | boolean | null)[]>()
     const { registry } = setup()
-    registry.register({
-      id: 'test.a', order: 0,
-      transform: (segments) => {
-        expect(Object.isFrozen(segments)).toBe(true)
-        expect(Object.isFrozen(segments[0])).toBe(true)
-        expect(Object.isFrozen(segments[0]?.data)).toBe(true)
-        if (target === 'array') Object.assign(segments, { 0: plain('bad') })
-        else if (target === 'node') Object.assign(segments[0]!, { end: 2 })
-        else Object.assign(segments[0]!.data, { text: 'bad' })
-        return segments
+    const nested = { values: ['borrowed'] }
+    const definition: UserTextRule = {
+      id: 'test.annotation', order: 0,
+      transform: (_segments, context) => {
+        const value = context.read('testNested')
+        if (value === undefined) throw new Error('Missing test payload')
+        return [{ id: 'test.annotation', start: 0, end: 1, data: { label: 'x', nested: value } }]
       },
-    })
-    expect(() => registry.createEvaluator()({ text: 'abc', facts: Object.freeze({}) })).toThrow(/test\.a/)
+    }
+    registry.register(definition)
+    const nodes = registry.createEvaluator()({ text: 'x', facts: { testNested: nested } })
+    if (nodes[0]?.id !== 'test.annotation') throw new Error('Missing annotation')
+    expect(nodes[0].data.nested).toBe(nested)
+    expect(Object.isFrozen(definition)).toBe(false)
+    expect(Object.isFrozen(nodes)).toBe(false)
+    expect(Object.isFrozen(nodes[0])).toBe(false)
+    expect(Object.isFrozen(nested)).toBe(false)
+    expect(Object.isFrozen(nested.values)).toBe(false)
   })
 
   it('closes escaped read contexts after both success and failure', () => {

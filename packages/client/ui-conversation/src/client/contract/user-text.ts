@@ -46,7 +46,7 @@ export interface UserTextRule<Id extends string = string> {
    * May split or merge adjacent Text nodes, update their `data.display`, and create business nodes using this rule's ID.
    * Text `data.text` always retains its original substring; display transforms compose from `display ?? text`.
    * Must not mutate inputs or consume or rewrite existing business nodes.
-   * @param segments - complete, frozen upstream nodes in original UTF-16 coordinates.
+   * @param segments - complete, readonly upstream nodes in original UTF-16 coordinates.
    * @param context - synchronous facts reader; reads replace this stage's previous dependencies.
    * @returns full ordered source coverage; new business nodes stay within one input Text segment.
    * Preserve unchanged input objects and return the input array when nothing changes.
@@ -59,6 +59,6 @@ export interface UserTextRule<Id extends string = string> {
  * Reentrant calls throw. A failed stage throws an Error carrying ruleId and cause, never partial output;
  * its failure and reads are cached until its definition, upstream input, text or a read field changes.
  * @param input - original text and immutable JSON facts; fields are compared with Object.is.
- * @returns frozen nodes covering the text, or [] for empty text; equivalent results retain identities.
+ * @returns readonly nodes covering the text, or [] for empty text; equivalent results retain identities.
  */
 export type UserTextEvaluator = (input: UserTextDocumentInput) => readonly UserTextNode[]

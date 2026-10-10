@@ -3,6 +3,8 @@ import type { PropsLocale, PropsRenderFactories, PropsRuntime } from '@deepseek-
 import { GOAL_COMMAND, type GoalCommandInputData } from './goal-command-input.ts'
 import css from './GoalCommandInputView.module.css'
 
+const GOAL_COMMANDS = [{ start: 0, end: GOAL_COMMAND.length + 1, name: GOAL_COMMAND }] as const
+
 type GoalCommandInputViewProps =
   PropsRuntime<'conversation.chat.node', 'command-input'>
   & PropsLocale<'goal'>
@@ -18,7 +20,6 @@ export const GoalCommandInputView = memo(function GoalCommandInputView({
   node, t, renderFactorySlot,
 }: GoalCommandInputViewProps) {
   const data: GoalCommandInputData = node.data
-  const commands = [{ start: 0, end: GOAL_COMMAND.length + 1, name: GOAL_COMMAND }]
   return (
     <div
       className={css.row}
@@ -30,7 +31,7 @@ export const GoalCommandInputView = memo(function GoalCommandInputView({
         <div className={css.bubble}>
           {renderFactorySlot('conversation.user.text', {
             text: data.text,
-            facts: { commands },
+            facts: { commands: GOAL_COMMANDS },
             interactive: false,
           })}
         </div>

@@ -26,11 +26,10 @@ interface Stage {
 /** Internal cache owned by one evaluator; no registry or React lifetime is retained here. */
 export class UserTextDocument {
   private text: string | undefined
-  private initial: readonly UserTextNode[] = Object.freeze([])
+  private initial: readonly UserTextNode[] = []
   private rules: readonly UserTextRule[] | undefined
   private readonly stages = new Map<string, Stage>()
   private readonly readers = new Map<FactKey, Set<Stage>>()
-  private readonly frozen = new WeakSet<object>()
   private evaluating = false
 
   /**
@@ -71,7 +70,6 @@ export class UserTextDocument {
       this.initial = input.text.length === 0 ? [] : [
         { id: 'text', start: 0, end: input.text.length, data: { text: input.text } },
       ]
-      this.freeze(this.initial)
     }
     if (this.rules !== rules) {
       const ids = new Set(rules.map(rule => rule.id))
@@ -94,14 +92,14 @@ export class UserTextDocument {
   private run(stage: Stage, definition: UserTextRule, segments: readonly UserTextNode[], input: UserTextDocumentInput): void {
     const reads = new Map<FactKey, unknown>()
     let active = true
-    const context: UserTextTransformContext = Object.freeze({
+    const context: UserTextTransformContext = {
       read: <K extends FactKey>(key: K): UserTextFacts[K] | undefined => {
         if (!active) throw new Error('user-text transform context is closed; read is synchronous only')
         const value = input.facts[key]
         reads.set(key, value)
         return value
       },
-    })
+    }
     stage.definition = definition
     stage.input = segments
     stage.dirty = false
@@ -114,9 +112,7 @@ export class UserTextDocument {
         active = false
       }
       validateOutput(input.text, definition.id, segments, output)
-      const aligned = alignNodes(output, stage.output, segments)
-      this.freeze(aligned)
-      stage.output = aligned
+      stage.output = alignNodes(output, stage.output, segments)
     } catch (cause) {
       stage.error = new UserTextTransformError(definition.id, cause)
     } finally {
@@ -138,13 +134,6 @@ export class UserTextDocument {
       if (!readers) this.readers.set(key, readers = new Set())
       readers.add(stage)
     }
-  }
-
-  private freeze(value: unknown): void {
-    if (value === null || typeof value !== 'object' || this.frozen.has(value)) return
-    for (const child of Object.values(value)) this.freeze(child)
-    Object.freeze(value)
-    this.frozen.add(value)
   }
 }
 

@@ -9,7 +9,7 @@ import type { UserTextNode } from '../src/client/contract/user-text.ts'
 import { UserTextRegistry } from '../src/client/conversation/user-text-registry.ts'
 import { UserText, PlainUserText, SessionReference } from '../src/client/user-text/UserText.tsx'
 import { sessionReferenceRule } from '../src/client/user-text/session-reference-rule.ts'
-import { collapseWhitespaceRule, stripEmojiRule, trimWhitespaceRule } from '../src/client/user-text/display-rules.ts'
+import { collapseWhitespaceRule, trimWhitespaceRule } from '../src/client/user-text/display-rules.ts'
 import { skillReferenceRule } from '../../ui-skill/src/client/user-text-rules.ts'
 import { SkillReference } from '../../ui-skill/src/client/SkillReference.tsx'
 import { fileReferenceRule, folderReferenceRule } from '../../ui-reference/src/client/user-text-rules.ts'
@@ -38,7 +38,7 @@ export function createUserTextFixture(actions: UserTextFixtureActions = {}): (in
   const registry = new UserTextRegistry(ctx)
   for (const rule of [
     sessionReferenceRule, skillReferenceRule, fileReferenceRule, folderReferenceRule,
-    goalCommandReferenceRule, stripEmojiRule, collapseWhitespaceRule, trimWhitespaceRule,
+    goalCommandReferenceRule, collapseWhitespaceRule, trimWhitespaceRule,
   ]) registry.register(rule)
   const useUserTextRevision = bindSnapshotSelector({
     getSnapshot: () => registry.getSnapshot(),
