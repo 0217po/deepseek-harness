@@ -2,7 +2,7 @@
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { cp, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { chromium, type Page } from 'playwright'
 import { expect, it, onTestFailed, onTestFinished } from 'vitest'
 import {
@@ -30,7 +30,7 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
   const scaffold = await launchWebScaffold({ extraInstallAnchors: [join(FIXTURE, 'package.json')] })
   onTestFinished(() => scaffold.close())
   const workspace = await scaffold.ctx.workspaceRegistry.create(scaffold.workspaceCwd)
-  const sessionId = await seedSession(scaffold, await readFile(SESSION_SEED, 'utf8'), 'session-menu-actions-web-e2e')
+  const sessionId = await seedSession(scaffold, await readFile(SESSION_SEED, 'utf8'), 'session-c4421b66-252e-44c0-80ed-6e320abeba25')
   await workspace.attachSession(sessionId)
   await scaffold.ctx.sessionController.rename({ sessionId, title: SESSION_TITLE })
   const entryId = await scaffold.ctx.loader.create({ name: '@fixture/live-client' })
@@ -82,25 +82,67 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
     await expect.poll(() => menu.count()).toBe(0)
     const idDialog = page.getByRole('dialog', { name: 'Session ID', exact: true })
     await idDialog.waitFor()
-    const idField = idDialog.getByRole('textbox', { name: 'Session ID', exact: true })
-    expect(await idField.inputValue()).toBe(sessionId)
-    expect(await idField.getAttribute('readonly')).not.toBeNull()
-    await idField.focus()
-    expect(await idField.evaluate((element: HTMLInputElement) =>
-      element.value.slice(element.selectionStart ?? 0, element.selectionEnd ?? 0))).toBe(sessionId)
+    const idText = idDialog.getByText(sessionId, { exact: true })
+    expect(await idDialog.getByRole('textbox').count()).toBe(0)
     const copyButton = idDialog.getByRole('button', { name: 'Copy', exact: true })
-    const fieldBox = await idField.boundingBox()
-    const copyBox = await copyButton.boundingBox()
-    expect(fieldBox).not.toBeNull()
-    expect(copyBox).not.toBeNull()
-    expect(copyBox!.x).toBeGreaterThanOrEqual(fieldBox!.x + fieldBox!.width)
-    expect(Math.abs(copyBox!.y + copyBox!.height / 2 - fieldBox!.y - fieldBox!.height / 2)).toBeLessThan(2)
+    const evidenceRoot = fileURLToPath(new URL('../../../.artifacts/screenshots/session-id-text/', import.meta.url))
+    await mkdir(evidenceRoot, { recursive: true })
+    const evidence = await mkdtemp(join(evidenceRoot, 'run-'))
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme })
+      await expect.poll(() => page.locator('body').getAttribute('data-ds-dark-theme')).toBe(colorScheme === 'dark' ? '' : null)
+      for (const width of [1440, 320]) {
+        await page.setViewportSize({ width, height: 1000 })
+        const layout = await idText.evaluate((element) => {
+          const range = document.createRange()
+          range.selectNodeContents(element)
+          const rect = element.getBoundingClientRect()
+          const style = getComputedStyle(element)
+          return {
+            text: element.textContent,
+            selectable: style.userSelect,
+            overflow: style.overflow,
+            textOverflow: style.textOverflow,
+            lineTops: [...new Set(Array.from(range.getClientRects(), line => line.top))],
+            contained: Array.from(range.getClientRects()).every(line => line.left >= rect.left - 1 && line.right <= rect.right + 1),
+            fits: element.scrollWidth <= element.clientWidth + 1 && element.scrollHeight <= element.clientHeight + 1,
+          }
+        })
+        expect(layout.text).toBe(sessionId)
+        expect(layout.selectable).toBe('text')
+        expect(layout.overflow).toBe('visible')
+        expect(layout.textOverflow).not.toBe('ellipsis')
+        expect(layout.contained).toBe(true)
+        expect(layout.fits).toBe(true)
+        if (width === 1440) expect(layout.lineTops).toHaveLength(1)
+        else expect(layout.lineTops.length).toBeGreaterThan(1)
+        const textBox = (await idText.boundingBox())!
+        const copyBox = (await copyButton.boundingBox())!
+        const dialogBox = (await idDialog.boundingBox())!
+        expect(copyBox.x).toBeGreaterThanOrEqual(textBox.x + textBox.width)
+        expect(Math.abs(copyBox.y + copyBox.height / 2 - textBox.y - textBox.height / 2)).toBeLessThan(2)
+        expect(dialogBox.x).toBeGreaterThanOrEqual(24)
+        expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(width - 24)
+        expect(dialogBox.width).toBeLessThanOrEqual(640)
+        await page.screenshot({ path: join(evidence, `${colorScheme}-${width}.png`) })
+        await writeFile(join(evidence, `${colorScheme}-${width}.json`), JSON.stringify({ layout, textBox, copyBox, dialogBox }, null, 2))
+      }
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await idText.evaluate((element) => {
+      const range = document.createRange()
+      range.selectNodeContents(element)
+      const selection = window.getSelection()!
+      selection.removeAllRanges()
+      selection.addRange(range)
+    })
+    expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(sessionId)
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
     await idDialog.getByRole('button', { name: 'Copy', exact: true }).click()
     await page.getByRole('alert').filter({ hasText: 'Session ID copied' }).waitFor()
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(sessionId)
-    expect(await idField.inputValue()).toBe(sessionId)
-    await idField.press('Escape')
+    expect(await idText.textContent()).toBe(sessionId)
+    await copyButton.press('Escape')
     await expect.poll(() => idDialog.count()).toBe(0)
     expect(console.pageErrors).toEqual([])
     await assertFixtureInventory(EXPECTED, [

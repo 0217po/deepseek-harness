@@ -1,4 +1,5 @@
 /** Session ID inspection through the row menu and a frame-wide read-only dialog. */
+import clsx from 'clsx'
 import { Button, IconInfoOutlineRegular, MenuItemButton, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SessionIdDialogProps, SessionIdInjected, SessionMenuItemProps } from '../contract/slots.ts'
 import css from '../rows/WorkspaceBrowser.module.css'
@@ -34,19 +35,12 @@ export function SessionIdDialog({ useSessionIdRequest, settleSessionId, copySess
       onClose={settleSessionId}
       closeLabel={t('close')}
       title={t('sessionId.title')}
+      className={clsx(css.sessionIdDialog)}
       footer={<Button variant="outline" onClick={settleSessionId}>{t('close')}</Button>}
     >
       <div className={css.sessionIdRow}>
-        <input
-          key={sessionId}
-          className={css.sessionIdValue}
-          aria-label={t('sessionId.title')}
-          readOnly
-          value={sessionId}
-          data-modal-autofocus
-          onFocus={(event) => { event.currentTarget.select() }}
-        />
-        <Button variant="outline" onClick={() => { void copySessionId(sessionId) }}>{t('copy')}</Button>
+        <code className={css.sessionIdValue}>{sessionId}</code>
+        <Button variant="outline" data-modal-autofocus onClick={() => { void copySessionId(sessionId) }}>{t('copy')}</Button>
       </div>
     </Modal>
   )

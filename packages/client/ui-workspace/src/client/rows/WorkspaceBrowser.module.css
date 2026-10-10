@@ -552,8 +552,7 @@
 }
 
 /* Rename dialog form (same figma dialog family as the create modals). */
-.renameInput,
-.sessionIdValue {
+.renameInput {
   box-sizing: border-box;
   width: 100%;
   height: 44px;
@@ -568,6 +567,11 @@
   color: var(--dsw-alias-label-primary);
 }
 
+.sessionIdDialog.sessionIdDialog {
+  width: max-content;
+  max-width: min(640px, 100%);
+}
+
 .sessionIdRow {
   display: flex;
   align-items: center;
@@ -575,8 +579,15 @@
 }
 
 .sessionIdValue {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--dsw-alias-label-primary);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  user-select: text;
 }
 
 .sessionIdRow > button {
