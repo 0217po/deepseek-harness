@@ -177,6 +177,11 @@ export class ChatViewport {
     let originalRoom = 0
     let finalRoom = 0
     let growth = 0
+    let base = 0
+    let previousColumnHeight = 0
+    let previousProgress = 0
+    let segmentProgress = 0
+    let segmentTop = 0
     return this.motion.followInput({
       begin: (boxes) => {
         const viewport = elements.scroller.getBoundingClientRect()
@@ -194,7 +199,9 @@ export class ChatViewport {
           } else growth += amount
         }
         const finalHeight = initialHeight - removed + growth
-        const base = Math.max(0, start - above)
+        base = Math.max(0, start - above)
+        segmentTop = start
+        previousColumnHeight = elements.column.offsetHeight
         target = Math.max(base, Math.max(0, finalHeight - metrics.height))
         finalRoom = target === 0 ? 0 : Math.max(0, target + metrics.height - finalHeight)
         elements.column.dataset.inputFold = ''
@@ -204,7 +211,17 @@ export class ChatViewport {
       },
       prepare: (progress, cancelled) => {
         if (this.elements !== elements) return
-        const top = cancelled ? elements.scroller.scrollTop : start + (target - start) * progress
+        const added = elements.column.offsetHeight - previousColumnHeight
+        if (added !== 0) {
+          initialHeight += added
+          const finalHeight = initialHeight - removed + growth
+          target = Math.max(base, finalHeight - elements.scroller.clientHeight, 0)
+          finalRoom = target === 0 ? 0 : Math.max(0, target + elements.scroller.clientHeight - finalHeight)
+          segmentTop = elements.scroller.scrollTop
+          segmentProgress = previousProgress
+        }
+        const remaining = segmentProgress === 1 ? 1 : (progress - segmentProgress) / (1 - segmentProgress)
+        const top = cancelled ? elements.scroller.scrollTop : segmentTop + (target - segmentTop) * remaining
         const currentHeight = initialHeight + (growth - removed) * progress
         const room = Math.max(cancelled ? 0 : finalRoom, top + elements.scroller.clientHeight - currentHeight)
         // Growing the room before shrinking boxes avoids a native clamp between writes.
@@ -212,12 +229,15 @@ export class ChatViewport {
       },
       frame: (progress, cancelled) => {
         if (this.elements !== elements) return 0
-        const top = cancelled ? elements.scroller.scrollTop : start + (target - start) * progress
+        const remaining = segmentProgress === 1 ? 1 : (progress - segmentProgress) / (1 - segmentProgress)
+        const top = cancelled ? elements.scroller.scrollTop : segmentTop + (target - segmentTop) * remaining
         const currentHeight = initialHeight + (growth - removed) * progress
         const room = Math.max(cancelled ? 0 : finalRoom, top + elements.scroller.clientHeight - currentHeight)
         elements.scroller.scrollTop = top
         this.setSpacer(room)
         if (!cancelled) this.observation = { top: elements.scroller.scrollTop, landing: null }
+        previousColumnHeight = elements.column.offsetHeight
+        previousProgress = progress
         return elements.scroller.scrollTop - start
       },
       finish: (cancelled) => {
@@ -226,6 +246,9 @@ export class ChatViewport {
         void elements.column.offsetHeight
         delete elements.column.dataset.inputFold
         if (cancelled) {
+          const metrics = scrollMetrics(elements.scroller)
+          const height = elements.scroller.scrollHeight - this.spacerHeight()
+          this.setSpacer(metrics.top === 0 ? 0 : Math.max(0, metrics.top + metrics.height - height))
           this.invalidate()
           return
         }

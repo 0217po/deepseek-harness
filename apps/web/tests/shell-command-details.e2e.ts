@@ -209,6 +209,7 @@ it.each([
           await expect.poll(() => page.locator('body').evaluate(element =>
             element.hasAttribute('data-ds-dark-theme'))).toBe(colorScheme === 'dark')
           if (background && state === 'done') {
+            await expect.poll(() => card.getAttribute('data-running')).toBeNull()
             expect(await card.evaluate((element, previous) => element === previous, mountedCard)).toBe(true)
             expect(await toggle.getAttribute('aria-expanded')).toBe('true')
             expect(await card.getAttribute('data-body')).toBeNull()

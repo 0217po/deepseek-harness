@@ -171,6 +171,21 @@ function mountVisibleFold(test: typeof visibleFoldCases[number], reduced: boolea
   scrollTo.mockClear()
   return {
     scroller, row, room, scrollTo,
+    reopenAll(verbose = false) {
+      act(() => { motion?.cancelMotion(row) })
+      row.hidden = false
+      if (verbose) {
+        input = { ...input, transcriptView: 'verbose' }
+        view.rerender(<ScrollHarness input={input} onMotion={onMotion} />)
+      }
+    },
+    growDuringFold(height: number, newSubmission: boolean) {
+      inputHeight += height
+      input = newSubmission
+        ? { ...input, submissionId: 'second-distinct-input' }
+        : { ...input, order: ['new-stream-content'], running: true }
+      view.rerender(<ScrollHarness input={input} onMotion={onMotion} />)
+    },
     cancelReading() {
       fireEvent.wheel(scroller, { deltaY: -20 })
       scroller.scrollTop -= 20
@@ -239,6 +254,46 @@ it('retains the reader position without clamping after an input fold is interrup
   const readingTop = h.cancelReading()
   act(() => { vi.advanceTimersByTime(400) })
   expect(h.scroller.scrollTop).toBe(readingTop)
+  expect(h.scrollTo.mock.calls.some(([options]) => options.behavior === 'smooth')).toBe(false)
+})
+
+it.each([false, true])('stops obsolete viewport writes when every closing row reopens (verbose=%s)', async (verbose) => {
+  const test = visibleFoldCases.find(test => test.name === 'T/B')!
+  const h = mountVisibleFold(test, false)
+  h.submit()
+  await act(async () => { await Promise.resolve() })
+  act(() => { vi.advanceTimersByTime(112) })
+  h.reopenAll(verbose)
+  await act(async () => { await Promise.resolve() })
+  const position = h.scroller.scrollTop
+  act(() => { vi.advanceTimersByTime(400) })
+  expect(h.room()).toBe(0)
+  expect(h.scroller.scrollTop).toBe(position)
+  expect(h.row.hidden).toBe(false)
+  expect(h.row.style.height).toBe('')
+  expect(h.scroller.querySelector('[data-input-fold]')).toBeNull()
+  expect(h.scrollTo.mock.calls.some(([options]) => options.behavior === 'smooth')).toBe(false)
+})
+
+it.each([false, true])('absorbs new height before the active fold finishes (new submission=%s)', async (newSubmission) => {
+  const test = visibleFoldCases.find(test => test.name === 'B/B')!
+  const h = mountVisibleFold(test, false)
+  h.submit()
+  await act(async () => { await Promise.resolve() })
+  act(() => { vi.advanceTimersByTime(112) })
+  h.growDuringFold(320, newSubmission)
+  await act(async () => { await Promise.resolve() })
+  const positions = [h.bodyTop()]
+  for (let frame = 0; frame < 12; frame++) {
+    act(() => { vi.advanceTimersByTime(16) })
+    positions.push(h.bodyTop())
+  }
+  expect(h.scroller.scrollTop).toBe(test.target + 320)
+  expect(h.room()).toBe(0)
+  for (let i = 1; i < positions.length; i++) expect(positions[i]!).toBeLessThanOrEqual(positions[i - 1]! + 0.01)
+  const settled = h.scroller.scrollTop
+  act(() => { vi.advanceTimersByTime(500) })
+  expect(h.scroller.scrollTop).toBe(settled)
   expect(h.scrollTo.mock.calls.some(([options]) => options.behavior === 'smooth')).toBe(false)
 })
 

@@ -86,6 +86,7 @@ interface FoldMotionSample {
   readonly height: number
   readonly spacer: number
   readonly folding: boolean
+  readonly raceApplied: boolean
   readonly composerTop: number
 }
 
@@ -545,6 +546,8 @@ describe('web e2e: long Chat scroll contract', () => {
     { name: 'visible-steps', bodyParagraphs: 2, inputLines: 1, reduced: false },
     { name: 'large-input', bodyParagraphs: 2, inputLines: 18, reduced: false },
     { name: 'reduced-motion', bodyParagraphs: 2, inputLines: 1, reduced: true },
+    { name: 'cancel-all-during-fold', bodyParagraphs: 2, inputLines: 1, reduced: false },
+    { name: 'content-growth-during-fold', bodyParagraphs: 32, inputLines: 1, reduced: false },
   ]) {
     it.skipIf(MODE === 'record')(`uses only visible fold room in one upward movement: ${scenario.name}`, async () => {
       const base = createChatScrollFixture({ markerPrefix: 'VISIBLE_FOLD', title: `CHAT_VISIBLE_FOLD_${scenario.name}`, turns: 8 })
@@ -651,8 +654,14 @@ describe('web e2e: long Chat scroll contract', () => {
             }, 0) }
         })
         expect(before.groupHeight).toBeGreaterThan(before.visibleHeight * 3)
-        if (scenario.name === 'body-only') expect(before.visibleSteps).toBe(0)
+        if (scenario.bodyParagraphs === 32) expect(before.visibleSteps).toBe(0)
         else expect(before.visibleSteps).toBeGreaterThan(0)
+        if (scenario.name === 'cancel-all-during-fold') {
+          await openSettings(page, 'en')
+          const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
+          await settings.getByText('Work details', { exact: true }).locator('../..').getByRole('button').click()
+          await page.getByRole('menuitem', { name: 'Verbose', exact: true }).waitFor()
+        }
         const release = holdTextAfter(world, 0)
         const finishGate = Promise.withResolvers<undefined>()
         const finishBlocked = Promise.withResolvers<undefined>()
@@ -673,7 +682,7 @@ describe('web e2e: long Chat scroll contract', () => {
           await route.continue()
         }
         await page.route('**/api/session/prompt', holdPrompt)
-        const trace = page.evaluate(marker => new Promise<FoldMotionSample[]>((resolveTrace) => {
+        const trace = page.evaluate(({ marker, race }) => new Promise<FoldMotionSample[]>((resolveTrace) => {
           const host = document.querySelector<HTMLElement>('[data-conversation-scroll]')!
           const column = host.querySelector<HTMLElement>('[data-chat-flow]:has(> [data-slot="conversation.chat.flow"])')!
           const body = [...column.querySelectorAll<HTMLElement>('[data-chat-turn="8"][data-chat-group-part="response"]')].at(-1)!
@@ -683,6 +692,8 @@ describe('web e2e: long Chat scroll contract', () => {
           const visibleStep = [...column.querySelectorAll<HTMLElement>('[data-chat-turn="8"] [data-variant="think"] [role="button"]')].at(-1)
           let frame = 0
           let ordinaryGrowth = false
+          let raceApplied = false
+          let closingHeight: number | undefined
           const markGrowth = (): void => { ordinaryGrowth = true }
           host.addEventListener('dsh-test-fold-growth', markGrowth)
           const stepPosition = (): number | null => {
@@ -699,6 +710,24 @@ describe('web e2e: long Chat scroll contract', () => {
             return glyph.height === 0 ? null : glyph.top
           }
           const sample = (): void => {
+            const closing = [...column.querySelectorAll<HTMLElement>('[data-chat-motion="collapse"]')]
+              .filter(element => element.parentElement?.closest('[data-chat-motion="collapse"]') === null)
+            const height = closing.reduce((sum, element) => sum + element.getBoundingClientRect().height, 0)
+            if (closing.length > 0) closingHeight ??= height
+            if (!raceApplied && closingHeight !== undefined && height > 0 && height < closingHeight - 1) {
+              if (race === 'cancel-all-during-fold') {
+                const verbose = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+                  .find(element => element.textContent?.trim() === 'Verbose')
+                if (verbose !== undefined) {
+                  raceApplied = true
+                  verbose.click()
+                }
+              } else if (race === 'content-growth-during-fold') {
+                // Controlled layout growth exercises ResizeObserver overlap, not Session-event delivery.
+                raceApplied = true
+                column.style.paddingBottom = '320px'
+              }
+            }
             const message = [...column.querySelectorAll<HTMLElement>('[data-submission-echo], [data-chat-flow-kind="user"]')]
               .find(element => element.textContent?.includes(marker))
             const step = stepPosition()
@@ -707,7 +736,7 @@ describe('web e2e: long Chat scroll contract', () => {
               stepY: step,
               flowHeight: column.getBoundingClientRect().height, height: host.scrollHeight,
               spacer: host.querySelector<HTMLElement>('[data-chat-turn-spacer]')!.getBoundingClientRect().height,
-              folding: column.querySelector('[data-chat-motion="collapse"]') !== null,
+              folding: column.querySelector('[data-chat-motion="collapse"]') !== null, raceApplied,
               composerTop: host.querySelector<HTMLElement>('[data-composer-seat]')!.getBoundingClientRect().top })
           }
           const tick = (): void => { sample(); frame = requestAnimationFrame(tick) }
@@ -717,17 +746,22 @@ describe('web e2e: long Chat scroll contract', () => {
             host.removeAttribute('data-fold-probe-ready'); resolveTrace(samples)
           }, { once: true })
           sample(); host.setAttribute('data-fold-probe-ready', ''); frame = requestAnimationFrame(tick)
-        }), 'VISIBLE_FOLD_NEXT_0')
+        }), { marker: 'VISIBLE_FOLD_NEXT_0', race: scenario.name })
         await page.locator('[data-fold-probe-ready]').waitFor()
         let settled: ReturnType<WebScaffold['whenTurnSettled']> | undefined
         let samples: Awaited<typeof trace> = []
         try {
           settled = world.scaffold.whenTurnSettled(30_000)
-          await page.getByRole('button', { name: 'Send message', exact: true }).click()
+          if (scenario.name === 'cancel-all-during-fold') {
+            await page.getByRole('button', { name: 'Send message', exact: true }).evaluate((button) => {
+              if (!(button instanceof HTMLButtonElement)) throw new Error('Send control is not a button')
+              button.click()
+            })
+          } else await page.getByRole('button', { name: 'Send message', exact: true }).click()
           await promptBlocked.promise
           await page.getByText(input, { exact: true }).waitFor()
           await expect.poll(() => page.locator('[data-chat-motion="collapse"]').count()).toBe(0)
-          await expectBottom(page)
+          if (scenario.name !== 'cancel-all-during-fold') await expectBottom(page)
           await page.locator('[data-conversation-scroll]').evaluate(async (host) => {
             let previous = host.scrollTop
             let stableSince = performance.now()
@@ -794,6 +828,10 @@ describe('web e2e: long Chat scroll contract', () => {
         const firstFoldIdle = samples.findIndex((sample, index) => index > 0 && !sample.folding && samples[index - 1]!.folding)
         const afterFold = firstFoldIdle < 0 ? [] : samples.slice(firstFoldIdle)
         const range = (values: number[]): number => values.length === 0 ? 0 : Math.max(...values) - Math.min(...values)
+        const foldBoundaryMovement = firstFoldIdle > 0
+          ? Math.abs(samples[firstFoldIdle]!.bodyY - samples[firstFoldIdle - 1]!.bodyY) : 0
+        const priorFrameMovements = samples.slice(1, Math.max(1, firstFoldIdle - 1))
+          .map((sample, index) => Math.abs(sample.bodyY - samples[index]!.bodyY))
         const secondMovement = range(afterFold.map(sample => sample.bodyY))
         const secondInputMovement = range(afterFold.flatMap(sample => sample.messageY === null ? [] : [sample.messageY]))
         const earlierShift = first.earlierY - last.earlierY
@@ -802,6 +840,21 @@ describe('web e2e: long Chat scroll contract', () => {
           earlierShift, reversal, inputReversal, stepReversal, secondMovement, secondInputMovement,
           ordinaryBodyReversal, ordinaryInputReversal, samples: allSamples }, null, 2))
         console.log(`visible-fold ${scenario.name}: spacer=${last.spacer}/${expectedSpacer}, top=${last.top}/${expectedTop}, reversal=${reversal}, secondMovement=${secondMovement}, evidence=${evidence}`)
+        if (scenario.name === 'cancel-all-during-fold') {
+          expect(samples.some(sample => sample.raceApplied)).toBe(true)
+          expect(last.folding).toBe(false)
+          expect(last.spacer).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
+          expect(await page.getByRole('dialog', { name: 'Settings', exact: true })
+            .getByText('Work details', { exact: true }).locator('../..')
+            .getByRole('button', { name: 'Verbose', exact: true }).count()).toBe(1)
+          expect(await page.locator('[data-input-fold]').count()).toBe(0)
+          assertClean(world)
+          return
+        }
+        if (scenario.name === 'content-growth-during-fold') {
+          expect(samples.some(sample => sample.raceApplied && sample.folding)).toBe(true)
+          expect.soft(foldBoundaryMovement).toBeLessThanOrEqual(Math.max(...priorFrameMovements) + GEOMETRY_TOLERANCE)
+        }
         expect.soft(removedHeight).toBeGreaterThan(before.visibleHeight * 3)
         if (!scenario.reduced) {
           expect.soft(samples.some(sample => sample.folding)).toBe(true)

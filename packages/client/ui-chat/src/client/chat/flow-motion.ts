@@ -1,7 +1,7 @@
 /**
- * Fade-then-close transitions owned by one Chat viewport. Rows fade before their boxes close;
- * the owner reserves removed height and holds scrolling until that viewport's folds finish.
- * Motion is opt-in under `[data-chat-motion]`, respects reduced motion, and clears temporary styles.
+ * Fold transitions owned by one Chat viewport. Input folds coordinate box sizes and scrolling on
+ * one frame clock; other folds use CSS transitions. Motion is opt-in under `[data-chat-motion]`,
+ * respects reduced motion, and clears temporary styles.
  */
 import { useCallback, useLayoutEffect, useRef, type RefObject } from 'react'
 import { useSearchableHidden, type HiddenTransition } from './searchable-hidden.ts'
@@ -34,9 +34,28 @@ export interface InputFoldBox {
 
 /** The viewport follows the same progress that changes the folded boxes. */
 export interface InputFoldDriver {
+  /**
+   * Capture geometry before the frame clock changes the boxes.
+   * @param boxes - non-nested boxes whose layout changes on this clock.
+   */
   begin(boxes: readonly InputFoldBox[]): void
+  /**
+   * Reserve scroll range before box writes; omit when the driver needs no pre-write compensation.
+   * @param progress - shared eased progress from zero to one.
+   * @param cancelled - automatic following has stopped; reader-position compensation still applies.
+   */
   prepare?(progress: number, cancelled: boolean): void
+  /**
+   * Apply viewport geometry after box writes, even when automatic following is cancelled.
+   * @param progress - shared eased progress from zero to one.
+   * @param cancelled - preserve the reader's position rather than applying the automatic target.
+   * @returns actual scrollTop displacement from the batch start, for closing-content visual compensation.
+   */
   frame(progress: number, cancelled: boolean): number
+  /**
+   * Release temporary geometry after the last frame or cancellation.
+   * @param cancelled - clean up without reacquiring follow ownership or committing an obsolete landing.
+   */
   finish(cancelled: boolean): void
 }
 
@@ -95,6 +114,7 @@ export function createFlowMotion(reserve: (px: number) => void, foldingChanged: 
   let clearEpoch = 0
   let inputCleanup: (() => void) | null = null
   let activeDriver: InputFoldDriver | null = null
+  let cancelEmptyBatch: (() => void) | null = null
 
   function cancelInput(): void { inputDriver = null }
 
@@ -130,6 +150,18 @@ export function createFlowMotion(reserve: (px: number) => void, foldingChanged: 
     const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
     let started: number | undefined
     let displacement = 0
+    cancelEmptyBatch = () => {
+      if (batch.some(box => box.closing && boxes.get(box.element) === box)) return
+      if (inputFrame !== null) cancelAnimationFrame(inputFrame)
+      inputFrame = null
+      inputBatch = false
+      activeDriver = null
+      inputDriver = null
+      inputCleanup = null
+      cancelEmptyBatch = null
+      for (const box of owned) if (boxes.get(box.element) === box) box.finish()
+      driver.finish(true)
+    }
     const tick = (now: number): void => {
       inputFrame = null
       started ??= now
@@ -162,6 +194,7 @@ export function createFlowMotion(reserve: (px: number) => void, foldingChanged: 
       inputBatch = false
       activeDriver = null
       inputCleanup = null
+      cancelEmptyBatch = null
       const cancelled = inputDriver !== driver
       if (!cancelled) inputDriver = null
       driver.finish(cancelled)
@@ -243,6 +276,7 @@ export function createFlowMotion(reserve: (px: number) => void, foldingChanged: 
   function cancelMotion(element: HTMLElement): void {
     pendingReserve.delete(element)
     running.get(element)?.()
+    cancelEmptyBatch?.()
   }
 
   function collapse(element: HTMLElement, done: () => void): void {
@@ -334,6 +368,7 @@ export function createFlowMotion(reserve: (px: number) => void, foldingChanged: 
     inputFrame = null
     inputCleanup?.()
     inputCleanup = null
+    cancelEmptyBatch = null
     foldIdleListeners.clear()
     pendingReserve.clear()
     pendingGrowth = 0
