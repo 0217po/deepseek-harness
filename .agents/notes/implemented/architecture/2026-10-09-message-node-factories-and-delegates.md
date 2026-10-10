@@ -1,16 +1,16 @@
 # Agent Note: Message image Factories with explicit loaders
 
-Status: proposed
+Status: implemented
 
 English | [中文](2026-10-09-message-node-factories-and-delegates.zh.md)
 
 ## Problem
 
-Message images pass through multiple layers of application props via custom `renderMessageImages` / `renderImages` functions that combine the rendering entry point with image-loading capability. Chat, Trajectory, and Tool need to retain their own image replacement positions while allowing official default entries and third-party wrapper entries to reuse the same gallery implementation.
+Native message images need reusable rendering entry points that remain separate from image-loading capability. Chat, Trajectory, and Tool retain their own image replacement positions while official default entries and third-party wrapper entries reuse the same gallery implementation.
 
-## Proposal
+## Decision
 
-Follow the [division between Body Slots and Content Factories](../../implemented/architecture/2026-10-09-reasoning-content-slot-factory.md), using only the existing `registerFactory`, `renderFactorySlot`, and ordinary image Slots.
+Follow the [division between Body Slots and Content Factories](2026-10-09-reasoning-content-slot-factory.md), using only the existing `registerFactory`, `renderFactorySlot`, and ordinary image Slots.
 
 | Entry point | Responsibility |
 | --- | --- |
@@ -22,7 +22,7 @@ Chat and Trajectory each retain the owning package and Session scope of their ex
 
 Image-rendering components call the corresponding entry point through the framework's `renderFactorySlot`, explicitly passing image references, `loadImage`, and presentation parameters. Conversation continues to manage read authorization, per-Session URL caching, and cleanup; Factories do not look up a global current Session. The gallery, load retries, thumbnails, and lightbox continue to use the attachment package's existing components; they do not move to ui-primitives.
 
-`AssistantNodeView` passes `loadImage` to `AssistantMarkdown`; `UserMessageNodeView` and Flow's pending-input bubbles pass it to `UserStyleBubble`. `AssistantMarkdown` and `UserStyleBubble` call the Chat image entry-point Factory at their existing image positions, retaining their component responsibilities and keys. These short prop paths keep the authorized loader explicit without a separate image adapter. Cross-plugin `ChatNodeOwnerProps.loadImage` and the image Factories' loader parameters remain explicit.
+`AssistantNodeView` passes `loadImage` to `AssistantMarkdown`; user, pending-steering, and local-echo wrappers pass it through `UserStyleBubble` to the `conversation.chat.user.content` Factory. `AssistantMarkdown` and `UserContent` call the Chat image entry-point Factory at their image positions, retaining image order and keys. These prop paths keep the authorized loader explicit. Cross-plugin `ChatNodeOwnerProps.loadImage` and the image Factories' loader parameters remain explicit.
 
 `ChatView` directly supplies the existing `MarkdownDelegateProvider` with `requestOpenFile`, `openExternalLink`, and `fileImages`. The wrapped file opener retains Chat's failure feedback and retry handling; Markdown navigation and image handling remain unchanged.
 
@@ -36,7 +36,7 @@ Image-rendering components call the corresponding entry point through the framew
 
 **Supply the loader implicitly through ImageDelegateProvider and extend Markdown node bindings.** This exceeds what native message-image reuse requires; the short explicit-loader prop paths and existing Markdown implementation are sufficient.
 
-## Acceptance criteria
+## Verification
 
 - Chat and Trajectory no longer define or pass custom rendering functions of type `RenderMessageImages`; image entry points use the framework's Factory renderer.
 - Default image entries for Chat, Trajectory, and Tool reuse the official Content Factory; plugins replacing the original image Slots can still take over the corresponding positions.
@@ -44,9 +44,9 @@ Image-rendering components call the corresponding entry point through the framew
 - Native Assistant, user-message, and pending-input images retain their component responsibilities, drawing positions, and keys, with `loadImage` passed through explicit props to each Factory call.
 - Markdown still uses Chat's wrapped file-open action through the existing `MarkdownDelegateProvider`, with the same external-link and file-image capabilities.
 - The Content Factory supports both default labels and caller-supplied complete custom labels.
-- Markdown code blocks, Markdown images, generic Delegate Providers, the incremental parser, the renderer framework, and UserMessage text semantics remain unchanged.
+- Image composition preserves Markdown code blocks, Markdown image processing, and generic Delegate Providers. [User-text transforms and node rendering](2026-10-10-user-text-json-nodes.md) have a separate owning decision.
 
-## Risks
+## Consequences
 
 Each entry-point Factory must own the sole declaration of its original image Slot; downstream calls must not bypass existing replacement positions. The shared gallery remains root-scoped, but reads of persistent images must use the authorized loader explicitly provided by the caller.
 

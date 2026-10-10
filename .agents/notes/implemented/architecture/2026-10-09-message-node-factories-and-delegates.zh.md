@@ -1,16 +1,16 @@
 # Agent Note: 消息图片 Factory 与显式 loader
 
-Status: proposed
+Status: implemented
 
 [English](2026-10-09-message-node-factories-and-delegates.md) | 中文
 
 ## 问题
 
-消息图片通过自制的 `renderMessageImages`／`renderImages` 函数穿过多层业务 props，函数同时携带渲染入口与图片读取能力。Chat、Trajectory 和 Tool 需要保留各自的图片替换位置，同时让官方默认条目和第三方包装条目复用同一份画廊实现。
+原生消息图片需要可复用的渲染入口，并将渲染入口与图片读取能力分开。Chat、Trajectory 和 Tool 保留各自的图片替换位置，官方默认条目和第三方包装条目复用同一份画廊实现。
 
-## 方案
+## 决策
 
-沿用 [Body Slot 与 Content Factory 的分工](../../implemented/architecture/2026-10-09-reasoning-content-slot-factory.zh.md)，仅使用现有的 `registerFactory`、`renderFactorySlot` 和普通图片 Slot。
+沿用 [Body Slot 与 Content Factory 的分工](2026-10-09-reasoning-content-slot-factory.zh.md)，仅使用现有的 `registerFactory`、`renderFactorySlot` 和普通图片 Slot。
 
 | 入口 | 职责 |
 | --- | --- |
@@ -22,7 +22,7 @@ Chat 和 Trajectory 分别保留原有图片 Slot 的所属包与 Session 作用
 
 图片渲染组件通过框架提供的 `renderFactorySlot` 调用对应入口，显式传入图片引用、`loadImage` 和展示参数。读取授权、逐会话 URL 缓存与回收继续由 Conversation 管理；Factory 不查找全局当前 Session。画廊、加载重试、缩略图及灯箱继续使用附件包现有组件，不迁到 ui-primitives。
 
-`AssistantNodeView` 将 `loadImage` 传给 `AssistantMarkdown`；`UserMessageNodeView` 和 Flow 的待处理输入气泡将它传给 `UserStyleBubble`。`AssistantMarkdown` 和 `UserStyleBubble` 在原有图片绘制位置调用 Chat 图片入口 Factory，保持组件分工和 key。这些短 props 路径使授权 loader 保持显式，无需单独的图片适配器。跨插件的 `ChatNodeOwnerProps.loadImage` 和图片 Factory 的 loader 参数保持显式。
+`AssistantNodeView` 将 `loadImage` 传给 `AssistantMarkdown`；用户消息、待处理 steering 和本地回显的包装层通过 `UserStyleBubble` 将它传给 `conversation.chat.user.content` Factory。`AssistantMarkdown` 和 `UserContent` 在各自图片绘制位置调用 Chat 图片入口 Factory，保持图片顺序和 key。这些 props 路径使授权 loader 保持显式。跨插件的 `ChatNodeOwnerProps.loadImage` 和图片 Factory 的 loader 参数保持显式。
 
 `ChatView` 直接向既有的 `MarkdownDelegateProvider` 提供 `requestOpenFile`、`openExternalLink` 和 `fileImages`。包装后的文件打开动作保留 Chat 的失败反馈与重试处理；Markdown 导航与图片处理保持不变。
 
@@ -36,7 +36,7 @@ Chat 和 Trajectory 分别保留原有图片 Slot 的所属包与 Session 作用
 
 **通过 ImageDelegateProvider 隐式供应 loader，并扩展 Markdown 节点绑定。** 超出原生消息图片复用所需范围，短路径显式透传 loader 和现有 Markdown 实现已足够。
 
-## 验收标准
+## 验证
 
 - Chat／Trajectory 不再定义或传递 `RenderMessageImages` 型自制渲染函数；图片入口使用框架的 Factory renderer。
 - Chat、Trajectory、Tool 的默认图片条目复用官方 Content Factory；替换原图片 Slot 的插件仍可接管对应位置。
@@ -44,9 +44,9 @@ Chat 和 Trajectory 分别保留原有图片 Slot 的所属包与 Session 作用
 - 原生 Assistant、用户消息与待处理输入图片保留组件分工、绘制位置和 key，通过显式 props 向每个 Factory 调用传入 `loadImage`。
 - Markdown 仍通过既有的 `MarkdownDelegateProvider` 使用 Chat 包装过的文件打开动作，外链及文件图片能力保持不变。
 - Content Factory 支持默认及调用者自定义的完整 labels。
-- 不修改 Markdown 代码块、Markdown 图片、通用 Delegate Provider、增量解析器、renderer 框架或 UserMessage 文本语义。
+- 图片组合保留 Markdown 代码块、Markdown 图片处理和通用 Delegate Provider 的既有行为。[用户文本变换与节点渲染](2026-10-10-user-text-json-nodes.zh.md)由独立的决策记录说明。
 
-## 风险
+## 影响
 
 入口 Factory 必须拥有原图片 Slot 的唯一声明；下游调用不能绕过既有替换位置。共享画廊保持 root 作用域，但持久图片读取必须使用调用者显式提供的授权 loader。
 
