@@ -41,6 +41,7 @@ describe('ui-chat Host settings', () => {
     expect(plainConfig(configuration.fiber.config)).toMatchObject({ collapseTiming: 'completion' })
     await configuration.update({ transcriptView: 'compact', collapseTiming: 'next-input' })
     const saved = plainConfig(configuration.fiber.config)
+    if (typeof saved !== 'object' || saved === null) throw new Error('expected saved configuration object')
     expect(saved).toMatchObject({ transcriptView: 'compact', collapseTiming: 'next-input' })
     await expect(configuration.update({ collapseTiming: 'never' })).rejects.toThrow()
     await configuration.fiber.dispose()
