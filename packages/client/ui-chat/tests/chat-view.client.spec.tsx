@@ -55,7 +55,7 @@ import type { TurnProcessSpec } from '../src/client/contract/turn-process.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 import { installTurnNavigatorObserver } from './turn-navigator-fixture.ts'
 import { renderReasoningSlot } from './reasoning-component-fixture.tsx'
-import { renderUserContent } from './user-content-component-fixture.tsx'
+import { createUserContentFixture } from './user-content-component-fixture.tsx'
 import { ConversationGroupStore } from '../../ui-conversation/src/client/conversation/group-store.ts'
 
 function installGroupedSnapshot(
@@ -401,7 +401,8 @@ function makeHarness(
     key => grouped?.groupSource(key as GroupKey) ?? absentGroup,
   )
   const openFile = vi.fn<(path: string) => Promise<void>>().mockResolvedValue(undefined)
-  const openSkill = vi.fn<(name: string) => void>()
+  const openUserFile = vi.fn<(path: string) => void>()
+  const renderUserContent = createUserContentFixture({ openFile: openUserFile })
   const loadOlder = vi.fn()
   const loadThrough = vi.fn<(seq: number) => Promise<void>>().mockResolvedValue(undefined)
   // Mutable outline holder: tests swap the value and drive a re-render via set().
@@ -503,7 +504,6 @@ function makeHarness(
     openView,
     completeViewRequest: () => {},
     openFile,
-    openSkill,
     openExternalLink: vi.fn(),
     loadOlder,
     loadThrough,
@@ -534,7 +534,7 @@ function makeHarness(
   }
   return {
     set, setSession: session.set, setChat: chatSource.set, ChatView, props,
-    openFile, openSkill, loadOlder, loadThrough, openView,
+    openFile, openUserFile, loadOlder, loadThrough, openView,
     setOutline: (value: unknown) => { outlineValue = value },
     chatScroll, forkAt, toolOwners,
     setPerformanceUsage: (mode: 'compact' | 'detailed') => { performanceUsage.set(mode) },
@@ -1867,7 +1867,7 @@ describe('ChatView', () => {
     expect(h.forkAt).toHaveBeenCalledWith(3)
   }))
 
-  it('keeps pending file mentions non-interactive until the admitted user renderer supplies reference actions', () => {
+  it('keeps pending file mentions non-interactive until admission enables the reference injector', () => {
     const pending: InboxState['next-step'][number] = {
       id: MessageId('pending-file-mention'), role: 'user', source: { kind: 'user' },
       content: [{ type: 'text', text: 'Read @src/review.ts' }],
@@ -1878,6 +1878,7 @@ describe('ChatView', () => {
     expect(mention.closest('[data-pending-steering]')).not.toBeNull()
     expect(view.queryByRole('button', { name: 'review.ts' })).toBeNull()
     fireEvent.click(mention)
+    expect(h.openUserFile).not.toHaveBeenCalled()
     expect(h.openFile).not.toHaveBeenCalled()
     act(() => {
       h.setSession({ testInbox: { 'next-turn': [], 'next-step': [] } })
@@ -1888,7 +1889,8 @@ describe('ChatView', () => {
     })
     expect(view.container.querySelector('[data-pending-steering]')).toBeNull()
     fireEvent.click(view.getByRole('button', { name: 'review.ts' }))
-    expect(h.openFile).toHaveBeenCalledWith('src/review.ts')
+    expect(h.openUserFile).toHaveBeenCalledWith('src/review.ts')
+    expect(h.openFile).not.toHaveBeenCalled()
   })
 
   it('keeps a later pending occurrence visible when it reuses a durable MessageId', () => {

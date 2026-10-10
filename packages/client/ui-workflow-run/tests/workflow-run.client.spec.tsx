@@ -363,7 +363,6 @@ function panelProps(data: WorkflowRunChatData, sessions = listState(), openSessi
     useTurnData: () => undefined,
     useDisclosure: () => { throw new Error('unused') },
     useGroupAction: () => { throw new Error('unused') },
-    openSkill: vi.fn(),
     openFile: () => {},
     inspectCall: () => {},
     forkAt: () => {},

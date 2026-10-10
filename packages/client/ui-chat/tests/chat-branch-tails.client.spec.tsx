@@ -18,7 +18,7 @@ import {
 import { AssistantMarkdown, type AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
 import { useDetailedPresentation } from './presentation-fixture.client.ts'
 import { unusedImageLoader } from './reasoning-component-fixture.tsx'
-import { renderUserContent } from './user-content-component-fixture.tsx'
+import { createUserContentFixture } from './user-content-component-fixture.tsx'
 import { useDisclosure } from '../src/client/chat/use-disclosure.ts'
 import { useSearchableHidden } from '../src/client/chat/searchable-hidden.ts'
 import { ActivityPill, UsagePill, type StatPillProps } from '../src/client/chat/StatsPills.tsx'
@@ -33,6 +33,8 @@ afterEach(() => {
 
 const t: ChatNodeViewProps['t'] = makeTranslate(zh, commonZh)
 const renderFactorySlot: AssistantMarkdownProps['renderFactorySlot'] = () => null
+let renderUserContent: ReturnType<typeof createUserContentFixture>
+beforeEach(() => { renderUserContent = createUserContentFixture() })
 const RETRY_ID = 'retry-fixture' as Extract<ConversationNode, { kind: 'model-retry' }>['retryId']
 
 // Recency scans the whole transcript; a detached fixture is its own latest row.
@@ -75,7 +77,7 @@ function MessageItem({ node, t: translate, referenceLabels, skillNames }: Messag
   }
   const props: Partial<Omit<ChatNodeViewProps, 'node'>> & { node: ChatConversationViewNode } = {
     node: viewNode, t: translate, loadImage: unusedImageLoader, renderFactorySlot: renderUserFactory,
-    openFile: vi.fn(), openSkill: vi.fn(), useChat: useDetachedChat,
+    openFile: vi.fn(), useChat: useDetachedChat,
   }
   switch (node.kind) {
     case 'user':
@@ -185,7 +187,7 @@ describe('MessageItem arms', () => {
     )
     expect(screen.getByText('14:24')).toBeTruthy()
     expect(screen.getByRole('button', { name: '复制' })).toBeTruthy()
-    const stack = view.getByText('hello bubble').parentElement?.parentElement
+    const stack = view.getByText('hello bubble').closest('div')?.parentElement
     expect(stack?.parentElement).toBe(view.container.firstElementChild)
     expect(stack?.contains(screen.getByText('14:24'))).toBe(false)
     expect(stack?.contains(screen.getByRole('button', { name: '复制' }))).toBe(false)

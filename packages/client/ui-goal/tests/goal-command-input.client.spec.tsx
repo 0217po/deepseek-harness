@@ -3,13 +3,15 @@ import { cleanup, render, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { SessionLiveEventEntry } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
-  ConversationNodeDefinition, ConversationViewDefinition,
+  ConversationNodeDefinition, ConversationViewDefinition, UserTextInput,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { ConversationNodeAssembler } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
   ChatConversationViewNode, ChatSnapshot,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import type { PropsRenderFactories } from '@deepseek-ai/dsh-client-ui-slots'
+import { createUserTextFixture } from '../../ui-conversation/tests/user-text-component-fixture.client.tsx'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { commandDefinition } from '@deepseek-ai/dsh-client-ui-chat/src/client/conversation-nodes/command.ts'
@@ -21,6 +23,14 @@ import {
 import { zh } from '../src/client/locales.ts'
 
 afterEach(cleanup)
+
+function textFactories(): PropsRenderFactories['renderFactorySlot'] {
+  const renderText = createUserTextFixture()
+  return (name, input) => {
+    if (name !== 'conversation.user.text') throw new Error(`Unexpected Goal Factory: ${name}`)
+    return renderText(input as UserTextInput)
+  }
+}
 
 class TestEventDefinitions {
   entries(): readonly ConversationNodeDefinition[] {
@@ -127,7 +137,8 @@ describe('goal command input projection', () => {
         data: { commandId: 'command-goal', text: '/goal ship it', time: 1_700_000_000_000 },
       },
       t,
-    } as unknown as Parameters<typeof GoalCommandInputView>[0]
+      renderFactorySlot: textFactories(),
+    } as Parameters<typeof GoalCommandInputView>[0]
     const view = render(<GoalCommandInputView {...props} />)
     const bubble = view.getByRole('group', { name: '指令输入' })
 
@@ -146,7 +157,8 @@ describe('goal command input projection', () => {
         data: { commandId: 'command-goal', text: '/goal', time: 1_700_000_000_000 },
       },
       t,
-    } as unknown as Parameters<typeof GoalCommandInputView>[0]
+      renderFactorySlot: textFactories(),
+    } as Parameters<typeof GoalCommandInputView>[0]
     const view = render(<GoalCommandInputView {...props} />)
     const bubble = view.getByRole('group', { name: '指令输入' })
     expect(bubble.textContent).toBe('/goal')
@@ -161,7 +173,8 @@ describe('goal command input projection', () => {
         data: { commandId: 'command-goal', text: '/goal 检查 /goal 的语法', time: 1_700_000_000_000 },
       },
       t,
-    } as unknown as Parameters<typeof GoalCommandInputView>[0]
+      renderFactorySlot: textFactories(),
+    } as Parameters<typeof GoalCommandInputView>[0]
     const view = render(<GoalCommandInputView {...props} />)
     const bubble = view.getByRole('group', { name: '指令输入' })
     expect(bubble.textContent).toBe('/goal 检查 /goal 的语法')

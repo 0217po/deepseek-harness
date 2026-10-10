@@ -549,11 +549,6 @@
     "5f1a0867b42cf35dac7fdf5839e3a39c2384c5b3b03142e799a36733ad96b9da": 1,
     "8342608ac37fdc653b6e751e7192472328c9d1baecf1f66d79a65529db5c4d6a": 1
   },
-  "packages/client/ui-goal/tests/goal-command-input.client.spec.tsx": {
-    "1c1b6199197153a573f0fe4407b8558555422b0d50dbbba17b25b3ca93c61c4d": 1,
-    "ac130009bd2e1d0af0c730a148e5e01a5a504bf712c43692bc62a8084c73e148": 1,
-    "c94a4dd0df97005875a97b9228b3f536765ee6d31872ee05e69677da27086124": 1
-  },
   "packages/client/ui-input-trigger/tests/apply.client.spec.ts": {
     "fc590cb703f599e5bb15f23909cedddeb2a77cb2cad0d4b9b8e664a62c46f44e": 1
   },

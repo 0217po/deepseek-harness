@@ -13,6 +13,16 @@ import type { UserContentAttachment, UserContentData, UserContentInput } from '.
 import { UserContent } from '../src/client/chat/UserContent.tsx'
 import { MessageImagesView } from '../src/client/chat/MessageImagesView.tsx'
 import { en, NS, zh } from '../src/client/locale.ts'
+import type { UserTextInjected } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { UserTextRegistry } from '../../ui-conversation/src/client/conversation/user-text-registry.ts'
+import { UserText, PlainUserText, SessionReference } from '../../ui-conversation/src/client/user-text/UserText.tsx'
+import { sessionReferenceRule } from '../../ui-conversation/src/client/user-text/session-reference-rule.ts'
+import { collapseWhitespaceRule, stripEmojiRule, trimWhitespaceRule } from '../../ui-conversation/src/client/user-text/display-rules.ts'
+import { fileReferenceRule, folderReferenceRule } from '../../ui-reference/src/client/user-text-rules.ts'
+import { FileReference, FolderReference } from '../../ui-reference/src/client/FileReference.tsx'
+import { en as referenceEn, zh as referenceZh } from '../../ui-reference/src/client/locales.ts'
+import { skillReferenceRule } from '../../ui-skill/src/client/user-text-rules.ts'
+import { SkillReference } from '../../ui-skill/src/client/SkillReference.tsx'
 
 afterEach(cleanup)
 
@@ -38,10 +48,37 @@ async function bench() {
   runtime.ctx.provide('locale', locale)
   locale.register('common', { en: commonEn, zh: commonZh })
   locale.register(NS, { en, zh })
+  locale.register('reference', { en: referenceEn, zh: referenceZh })
   locale.setLocale('en')
   runtime.slots.installLocale(locale)
   const imageCalls: PropsRuntime<'conversation.message.images'>[] = []
+  const openFile = vi.fn<(path: string) => void>()
+  const openSkill = vi.fn<(name: string) => void>()
   await runtime.mount({ inject: ['slots'], apply: (ctx) => {
+    const userText = new UserTextRegistry(ctx)
+    for (const rule of [
+      sessionReferenceRule, fileReferenceRule, folderReferenceRule, skillReferenceRule,
+      stripEmojiRule, collapseWhitespaceRule, trimWhitespaceRule,
+    ]) {
+      userText.register(rule)
+    }
+    ctx.slots.registerFactory({
+      name: 'conversation.user.text', scope: 'session',
+      children: { 'conversation.user.text.node': { kind: 'keyed', scope: 'session', inline: true } },
+      inject: (): UserTextInjected => ({
+        hooks: { userTextRevision: {
+          getSnapshot: () => userText.getSnapshot(), subscribe: listener => userText.subscribe(listener),
+        } },
+        createUserTextEvaluator: () => userText.createEvaluator(),
+        reportTransformFailure: (error: unknown): never => { throw error },
+      }),
+    }, UserText)
+    ctx.slots.register({ name: 'conversation.user.text.node', key: 'text' }, PlainUserText)
+    ctx.slots.register({ name: 'conversation.user.text.node', key: 'session' }, SessionReference)
+    ctx.slots.register({ name: 'conversation.user.text.node', key: 'file', locale: 'reference',
+      inject: () => ({ openFile }) }, FileReference)
+    ctx.slots.register({ name: 'conversation.user.text.node', key: 'folder' }, FolderReference)
+    ctx.slots.register({ name: 'conversation.user.text.node', key: 'skill', inject: () => ({ openSkill }) }, SkillReference)
     ctx.slots.registerFactory({
       name: 'conversation.message.images.view', scope: 'session',
       children: { 'conversation.message.images': { kind: 'single', scope: 'session' } },
@@ -83,18 +120,18 @@ async function bench() {
     return { ...view, rerender: update }
   }
   const loadImage = vi.fn<UserContentInput['loadImage']>(async () => 'blob:loaded')
-  return { runtime, locale, owner, mountContent, factory, render, loadImage, imageCalls, SessionProvider }
+  return { runtime, locale, owner, mountContent, factory, render, loadImage, imageCalls, SessionProvider, openFile, openSkill }
 }
 
 describe('user Content Factory', () => {
   it('renders prepared text directly without a row, admission markers, time, or copy controls', async () => {
     const b = await bench()
     const text = '**literal user text**\nsecond line'
-    const view = b.render(b.factory({ content: { ...empty, text }, loadImage: b.loadImage }))
+    const view = b.render(b.factory({ content: { ...empty, text }, facts: {}, loadImage: b.loadImage }))
     const textNode = view.getByText('**literal user text** second line')
     expect(textNode.textContent).toBe(text)
     const root = view.container.querySelector('[data-slot="root"]')
-    expect(textNode.parentElement?.parentElement).toBe(root?.firstElementChild)
+    expect(textNode.closest('div')?.parentElement).toBe(root?.firstElementChild)
     expect(root?.children).toHaveLength(1)
     expect(view.container.querySelector('strong, time, [role="status"], [data-pending-steering], [data-submission-echo]')).toBeNull()
     expect(view.queryAllByRole('button')).toHaveLength(0)
@@ -109,7 +146,7 @@ describe('user Content Factory', () => {
     const content: UserContentData = {
       ...empty, text: 'Prepared text', attachments: [filePart, durable, { type: 'file', file: { ...file, name: 'last.md' } }, preview],
     }
-    const view = b.render(b.factory({ content, loadImage: b.loadImage }))
+    const view = b.render(b.factory({ content, facts: {}, loadImage: b.loadImage }))
     const attachments = view.container.querySelector('[data-message-attachments]')
     expect([...attachments?.children ?? []].map(child => child.textContent)).toEqual([
       'notes.txtTXT 23B', 'history.png', 'last.mdMD 23B', 'preview.png',
@@ -133,7 +170,7 @@ describe('user Content Factory', () => {
     { label: 'one preview and one file', attachments: [preview, filePart], compact: true },
   ])('uses all attachments to choose compact images: $label', async ({ attachments, compact }) => {
     const b = await bench()
-    const view = b.render(b.factory({ content: { ...empty, attachments }, loadImage: b.loadImage }))
+    const view = b.render(b.factory({ content: { ...empty, attachments }, facts: {}, loadImage: b.loadImage }))
     expect(view.getAllByTestId('image')).toHaveLength(1)
     expect(b.imageCalls[0]).toMatchObject({ compact, align: 'end', loadImage: b.loadImage })
     expect(view.queryAllByRole('button')).toHaveLength(0)
@@ -147,7 +184,7 @@ describe('user Content Factory', () => {
     const content: UserContentData = Object.freeze({
       text: 'Already prepared', attachments: Object.freeze([preview]), extraBlocks: Object.freeze([]),
     })
-    const input: UserContentInput = { content, loadImage: b.loadImage }
+    const input: UserContentInput = { content, facts: {}, loadImage: b.loadImage }
     const { SessionProvider } = b
     const view = b.render(<>
       <section data-testid="first">{b.factory(input)}</section>
@@ -166,7 +203,7 @@ describe('user Content Factory', () => {
     const b = await bench()
     const block = { type: 'future-block', value: 'x'.repeat(20_001) }
     const content: UserContentData = { ...empty, extraBlocks: [block], referenceLabels: ['Alpha', 'Beta'] }
-    const view = b.render(b.factory({ content, loadImage: b.loadImage }))
+    const view = b.render(b.factory({ content, facts: {}, loadImage: b.loadImage }))
     expect(view.getByText('Referenced session · Alpha, Beta')).toBeTruthy()
     fireEvent.click(view.getByRole('button', { name: '▸ Extra content block' }))
     expect(view.container.querySelector('pre')?.textContent).toContain('"type": "future-block"')
@@ -181,32 +218,30 @@ describe('user Content Factory', () => {
     )
   })
 
-  it('opens file and skill references only when explicit actions are supplied', async () => {
+  it('opens file and skill references through their own injectors only in interactive content', async () => {
     const b = await bench()
+    const labels = ['Alpha']
     const content: UserContentData = {
-      ...empty, text: 'Read @"src/my file.ts" with /review and @Alpha', referenceLabels: ['Alpha'], skillNames: ['review'],
+      ...empty, text: 'Read @"src/my file.ts" with /review and @Alpha', referenceLabels: labels,
     }
-    const references = {
-      openFile: vi.fn<NonNullable<UserContentInput['references']>['openFile']>(),
-      openSkill: vi.fn<NonNullable<UserContentInput['references']>['openSkill']>(),
-    }
-    const view = b.render(b.factory({ content, loadImage: b.loadImage, references }))
+    const facts = { sessionLabels: labels, skillNames: ['review'] }
+    const view = b.render(b.factory({ content, facts, loadImage: b.loadImage, interactive: true }))
     fireEvent.click(view.getByRole('button', { name: 'my file.ts' }))
     fireEvent.click(view.getByRole('button', { name: '/review' }))
-    expect(references.openFile).toHaveBeenCalledWith('src/my file.ts')
-    expect(references.openSkill).toHaveBeenCalledWith('review')
+    expect(b.openFile).toHaveBeenCalledWith('src/my file.ts')
+    expect(b.openSkill).toHaveBeenCalledWith('review')
     expect(view.queryByRole('button', { name: 'Alpha' })).toBeNull()
-    view.rerender(b.factory({ content, loadImage: b.loadImage }))
+    view.rerender(b.factory({ content, facts, loadImage: b.loadImage }))
     expect(view.queryAllByRole('button')).toHaveLength(0)
     for (const label of ['my file.ts', '/review', 'Alpha']) fireEvent.click(view.getByText(label, { exact: true }))
-    expect(references.openFile).toHaveBeenCalledTimes(1)
-    expect(references.openSkill).toHaveBeenCalledTimes(1)
+    expect(b.openFile).toHaveBeenCalledTimes(1)
+    expect(b.openSkill).toHaveBeenCalledTimes(1)
     expect(view.container.querySelectorAll('[data-ref-chip]')).toHaveLength(3)
   })
 
   it('keeps an empty prepared value empty', async () => {
     const b = await bench()
-    const view = b.render(b.factory({ content: empty, loadImage: b.loadImage }))
+    const view = b.render(b.factory({ content: empty, facts: {}, loadImage: b.loadImage }))
     expect(view.container.textContent).toBe('')
     const root = view.container.querySelector('[data-slot="root"]')
     expect(root?.children).toHaveLength(1)
@@ -218,7 +253,7 @@ describe('user Content Factory', () => {
 
   it('removes live content on owner disposal and renders it again after registration', async () => {
     const b = await bench()
-    const view = b.render(b.factory({ content: { ...empty, text: 'Reusable content' }, loadImage: b.loadImage }))
+    const view = b.render(b.factory({ content: { ...empty, text: 'Reusable content' }, facts: {}, loadImage: b.loadImage }))
     expect(view.getByText('Reusable content')).toBeTruthy()
     await b.owner.dispose()
     expect(view.queryByText('Reusable content')).toBeNull()
@@ -236,7 +271,7 @@ describe('user Content Factory', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     window.addEventListener('error', suppressExpectedError)
     try {
-      expect(() => b.render(b.factory({ content: { ...empty, text: 'Unbound content' }, loadImage: b.loadImage }), false))
+      expect(() => b.render(b.factory({ content: { ...empty, text: 'Unbound content' }, facts: {}, loadImage: b.loadImage }), false))
         .toThrow(message)
     } finally {
       window.removeEventListener('error', suppressExpectedError)
