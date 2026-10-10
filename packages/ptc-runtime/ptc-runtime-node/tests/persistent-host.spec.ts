@@ -174,6 +174,37 @@ it.each(['per-call', 'persistent-in-memory'] as const)('keeps a %s call canceled
   }
 })
 
+it('rejects a retained call when its provider unloads during earlier policy cleanup', async () => {
+  const h = await setup()
+  const session = h.ctx.sessions.create(SessionId('unloading-admission'))
+  h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+  await h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) })
+  const cleaning = Promise.withResolvers<undefined>()
+  const cleanup = Promise.withResolvers<boolean>()
+  h.waitForExit.mockImplementation(() => { cleaning.resolve(undefined); return cleanup.promise })
+  setSandboxMode(session, 'read-only')
+  await cleaning.promise
+  const pending = h.runtime.run(h.runtime.resolve({
+    ...request, stateOwner: {}, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }),
+  }))
+  const rejected = expect(pending).rejects.toThrow('persistent PTC: run after disposal')
+  const closing = h.fiber.dispose()
+  try {
+    await vi.waitFor(() => {
+      expect(() => h.runtime.resolve(request)).toThrow('persistent PTC: resolve after disposal')
+    })
+    expect(h.spawn).toHaveBeenCalledOnce()
+    cleanup.resolve(true)
+    await rejected
+    await closing
+    expect(h.ctx.get('ptcRuntime')).toBeUndefined()
+    expect(h.spawn).toHaveBeenCalledOnce()
+  } finally {
+    cleanup.resolve(true)
+    await Promise.allSettled([pending, rejected, closing])
+  }
+})
+
 describe('persistent PTC host protocol', () => {
   it.each([
     null,
