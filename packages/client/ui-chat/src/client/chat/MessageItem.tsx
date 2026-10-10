@@ -1,10 +1,9 @@
-import { Fragment, memo, useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { MessageImageSource } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { PropsRenderFactories } from '@deepseek-ai/dsh-client-ui-slots'
-import { fileExtension, FileTypeIcon, fileSizeText, JsonBlock, projectUserText, StateDot, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps } from '../contract/slots.ts'
+import { JsonBlock, StateDot, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps, UserContentAttachment, UserContentData } from '../contract/slots.ts'
 import type { ModelRetryNode, TurnErrorNode, UserMessageNode } from '../contract/snapshot.ts'
 import { CompactionItem } from './CompactionItem.tsx'
 import { ContextInjectionRow } from './ContextInjectionRow.tsx'
@@ -13,17 +12,13 @@ import css from './MessageItem.module.css'
 
 type UserImage = Extract<UserMessageNode['content'][number], { type: 'image' }>
 type UserFile = Extract<UserMessageNode['content'][number], { type: 'file' }>
-type PresentedAttachment =
-  | { readonly type: 'image'; readonly image: MessageImageSource }
-  | { readonly type: 'file'; readonly file: UserFile['attachment'] }
-
 function contentParts(content: readonly unknown[]): {
   text: string
-  attachments: PresentedAttachment[]
+  attachments: UserContentAttachment[]
   rest: unknown[]
 } {
   const texts: string[] = []
-  const attachments: PresentedAttachment[] = []
+  const attachments: UserContentAttachment[] = []
   const rest: unknown[] = []
   for (const block of content) {
     const b = block as { type?: string; text?: string; attachment?: unknown }
@@ -161,8 +156,8 @@ function TurnMaxTokensItem({ t }: {
 
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
-  content, loadImage, renderFactorySlot, actions, pending = false, echo = false, referenceLabels = [], skillNames = [],
-  previewAttachments, references, t,
+  content, loadImage, renderFactorySlot, actions, pending = false, echo = false, referenceLabels, skillNames,
+  previewAttachments, references,
 }: {
   content: readonly unknown[]
   renderFactorySlot: PropsRenderFactories['renderFactorySlot']
@@ -177,57 +172,29 @@ function UserStyleBubble({
   /** Skill names the step's `skill-invocation` injections loaded for this message. */
   skillNames?: readonly string[]
   /** Local submission-echo attachments replacing the content-derived attachment sequence. */
-  previewAttachments?: readonly PresentedAttachment[]
+  previewAttachments?: readonly UserContentAttachment[]
   references?: Pick<ChatNodeOwnerProps, 'openFile' | 'openSkill'>
-  t: ChatViewSlotProps['t']
 } & Pick<ChatNodeOwnerProps, 'loadImage'>): ReactNode {
-  const { text, attachments: contentAttachments, rest } = contentParts(content)
-  const attachments = previewAttachments ?? contentAttachments
-  const compactImages = attachments.length > 1
-  const truncated = (total: number): string => t('json.truncated', { total })
-  const showBubble = text !== '' || rest.length > 0
+  const parts = useMemo(() => contentParts(content), [content])
+  const prepared = useMemo<UserContentData>(() => ({
+    text: parts.text,
+    attachments: previewAttachments ?? parts.attachments,
+    extraBlocks: parts.rest,
+    ...(referenceLabels === undefined ? {} : { referenceLabels }),
+    ...(skillNames === undefined ? {} : { skillNames }),
+  }), [parts, previewAttachments, referenceLabels, skillNames])
   return (
     <div
       className={css.userRow}
       data-pending-steering={pending || undefined}
       data-submission-echo={echo || undefined}
     >
-      <div className={css.userStack}>
-        {attachments.length > 0 && (
-          <div className={css.attachmentRow} data-message-attachments>
-            {attachments.map((attachment, index) => attachment.type === 'image'
-              ? (
-                <Fragment key={`image:${index}`}>
-                  {renderFactorySlot('conversation.message.images.view', {
-                    images: [attachment.image], loadImage, align: 'end', compact: compactImages,
-                  })}
-                </Fragment>
-              )
-              : (
-                <span key={`file:${index}`} className={css.fileCard} title={attachment.file.name}>
-                  <FileTypeIcon path={attachment.file.name} className={css.fileIcon} />
-                  <span className={css.fileContent}>
-                    <span className={css.fileName}>{attachment.file.name}</span>
-                    <span className={css.fileMeta}>
-                      {[fileExtension(attachment.file.name).toUpperCase().slice(0, 8), fileSizeText(attachment.file.bytes)]
-                        .filter(Boolean).join(' ')}
-                    </span>
-                  </span>
-                </span>
-              ))}
-          </div>
-        )}
-        {showBubble && <div className={css.bubble}>
-          {projectUserText(text, referenceLabels, skillNames, 'skill', references)}
-          {rest.map((block, i) => <JsonBlock key={i} label={t('message.extraBlock')} payload={block} truncatedLabel={truncated} />)}
-        </div>}
-        {referenceLabels.length > 0 && (
-          <div className={css.referenceSummary}>
-            {t('message.referenceSummary', { labels: referenceLabels.join(t('message.referenceSeparator')) })}
-          </div>
-        )}
-      </div>
-      {actions?.(text)}
+      {renderFactorySlot('conversation.chat.user.content', {
+        content: prepared,
+        loadImage,
+        ...(references === undefined ? {} : { references }),
+      })}
+      {actions?.(prepared.text)}
     </div>
   )
 }
@@ -249,7 +216,6 @@ export function PendingSteeringBubble({ content, loadImage, renderFactorySlot, t
       renderFactorySlot={renderFactorySlot}
       loadImage={loadImage}
       pending
-      t={t}
       actions={text => (
         <MessageIconActions
           text={text}
@@ -279,7 +245,7 @@ export function PendingSubmissionBubble({ submission, loadImage, renderFactorySl
     () => (submission.text === '' ? [] : [{ type: 'text', text: submission.text }]),
     [submission.text],
   )
-  const previewAttachments = useMemo<readonly PresentedAttachment[]>(
+  const previewAttachments = useMemo<readonly UserContentAttachment[]>(
     () => submission.attachments.map(attachment => attachment.type === 'image'
       ? {
         type: 'image',
@@ -303,7 +269,6 @@ export function PendingSubmissionBubble({ submission, loadImage, renderFactorySl
       loadImage={loadImage}
       pending={submission.placement === 'steering'}
       echo
-      t={t}
       actions={text => (
         <MessageIconActions
           text={text}
@@ -330,7 +295,6 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
       loadImage={loadImage}
       {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
       {...data.skillNames === undefined ? {} : { skillNames: data.skillNames }}
-      t={t}
       actions={text => (
         <MessageIconActions
           text={text}

@@ -7,7 +7,7 @@ import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts
 import type {
   ChatConversationViewNode, ConversationNode,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
-import type { ChatNodeViewProps } from '../src/client/contract/slots.ts'
+import type { ChatNodeViewProps, UserContentInput } from '../src/client/contract/slots.ts'
 import {
   formatMessageClock, msUntilNextLocalMidnight, startOfLocalDay,
 } from '../src/client/chat/message-chrome.ts'
@@ -18,6 +18,7 @@ import {
 import { AssistantMarkdown, type AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
 import { useDetailedPresentation } from './presentation-fixture.client.ts'
 import { unusedImageLoader } from './reasoning-component-fixture.tsx'
+import { renderUserContent } from './user-content-component-fixture.tsx'
 import { useDisclosure } from '../src/client/chat/use-disclosure.ts'
 import { useSearchableHidden } from '../src/client/chat/searchable-hidden.ts'
 import { ActivityPill, UsagePill, type StatPillProps } from '../src/client/chat/StatsPills.tsx'
@@ -68,8 +69,12 @@ function MessageItem({ node, t: translate, referenceLabels, skillNames }: Messag
         }
         : node,
   }
+  const renderUserFactory: ChatNodeViewProps['renderFactorySlot'] = (name, input) => {
+    if (name !== 'conversation.chat.user.content') throw new Error(`Unexpected user Factory: ${name}`)
+    return renderUserContent(input as UserContentInput, renderFactorySlot, translate)
+  }
   const props: Partial<Omit<ChatNodeViewProps, 'node'>> & { node: ChatConversationViewNode } = {
-    node: viewNode, t: translate, loadImage: unusedImageLoader, renderFactorySlot,
+    node: viewNode, t: translate, loadImage: unusedImageLoader, renderFactorySlot: renderUserFactory,
     openFile: vi.fn(), openSkill: vi.fn(), useChat: useDetachedChat,
   }
   switch (node.kind) {
@@ -170,16 +175,21 @@ describe('MessageItem arms', () => {
     // Same-day clock: construct "today at 14:24" so the label stays `HH:mm`.
     const now = new Date()
     const time = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 14, 24).getTime()
-    render(
+    const view = render(
       <MessageItem t={t} node={{
         kind: 'user', seq: 1, time,
-        content: [{ type: 'text', text: 'hello bubble' }] as never,
+        content: [{ type: 'text', text: 'hello ' }, { type: 'text', text: 'bubble' }],
         source: null,
       }}
       />,
     )
     expect(screen.getByText('14:24')).toBeTruthy()
     expect(screen.getByRole('button', { name: '复制' })).toBeTruthy()
+    const stack = view.getByText('hello bubble').parentElement?.parentElement
+    expect(stack?.parentElement).toBe(view.container.firstElementChild)
+    expect(stack?.contains(screen.getByText('14:24'))).toBe(false)
+    expect(stack?.contains(screen.getByRole('button', { name: '复制' }))).toBe(false)
+    expect(stack?.nextElementSibling?.contains(screen.getByRole('button', { name: '复制' }))).toBe(true)
     expect(screen.queryByRole('button', { name: '在新对话中分支' })).toBeNull()
     expect(screen.queryByRole('button', { name: '编辑' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '复制' }))

@@ -32,6 +32,7 @@ import { ChatView } from './chat/ChatView.tsx'
 import { ChatFlow } from './chat/ChatFlow.tsx'
 import { registerChatNodeRenderers } from './chat/register-node-renderers.ts'
 import { MessageImagesView } from './chat/MessageImagesView.tsx'
+import { UserContent } from './chat/UserContent.tsx'
 import { ActivityPill, UsagePill } from './chat/StatsPills.tsx'
 import { registerConversationNodes } from './conversation-nodes/register.ts'
 import { QuotaNoticeHost } from './chat/QuotaNoticeHost.tsx'
@@ -175,6 +176,9 @@ export function apply(ctx: Context): void {
     scope: 'session',
     children: { 'conversation.message.images': { kind: 'single', scope: 'session' } },
   }, MessageImagesView)
+  ctx.slots.registerFactory({
+    name: 'conversation.chat.user.content', scope: 'session', locale: NS,
+  }, UserContent)
 
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',

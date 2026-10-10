@@ -2,6 +2,7 @@
 
 import type { ProcessGroupData } from '../src/client/contract/process-groups.ts'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
+import { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { GlobalStandardProps, PropsRenderFactories, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -12,7 +13,7 @@ import type {
   ChatViewSlotProps, CommandNode, CompactionSummaryNode, ContextMessageNode, ConversationNode,
   LegacyConversationSlice, ModelRetryNode, StartedToolCall, SteeringMessageNode,
   ToolCallBlock, ToolResultNode, TurnErrorNode, TurnMaxTokensNode,
-  TranscriptViewMode, UserMessageNode,
+  TranscriptViewMode, UserContentInput, UserMessageNode,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {
   SessionListState, SessionSnapshot,
@@ -54,6 +55,7 @@ import type { TurnProcessSpec } from '../src/client/contract/turn-process.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 import { installTurnNavigatorObserver } from './turn-navigator-fixture.ts'
 import { renderReasoningSlot } from './reasoning-component-fixture.tsx'
+import { renderUserContent } from './user-content-component-fixture.tsx'
 import { ConversationGroupStore } from '../../ui-conversation/src/client/conversation/group-store.ts'
 
 function installGroupedSnapshot(
@@ -438,6 +440,9 @@ function makeHarness(
     throw new Error(`Undeclared flow child: ${key}`)
   }
   const renderFactorySlot: PropsRenderFactories['renderFactorySlot'] = (name, owner, opts) => {
+    if (name === 'conversation.chat.user.content') {
+      return renderUserContent(owner as UserContentInput, renderFactorySlot, props.t)
+    }
     if (name !== 'conversation.message.images.view' || !isImageOwner(owner)) {
       throw new Error(`Unexpected Chat image Factory call: ${name}`)
     }
@@ -1861,6 +1866,30 @@ describe('ChatView', () => {
     // Host boundary), not the assistant node seq.
     expect(h.forkAt).toHaveBeenCalledWith(3)
   }))
+
+  it('keeps pending file mentions non-interactive until the admitted user renderer supplies reference actions', () => {
+    const pending: InboxState['next-step'][number] = {
+      id: MessageId('pending-file-mention'), role: 'user', source: { kind: 'user' },
+      content: [{ type: 'text', text: 'Read @src/review.ts' }],
+    }
+    const h = makeHarness({}, { testInbox: { 'next-turn': [], 'next-step': [pending] }, running: true })
+    const view = render(<h.ChatView {...h.props} />)
+    const mention = view.getByText('review.ts')
+    expect(mention.closest('[data-pending-steering]')).not.toBeNull()
+    expect(view.queryByRole('button', { name: 'review.ts' })).toBeNull()
+    fireEvent.click(mention)
+    expect(h.openFile).not.toHaveBeenCalled()
+    act(() => {
+      h.setSession({ testInbox: { 'next-turn': [], 'next-step': [] } })
+      h.setChat({ nodes: [{
+        kind: 'steering', messageId: pending.id, seq: 1, time: 1_000,
+        content: pending.content, source: pending.source,
+      }] })
+    })
+    expect(view.container.querySelector('[data-pending-steering]')).toBeNull()
+    fireEvent.click(view.getByRole('button', { name: 'review.ts' }))
+    expect(h.openFile).toHaveBeenCalledWith('src/review.ts')
+  })
 
   it('keeps a later pending occurrence visible when it reuses a durable MessageId', () => {
     const pending = {

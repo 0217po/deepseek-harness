@@ -30,6 +30,7 @@ import { CHAT_SETTINGS_NAMESPACE, type ChatSettings } from '../src/chat-settings
 import { ActivityPill, UsagePill } from '../src/client/chat/StatsPills.tsx'
 import { createFlowMotion } from '../src/client/chat/flow-motion.ts'
 import { CHAT_FLOW_INJECT, CHAT_NODE_INJECT } from '../src/client/apply.ts'
+import { UserContent } from '../src/client/chat/UserContent.tsx'
 
 declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
   interface ConversationTurnDataMap {
@@ -101,6 +102,7 @@ describe('Chat apply wiring', () => {
     expect(entry).not.toHaveProperty('CHAT_FLOW_INJECT')
     expect(entry).not.toHaveProperty('CHAT_NODE_INJECT')
     expect(entry).not.toHaveProperty('ChatFlow')
+    expect(entry).not.toHaveProperty('UserContent')
   })
 
   it('registers the frame-wide quota notice host and keeps the failure row injection-free', async () => {
@@ -148,6 +150,11 @@ describe('Chat apply wiring', () => {
     const view = b.runtime.slots.entries('conversation.view')[0]
     const flow = b.runtime.slots.entries('conversation.chat.flow')[0]
     const images = b.runtime.factoryOf('conversation.message.images.view')
+    const userContent = b.runtime.factoryOf('conversation.chat.user.content')
+    expect(userContent).toMatchObject({ scope: 'session', locale: 'chat', component: UserContent })
+    expect(userContent.children).toBeUndefined()
+    expect(userContent.store).toBeUndefined()
+    expect(userContent.inject).toBeUndefined()
     expect(view?.children?.['conversation.chat.flow']).toBeDefined()
     expect(view?.children?.['conversation.chat.node']).toBeUndefined()
     expect(view?.children?.['conversation.message.images']).toBeUndefined()
@@ -161,6 +168,7 @@ describe('Chat apply wiring', () => {
     expect(b.runtime.slots.spec('conversation.chat.node')).toBeUndefined()
     expect(b.runtime.slots.spec('conversation.message.images')).toBeUndefined()
     expect(() => b.runtime.factoryOf('conversation.message.images.view')).toThrow('no definition')
+    expect(() => b.runtime.factoryOf('conversation.chat.user.content')).toThrow('no definition')
   })
 
   it('lets another registrant replace one composer stats pill by id', async () => {

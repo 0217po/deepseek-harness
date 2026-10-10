@@ -3,11 +3,12 @@ import type { RefObject } from 'react'
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { FileAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type {
   CommandNode, CompactionSummaryNode, ConversationLocationDataStore, ConversationTurnDataMap,
   ConversationGroupData, GroupSnapshot,
-  MessageImageLoader, MessageImagesOwnerProps, RenderEntry, TurnLocation,
+  MessageImageLoader, MessageImageSource, MessageImagesOwnerProps, RenderEntry, TurnLocation,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
   HostObservable, InjectFace, KeyedSnapshotSelectorHook, PropsLocale, PropsRenderSlots, PropsRuntime,
@@ -221,6 +222,27 @@ export interface ChatNodeOwnerProps {
   turnProcess?: TurnProcessOwnerProps | undefined
 }
 
+/** One attachment in the original user-message display order. */
+export type UserContentAttachment =
+  | { readonly type: 'image'; readonly image: MessageImageSource }
+  | { readonly type: 'file'; readonly file: FileAttachmentRef }
+
+/** Prepared user contents without row identity, admission state, time, or actions. */
+export interface UserContentData {
+  readonly text: string
+  readonly attachments: readonly UserContentAttachment[]
+  /** Blocks not represented by text or attachment presentation. */
+  readonly extraBlocks: readonly unknown[]
+  readonly referenceLabels?: readonly string[]
+  readonly skillNames?: readonly string[]
+}
+
+/** Public content rendering input; absent reference actions leave mentions non-interactive. */
+export interface UserContentInput extends Pick<ChatNodeOwnerProps, 'loadImage'> {
+  readonly content: UserContentData
+  readonly references?: Pick<ChatNodeOwnerProps, 'openFile' | 'openSkill'>
+}
+
 /** Shared presentation state for one Turn-process answer generation. */
 export interface TurnProcessOwnerProps {
   /** Process content eligible to share one Turn-level disclosure. */
@@ -347,6 +369,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 
   interface SlotFactoryMap {
+    /** Prepared user text, attachments, and references inside a caller-owned message row. */
+    'conversation.chat.user.content': {
+      scope: 'session'
+      props: UserContentInput
+      locale: 'chat'
+    }
     /** Portable Chat image position, retaining the existing image Slot. */
     'conversation.message.images.view': {
       scope: 'session'
