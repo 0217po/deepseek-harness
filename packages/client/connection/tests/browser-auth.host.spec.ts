@@ -93,6 +93,21 @@ afterEach(() => {
 })
 
 describe('API credentials', () => {
+  it('refuses a request without a URL before publishing an API operator', async () => {
+    const auth = await createAuth(new RecordCredentials())
+    const publish = vi.fn(() => 'api-operator' as PeerId)
+    const res = response()
+
+    auth.authorizeConnect({ method: 'GET', headers: { host: 'localhost' } }, res.value, false, publish)
+
+    expect(res.state).toEqual({
+      status: 401,
+      headers: { 'cache-control': 'no-store', 'content-type': 'text/plain; charset=utf-8' },
+      body: 'dsh web authentication required; reopen the URL printed by dsh web.\n',
+    })
+    expect(publish).not.toHaveBeenCalled()
+  })
+
   it('signs the published id and rejects browser confusion, tampering, audience mismatch, and expiry', async () => {
     vi.useFakeTimers()
     const store = new RecordCredentials()

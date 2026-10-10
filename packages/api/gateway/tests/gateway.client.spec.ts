@@ -3000,6 +3000,33 @@ describe('Remote stream client carrier lifecycle', () => {
     })
   })
 
+  it('rejects a stream waiting on an established socket when its close completes', async () => {
+    await withFakeWebSocket('https://harness.example', async () => {
+      FakeWebSocket.autoOpen = false
+      FakeWebSocket.dispatchClose = false
+      const client = new RemoteStreamMuxClient()
+      client.start()
+      const socket = FakeWebSocket.sockets[0]!
+      socket.open()
+      socket.close()
+      expect(socket.readyState).toBe(FakeWebSocket.CLOSING)
+      const pending = client.open('feed/follow', {}, new AbortController().signal)
+        [Symbol.asyncIterator]().next()
+      const rejected = expect(pending).rejects.toMatchObject({
+        name: 'RemoteStreamCarrierError', message: 'api gateway: Remote stream WebSocket closed',
+      })
+      try {
+        socket.drop()
+        await rejected
+        expect(socket.sent).toEqual([])
+        expect(FakeWebSocket.sockets).toHaveLength(1)
+      } finally {
+        socket.drop()
+        await client.close()
+      }
+    })
+  })
+
   it('mints a new wire stream id when the same endpoint opens on a replacement socket', async () => {
     await withFakeWebSocket('https://harness.example', async () => {
       const client = new RemoteStreamMuxClient()

@@ -199,9 +199,14 @@ describe('connection node half', () => {
     const ctx = new Context()
     provideBrowserCredentials(ctx)
     const fiber = ctx.plugin({ inject: [...inject], apply })
-    await fiber.await()
-    expect(ctx.get('connection')).toBeInstanceOf(Object)
-    await fiber.dispose()
+    try {
+      await fiber.await()
+      const connection = ctx.get('connection') as HostConnectionHandle
+      const cookie = browserCookie(connection, 'localhost')
+      expect(connection.admit(fakeRequest({ host: 'localhost', cookie }))).toEqual({ peer: connection.operator })
+    } finally {
+      await fiber.dispose()
+    }
   })
 
   it('accepts the bind address of a web carrier attached after Connection', async () => {
@@ -757,6 +762,21 @@ describe('operator-scoped connect', () => {
         expect(response.state.status).toBe(401)
         expect(response.state.headers?.['set-cookie']).toBeUndefined()
       }
+    } finally { await host.dispose() }
+  })
+
+  it('refuses a captured connect request after the owning fiber is disposed', async () => {
+    const host = await mounted()
+    try {
+      const route = host.routes.find(candidate => candidate.path === '/connect')!
+      const request = fakeRequest({ host: 'localhost' }, host.connection.authenticatedUrl('http://localhost/connect'))
+      await host.dispose()
+      const response = fakeResponse()
+
+      await route.handler(request, response.response)
+
+      expect(response.state).toEqual({ status: 401, body: 'unauthorized' })
+      expect(response.response.writableEnded).toBe(true)
     } finally { await host.dispose() }
   })
 

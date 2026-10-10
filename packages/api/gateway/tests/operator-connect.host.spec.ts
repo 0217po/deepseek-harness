@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { IncomingMessage } from 'node:http'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -19,6 +20,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import { z } from 'zod'
 import { parseRemoteStreamServerMessage, type RemoteStreamServerMessage } from '../src/stream-protocol.ts'
+import { RemoteStreamMuxServer } from '../src/stream-server.ts'
 import OperatorConnectFixture from './operator-connect-fixture.ts'
 
 interface SocketClient {
@@ -80,6 +82,80 @@ describe('operator connect through Loader composition', () => {
     await vi.waitFor(() => { expect(host.fixture.effects.size).toBe(0) })
     host.fixture.streamCleanup.resolve(undefined)
     await vi.waitFor(() => { expect(call(host, 'follow').finished).toBe(true) })
+  })
+
+  it('reports failed Operator release without retaining its credential or blocking shutdown', async () => {
+    const host = await boot()
+    const cookie = await exchange(host, 'none')
+    await success(host, cookie, 'fixture/identity', { label: 'release-failure' })
+    const peer = call(host, 'release-failure').peer
+    const dispose = peer.dispose.bind(peer)
+    const failure = new Error('fixture Operator disposal failure')
+    const disposing = vi.spyOn(peer, 'dispose').mockImplementationOnce(async () => {
+      await dispose()
+      throw failure
+    })
+    const report = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await close(await mux(host, cookie))
+      await vi.waitFor(() => {
+        expect(report).toHaveBeenCalledWith('[api-gateway] Operator release failed:', failure)
+      })
+      expect((await rpc(host, cookie, 'fixture/identity', { label: 'refused' })).status).toBe(401)
+      expect(host.fixture.calls.has('refused')).toBe(false)
+      expect(host.fixture.effects.size).toBe(0)
+      await host.ctx.fiber.dispose()
+      expect(disposing).toHaveBeenCalledOnce()
+    } finally {
+      disposing.mockRestore()
+      report.mockRestore()
+    }
+  })
+
+  it('releases admission when the underlying socket is destroyed before upgrade', async () => {
+    const host = await boot()
+    const cookie = await exchange(host, 'none')
+    const admit = host.ctx.connection.admitConnection.bind(host.ctx.connection)
+    const admission = vi.spyOn(host.ctx.connection, 'admitConnection').mockImplementationOnce((request) => {
+      const result = admit(request)
+      if (!(request instanceof IncomingMessage)) throw new Error('fixture expected a Node upgrade request')
+      request.socket.destroy()
+      return result
+    })
+    const upgrade = vi.spyOn(RemoteStreamMuxServer.prototype, 'handleUpgrade')
+    try {
+      const client = socketClient(host, cookie)
+      await client.closed
+      expect(client.socket.readyState).toBe(WebSocket.CLOSED)
+      expect(upgrade).not.toHaveBeenCalled()
+      expect((await rpc(host, cookie, 'fixture/identity', { label: 'refused' })).status).toBe(401)
+      expect(host.fixture.calls.has('refused')).toBe(false)
+    } finally {
+      admission.mockRestore()
+      upgrade.mockRestore()
+    }
+  })
+
+  it('releases admission and closes the socket when the WebSocket upgrade throws', async () => {
+    const host = await boot()
+    const cookie = await exchange(host, 'none')
+    const failure = new Error('fixture WebSocket upgrade failure')
+    const upgrade = vi.spyOn(RemoteStreamMuxServer.prototype, 'handleUpgrade').mockImplementationOnce(() => {
+      throw failure
+    })
+    const report = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const client = socketClient(host, cookie)
+      await client.closed
+      expect(client.socket.readyState).toBe(WebSocket.CLOSED)
+      expect(report).toHaveBeenCalledWith('[api-gateway] Remote stream upgrade failed:', failure)
+      expect((await rpc(host, cookie, 'fixture/identity', { label: 'refused' })).status).toBe(401)
+      expect(host.fixture.calls.has('refused')).toBe(false)
+      await close(await mux(host, await exchange(host, 'none')))
+    } finally {
+      upgrade.mockRestore()
+      report.mockRestore()
+    }
   })
 
   it('lets an admitted unary finish after its lifecycle socket closes', async () => {
