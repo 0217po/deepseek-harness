@@ -1,6 +1,6 @@
 import { Fragment, memo, useMemo } from 'react'
 import { fileMediaUrl } from '@deepseek-ai/dsh-util-workspace-path'
-import type { PropsRenderFactories, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ReactNode } from 'react'
 import { JsonBlock, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MarkdownFileMentions, MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -27,8 +27,9 @@ export function localPathMediaUrl(base: string, value: string): string | undefin
   return fileMediaUrl(base, path)
 }
 
-export interface AssistantMarkdownProps extends Pick<PropsRenderSlots<'conversation.chat.reasoning.body'>, 'renderSlot'>,
-  Pick<PropsRenderFactories, 'renderFactorySlot'>, Pick<ChatNodeOwnerProps, 'loadImage'> {
+export interface AssistantMarkdownProps extends
+  Pick<PropsRenderSlots<'conversation.chat.reasoning.body' | 'conversation.chat.message.images'>, 'renderSlot'>,
+  Pick<ChatNodeOwnerProps, 'loadImage'> {
   /** Render only the requested business portion, preserving original block indexes. */
   groupPart?: string | undefined
   /** Stable Hook forwarded to each independently expandable reasoning block. */
@@ -53,7 +54,7 @@ export interface AssistantMarkdownProps extends Pick<PropsRenderSlots<'conversat
 
 /** Renders non-blank reasoning blocks as independent disclosures alongside the response. */
 export const AssistantMarkdown = memo(function AssistantMarkdown({
-  blocks, streaming, interrupted, loadImage, renderFactorySlot, groupPart, useDisclosure,
+  blocks, streaming, interrupted, loadImage, groupPart, useDisclosure,
   reasoningHidden = false, usePresentation, revealProcess, mentions, renderSlot, useGroupAction, t,
 }: AssistantMarkdownProps) {
   // Stable per locale revision (t identity changes on switch): a fresh object
@@ -120,7 +121,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
         }
         rendered.push(
           <Fragment key={start}>
-            {renderFactorySlot('conversation.message.images.view', {
+            {renderSlot('conversation.chat.message.images', {
               images: group.map(({ attachment }) => ({ attachment })), loadImage, align: 'start',
             })}
           </Fragment>,

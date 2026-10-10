@@ -37,9 +37,9 @@ kind: "package-reference"
 
 `ChatView` 通过节点列表外围既有的 `MarkdownDelegateProvider` 提供文件及 HTTP(S) 导航，直接传入 `requestOpenFile`、`openExternalLink` 和 `fileImages`。文件打开动作保留 Chat 的失败反馈与重试处理。Assistant Markdown 文件链接在消息落定后可于右侧栏打开，包括未修改文件的引用。相对路径基于当前查看的 Session 工作区解析；绝对路径仍使用同一 Session 的文件系统访问。`#L24` 和 `#L24-L30` 定位到指定起始行，并复用现有文件标签。文件缺失时显示预览错误状态。
 
-原生消息图片渲染通过显式 props 接收 `loadImage`：`AssistantNodeView` 将它传给 `AssistantMarkdown`，用户消息、待处理 steering 和本地回显的包装层则通过 `UserStyleBubble` 将它传给 `conversation.chat.user.content`。`AssistantMarkdown` 和 `UserContent` 在各自的图片绘制位置，通过框架 `renderFactorySlot` 调用 `conversation.message.images.view`，提供图片来源、loader 和布局参数。入口 Factory 拥有可替换的 `conversation.message.images` Slot，官方条目复用 `conversation.message.images.content`。跨插件的 Chat 节点 props 和图片 Factory 保留显式 loader。
+原生消息图片使用独立的用户与输出位置。`conversation.chat.user.content` Factory 声明 `conversation.chat.user.images`，由 `UserContent` 渲染；Assistant 节点注册声明 `conversation.chat.message.images`，由 `AssistantMarkdown` 渲染。两者通过显式 props 接收图片来源、授权 `loadImage` 和布局参数。官方 `MessageImages` 条目调用共享的 root 作用域 `conversation.images.content` Factory。每个位置均可独立替换，无需复制画廊实现。
 
-Session 作用域的 `conversation.chat.user.content` Factory 只渲染用户内容区域：文本、额外内容块、按输入顺序排列的图片／文件附件（含图片预览）及引用摘要。[`UserContentInput`](<src/client/contract/slots.ts#L225-L244>) 携带预处理的 `content`、显式 `loadImage`，以及 `references` 中可选的 `openFile`／`openSkill` 配对动作；省略这些动作时，引用与待处理气泡一样不可点击。框架提供 renderer 和 `chat` locale。直接调用需要实际的 Session 绑定及相应图片 Factory／Slot 注册，并由调用方自带行包装层。
+Session 作用域的 `conversation.chat.user.content` Factory 只渲染用户内容区域：文本、额外内容块、按输入顺序排列的图片／文件附件及引用摘要。[`UserContentInput`](src/client/contract/slots.ts) 携带预处理的 `content`、变换 `facts`、显示 props 和显式 `loadImage`；引用动作由节点自己的 Injection 提供。正文调用共享 `conversation.user.text` Factory，图片调用自身拥有的图片 Slot。直接调用需要 Session 绑定，行包装层由调用方提供。
 
 `UserStyleBubble` 和[各来源包装层](<src/client/chat/MessageItem.tsx#L157-L309>) 保留用户行、key、pending／echo 标记、时间、复制控件及其他消息操作。内容 Factory 不读取来源专属模型或私有 Context，也不是全局用户内容替换入口。
 

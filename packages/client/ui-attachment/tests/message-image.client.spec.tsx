@@ -275,12 +275,12 @@ describe('ImageGallery', () => {
     runtime.ctx.provide('locale', locale)
     new UiConversation(runtime.ctx, runtime.sessions)
     runtime.slots.installLocale(locale)
-    await runtime.declare({ 'conversation.message.images': { kind: 'single', scope: 'session' } })
+    await runtime.declare({ 'conversation.chat.message.images': { kind: 'single', scope: 'session' } })
     await runtime.mount(attachmentPlugin)
     await runtime.sessions.add({ id: 'message-images-test' })
     const session = runtime.sessions.retainFor(runtime.ctx, SessionId('message-images-test'))
     const loadImage = vi.fn().mockResolvedValue('blob:slot-image')
-    const slot = runtime.renderSlot('conversation.message.images', {
+    const slot = runtime.renderSlot('conversation.chat.message.images', {
       images: [{ attachment }], loadImage, align: 'end',
     }, { session })
     const { view, container } = slot

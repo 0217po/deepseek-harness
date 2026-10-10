@@ -27,7 +27,6 @@ import {
 import type { TrajectorySnapshot } from './trajectory-contract.ts'
 import { registerTrajectoryToolDefinition } from './trajectory-tool-definition.ts'
 import { TrajectoryView, type TrajectoryViewInjected } from './TrajectoryView.tsx'
-import { TrajectoryImagesView } from './TrajectoryImagesView.tsx'
 
 export type { TrajectoryKey } from './locales.ts'
 export type {
@@ -77,17 +76,13 @@ export function apply(ctx: Context): void {
     hooks: ['trajectory'],
     resolve: binding => ({ hooks: { trajectory: trajectorySource(binding) } }),
   })
-  ctx.slots.registerFactory({
-    name: 'conversation.trajectory.images.view',
-    scope: 'session',
-    children: { 'conversation.trajectory.images': { kind: 'single', scope: 'session' } },
-  }, TrajectoryImagesView)
   ctx.slots.inject('conversation.view', () => ctx.slots.register({
     name: 'conversation.view',
     id: 'trajectory',
     order: 10,
     locale: NS,
     label: () => t('view.trajectory'),
+    children: { 'conversation.trajectory.images': { kind: 'single', scope: 'session' } },
     inject: (sessionId: SessionId): TrajectoryViewInjected => {
       const session = ctx.sessions.binding(sessionId)?.session
       if (session === undefined) {

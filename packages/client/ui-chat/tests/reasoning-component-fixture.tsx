@@ -21,9 +21,10 @@ function content(input: ReasoningContentInput) {
 }
 
 /** Render the production child component without emulating a registry or its dispatch. */
-export const renderReasoningSlot = (
-  (_key: 'conversation.chat.reasoning.body', input: ReasoningContentInput) => content(input)
-) as AssistantMarkdownProps['renderSlot']
+export const renderReasoningSlot: AssistantMarkdownProps['renderSlot'] = (key: string, input: object) => {
+  if (key !== 'conversation.chat.reasoning.body') throw new Error(`Unexpected reasoning Slot: ${key}`)
+  return content(input as ReasoningContentInput)
+}
 
 /** Supply the official component at the Factory call seam of a standalone component unit. */
 export const renderReasoningFactory: PropsRenderFactories['renderFactorySlot'] = (name, input) => {

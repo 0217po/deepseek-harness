@@ -279,9 +279,6 @@ type ToolOwner = Pick<ChatNodeOwnerProps, 'openFile' | 'inspectCall'> & {
 const renderCommandSlot: React.ComponentProps<typeof CommandNodeView>['renderSlot'] =
   (_key, _owner, opts) => opts?.fallback ?? null
 const renderTurnTailSlot: React.ComponentProps<typeof TurnTailNodeView>['renderSlot'] = () => null
-const assistantSlots: Pick<React.ComponentProps<typeof AssistantNodeView>, 'renderSlot'> = {
-  renderSlot: renderReasoningSlot,
-}
 
 function HarnessChatFlow({ standard, owner, hookContext, renderSlot }: {
   readonly standard: HarnessStandardProps
@@ -297,13 +294,14 @@ function HarnessChatFlow({ standard, owner, hookContext, renderSlot }: {
   return <ChatFlow {...shared} {...owner} {...hooks} renderSlot={renderSlot} />
 }
 
-function HarnessChatNode({ standard, owner, hookContext, usePerformanceUsage, toolOwners, fallback }: {
+function HarnessChatNode({ standard, owner, hookContext, usePerformanceUsage, toolOwners, fallback, renderAssistantSlot }: {
   readonly standard: HarnessStandardProps
   readonly owner: RoutedChatNodeOwner
   readonly hookContext: ChatNodeHookContext
   readonly usePerformanceUsage: React.ComponentProps<typeof TurnTailNodeView>['usePerformanceUsage']
   readonly toolOwners: ToolOwner[]
   readonly fallback: React.ReactNode
+  readonly renderAssistantSlot: React.ComponentProps<typeof AssistantNodeView>['renderSlot']
 }) {
   const hooks = useMemo(() => ({
     useTurnData: CHAT_NODE_INJECT.hooks.turnData(standard, hookContext),
@@ -320,7 +318,7 @@ function HarnessChatNode({ standard, owner, hookContext, usePerformanceUsage, to
     case 'context':
       return <ContextMessageNodeView {...nodeProps} node={owner.node} />
     case 'assistant-step':
-      return <AssistantNodeView {...nodeProps} node={owner.node} {...assistantSlots} />
+      return <AssistantNodeView {...nodeProps} node={owner.node} renderSlot={renderAssistantSlot} />
     case 'command':
       return <CommandNodeView {...nodeProps} node={owner.node} renderSlot={renderCommandSlot} />
     case 'manual-compaction':
@@ -425,11 +423,19 @@ function makeHarness(
   const usePerformanceUsage = bindSnapshotSelector(performanceUsage)
   let nodeSlotOverride: NodeRenderer | undefined
   let imageSlotOverride: ImageRenderer | undefined
+  const renderImages = (name: string, owner: object, options?: { fallback?: React.ReactNode }) => {
+    if ((name !== 'conversation.chat.user.images' && name !== 'conversation.chat.message.images') || !isImageOwner(owner)) {
+      throw new Error(`Unexpected Chat image Slot: ${name}`)
+    }
+    return imageSlotOverride?.(owner) ?? options?.fallback ?? null
+  }
+  const renderAssistantSlot: React.ComponentProps<typeof AssistantNodeView>['renderSlot'] = (name, owner, options) =>
+    name === 'conversation.chat.message.images' ? renderImages(name, owner, options) : renderReasoningSlot(name, owner, options)
   const renderNodeSlot: NodeRenderer = (key, owner, opts) => {
     if (nodeSlotOverride !== undefined) return nodeSlotOverride(key, owner, opts)
     return <HarnessChatNode standard={props} owner={owner}
       hookContext={opts.hookContext} usePerformanceUsage={usePerformanceUsage}
-      toolOwners={toolOwners} fallback={opts.fallback} />
+      toolOwners={toolOwners} fallback={opts.fallback} renderAssistantSlot={renderAssistantSlot} />
   }
   const renderFlowSlot: ChatFlowSlotProps['renderSlot'] = (key: string, owner: object, opts?: {
     fallback?: React.ReactNode
@@ -440,14 +446,9 @@ function makeHarness(
     }
     throw new Error(`Undeclared flow child: ${key}`)
   }
-  const renderFactorySlot: PropsRenderFactories['renderFactorySlot'] = (name, owner, opts) => {
-    if (name === 'conversation.chat.user.content') {
-      return renderUserContent(owner as UserContentInput, renderFactorySlot, props.t)
-    }
-    if (name !== 'conversation.message.images.view' || !isImageOwner(owner)) {
-      throw new Error(`Unexpected Chat image Factory call: ${name}`)
-    }
-    return imageSlotOverride?.(owner) ?? opts?.fallback ?? null
+  const renderFactorySlot: PropsRenderFactories['renderFactorySlot'] = (name, owner) => {
+    if (name !== 'conversation.chat.user.content') throw new Error(`Unexpected Chat Factory: ${name}`)
+    return renderUserContent(owner as UserContentInput, renderImages, props.t)
   }
   const renderSlot: FlowRenderer = (key, owner, opts) => {
     if (key !== 'conversation.chat.flow') throw new Error(`Undeclared ChatView child: ${key}`)

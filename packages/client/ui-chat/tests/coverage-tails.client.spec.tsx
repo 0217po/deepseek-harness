@@ -12,7 +12,6 @@ import { useSearchableHidden } from '../src/client/chat/searchable-hidden.ts'
 import { zh } from '../src/client/locale.ts'
 
 const t: AssistantMarkdownProps['t'] = makeTranslate(zh, commonZh)
-const renderFactorySlot: AssistantMarkdownProps['renderFactorySlot'] = () => null
 
 afterEach(cleanup)
 
@@ -28,7 +27,7 @@ describe('tails', () => {
           { kind: 'other', block: { type: 'mystery' } },
         ]}
         streaming
-        loadImage={unusedImageLoader} renderFactorySlot={renderFactorySlot}
+        loadImage={unusedImageLoader}
       />,
     )
     expect(view.getByText('思考')).toBeTruthy()
@@ -41,7 +40,7 @@ describe('tails', () => {
         blocks={[{ kind: 'text', text: 'partial words' }]}
         streaming={false}
         interrupted
-        loadImage={unusedImageLoader} renderFactorySlot={renderFactorySlot}
+        loadImage={unusedImageLoader}
       />,
     )
     expect(stopped.getByText('已停止')).toBeTruthy()
@@ -56,14 +55,14 @@ describe('tails', () => {
         t={t}
         blocks={[{ kind: 'tool-call', callId: 'c', name: 'todo_write', argsRaw: '{}' }]}
         streaming={false}
-        loadImage={unusedImageLoader} renderFactorySlot={renderFactorySlot}
+        loadImage={unusedImageLoader}
       />,
     )
     expect(empty.container.firstChild).toBeNull()
     const blank = render(
       <AssistantMarkdown renderSlot={() => null} useDisclosure={useDisclosure} useGroupAction={useSearchableHidden}
         usePresentation={useDetailedPresentation}
-        t={t} blocks={[]} streaming={false} loadImage={unusedImageLoader} renderFactorySlot={renderFactorySlot} />,
+        t={t} blocks={[]} streaming={false} loadImage={unusedImageLoader} />,
     )
     expect(blank.container.firstChild).toBeNull()
   })

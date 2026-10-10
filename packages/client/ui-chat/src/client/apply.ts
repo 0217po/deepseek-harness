@@ -31,7 +31,6 @@ import { ApprovalCommand } from './chat/ApprovalCommand.tsx'
 import { ChatView } from './chat/ChatView.tsx'
 import { ChatFlow } from './chat/ChatFlow.tsx'
 import { registerChatNodeRenderers } from './chat/register-node-renderers.ts'
-import { MessageImagesView } from './chat/MessageImagesView.tsx'
 import { UserContent } from './chat/UserContent.tsx'
 import { ActivityPill, UsagePill } from './chat/StatsPills.tsx'
 import { registerConversationNodes } from './conversation-nodes/register.ts'
@@ -172,12 +171,8 @@ export function apply(ctx: Context): void {
   const performanceUsage = performancePolicy.mode
   registerChatNodeRenderers(ctx, performanceUsage, presentation)
   ctx.slots.registerFactory({
-    name: 'conversation.message.images.view',
-    scope: 'session',
-    children: { 'conversation.message.images': { kind: 'single', scope: 'session' } },
-  }, MessageImagesView)
-  ctx.slots.registerFactory({
     name: 'conversation.chat.user.content', scope: 'session', locale: NS,
+    children: { 'conversation.chat.user.images': { kind: 'single', scope: 'session' } },
   }, UserContent)
 
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({

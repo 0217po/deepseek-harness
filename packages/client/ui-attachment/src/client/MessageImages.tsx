@@ -11,7 +11,7 @@ import { messageImageLabels } from './labels.ts'
  * @returns the official gallery; no Session binding is needed by this component.
  */
 export function MessageImagesContent({ images, loadImage, align, compact = false, thumbnail = false, labels, t }:
-FactoryComponentPropsOf<'conversation.message.images.content'>) {
+FactoryComponentPropsOf<'conversation.images.content'>) {
   const resolved = useMemo(() => labels ?? messageImageLabels(t), [labels, t])
   return <ImageGallery images={images} load={loadImage} align={align}
     compact={compact} thumbnail={thumbnail} labels={resolved} />
@@ -23,7 +23,7 @@ FactoryComponentPropsOf<'conversation.message.images.content'>) {
  * @returns the official gallery occurrence.
  */
 export function MessageImages({ images, loadImage, align, compact, thumbnail, renderFactorySlot }: MessageImagesProps) {
-  return renderFactorySlot('conversation.message.images.content', {
+  return renderFactorySlot('conversation.images.content', {
     images, loadImage, align,
     ...compact === undefined ? {} : { compact },
     ...thumbnail === undefined ? {} : { thumbnail },

@@ -49,7 +49,7 @@ Trajectory 附件行使用 48px 方形缩略图，完整缩放图片而不裁剪
 <details>
 <summary>实现细节——点击展开</summary>
 
-插件提供 root 作用域的 `conversation.message.images.content` Factory，并通过 `ctx.slots.inject` 等待 `conversation.input.attachments`、`conversation.message.images`、`conversation.trajectory.images` 与 `tool.call.images`。各官方图片条目以优先级 100 注册，调用同一 Content Factory；Factory 负责画廊尺寸、预览状态和默认文案。调用者提供引用、授权 loader、布局提示及可选的完整 labels。Factory 复用本包画廊，不读取 Session 状态；读取和 URL 缓存仍由资源所有者负责。Chat 和 Trajectory 仍拥有各自可替换的图片位置。Composer rail 与拖放目标仍为普通条目，包入口不导出任何组件。
+插件提供 root 作用域的 `conversation.images.content` Factory。官方 `MessageImages` 条目通过 `ctx.slots.inject`，以优先级 100 填入 `conversation.chat.user.images`、`conversation.chat.message.images`、`conversation.trajectory.images` 和 `tool.call.images`。较低优先级的条目只替换自身所在位置，移除后恢复官方条目。各默认条目复用同一画廊，显式传入图片引用、授权 loader、布局参数和可选的完整 labels。Factory 负责画廊展示与默认文案，不拥有 Session 状态或读取授权。各领域拥有自己的 Slot 声明。Composer 附件栏仍为独立条目，包入口不导出任何组件。
 
 | 文件 | 职责 |
 |---|---|

@@ -49,7 +49,7 @@ While a file drag is over the page, the full-viewport overlay announces the drop
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The plugin provides the root-scoped `conversation.message.images.content` Factory and waits for `conversation.input.attachments`, `conversation.message.images`, `conversation.trajectory.images`, and `tool.call.images` through `ctx.slots.inject`. Each official image entry registers at priority 100 and calls the same Content Factory, which owns gallery sizing, preview state, and default labels. Callers supply references, an authorized loader, layout hints, and optional complete labels. The Factory reuses this package's gallery without reading Session state; loading and URL caching remain with the resource owner. Chat and Trajectory retain ownership of their replaceable image positions. The composer rail and drop target remain ordinary entries, and the package entry exports no components.
+The plugin provides the root-scoped `conversation.images.content` Factory. Its official `MessageImages` entries fill `conversation.chat.user.images`, `conversation.chat.message.images`, `conversation.trajectory.images`, and `tool.call.images` at priority 100 through `ctx.slots.inject`. A lower-priority entry replaces only its own position; removing it restores the official entry. All defaults reuse one gallery with explicit image references, authorized loader, layout hints, and optional complete labels. The Factory owns gallery presentation and default copy, not Session state or read authorization. Each domain owns its Slot declaration. The composer attachment rail remains a separate entry, and the package entry exports no components.
 
 | File | Role |
 |---|---|

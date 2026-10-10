@@ -28,7 +28,8 @@ async function bench() {
     children: {
       'conversation.user.text.node': { kind: 'keyed', scope: 'session' },
       'conversation.input.attachments': { kind: 'single', scope: 'session-maybe' },
-      'conversation.message.images': { kind: 'single', scope: 'session' },
+      'conversation.chat.message.images': { kind: 'single', scope: 'session' },
+      'conversation.chat.user.images': { kind: 'single', scope: 'session' },
       'conversation.trajectory.images': { kind: 'single', scope: 'session' },
       'tool.call.images': { kind: 'single', scope: 'session' },
     },
@@ -69,16 +70,17 @@ describe('attachment plugin', () => {
     expect(ctx.slots.entries('conversation.user.text.node')[0]?.inject).toBeTypeOf('function')
     expect(ctx.uiConversation.userText.entries().map(rule => rule.id)).toEqual(['attachment'])
     expect(registerFactory).toHaveBeenCalledWith({
-      name: 'conversation.message.images.content', scope: 'root', locale: 'conversation',
+      name: 'conversation.images.content', scope: 'root', locale: 'conversation',
     }, MessageImagesContent)
-    expect(ctx.slots.snapshot('factory:conversation.message.images.content')).toHaveLength(1)
+    expect(ctx.slots.snapshot('factory:conversation.images.content')).toHaveLength(1)
     expect(ctx.slots.entries('conversation.input.attachments')).toMatchObject([{
       locale: 'conversation',
       component: ComposerAttachments,
     }])
-    expect(ctx.slots.entries('conversation.message.images')).toMatchObject([{
+    expect(ctx.slots.entries('conversation.chat.message.images')).toMatchObject([{
       component: MessageImages,
     }])
+    expect(ctx.slots.entries('conversation.chat.user.images')).toMatchObject([{ component: MessageImages, options: { priority: 100 } }])
     expect(ctx.slots.entries('conversation.trajectory.images')).toMatchObject([{
       component: MessageImages,
     }])
@@ -91,9 +93,10 @@ describe('attachment plugin', () => {
     expect(ctx.slots.entries('conversation.user.text.node')).toHaveLength(0)
     expect(ctx.uiConversation.userText.entries()).toHaveLength(0)
     expect(ctx.slots.entries('conversation.input.attachments')).toHaveLength(0)
-    expect(ctx.slots.entries('conversation.message.images')).toHaveLength(0)
+    expect(ctx.slots.entries('conversation.chat.message.images')).toHaveLength(0)
+    expect(ctx.slots.entries('conversation.chat.user.images')).toHaveLength(0)
     expect(ctx.slots.entries('conversation.trajectory.images')).toHaveLength(0)
     expect(ctx.slots.entries('tool.call.images')).toHaveLength(0)
-    expect(ctx.slots.snapshot('factory:conversation.message.images.content')).toHaveLength(0)
+    expect(ctx.slots.snapshot('factory:conversation.images.content')).toHaveLength(0)
   })
 })

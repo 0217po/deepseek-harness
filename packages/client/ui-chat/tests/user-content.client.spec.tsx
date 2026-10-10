@@ -11,7 +11,6 @@ import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts
 import type { PropsRenderFactories, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { UserContentAttachment, UserContentData, UserContentInput } from '../src/client/contract/slots.ts'
 import { UserContent } from '../src/client/chat/UserContent.tsx'
-import { MessageImagesView } from '../src/client/chat/MessageImagesView.tsx'
 import { en, NS, zh } from '../src/client/locale.ts'
 import type { UserTextInjected } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { UserTextRegistry } from '../../ui-conversation/src/client/conversation/user-text-registry.ts'
@@ -51,7 +50,7 @@ async function bench() {
   locale.register('reference', { en: referenceEn, zh: referenceZh })
   locale.setLocale('en')
   runtime.slots.installLocale(locale)
-  const imageCalls: PropsRuntime<'conversation.message.images'>[] = []
+  const imageCalls: PropsRuntime<'conversation.chat.user.images'>[] = []
   const openFile = vi.fn<(path: string) => void>()
   const openSkill = vi.fn<(name: string) => void>()
   await runtime.mount({ inject: ['slots'], apply: (ctx) => {
@@ -79,21 +78,20 @@ async function bench() {
       inject: () => ({ openFile }) }, FileReference)
     ctx.slots.register({ name: 'conversation.user.text.node', key: 'folder' }, FolderReference)
     ctx.slots.register({ name: 'conversation.user.text.node', key: 'skill', inject: () => ({ openSkill }) }, SkillReference)
-    ctx.slots.registerFactory({
-      name: 'conversation.message.images.view', scope: 'session',
-      children: { 'conversation.message.images': { kind: 'single', scope: 'session' } },
-    }, MessageImagesView)
-    ctx.slots.register({ name: 'conversation.message.images' }, function ImageProbe(props) {
+    ctx.slots.inject('conversation.chat.user.images', () => ctx.slots.register({ name: 'conversation.chat.user.images' }, function ImageProbe(props) {
       imageCalls.push(props)
       const source = props.images[0]
       if (source === undefined) throw new Error('User content must pass one image to the image Slot')
       const name = 'attachment' in source ? source.attachment.name : source.preview.name
       return <span data-testid="image" data-session={props.sessionId}
         data-current-session={props.useSession(snapshot => snapshot.sessionId)}>{name}</span>
-    })
+    }))
   } })
   const mountContent = () => runtime.mount({ inject: ['slots'], apply: (ctx) => {
-    ctx.slots.registerFactory({ name: 'conversation.chat.user.content', scope: 'session', locale: NS }, UserContent)
+    ctx.slots.registerFactory({
+      name: 'conversation.chat.user.content', scope: 'session', locale: NS,
+      children: { 'conversation.chat.user.images': { kind: 'single', scope: 'session' } },
+    }, UserContent)
   } })
   const owner = await mountContent()
   await runtime.sessions.add({ id: 'user-content' })
@@ -141,7 +139,7 @@ describe('user Content Factory', () => {
     })
   })
 
-  it('keeps mixed files, durable images, and local previews in their prepared order through the image Factory', async () => {
+  it('keeps mixed files, durable images, and local previews in their prepared order through its user-image Slot', async () => {
     const b = await bench()
     const content: UserContentData = {
       ...empty, text: 'Prepared text', attachments: [filePart, durable, { type: 'file', file: { ...file, name: 'last.md' } }, preview],

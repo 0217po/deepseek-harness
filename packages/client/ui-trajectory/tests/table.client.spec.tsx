@@ -8,15 +8,14 @@ import { useState, type ComponentProps, type ReactNode } from 'react'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import type { MessageImageLoader, MessageImagesOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { PropsRenderFactories, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
-import { TrajectoryImagesView } from '../src/client/TrajectoryImagesView.tsx'
+import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { TrajectoryTable as LocalizedTrajectoryTable } from '../src/client/TrajectoryTable.tsx'
 import { deriveTrajectoryLayout, type TrajectoryTurnModel } from '../src/client/layout.ts'
 import { trajectoryRecordId } from '../src/client/trajectory-record.ts'
 import { t, tZh } from './locale.client.ts'
 
 const loadImage: MessageImageLoader = async () => 'blob:trajectory'
-const renderNoFactories: PropsRenderFactories['renderFactorySlot'] = () => null
+const renderNoImages: PropsRenderSlots<'conversation.trajectory.images'>['renderSlot'] = () => null
 
 const RecordImages = ({ images }: MessageImagesOwnerProps) => (
   <div data-testid="record-images" data-count={images.length}>
@@ -29,30 +28,26 @@ const RecordImages = ({ images }: MessageImagesOwnerProps) => (
   </div>
 )
 
-async function imageFactory() {
+async function imageSlotFixture() {
   const runtime = await SlotTestRuntime.create()
   onTestFinished(() => runtime.dispose())
-  runtime.slots.registerFactory({
-    name: 'conversation.trajectory.images.view', scope: 'session',
-    children: { 'conversation.trajectory.images': { kind: 'single', scope: 'session' } },
-  }, TrajectoryImagesView)
-  runtime.slots.register({ name: 'conversation.trajectory.images' }, RecordImages)
   await runtime.sessions.add({ id: 'trajectory-images' })
   const session = runtime.sessions.retainFor(runtime.ctx, SessionId('trajectory-images'))
-  type Seats = PropsRenderFactories & Pick<PropsRenderSlots<'conversation.view'>, 'SessionProvider'>
+  type Seats = PropsRenderSlots<'conversation.trajectory.images'>
   const captured: { seats?: Seats; setContent?: (content: ReactNode) => void } = {}
-  await runtime.root.declare({ 'conversation.view': { kind: 'list', scope: 'session' } }, function TestRoot(props) {
+  await runtime.root.declare({ 'conversation.trajectory.images': { kind: 'single', scope: 'session' } }, function TestRoot(props) {
     const [content, setContent] = useState<ReactNode>(null)
     captured.seats = props
     captured.setContent = setContent
     const { SessionProvider } = props
     return <SessionProvider session={session}>{content}</SessionProvider>
   })
+  runtime.slots.register({ name: 'conversation.trajectory.images' }, RecordImages)
   const view = runtime.renderRoot()
   const { seats, setContent } = captured
   if (seats === undefined || setContent === undefined) throw new Error('trajectory image fixture root did not render')
   return {
-    renderFactorySlot: seats.renderFactorySlot,
+    renderSlot: seats.renderSlot,
     render: (content: ReactNode) => {
       act(() => { setContent(content) })
       return view
@@ -63,8 +58,8 @@ async function imageFactory() {
 type TableProps = ComponentProps<typeof LocalizedTrajectoryTable>
 
 function TrajectoryTable(
-  props: Omit<TableProps, 't' | 'renderFactorySlot' | 'loadImage'>
-    & Partial<Pick<TableProps, 'renderFactorySlot' | 'loadImage'>>,
+  props: Omit<TableProps, 't' | 'renderSlot' | 'loadImage'>
+    & Partial<Pick<TableProps, 'renderSlot' | 'loadImage'>>,
 ) {
   const inferred: Array<NonNullable<typeof props.requestNumbers>[number] & { firstIndex: number }> = []
   for (const turn of props.turns) {
@@ -98,7 +93,7 @@ function TrajectoryTable(
     .map(({ firstIndex: _firstIndex, ...request }, index) => ({ ...request, number: index + 1 }))
   return (
     <LocalizedTrajectoryTable
-      renderFactorySlot={renderNoFactories} loadImage={loadImage}
+      renderSlot={renderNoImages} loadImage={loadImage}
       {...props}
       requestNumbers={requestNumbers}
       t={t}
@@ -206,7 +201,7 @@ describe('TrajectoryTable', () => {
     render(
       <LocalizedTrajectoryTable
         t={tZh}
-        renderFactorySlot={renderNoFactories} loadImage={loadImage}
+        renderSlot={renderNoImages} loadImage={loadImage}
         turns={TURNS}
         collapsedTurns={new Set<number>()}
         onToggleTurn={() => {}}
@@ -1003,7 +998,7 @@ describe('TrajectoryTable', () => {
     }]
     const table = (status: 'running' | 'complete' | 'error') => (
       <LocalizedTrajectoryTable
-        turns={turns} {...FOLD_PROPS} t={translate} renderFactorySlot={renderNoFactories} loadImage={loadImage}
+        turns={turns} {...FOLD_PROPS} t={translate} renderSlot={renderNoImages} loadImage={loadImage}
         requestNumbers={[{
           turn: 1, step: 1, group: 'Step 1', number: 1, status,
           error: 'upstream 503', errorCode: 'SERVER', retry: 1, maxRetries: 2,
@@ -1172,10 +1167,10 @@ describe('TrajectoryTable', () => {
         partial: null,
         runningCalls: [],
       }, translate)
-      const { render, renderFactorySlot: factorySlot } = await imageFactory()
-      const renderFactorySlot = vi.fn(factorySlot)
+      const { render, renderSlot: slotRenderer } = await imageSlotFixture()
+      const renderSlot = vi.fn((name: 'conversation.trajectory.images', owner: object) => slotRenderer(name, owner as MessageImagesOwnerProps))
       const view = render(<LocalizedTrajectoryTable turns={turns} {...FOLD_PROPS} t={translate}
-        renderFactorySlot={renderFactorySlot} loadImage={loadImage} />)
+        renderSlot={renderSlot} loadImage={loadImage} />)
       fireEvent.click(view.container.querySelector('[data-trajectory-row-key]')!)
       for (const tab of [summaryTab, previewTab]) {
         fireEvent.click(screen.getByRole('tab', { name: tab }))
@@ -1184,7 +1179,7 @@ describe('TrajectoryTable', () => {
         expect(names).toEqual([imageLabel, file.name, imageLabel.replace('1', '2')])
         expect(within(list).getByText('TXT · 0B')).toBeTruthy()
         expect(within(list).getAllByText('image/png · 68B · 40 × 800')).toHaveLength(2)
-        expect(renderFactorySlot).toHaveBeenCalledWith('conversation.trajectory.images.view', {
+        expect(renderSlot).toHaveBeenCalledWith('conversation.trajectory.images', {
           images: [{ attachment, label: imageLabel }], align: 'start', thumbnail: true, loadImage,
         })
       }
@@ -1203,7 +1198,7 @@ describe('TrajectoryTable', () => {
   )
 
   it('renders a tool-result image through the shared gallery in the Result tab', async () => {
-    const { render, renderFactorySlot } = await imageFactory()
+    const { render, renderSlot } = await imageSlotFixture()
     const attachment = {
       attachmentId: AttachmentId(`sha256:${'b'.repeat(64)}`),
       mediaType: 'image/png',
@@ -1229,7 +1224,7 @@ describe('TrajectoryTable', () => {
       }],
     }]
 
-    render(<TrajectoryTable turns={turns} {...FOLD_PROPS} renderFactorySlot={renderFactorySlot} />)
+    render(<TrajectoryTable turns={turns} {...FOLD_PROPS} renderSlot={renderSlot} />)
     fireEvent.click(screen.getByRole('row', { name: /TOOL/ }))
     fireEvent.click(screen.getByRole('tab', { name: 'Result' }))
 
@@ -1240,7 +1235,7 @@ describe('TrajectoryTable', () => {
   })
 
   it('keeps the failure name beside an image-only error result', async () => {
-    const { render, renderFactorySlot } = await imageFactory()
+    const { render, renderSlot } = await imageSlotFixture()
     const attachment = {
       attachmentId: AttachmentId(`sha256:${'c'.repeat(64)}`),
       mediaType: 'image/png',
@@ -1267,7 +1262,7 @@ describe('TrajectoryTable', () => {
       }],
     }]
 
-    render(<TrajectoryTable turns={turns} {...FOLD_PROPS} renderFactorySlot={renderFactorySlot} />)
+    render(<TrajectoryTable turns={turns} {...FOLD_PROPS} renderSlot={renderSlot} />)
     fireEvent.click(screen.getByRole('row', { name: /TOOL/ }))
     fireEvent.click(screen.getByRole('tab', { name: 'Result' }))
 

@@ -34,14 +34,18 @@ export function apply(ctx: ClientContext): void {
     }),
   }, AttachmentReference))
   ctx.slots.registerFactory({
-    name: 'conversation.message.images.content', scope: 'root', locale: 'conversation',
+    name: 'conversation.images.content', scope: 'root', locale: 'conversation',
   }, MessageImagesContent)
   ctx.slots.inject('conversation.input.attachments', () => ctx.slots.register({
     name: 'conversation.input.attachments',
     locale: 'conversation',
   }, ComposerAttachments))
-  ctx.slots.inject('conversation.message.images', () => ctx.slots.register({
-    name: 'conversation.message.images',
+  ctx.slots.inject('conversation.chat.message.images', () => ctx.slots.register({
+    name: 'conversation.chat.message.images',
+    priority: 100,
+  }, MessageImages))
+  ctx.slots.inject('conversation.chat.user.images', () => ctx.slots.register({
+    name: 'conversation.chat.user.images',
     priority: 100,
   }, MessageImages))
   ctx.slots.inject('conversation.trajectory.images', () => ctx.slots.register({

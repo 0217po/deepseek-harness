@@ -2,21 +2,21 @@
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-09-message-node-factories-and-delegates.md
-/agent-note-message-image-factories-with-explicit-loaders:
-  en: 2643c4807b39dfd5
-  zh: a44a57b04b5835f6
-/agent-note-message-image-factories-with-explicit-loaders/problem:
-  en: 2d301b07133242c4
-  zh: 695d3c0553e96268
-/agent-note-message-image-factories-with-explicit-loaders/decision:
-  en: 559cc1ca16188e22
-  zh: 155da636b04fed38
-/agent-note-message-image-factories-with-explicit-loaders/alternatives-considered:
-  en: 401aadb0bebc31f6
-  zh: 064f9612f3bcf87a
-/agent-note-message-image-factories-with-explicit-loaders/verification:
-  en: 4efdf85afc83048a
-  zh: 9be23ccebfc14f13
-/agent-note-message-image-factories-with-explicit-loaders/consequences:
-  en: 59066f3fab26b634
-  zh: d027037d84165128
+/agent-note-domain-image-slots-and-a-shared-gallery-factory:
+  en: bce6358fb4211261
+  zh: bfebd3bbdb1affb1
+/agent-note-domain-image-slots-and-a-shared-gallery-factory/problem:
+  en: ec6ffd7f737a1f56
+  zh: 5e368f87ce52e28c
+/agent-note-domain-image-slots-and-a-shared-gallery-factory/decision:
+  en: b807777fd48560eb
+  zh: e7b1625bd4448ce1
+/agent-note-domain-image-slots-and-a-shared-gallery-factory/alternatives-considered:
+  en: db14fd6d0e2ce78b
+  zh: c29a19cde692a1dd
+/agent-note-domain-image-slots-and-a-shared-gallery-factory/verification:
+  en: d82e036edb981e7c
+  zh: 5a05e9a2e6489d21
+/agent-note-domain-image-slots-and-a-shared-gallery-factory/consequences:
+  en: ac387ffb5a316920
+  zh: ab584aaafe554278

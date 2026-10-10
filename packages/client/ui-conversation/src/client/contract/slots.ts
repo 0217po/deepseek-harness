@@ -184,7 +184,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       }
     }
     /** Official reusable gallery, with explicit authorized loading and optional caller copy. */
-    'conversation.message.images.content': {
+    'conversation.images.content': {
       scope: 'root'
       props: MessageImagesContentInput
       locale: 'conversation'

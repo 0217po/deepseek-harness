@@ -14,7 +14,6 @@ import { zh } from '../src/client/locale.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 
 const t: AssistantMarkdownProps['t'] = makeTranslate(zh, commonZh)
-const renderFactorySlot: AssistantMarkdownProps['renderFactorySlot'] = () => null
 
 afterEach(() => {
   cleanup()
@@ -30,7 +29,7 @@ describe('render branch tails', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text: 'done thinking' }, { kind: 'text', text: 'answer' }]}
         streaming
-        loadImage={unusedImageLoader} renderFactorySlot={renderFactorySlot}
+        loadImage={unusedImageLoader}
       />,
     )
     // reasoning at index 0 with a later block: running is false → ok state.
@@ -73,7 +72,7 @@ describe('render branch tails', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text: 'still thinking' }]}
         streaming
-        loadImage={unusedImageLoader} renderFactorySlot={renderFactorySlot}
+        loadImage={unusedImageLoader}
       />,
     )
     expect(view.container.querySelector('[data-state="running"]')).not.toBeNull()

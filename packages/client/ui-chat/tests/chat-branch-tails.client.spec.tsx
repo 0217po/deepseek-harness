@@ -15,7 +15,7 @@ import {
   CompactionNodeView, ContextMessageNodeView, RetryNodeView, UnknownNodeView,
   UserMessageNodeView,
 } from '../src/client/chat/MessageItem.tsx'
-import { AssistantMarkdown, type AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
+import { AssistantMarkdown } from '../src/client/chat/AssistantMarkdown.tsx'
 import { useDetailedPresentation } from './presentation-fixture.client.ts'
 import { unusedImageLoader } from './reasoning-component-fixture.tsx'
 import { createUserContentFixture } from './user-content-component-fixture.tsx'
@@ -32,7 +32,7 @@ afterEach(() => {
 })
 
 const t: ChatNodeViewProps['t'] = makeTranslate(zh, commonZh)
-const renderFactorySlot: AssistantMarkdownProps['renderFactorySlot'] = () => null
+const renderUserImages: Parameters<ReturnType<typeof createUserContentFixture>>[1] = () => null
 let renderUserContent: ReturnType<typeof createUserContentFixture>
 beforeEach(() => { renderUserContent = createUserContentFixture() })
 const RETRY_ID = 'retry-fixture' as Extract<ConversationNode, { kind: 'model-retry' }>['retryId']
@@ -73,7 +73,7 @@ function MessageItem({ node, t: translate, referenceLabels, skillNames }: Messag
   }
   const renderUserFactory: ChatNodeViewProps['renderFactorySlot'] = (name, input) => {
     if (name !== 'conversation.chat.user.content') throw new Error(`Unexpected user Factory: ${name}`)
-    return renderUserContent(input as UserContentInput, renderFactorySlot, translate)
+    return renderUserContent(input as UserContentInput, renderUserImages, translate)
   }
   const props: Partial<Omit<ChatNodeViewProps, 'node'>> & { node: ChatConversationViewNode } = {
     node: viewNode, t: translate, loadImage: unusedImageLoader, renderFactorySlot: renderUserFactory,
@@ -1065,7 +1065,7 @@ describe('small branch tails', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text: 'one-liner' }]}
         streaming={false}
-        loadImage={unusedImageLoader} renderFactorySlot={renderFactorySlot}
+        loadImage={unusedImageLoader}
       />,
     )
     expect(view.getByText('one-liner')).toBeTruthy()

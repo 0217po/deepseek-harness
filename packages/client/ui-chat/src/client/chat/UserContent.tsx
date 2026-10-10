@@ -12,7 +12,7 @@ const EMPTY_LABELS: readonly string[] = []
  * @param props - prepared content, facts, authorized image loader, and framework Factory/locale seats.
  * @returns the content stack using the existing user-message layout.
  */
-export function UserContent({ content, loadImage, facts, interactive = false, ellipsis = false, renderFactorySlot, t }:
+export function UserContent({ content, loadImage, facts, interactive = false, ellipsis = false, renderSlot, renderFactorySlot, t }:
 FactoryComponentPropsOf<'conversation.chat.user.content'>) {
   const { text, attachments, extraBlocks, referenceLabels = EMPTY_LABELS } = content
   const compactImages = attachments.length > 1
@@ -25,7 +25,7 @@ FactoryComponentPropsOf<'conversation.chat.user.content'>) {
           {attachments.map((attachment, index) => attachment.type === 'image'
             ? (
               <Fragment key={`image:${index}`}>
-                {renderFactorySlot('conversation.message.images.view', {
+                {renderSlot('conversation.chat.user.images', {
                   images: [attachment.image], loadImage, align: 'end', compact: compactImages,
                 })}
               </Fragment>

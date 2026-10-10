@@ -352,8 +352,9 @@ export type ChatViewSlotProps =
   & InjectFace<ChatViewInjected>
   & PropsLocale<'chat'>
 
-/** Full props of the durable-message image renderer. */
-export type MessageImagesProps = PropsRuntime<'conversation.message.images'> & PropsRenderFactories
+/** Full props shared by the user and output image entries. */
+export type MessageImagesProps =
+  PropsRuntime<'conversation.chat.user.images' | 'conversation.chat.message.images'> & PropsRenderFactories
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SessionStandardProps {
@@ -372,12 +373,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       scope: 'session'
       props: UserContentInput
       locale: 'chat'
-    }
-    /** Portable Chat image position, retaining the existing image Slot. */
-    'conversation.message.images.view': {
-      scope: 'session'
-      props: MessageImagesOwnerProps
-      children: { 'conversation.message.images': { kind: 'single'; scope: 'session' } }
+      children: { 'conversation.chat.user.images': { kind: 'single'; scope: 'session' } }
     }
     /** Session-independent reasoning Markdown with Chat labels and compact typography. */
     'conversation.chat.reasoning.content': {
@@ -414,7 +410,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * supplies image references, an authorized loader, and alignment. A
      * registration replaces the shipped gallery; without one, images are omitted.
      */
-    'conversation.message.images': { kind: 'single'; scope: 'session'; owner: MessageImagesOwnerProps }
+    'conversation.chat.message.images': { kind: 'single'; scope: 'session'; owner: MessageImagesOwnerProps }
+    /** User-message images, including pending and local-echo previews, independently replaceable from output images. */
+    'conversation.chat.user.images': { kind: 'single'; scope: 'session'; owner: MessageImagesOwnerProps }
     /**
      * Command row keyed by the command name. The component receives the folded
      * command lifecycle and linked compaction when present. Reusing a key

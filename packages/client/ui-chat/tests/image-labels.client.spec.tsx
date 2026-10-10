@@ -8,7 +8,6 @@ import { makeTranslate, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-run
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { MessageImagesOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { AssistantMarkdown, type AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
-import { MessageImagesView } from '../src/client/chat/MessageImagesView.tsx'
 import { useDetailedPresentation } from './presentation-fixture.client.ts'
 import { useDisclosure } from '../src/client/chat/use-disclosure.ts'
 import { useSearchableHidden } from '../src/client/chat/searchable-hidden.ts'
@@ -31,12 +30,7 @@ async function renderImages(blocks: AssistantMarkdownProps['blocks'], calls: Mes
   const runtime = await SlotTestRuntime.create()
   onTestFinished(() => runtime.dispose())
   const loadImage = vi.fn<AssistantMarkdownProps['loadImage']>(async () => 'blob:history')
-  runtime.slots.registerFactory({
-    name: 'conversation.message.images.view',
-    scope: 'session',
-    children: { 'conversation.message.images': { kind: 'single', scope: 'session' } },
-  }, MessageImagesView)
-  runtime.slots.register({ name: 'conversation.message.images' }, (owner: MessageImagesOwnerProps) => {
+  runtime.slots.inject('conversation.chat.message.images', () => runtime.slots.register({ name: 'conversation.chat.message.images' }, (owner: MessageImagesOwnerProps) => {
     calls.push(owner)
     return (
       <div data-testid="message-images" data-align={owner.align} data-count={owner.images.length}>
@@ -47,14 +41,15 @@ async function renderImages(blocks: AssistantMarkdownProps['blocks'], calls: Mes
         })}
       </div>
     )
-  })
+  }))
   await runtime.sessions.add({ id: 'image-labels' })
   const session = runtime.sessions.retainFor(runtime.ctx, SessionId('image-labels'))
   await runtime.root.declare({
     'conversation.chat.reasoning.body': { kind: 'single', scope: 'session' },
-  }, ({ renderFactorySlot, renderSlot, SessionProvider }) => (
+    'conversation.chat.message.images': { kind: 'single', scope: 'session' },
+  }, ({ renderSlot, SessionProvider }) => (
     <SessionProvider session={session}>
-      <AssistantMarkdown loadImage={loadImage} renderSlot={renderSlot} renderFactorySlot={renderFactorySlot}
+      <AssistantMarkdown loadImage={loadImage} renderSlot={renderSlot}
         useDisclosure={useDisclosure} useGroupAction={useSearchableHidden}
         usePresentation={useDetailedPresentation} t={t} blocks={blocks} streaming={false} />
     </SessionProvider>
@@ -77,36 +72,36 @@ describe('assistant image slot handoff', () => {
     const firstLoader = vi.fn<AssistantMarkdownProps['loadImage']>(async () => 'blob:first')
     const nextLoader = vi.fn<AssistantMarkdownProps['loadImage']>(async () => 'blob:next')
     const siblingLoader = vi.fn<AssistantMarkdownProps['loadImage']>(async () => 'blob:sibling')
-    const firstRenderer = vi.fn<AssistantMarkdownProps['renderFactorySlot']>(() => <span>first gallery</span>)
-    const siblingRenderer = vi.fn<AssistantMarkdownProps['renderFactorySlot']>(() => <span>sibling gallery</span>)
+    const firstRenderer = vi.fn((_key: string, _owner: object) => <span>first gallery</span>)
+    const siblingRenderer = vi.fn((_key: string, _owner: object) => <span>sibling gallery</span>)
     const props = {
       blocks: [{ kind: 'image', attachment }], streaming: false, t,
-      renderSlot: () => null, useDisclosure, useGroupAction: useSearchableHidden,
+      useDisclosure, useGroupAction: useSearchableHidden,
       usePresentation: useDetailedPresentation,
-    } satisfies Omit<AssistantMarkdownProps, 'loadImage' | 'renderFactorySlot'>
+    } satisfies Omit<AssistantMarkdownProps, 'loadImage' | 'renderSlot'>
     const content = (loadImage: AssistantMarkdownProps['loadImage']) => (
       <>
-        <AssistantMarkdown {...props} loadImage={loadImage} renderFactorySlot={firstRenderer} />
-        <AssistantMarkdown {...props} loadImage={siblingLoader} renderFactorySlot={siblingRenderer} />
+        <AssistantMarkdown {...props} loadImage={loadImage} renderSlot={firstRenderer} />
+        <AssistantMarkdown {...props} loadImage={siblingLoader} renderSlot={siblingRenderer} />
       </>
     )
     const view = render(content(firstLoader))
     const firstGallery = view.getByText('first gallery')
     const siblingGallery = view.getByText('sibling gallery')
     const owner = { images: [{ attachment }], align: 'start' }
-    expect(firstRenderer).toHaveBeenLastCalledWith('conversation.message.images.view', {
+    expect(firstRenderer).toHaveBeenLastCalledWith('conversation.chat.message.images', {
       ...owner, loadImage: firstLoader,
     })
-    expect(siblingRenderer).toHaveBeenLastCalledWith('conversation.message.images.view', {
+    expect(siblingRenderer).toHaveBeenLastCalledWith('conversation.chat.message.images', {
       ...owner, loadImage: siblingLoader,
     })
 
     view.rerender(content(nextLoader))
 
-    expect(firstRenderer).toHaveBeenLastCalledWith('conversation.message.images.view', {
+    expect(firstRenderer).toHaveBeenLastCalledWith('conversation.chat.message.images', {
       ...owner, loadImage: nextLoader,
     })
-    expect(siblingRenderer).toHaveBeenLastCalledWith('conversation.message.images.view', {
+    expect(siblingRenderer).toHaveBeenLastCalledWith('conversation.chat.message.images', {
       ...owner, loadImage: siblingLoader,
     })
     expect(view.getByText('first gallery')).toBe(firstGallery)
