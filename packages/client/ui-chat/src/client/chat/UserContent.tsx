@@ -1,7 +1,7 @@
 /** Reusable user contents inside a caller-owned message row. */
 import { Fragment } from 'react'
 import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
-import { fileExtension, FileTypeIcon, fileSizeText, JsonBlock, projectUserText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { fileExtension, FileTypeIcon, fileSizeText, JsonBlock } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './MessageItem.module.css'
 
 const EMPTY_LABELS: readonly string[] = []
@@ -9,12 +9,12 @@ const EMPTY_LABELS: readonly string[] = []
 /**
  * Render prepared text, ordered attachments, and references without message chrome.
  * The caller owns row identity, pending/echo state, time, and message actions.
- * @param props - prepared content, explicit capabilities, and framework Factory/locale seats.
+ * @param props - prepared content, facts, authorized image loader, and framework Factory/locale seats.
  * @returns the content stack using the existing user-message layout.
  */
-export function UserContent({ content, loadImage, references, renderFactorySlot, t }:
+export function UserContent({ content, loadImage, facts, interactive = false, ellipsis = false, renderFactorySlot, t }:
 FactoryComponentPropsOf<'conversation.chat.user.content'>) {
-  const { text, attachments, extraBlocks, referenceLabels = EMPTY_LABELS, skillNames = EMPTY_LABELS } = content
+  const { text, attachments, extraBlocks, referenceLabels = EMPTY_LABELS } = content
   const compactImages = attachments.length > 1
   const truncated = (total: number): string => t('json.truncated', { total })
   const showBubble = text !== '' || extraBlocks.length > 0
@@ -45,7 +45,7 @@ FactoryComponentPropsOf<'conversation.chat.user.content'>) {
         </div>
       )}
       {showBubble && <div className={css.bubble}>
-        {projectUserText(text, referenceLabels, skillNames, 'skill', references)}
+        {renderFactorySlot('conversation.user.text', { text, facts, interactive, ellipsis })}
         {extraBlocks.map((block, index) => (
           <JsonBlock key={index} label={t('message.extraBlock')} payload={block} truncatedLabel={truncated} />
         ))}

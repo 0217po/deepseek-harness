@@ -267,11 +267,6 @@ export function apply(ctx: Context): void {
             else ctx.sidebarRight.openResource(url, { params: { line: options.line } })
             await Promise.resolve()
           },
-          openSkill: (name) => {
-            const scope = ctx.sessions.scope(sessionId)
-            if (scope === undefined) return
-            ctx.get('inputTriggers')?.sessionOf(scope).openReference('skill', { ref: `/${name}` })
-          },
           openExternalLink: (url) => {
             if (linkOpening.getSnapshot() === 'sidebar' && ctx.get('sidebarRightTabs')?.get('browser') !== undefined) {
               ctx.sidebarRight.openTab('browser', { params: { url } })

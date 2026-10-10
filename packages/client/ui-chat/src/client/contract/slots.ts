@@ -8,7 +8,7 @@ import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type {
   CommandNode, CompactionSummaryNode, ConversationLocationDataStore, ConversationTurnDataMap,
   ConversationGroupData, GroupSnapshot,
-  MessageImageLoader, MessageImageSource, MessageImagesOwnerProps, RenderEntry, TurnLocation,
+  MessageImageLoader, MessageImageSource, MessageImagesOwnerProps, RenderEntry, TurnLocation, UserTextFacts, UserTextInput,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
   HostObservable, InjectFace, KeyedSnapshotSelectorHook, PropsLocale, PropsRenderSlots, PropsRuntime,
@@ -210,8 +210,6 @@ export interface ChatNodeOwnerProps {
   /** Renderer-owned Node portion selected by the grouping Definition. */
   groupPart?: string
   cwd?: string | undefined
-  /** Open the current source file of a skill referenced by a sent message. */
-  openSkill: (name: string) => void
   openFile: (path: string, options?: OpenFileOptions) => void
   inspectCall: ((callId: ToolCallId) => void) | undefined
   forkAt: (seq: number) => void
@@ -233,14 +231,16 @@ export interface UserContentData {
   readonly attachments: readonly UserContentAttachment[]
   /** Blocks not represented by text or attachment presentation. */
   readonly extraBlocks: readonly unknown[]
+  /** Labels displayed in the caller-provided reference summary. */
   readonly referenceLabels?: readonly string[]
-  readonly skillNames?: readonly string[]
 }
 
-/** Public content rendering input; absent reference actions leave mentions non-interactive. */
-export interface UserContentInput extends Pick<ChatNodeOwnerProps, 'loadImage'> {
+/** Public content rendering input; reference renderers own their injected actions. */
+export interface UserContentInput extends Pick<ChatNodeOwnerProps, 'loadImage'>,
+  Pick<UserTextInput, 'interactive' | 'ellipsis'> {
   readonly content: UserContentData
-  readonly references?: Pick<ChatNodeOwnerProps, 'openFile' | 'openSkill'>
+  /** Transform inputs passed unchanged to UserText, separate from summary and rendering props. */
+  readonly facts: Readonly<Partial<UserTextFacts>>
 }
 
 /** Shared presentation state for one Turn-process answer generation. */
@@ -308,8 +308,6 @@ export interface ChatViewInjected {
     /** Resolve one optional group without subscribing the root View to its data. */
     chatGroup: (key: string) => ObservableSnapshot<GroupSnapshot<ConversationGroupData<'chat'>> | undefined> | undefined
   }
-  /** Open the current source file of a skill referenced by a sent message. */
-  openSkill: (name: string) => void
   /** Open one HTTP(S) message link at the selected destination, using an external tab if Sidebar Browser is unavailable. */
   openExternalLink: (url: string) => void
   openFile: (path: string, options?: OpenFileOptions) => Promise<void>
@@ -330,7 +328,7 @@ export type ChatFlowDataInjected = Pick<ChatViewInjected, 'hooks' | 'keyedHooks'
 
 /** Ordered rows and reconciled local echoes rendered inside one Chat viewport. */
 export interface ChatFlowOwnerProps extends Pick<ChatNodeOwnerProps,
-  'cwd' | 'openSkill' | 'openFile' | 'inspectCall' | 'forkAt' | 'loadImage' | 'fileMentions'> {
+  'cwd' | 'openFile' | 'inspectCall' | 'forkAt' | 'loadImage' | 'fileMentions'> {
   readonly entries: readonly RenderEntry[]
   readonly pendingInputs: readonly (PendingSubmission | InboxState['next-step'][number])[]
   readonly lastInputTurn: number | undefined

@@ -2,13 +2,18 @@ import { memo, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { PropsRenderFactories } from '@deepseek-ai/dsh-client-ui-slots'
+import type { UserTextFacts } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { JsonBlock, StateDot, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps, UserContentAttachment, UserContentData } from '../contract/slots.ts'
+import type {
+  ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps, UserContentAttachment, UserContentData, UserContentInput,
+} from '../contract/slots.ts'
 import type { ModelRetryNode, TurnErrorNode, UserMessageNode } from '../contract/snapshot.ts'
 import { CompactionItem } from './CompactionItem.tsx'
 import { ContextInjectionRow } from './ContextInjectionRow.tsx'
 import { MessageIconActions } from './MessageIconActions.tsx'
 import css from './MessageItem.module.css'
+
+const EMPTY_TEXT_FACTS: Readonly<Partial<UserTextFacts>> = {}
 
 type UserImage = Extract<UserMessageNode['content'][number], { type: 'image' }>
 type UserFile = Extract<UserMessageNode['content'][number], { type: 'file' }>
@@ -157,7 +162,7 @@ function TurnMaxTokensItem({ t }: {
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
   content, loadImage, renderFactorySlot, actions, pending = false, echo = false, referenceLabels, skillNames,
-  previewAttachments, references,
+  previewAttachments, facts: inputFacts = EMPTY_TEXT_FACTS, interactive = false,
 }: {
   content: readonly unknown[]
   renderFactorySlot: PropsRenderFactories['renderFactorySlot']
@@ -173,16 +178,21 @@ function UserStyleBubble({
   skillNames?: readonly string[]
   /** Local submission-echo attachments replacing the content-derived attachment sequence. */
   previewAttachments?: readonly UserContentAttachment[]
-  references?: Pick<ChatNodeOwnerProps, 'openFile' | 'openSkill'>
-} & Pick<ChatNodeOwnerProps, 'loadImage'>): ReactNode {
+  /** Inputs used by text transforms, separate from row and rendering props. */
+  facts?: Readonly<Partial<UserTextFacts>>
+} & Pick<ChatNodeOwnerProps, 'loadImage'> & Pick<UserContentInput, 'interactive'>): ReactNode {
   const parts = useMemo(() => contentParts(content), [content])
   const prepared = useMemo<UserContentData>(() => ({
     text: parts.text,
     attachments: previewAttachments ?? parts.attachments,
     extraBlocks: parts.rest,
     ...(referenceLabels === undefined ? {} : { referenceLabels }),
+  }), [parts, previewAttachments, referenceLabels])
+  const facts = useMemo<Readonly<Partial<UserTextFacts>>>(() => ({
+    ...inputFacts,
+    ...(referenceLabels === undefined ? {} : { sessionLabels: referenceLabels }),
     ...(skillNames === undefined ? {} : { skillNames }),
-  }), [parts, previewAttachments, referenceLabels, skillNames])
+  }), [inputFacts, referenceLabels, skillNames])
   return (
     <div
       className={css.userRow}
@@ -192,7 +202,8 @@ function UserStyleBubble({
       {renderFactorySlot('conversation.chat.user.content', {
         content: prepared,
         loadImage,
-        ...(references === undefined ? {} : { references }),
+        facts,
+        interactive,
       })}
       {actions?.(prepared.text)}
     </div>
@@ -284,13 +295,13 @@ export function PendingSubmissionBubble({ submission, loadImage, renderFactorySl
 
 /** User and admitted-steering keyed Chat renderer. */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
-  node, renderFactorySlot, loadImage, openFile, openSkill, t,
+  node, renderFactorySlot, loadImage, t,
 }: ChatNodeViewProps<'user' | 'steering'>) {
   const data = node.data
   return (
     <UserStyleBubble
       content={data.content}
-      references={{ openFile, openSkill }}
+      interactive
       renderFactorySlot={renderFactorySlot}
       loadImage={loadImage}
       {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
