@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-当委派工作需要在父会话工作区中的真实无人值守 Codex 会话内运行时，把 `@deepseek-ai/dsh-subagent-codex` 安装进 Profile。每次委派都会为一个自包含文本任务使用全新且隔离的 Codex 线程，并且只返回其最终答案或安全失败诊断。原生 Codex 配置和身份验证继续作为权威来源，而 `permissionMode` 选择非交互式审批和沙箱行为。Bundle 提供兼容的原生 Codex 载荷，并为完整 Web 预设添加委派工具。
+当委派工作需要在父会话工作区中的真实无人值守 Codex 会话内运行时，把 `@deepseek-ai/dsh-subagent-codex` 安装进 Profile。每次委派都会为一个自包含文本任务使用全新且隔离的 Codex 线程，并且只返回其最终答案或安全失败诊断。原生 Codex 配置和身份验证继续作为权威来源，而 `permissionMode` 选择非交互式审批和沙箱行为。Bundle 提供兼容的原生 Codex 载荷，并以全局工具形式添加委派工具。
 
 ## 目录
 
@@ -29,11 +29,11 @@ kind: "package-bundle"
 
 ### 安装 Bundle
 
-官方条目可离线显示。启用时，普通 bundle 安装器会安装[当前 DSH 安装对应的目标](../../boot/plugin-manager/README.zh.md#use-this-package)并选择其配置层。此层注册提供方，并为 `standard`、`cordis` 和 `ptc` 添加 `subagent_codex`；实际委派前不会启动原生进程。安装器提示需要重启时，请重启应用。
+官方条目可离线显示。启用时，普通 bundle 安装器会安装[当前 DSH 安装对应的目标](../../boot/plugin-manager/README.zh.md#use-this-package)并选择其配置层。此层注册提供方，并为所有智能体添加全局工具 `subagent_codex`；实际委派前不会启动原生进程。安装器提示需要重启时，请重启应用。
 
-关闭只会取消选择配置层，保留已安装的包。移除是独立的包操作。新智能体和随后重新打开的会话使用所选工具组合；正在运行的智能体保留已有组合。
+关闭只会取消选择配置层，保留已安装的包。移除是独立的包操作。启用或关闭会在运行中的 Host 注册或移除该全局工具，正在运行的智能体会在下一次请求时看到变化。
 
-不包含完整 Web 预设的配置（包括随附的 headless、SDK 和 ACP）必须将此包安装为配置依赖，而不选择其 bundle 层，然后显式挂载提供方和委派工具。原有仅提供方用法请遵循[升级指南](../../../docs/upgrade-guide/v0.2.1-alpha.1/native-subagent-bundle-tools/guide.zh.md)。
+此层只插入 Host 条目，因此任何配置（包括随附的 headless、SDK 和 ACP）都可以选择它。原有仅提供方用法请遵循[升级指南](../../../docs/upgrade-guide/v0.2.1-alpha.1/native-subagent-bundle-tools/guide.zh.md)。
 
 ### 配置
 
@@ -56,7 +56,7 @@ kind: "package-bundle"
 <a id="exposing-the-tool"></a>
 ### 暴露工具
 
-Bundle 通过作用于预设的配置补丁为每个完整预设添加 `tool-subagent-codex`。后续用户补丁可以配置或禁用该行；完整的预设替换保留自己的子列表。不要重复声明同一个面向模型的工具。minimal 预设和 Host 工具目录保持不变。对于不包含这些预设目标的 profile，保留已安装的包但不选择其 bundle 层，然后在 `cordis.patch.yml` 中显式挂载提供方和工具：
+Bundle 将 `tool-subagent-codex` 作为 Host 条目插入，因此 `subagent_codex` 是所有预设（包括 minimal）都可见的全局工具。后续用户补丁可以按 id 配置或禁用该行。预设自行注册的同名工具会为其智能体遮蔽该全局工具。若要不选择 bundle 层而挂载提供方和工具，在 `cordis.patch.yml` 中插入相同的条目：
 
 ```yaml
 - insert:

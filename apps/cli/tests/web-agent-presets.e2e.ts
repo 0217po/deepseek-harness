@@ -13,15 +13,12 @@ import {
   loadProfile,
   PluginPackages,
   type Profile,
-  type ProfilePatch,
 } from '@deepseek-ai/dsh-app-boot'
 import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
 import { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from 'vitest'
-import { dump, load } from 'js-yaml'
-import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 import { bundlePatchPaths, composeEntries } from '@deepseek-ai/dsh-app-boot'
 import { createPluginProfile } from '../../desktop/src/project-manager.ts'
 /** Profile entry ids whose volatile fields these scenarios edit through Settings. */
@@ -63,7 +60,7 @@ const MINIMAL_BASH_DESCRIPTION = `Run commands in a bash shell
  */
 async function bootWeb(
   profileHome: string,
-  extra: ProfilePatch[] = [],
+  extra: PatchOptions[] = [],
   profilePackages: readonly string[] = [],
   profileBundles?: readonly string[],
   surface: 'web' | 'desktop' | 'spec' = 'spec',
@@ -532,165 +529,74 @@ describe('the shipped Web composition', () => {
   })
 })
 
-describe('product Bundle and user-preset intersection', () => {
-  const presetIds = ['products-none', 'products-codex', 'products-claude', 'products-both'] as const
-  type Product = 'codex' | 'claude-code'
-  type PresetId = typeof presetIds[number]
+describe.each(['web', 'desktop'] as const)('%s native subagent bundles', (surface) => {
+  const products = ['codex', 'claude-code'] as const
+  type Product = typeof products[number]
+  const packageDir = (product: Product): string => (product === 'codex' ? CODEX_PACKAGE_DIR : CLAUDE_CODE_PACKAGE_DIR)
+  const toolName = (product: Product): string => `subagent_${product.replaceAll('-', '_')}`
 
-  async function bootProducts(installed: readonly Product[]): Promise<Context> {
-    const root = await mkdtemp(join(tmpdir(), 'dsh-product-presets-'))
-    const definitions: import('@deepseek-ai/cordis-plugin-loader').EntryOptions[] = []
-    const standardConfig = composeEntries([webPatches('test')]).find(row => row.id === 'preset-standard')!.config as import('@deepseek-ai/dsh-agent-preset-registry').PresetDefinition
-    const standard = dump(standardConfig.plugins, { schema: entryListSchema })
-    for (const id of presetIds) {
-      const plugins = load(standard, { schema: entryListSchema }) as import('@deepseek-ai/cordis-plugin-loader').EntryOptions[]
-      // User presets declare their own delegation rows; provider bundles target only the three full shipped presets.
-      if (id === 'products-codex' || id === 'products-both') {
-        plugins.push({ id: 'custom-tool-subagent-codex', name: '@deepseek-ai/dsh-tool-subagent', config: {
-          provider: 'codex', toolName: 'subagent_codex', maxDepth: 'provider-managed',
-        } })
-      }
-      if (id === 'products-claude' || id === 'products-both') {
-        plugins.push({ id: 'custom-tool-subagent-claude-code', name: '@deepseek-ai/dsh-tool-subagent', config: {
-          provider: 'claude-code', toolName: 'subagent_claude_code', maxDepth: 'provider-managed',
-        } })
-      }
-      definitions.push({ id: `preset-${id}`, name: '@deepseek-ai/dsh-agent-preset', config: { id, plugins } })
-    }
-    const packageDir = (product: Product): string => (
-      product === 'codex' ? CODEX_PACKAGE_DIR : CLAUDE_CODE_PACKAGE_DIR
-    )
-    const packageName = (product: Product): string => (
-      product === 'codex'
-        ? '@deepseek-ai/dsh-subagent-codex'
-        : '@deepseek-ai/dsh-subagent-claude-code'
-    )
-    return await bootWeb(root, [{ insert: definitions }], installed.map(packageDir), [
-      '@deepseek-ai/dsh-base',
-      '@deepseek-ai/dsh-web-app',
-      ...installed.map(packageName),
-    ])
+  async function bootSelected(installed: readonly Product[], extra: PatchOptions[] = []): Promise<Context> {
+    const root = await mkdtemp(join(tmpdir(), `dsh-${surface}-native-bundles-`))
+    onTestFinished(async () => { await rm(root, { recursive: true, force: true }) })
+    return await bootWeb(root, extra, installed.map(packageDir), [
+      '@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', ...installed.map(product => `@deepseek-ai/dsh-subagent-${product}`),
+    ], surface)
   }
 
-  it('composes the intersection of installed Bundles and enabled preset rows', async () => {
-    const enabledByPreset: Record<PresetId, Product[]> = {
-      'products-none': [],
-      'products-codex': ['codex'],
-      'products-claude': ['claude-code'],
-      'products-both': ['codex', 'claude-code'],
-    }
-    const scenarios: Array<{ installed: Product[]; presets: readonly PresetId[] }> = [
-      { installed: [], presets: ['products-both'] },
-      { installed: ['codex'], presets: ['products-both'] },
-      { installed: ['claude-code'], presets: ['products-both'] },
-      { installed: ['codex', 'claude-code'], presets: presetIds },
-    ]
+  async function presetTools(productCtx: Context, preset: string): Promise<string[]> {
+    const handle = await productCtx.agents.create({
+      sessionId: SessionId(`native-${surface}-${preset}-${randomUUID()}`),
+      setup: owner => productCtx.agentPresets.mount(owner, preset).then(() => undefined),
+    })
+    try {
+      return toolNames(productCtx, handle.agent).filter(name => /(?:subagent|custom)_(?:codex|claude_code)$/.test(name))
+    } finally { await handle.dispose() }
+  }
 
-    for (const { installed, presets } of scenarios) {
-      const productCtx = await bootProducts(installed)
+  it.each([[[]], [['codex']], [['claude-code']], [['codex', 'claude-code']]] as Array<[Product[]]>)(
+    'adds the selected %j delegation tools to every preset as global tools', async (installed) => {
+      const productCtx = await bootSelected(installed)
       const spawn = vi.spyOn(productCtx.subprocess, 'spawn')
       try {
-        expect(productCtx.subagents.list()
-          .filter(name => name === 'codex' || name === 'claude-code')
-          .sort())
+        expect(productCtx.subagents.list().filter(name => (products as readonly string[]).includes(name)).sort())
           .toEqual([...installed].sort())
-        for (const id of presets) {
-          const handle = await productCtx.agents.create({
-            sessionId: SessionId(`preset-${id}-${installed.join('-') || 'none'}-${randomUUID()}`),
-            setup: agentCtx => productCtx.agentPresets.mount(agentCtx, id).then(() => undefined),
-          })
-          try {
-            const productTools = enabledByPreset[id]
-              .filter(product => installed.includes(product))
-              .map(product => product === 'codex' ? 'subagent_codex' : 'subagent_claude_code')
-              .sort()
-            const tools = toolNames(productCtx, handle.agent)
-            expect(tools.filter(name => name === 'subagent_codex' || name === 'subagent_claude_code'))
-              .toEqual(productTools)
-            expect(tools).toEqual(expect.arrayContaining(['job_kill', 'job_list', 'job_output']))
-            for (const productTool of productTools) {
-              expect(toolParameterNames(productCtx, handle.agent, productTool)).toEqual([
-                'cwd', 'description', 'prompt',
-              ])
-            }
-          } finally {
-            await handle.dispose()
-          }
+        const expected = installed.map(toolName).sort()
+        for (const preset of ['standard', 'cordis', 'ptc', 'minimal']) {
+          expect(await presetTools(productCtx, preset)).toEqual(expected)
         }
+        const handle = await productCtx.agents.create({
+          sessionId: SessionId(`native-${surface}-params-${randomUUID()}`),
+          setup: owner => productCtx.agentPresets.mount(owner, 'standard').then(() => undefined),
+        })
+        try {
+          for (const product of installed) {
+            expect(toolParameterNames(productCtx, handle.agent, toolName(product))).toEqual(['cwd', 'description', 'prompt'])
+          }
+        } finally { await handle.dispose() }
         expect(spawn).not.toHaveBeenCalled()
       } finally {
         spawn.mockRestore()
         await productCtx.fiber.dispose()
       }
-    }
-  }, 120_000)
-})
+    }, 120_000)
 
-describe.each(['web', 'desktop'] as const)('%s native bundle adoption', (surface) => {
-  const products = ['codex', 'claude-code'] as const
-  const bundleNames = products.map(product => `@deepseek-ai/dsh-subagent-${product}`)
-
-  async function bootSelected(extra: ProfilePatch[]): Promise<Context> {
-    const root = await mkdtemp(join(tmpdir(), `dsh-${surface}-native-adoption-`))
-    onTestFinished(async () => { await rm(root, { recursive: true, force: true }) })
-    return await bootWeb(root, extra, [CODEX_PACKAGE_DIR, CLAUDE_CODE_PACKAGE_DIR], [
-      '@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', ...bundleNames,
-    ], surface)
-  }
-
-  it('keeps selected provider identities and later tool overrides without duplicating custom preset tools', async () => {
-    const definition = composeEntries([webPatches('adoption')]).find(row => row.id === 'preset-cordis')!
-      .config as import('@deepseek-ai/dsh-agent-preset-registry').PresetDefinition
-    const config = { ...definition, plugins: [...definition.plugins, ...products.map(product => ({
-      id: `tool-subagent-${product}`, name: '@deepseek-ai/dsh-tool-subagent', disabled: product === 'codex',
-      config: { provider: product, toolName: `custom_${product.replaceAll('-', '_')}`, maxDepth: 'provider-managed' },
-    }))] }
+  it('keeps provider identities and applies later Host row overrides', async () => {
     const providerConfig = { model: 'adoption-model', env: { DSH_NATIVE_ADOPTION: 'preserved' } }
-    const productCtx = await bootSelected([
+    const productCtx = await bootSelected(products, [
       ...products.map(product => ({ id: `subagent-${product}`, config: providerConfig })),
-      { preset: 'preset-standard', id: 'tool-subagent-codex', disabled: true },
-      { preset: 'preset-standard', id: 'tool-subagent-claude-code', config: {
+      { id: 'tool-subagent-codex', disabled: true },
+      { id: 'tool-subagent-claude-code', config: {
         provider: 'claude-code', toolName: 'custom_claude_code', maxDepth: 'provider-managed',
       } },
-      { id: 'preset-cordis', config },
     ])
-    const spawn = vi.spyOn(productCtx.subprocess, 'spawn')
     try {
-      expect(productCtx.subagents.list()).toEqual(expect.arrayContaining([...products]))
       for (const product of products) {
         expect([...productCtx.loader.entries()].find(entry => entry.options.id === `subagent-${product}`)?.options.config)
           .toMatchObject(providerConfig)
       }
-      for (const [preset, expected] of [
-        ['standard', ['custom_claude_code']], ['cordis', ['custom_claude_code']],
-        ['ptc', ['subagent_claude_code', 'subagent_codex']], ['minimal', []],
-      ] as const) {
-        const handle = await productCtx.agents.create({
-          sessionId: SessionId(`adoption-${surface}-${preset}-${randomUUID()}`),
-          setup: owner => productCtx.agentPresets.mount(owner, preset).then(() => undefined),
-        })
-        try {
-          expect(toolNames(productCtx, handle.agent).filter(name => /(?:subagent|custom)_(?:codex|claude_code)/.test(name)))
-            .toEqual(expected)
-        } finally { await handle.dispose() }
+      for (const preset of ['standard', 'ptc', 'minimal']) {
+        expect(await presetTools(productCtx, preset)).toEqual(['custom_claude_code'])
       }
-      expect(spawn).not.toHaveBeenCalled()
-    } finally {
-      spawn.mockRestore()
-      await productCtx.fiber.dispose()
-    }
-  }, 120_000)
-
-  it('reports a redundant manual tool instead of silently replacing the bundle contribution', async () => {
-    const productCtx = await bootSelected([{ preset: 'preset-standard', insert: [{
-      id: 'manual-codex', name: '@deepseek-ai/dsh-tool-subagent', config: {
-        provider: 'codex', toolName: 'subagent_codex', maxDepth: 'provider-managed',
-      },
-    }] }])
-    try {
-      expect((await productCtx.agentPresets.list()).find(preset => preset.id === 'standard')?.broken)
-        .toContain('already registered')
-      expect(productCtx.profileContext.startedBundles).toEqual(expect.arrayContaining(bundleNames))
     } finally { await productCtx.fiber.dispose() }
   }, 120_000)
 })
