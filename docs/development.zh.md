@@ -151,6 +151,8 @@ vendor manifest 守卫检查 `vendor/*/src` 下的改动是否连同对应的 `v
 
 贡献者可以选择运行 `pnpm run check:all`，执行全面的本地门禁集。该命令独立于 Git 钩子，也不是对 agent 的指令。
 
+在 CI 之外（`CI` 不为 `true`），默认 worker 数遵循[本地 worker 预算](../scripts/parallelism.ts)：门禁调度器、`build`、`typecheck`、Oxlint 与 publint 为 12；Vitest fork 与本地覆盖率为 48；`doc-sync`、`test:docs`、`hygiene` 与 `check:all` 最多并发 8 个门禁。`os.availableParallelism()` 报告的是宿主 CPU 数而不是容器的 CPU 配额，因此不设上限的默认值会在共享主机上超额订阅。CI 仍使用 runner 的 CPU 数。`DSH_GATE_CONCURRENCY`、`DSH_OXLINT_THREADS`、`DSH_COVERAGE_MAX_WORKERS` 与 Vitest 的 `--maxWorkers` 可覆盖这些默认值。
+
 ### CI 门禁
 
 keyless [CI 工作流](../.github/workflows/ci.yml) 将独立门禁分组到若干宽粒度 lane，并在受支持的 Node 版本上运行一组较小的兼容性检查。产物消费方在各自 lane 内等待一次 build。覆盖率分区复用按平台和运行器池隔离的文件耗时，在配置的 worker 上限内均衡工作量。必需 benchmark 在标准 GitHub 托管 Linux 上独立运行；[benchmark 运行器说明](../benchmarks/AGENTS.md)拥有路由及 job 超时。单独的真实 API 工作流按其配置的 worker 上限运行 `pnpm run test:e2e`。当前门禁和 job 清单以 [scripts/run-gates.ts](../scripts/run-gates.ts) 和工作流文件为准。

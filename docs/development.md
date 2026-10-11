@@ -146,6 +146,8 @@ Apart from the scoped staged-record verification, the hooks intentionally do not
 
 Contributors can opt into the comprehensive local gate set with `pnpm run check:all`. The command is independent of the Git hooks and is not an agent instruction.
 
+Outside CI (`CI` other than `true`), default worker counts follow the [local worker budget](../scripts/parallelism.ts): 12 for gate schedulers, `build`, `typecheck`, Oxlint, and publint; 48 for Vitest forks and local coverage; and 8 concurrent gates for `doc-sync`, `test:docs`, `hygiene`, and `check:all`. `os.availableParallelism()` reports host CPUs rather than a container's CPU quota, so uncapped defaults oversubscribe shared hosts. CI keeps the runner's CPU count. `DSH_GATE_CONCURRENCY`, `DSH_OXLINT_THREADS`, `DSH_COVERAGE_MAX_WORKERS`, and Vitest `--maxWorkers` override the defaults.
+
 ### CI gates
 
 The keyless [CI workflow](../.github/workflows/ci.yml) groups independent gates into broad lanes and runs a smaller compatibility signal across supported Node versions. Artifact consumers wait for one build within their lane. Coverage partitions reuse file timings scoped to their platform and runner pool to balance work within the configured worker limit. Required benchmarks run separately on standard GitHub-hosted Linux; the [benchmark runner reference](../benchmarks/AGENTS.md) owns routing and the job timeout. The separate real-API workflow runs `pnpm run test:e2e` with its configured worker bound. See [scripts/run-gates.ts](../scripts/run-gates.ts) and the workflow files for the current gate and job inventory.

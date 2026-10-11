@@ -10,7 +10,6 @@
  */
 
 import { rmSync } from 'node:fs'
-import { availableParallelism } from 'node:os'
 import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import {
@@ -24,6 +23,7 @@ import {
 import { aggregateBuildArgs, aggregateCheckArgs, contractSteps, libraryBuildSteps } from './compile-referenced-projects.ts'
 import type { LibraryStep } from './compile-referenced-projects.ts'
 import { pnpmCommand } from './release/process.ts'
+import { defaultParallelism, describeDefaultParallelism } from './parallelism.ts'
 import { runAggregate } from './run-gates.ts'
 import type { Gate } from './run-gates.ts'
 
@@ -155,11 +155,11 @@ async function main(): Promise<number> {
   }
   const { scope, profile } = parseBuildArguments(process.argv.slice(2))
   const root = resolve(import.meta.dirname, '..')
-  const name = scope === 'complete' ? 'build' : `build:${scope}`
-  const available = availableParallelism()
+  const name = scope === 'complete' ? 'build' : scope === 'typecheck' ? 'typecheck' : `build:${scope}`
+  const budget = defaultParallelism()
   const workers = (gates: readonly Gate[]) => ({
-    workers: Math.min(gates.length, available),
-    source: `${String(available)} available CPU(s)`,
+    workers: Math.min(gates.length, budget),
+    source: describeDefaultParallelism(),
   })
   if (scope === 'check' || scope === 'typecheck') {
     const gates = buildGates(root, scope)
