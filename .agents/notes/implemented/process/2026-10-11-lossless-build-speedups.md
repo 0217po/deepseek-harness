@@ -16,7 +16,7 @@ A cold build carries three fixed costs that do not affect output contents:
 
 ## Decision
 
-The following eight speed-ups change neither the bytes of `lib/` and `apps/web/dist` outputs nor the set of type diagnostics that repository builds report. The only change in diagnostic ownership comes from item 4: Typert does not validate tsconfigs of packages it does not analyze, and only `tsc -b` reports those errors. [The build split note](2026-10-11-build-src-test-split.md) records the command split and concurrent scheduling.
+The following eight speed-ups change neither the bytes of `lib/` and `apps/web/dist` outputs nor the set of type diagnostics that repository builds report. The only change in diagnostic ownership comes from item 4: Typert does not validate tsconfigs of packages it does not analyze, and only `tsc -b` reports those errors. [The build split note](2026-10-11-build-artifacts-check-split.md) records the command split and concurrent scheduling.
 
 | # | Decision | Affected stage | Measured median | Outputs and diagnostics | Intended behavior difference |
 |---|---|---|---|---|---|
@@ -127,7 +127,7 @@ All numbers come from one shared Linux host (256 vCPU, 4 TB memory, load average
 
 ## Consequences
 
-Client type checking spends substantially less CPU and wall time, and the Host and Client tsdown passes take substantially less wall time, without changing runtime resolution, published installation semantics, or any output byte. In the serial build segments (master → branch, one sample each), Host tsdown falls from 22.5 to 11.7 s, Client package compilation from 55.6 to 48.7 s, the Client aggregate check from 68.2 to 35.9 s, and Client tsdown from 13.9 to 10.5 s; the serial segments sum to 308.5 s on master and 254.9 s on the branch (see [the build split note](2026-10-11-build-src-test-split.md)). Host tsdown lies on the critical path of both `build` and `build:src`, Client tsdown on that of `build:src`, and the Client aggregate check is the last step of the `build` critical path.
+Client type checking spends substantially less CPU and wall time, and the Host and Client tsdown passes take substantially less wall time, without changing runtime resolution, published installation semantics, or any output byte. In the serial build segments (master → branch, one sample each), Host tsdown falls from 22.5 to 11.7 s, Client package compilation from 55.6 to 48.7 s, the Client aggregate check from 68.2 to 35.9 s, and Client tsdown from 13.9 to 10.5 s; the serial segments sum to 308.5 s on master and 254.9 s on the branch (see [the build split note](2026-10-11-build-artifacts-check-split.md)). Host tsdown lies on the critical path of both `build` and `build:artifacts`, Client tsdown on that of `build:artifacts`, and the Client aggregate check is the last step of the `build` critical path.
 
 Costs: every workspace package shares one React types version; Typert does not validate tsconfigs of packages it does not analyze, and `tsc -b` owns those errors; Host tsdown max RSS grows by about 0.6 GiB, and under heavy shared-host load the worker can become Host tsdown's critical path.
 

@@ -33,14 +33,14 @@ describe('repository build CLI', () => {
 
   it('selects the complete build by default and one step set by scope', () => {
     expect(parseBuildArguments([])).toEqual({ scope: 'complete', profile: undefined })
-    expect(parseBuildArguments(['--scope', 'src', '--profile', 'official'])).toEqual({ scope: 'src', profile: 'official' })
-    expect(parseBuildArguments(['--scope', 'test'])).toEqual({ scope: 'test', profile: undefined })
+    expect(parseBuildArguments(['--scope', 'artifacts', '--profile', 'official'])).toEqual({ scope: 'artifacts', profile: 'official' })
+    expect(parseBuildArguments(['--scope', 'check'])).toEqual({ scope: 'check', profile: undefined })
   })
 
   it.each([
-    [['--scope', 'complete'], '--scope must be src or test'],
-    [['--scope', 'lib'], '--scope must be src or test'],
-    [['--scope', 'test', '--profile', 'official'], '--profile selects artifact values and does not apply to --scope test'],
+    [['--scope', 'complete'], '--scope must be artifacts or check'],
+    [['--scope', 'lib'], '--scope must be artifacts or check'],
+    [['--scope', 'check', '--profile', 'official'], '--profile selects artifact values and does not apply to --scope check'],
   ])('rejects %j', (args, message) => {
     expect(() => parseBuildArguments(args)).toThrow(message)
   })
@@ -48,7 +48,7 @@ describe('repository build CLI', () => {
 
 describe('repository build steps', () => {
   it('keeps artifact steps in serial dependency order', () => {
-    expect(graph('src')).toEqual({
+    expect(graph('artifacts')).toEqual({
       'native': [],
       'host-src': ['native'],
       'host-bundle': ['host-src'],
@@ -60,8 +60,8 @@ describe('repository build steps', () => {
   })
 
   it('checks both aggregate programs without artifact predecessors', () => {
-    expect(graph('test')).toEqual({ 'host-test': [], 'client-test': [] })
-    expect(buildGates(root, 'test').map(gate => gate.args.slice(-2))).toEqual([
+    expect(graph('check')).toEqual({ 'host-check': [], 'client-check': [] })
+    expect(buildGates(root, 'check').map(gate => gate.args.slice(-2))).toEqual([
       ['-p', 'tsconfig.host.json'],
       ['-p', 'tsconfig.client.json'],
     ])
@@ -69,9 +69,9 @@ describe('repository build steps', () => {
 
   it('starts each aggregate check after its own package compilation in the complete build', () => {
     expect(graph('complete')).toEqual({
-      ...graph('src'),
-      'host-test': ['host-src'],
-      'client-test': ['client-src'],
+      ...graph('artifacts'),
+      'host-check': ['host-src'],
+      'client-check': ['client-src'],
     })
   })
 

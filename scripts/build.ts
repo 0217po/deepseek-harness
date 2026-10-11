@@ -1,8 +1,8 @@
 /**
  * Build repository artifacts, type-check the aggregate test and script programs, or both.
  *
- * `--scope src` emits every artifact and binds the client outputs to their public environment;
- * `--scope test` type-checks only the Host and Client aggregate programs against the package
+ * `--scope artifacts` emits every artifact and binds the client outputs to their public environment;
+ * `--scope check` type-checks only the Host and Client aggregate programs against the package
  * declarations already on disk; the default runs both step sets as one dependency graph, so the
  * aggregate checks overlap the remaining artifact steps.
  */
@@ -25,7 +25,7 @@ import { runAggregate } from './run-gates.ts'
 import type { Gate } from './run-gates.ts'
 
 /** Steps one build invocation runs: every artifact and check, only artifacts, or only aggregate checks. */
-export type BuildScope = 'complete' | 'src' | 'test'
+export type BuildScope = 'complete' | 'artifacts' | 'check'
 
 /** Parsed command-line selection of one build invocation. */
 export interface BuildArguments {
@@ -38,7 +38,7 @@ export interface BuildArguments {
  * Parse the build command line.
  * @param args - Arguments after the script path.
  * @returns The selected scope and requested client build profile.
- * @throws If an option is unknown, the scope is not `src` or `test`, or `--profile` accompanies `--scope test`.
+ * @throws If an option is unknown, the scope is not `artifacts` or `check`, or `--profile` accompanies `--scope check`.
  */
 export function parseBuildArguments(args: readonly string[]): BuildArguments {
   const { values } = parseArgs({
@@ -49,12 +49,12 @@ export function parseBuildArguments(args: readonly string[]): BuildArguments {
     },
     allowPositionals: false,
   })
-  if (values.scope !== undefined && values.scope !== 'src' && values.scope !== 'test') {
-    throw new Error(`build: --scope must be src or test, got ${JSON.stringify(values.scope)}; omit it for the complete build`)
+  if (values.scope !== undefined && values.scope !== 'artifacts' && values.scope !== 'check') {
+    throw new Error(`build: --scope must be artifacts or check, got ${JSON.stringify(values.scope)}; omit it for the complete build`)
   }
   const scope: BuildScope = values.scope ?? 'complete'
-  if (scope === 'test' && values.profile !== undefined) {
-    throw new Error('build: --profile selects artifact values and does not apply to --scope test')
+  if (scope === 'check' && values.profile !== undefined) {
+    throw new Error('build: --profile selects artifact values and does not apply to --scope check')
   }
   return { scope, profile: values.profile }
 }
@@ -78,7 +78,7 @@ export function buildGates(
 ): Gate[] {
   const env = { ...environment }
   const gates: Gate[] = []
-  if (scope !== 'test') {
+  if (scope !== 'check') {
     gates.push(pnpmGate('native', 'native addon', ['run', 'build:native-system'], [], env))
     for (const step of libraryBuildSteps(root, 'all')) {
       gates.push({
@@ -93,10 +93,10 @@ export function buildGates(
     }
     gates.push(pnpmGate('web', 'Web build', ['run', 'build:web'], ['client-bundle'], env))
   }
-  if (scope !== 'src') {
+  if (scope !== 'artifacts') {
     for (const face of ['host', 'client'] as const) {
       gates.push({
-        id: `${face}-test`,
+        id: `${face}-check`,
         label: `${face} aggregate check`,
         displayCommand: `tsc -p tsconfig.${face}.json`,
         command: process.execPath,
@@ -143,7 +143,7 @@ async function main(): Promise<number> {
     workers: Math.min(gates.length, available),
     source: `${String(available)} available CPU(s)`,
   })
-  if (scope === 'test') {
+  if (scope === 'check') {
     const gates = buildGates(root, scope)
     return runAggregate(name, gates, workers(gates))
   }

@@ -16,7 +16,7 @@ Status: implemented
 
 ## 决策
 
-以下八项提速不改变 `lib/`、`apps/web/dist` 的产物字节，也不改变仓库构建报告的类型诊断集合。唯一的诊断归属变化来自第 4 项：Typert 不校验它不分析的包 tsconfig，这些错误只由 `tsc -b` 报告。命令拆分与并发调度由[构建拆分 Note](2026-10-11-build-src-test-split.zh.md)记录。
+以下八项提速不改变 `lib/`、`apps/web/dist` 的产物字节，也不改变仓库构建报告的类型诊断集合。唯一的诊断归属变化来自第 4 项：Typert 不校验它不分析的包 tsconfig，这些错误只由 `tsc -b` 报告。命令拆分与并发调度由[构建拆分 Note](2026-10-11-build-artifacts-check-split.zh.md)记录。
 
 | # | 决策 | 受影响阶段 | 实测中位数 | 产物与诊断 | 有意的行为差异 |
 |---|---|---|---|---|---|
@@ -127,7 +127,7 @@ Status: implemented
 
 ## 后果
 
-Client 类型检查的 CPU 与 wall 时间、Host tsdown 与 Client tsdown 的 wall 时间都明显下降，且不改变 runtime 解析、发布安装语义或任何产物字节。串行构建的各段中（master → 本分支，各一个样本），Host tsdown 从 22.5 s 降到 11.7 s，Client 包编译从 55.6 s 降到 48.7 s，Client 聚合检查从 68.2 s 降到 35.9 s，Client tsdown 从 13.9 s 降到 10.5 s；串行各段合计在 master 上为 308.5 s，在本分支上为 254.9 s（见[构建拆分 Note](2026-10-11-build-src-test-split.zh.md)）。Host tsdown 位于 `build` 与 `build:src` 的关键路径上，Client tsdown 位于 `build:src` 的关键路径上，Client 聚合检查是 `build` 关键路径的最后一步。
+Client 类型检查的 CPU 与 wall 时间、Host tsdown 与 Client tsdown 的 wall 时间都明显下降，且不改变 runtime 解析、发布安装语义或任何产物字节。串行构建的各段中（master → 本分支，各一个样本），Host tsdown 从 22.5 s 降到 11.7 s，Client 包编译从 55.6 s 降到 48.7 s，Client 聚合检查从 68.2 s 降到 35.9 s，Client tsdown 从 13.9 s 降到 10.5 s；串行各段合计在 master 上为 308.5 s，在本分支上为 254.9 s（见[构建拆分 Note](2026-10-11-build-artifacts-check-split.zh.md)）。Host tsdown 位于 `build` 与 `build:artifacts` 的关键路径上，Client tsdown 位于 `build:artifacts` 的关键路径上，Client 聚合检查是 `build` 关键路径的最后一步。
 
 代价：所有 workspace 包共用一个 React 类型版本；Typert 不校验它不分析的包 tsconfig，这些错误由 `tsc -b` 负责；Host tsdown 的最大 RSS 约增加 0.6 GiB，共享主机高负载时 worker 可能成为 Host tsdown 的关键路径。
 

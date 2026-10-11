@@ -424,7 +424,7 @@ function nodeCompatGates(): Gate[] {
   }
   return [
     ...typecheck,
-    pnpmScript('build', 'build:src', {
+    pnpmScript('build', 'build:artifacts', {
       ...typecheck.length === 0 ? {} : { needs: ['typecheck'] },
     }),
     ...nodeCompatSmokeGates({ cliSmoke: true }),

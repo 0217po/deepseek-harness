@@ -25,7 +25,7 @@ function run(env: NodeJS.ProcessEnv, ...args: string[]) {
 describe('Python runtime executable builder CLI', () => {
   it.each([
     { flags: [], command: 'run build' },
-    { flags: ['--build-src'], command: 'run build:src' },
+    { flags: ['--build-artifacts'], command: 'run build:artifacts' },
   ])('validates the closure before $command and deploys only after building', ({ flags, command }) => {
     const result = run(
       { npm_execpath: 'C:\\tools\\pnpm.cjs' },
@@ -57,14 +57,14 @@ describe('Python runtime executable builder CLI', () => {
     const result = run(
       { npm_execpath: entrypoint, DSH_PYTHON_BUILD_COMMANDS: commands },
       '--skip-build',
-      '--build-src',
+      '--build-artifacts',
       '--targets=node24-macos-arm64',
     )
 
     expect(result.error).toBeUndefined()
     expect(result.signal).toBeNull()
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('--skip-build and --build-src cannot be combined')
+    expect(result.stderr).toContain('--skip-build and --build-artifacts cannot be combined')
     expect(result.stdout).toBe('')
     expect(existsSync(commands)).toBe(false)
   })
@@ -83,7 +83,7 @@ describe('Python runtime executable builder CLI', () => {
 
     const result = run(
       { npm_execpath: entrypoint, DSH_PYTHON_BUILD_COMMANDS: commands },
-      '--build-src',
+      '--build-artifacts',
       '--targets=node24-macos-arm64',
     )
 

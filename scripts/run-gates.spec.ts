@@ -865,9 +865,9 @@ describe('Node compatibility graph', () => {
       withEnv('DSH_NODE_COMPAT_SKIP_TYPECHECK', skipTypecheck, () =>
         withPnpmEntrypoint(() => gatesForMode('node-compat'))))
 
-    expect(subject.filter(item => item.displayCommand === 'pnpm run build:src')).toHaveLength(1)
+    expect(subject.filter(item => item.displayCommand === 'pnpm run build:artifacts')).toHaveLength(1)
     expect(subject.find(item => item.id === 'build')?.args).toEqual([
-      '/private/pnpm.cjs', 'run', 'build:src',
+      '/private/pnpm.cjs', 'run', 'build:artifacts',
     ])
     expect(subject.map(item => item.id)).not.toContain('build:web')
     expect(subject.find(item => item.id === 'cli-lazy-search-startup-smoke')).toMatchObject({
