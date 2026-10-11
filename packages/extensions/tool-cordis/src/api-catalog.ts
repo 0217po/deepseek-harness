@@ -3623,6 +3623,43 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'webStartup',
+    summary: 'What the web rows read from WEB_STARTUP_SERVICE.',
+    description: 'What the web rows read from WEB_STARTUP_SERVICE.',
+    methods: [
+      {
+        signature: 'openBrowser: boolean',
+        description: 'Whether this invocation opens the default browser after startup.',
+        parameters: [],
+      },
+      {
+        signature: 'host?: string',
+        description: '`--host`, absent when the invocation did not name one.',
+        parameters: [],
+      },
+      {
+        signature: 'port?: number',
+        description: '`--port`, absent when the invocation did not name one.',
+        parameters: [],
+      },
+      {
+        signature: 'publicUrl?: string',
+        description: '`--public-url` as its canonical root ending in `/`, absent when not specified: the advertised HTTP(S) root. See [public deployments](../README.md#public-deployments).',
+        parameters: [],
+      },
+      {
+        signature: 'trustedHosts: string[]',
+        description: 'Explicit `--trusted-host` authorities, in argument order.',
+        parameters: [],
+      },
+      {
+        signature: 'tls?: TlsConfig',
+        description: 'Server certificate chain and unencrypted private key supplied together.',
+        parameters: [],
+      },
+    ],
+  },
+  {
     key: 'workflowEngine',
     summary: 'Workflow Service Definition contract.',
     description: 'Workflow Service Definition contract. Invalid requests throw before publication; a live run is holder-owned, its result never rejects, and disposal waits for script and child cleanup. Lifecycle listener failures are contained, and `workflow/end` fires exactly once as the result settles.',
@@ -7879,6 +7916,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TimeOutOfRangeError',
     declaration: 'export interface TimeOutOfRangeError {\n    readonly code: \'time_out_of_range\';\n    readonly message: string;\n}',
+  },
+  {
+    name: 'TlsConfig',
+    declaration: 'export interface TlsConfig {\n    certFile: string;\n    keyFile: string;\n}',
   },
   {
     name: 'ToastOptions',

@@ -31,7 +31,8 @@ export interface WebStartupValues {
   /** `--port`, absent when the invocation did not name one. */
   port?: number
   /**
-   * `--public-url`, absent when not specified: the advertised HTTP(S) root.
+   * `--public-url` as its canonical root ending in `/`, absent when not
+   * specified: the advertised HTTP(S) root.
    * See [public deployments](../README.md#public-deployments).
    */
   publicUrl?: string
@@ -104,9 +105,10 @@ export function apply(ctx: Context): void {
     } else if (options.tlsCert !== undefined || options.tlsKey !== undefined) {
       program.error('error: --tls-cert and --tls-key must be supplied together')
     }
+    let publicUrl: string | undefined
     if (options.publicUrl !== undefined) {
       try {
-        parsePublicUrl(options.publicUrl, '--public-url')
+        publicUrl = parsePublicUrl(options.publicUrl, '--public-url').href
       } catch (error) {
         program.error(`error: ${(error as Error).message}`)
       }
@@ -115,7 +117,7 @@ export function apply(ctx: Context): void {
       openBrowser: options.open,
       ...options.host !== undefined && { host: options.host },
       ...options.port !== undefined && { port: Number(options.port) },
-      ...options.publicUrl !== undefined && { publicUrl: options.publicUrl },
+      ...publicUrl !== undefined && { publicUrl },
       ...tls !== undefined && { tls },
       trustedHosts: options.trustedHost ?? [],
     } satisfies WebStartupValues)

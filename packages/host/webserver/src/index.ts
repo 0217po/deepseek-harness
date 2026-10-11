@@ -198,6 +198,23 @@ export function normalizeBindAddress(host: string): string {
   return parsed.toString()
 }
 
+/**
+ * The URL host form of a bind address. Loopback addresses use their canonical
+ * text, so browsers treat them as local, trustworthy origins: a mapped literal
+ * such as `::ffff:127.0.0.1` reads as `127.0.0.1`, and `::0.0.0.1` reads as
+ * `::1`. A redundant loopback zone is dropped; other addresses keep their text,
+ * and IPv6 text is bracketed.
+ * @param host - concrete IPv4 or IPv6 bind literal.
+ * @returns the URL host, or `undefined` when a non-loopback interface zone id makes the address inexpressible in a URL.
+ */
+export function bindUrlHost(host: string): string | undefined {
+  const zoneAt = host.indexOf('%')
+  const bare = zoneAt === -1 ? host : host.slice(0, zoneAt)
+  if (!isLoopbackHost(bare) && zoneAt !== -1) return undefined
+  const text = isLoopbackHost(bare) ? normalizeBindAddress(bare) : host
+  return isIP(text) === 6 ? `[${text}]` : text
+}
+
 function createGzipMiddleware(config: ResolvedConfig): NodeMiddleware {
   // `compression` is typed for Express, but its runtime uses only the
   // node:http request and response members supplied here.
@@ -323,6 +340,20 @@ export class WebServer extends Service {
    */
   get protocol(): 'http:' | 'https:' {
     return this.tlsConfig === undefined ? 'http:' : 'https:'
+  }
+
+  /**
+   * The root URL local clients use to reach the bound listener: the protocol,
+   * the {@link bindUrlHost} form of the bind address, and the listening port.
+   * Read it after `listen` binds, like {@link port}.
+   * @throws when the bind address has no URL form.
+   */
+  get origin(): string {
+    const host = bindUrlHost(this.config.host)
+    if (host === undefined) {
+      throw new Error(`webserver: bind address ${JSON.stringify(this.config.host)} carries an interface zone id, which no URL can express`)
+    }
+    return `${this.protocol}//${host}:${String(this.listenedPort)}`
   }
 
   /**

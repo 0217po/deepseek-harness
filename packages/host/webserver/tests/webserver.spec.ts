@@ -21,7 +21,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
-import HttpServer, { isLoopbackHost, normalizeBindAddress, renderIndexInjections, type TlsConfig } from '../src/index.ts'
+import HttpServer, { bindUrlHost, isLoopbackHost, normalizeBindAddress, renderIndexInjections, type TlsConfig } from '../src/index.ts'
 import { materializeTlsFixture, type TlsFixture } from './tls-fixture.ts'
 
 /** One-shot barrier for disposal overlapping a pending PEM read. */
@@ -278,6 +278,26 @@ describe('real Loader composition', () => {
     ]
     for (const [host, text] of rows) expect(normalizeBindAddress(host)).toBe(text)
     expect(() => normalizeBindAddress('localhost')).toThrow(/is not a concrete IPv4 or IPv6 address literal/)
+  })
+
+  it('writes bind addresses in their URL host form', () => {
+    const rows: [string, string | undefined][] = [
+      ['127.0.0.1', '127.0.0.1'],
+      ['::ffff:127.0.0.1%lo', '127.0.0.1'],
+      ['::1', '[::1]'],
+      ['::0.0.0.1%lo', '[::1]'],
+      ['10.1.2.3', '10.1.2.3'],
+      ['fd00::1', '[fd00::1]'],
+      // A zone selects an interface and no URL can carry it; only a loopback zone is redundant.
+      ['fe80::1%eth0', undefined],
+      ['::127.0.0.1%lo', undefined],
+    ]
+    for (const [host, text] of rows) expect(bindUrlHost(host)).toBe(text)
+  })
+
+  it('reports no origin for a bind address that no URL can express', () => {
+    expect(() => new HttpServer(new Context(), HttpServer.Config({ host: 'fe80::1%eth0', port: 0 })).origin)
+      .toThrow('webserver: bind address "fe80::1%eth0" carries an interface zone id, which no URL can express')
   })
 
 
@@ -554,6 +574,7 @@ describe('real Loader composition', () => {
     const loaded = await loadComposition(0, false, '127.0.0.1', tls)
     const server = loaded.webServer
     expect(server.protocol).toBe('https:')
+    expect(server.origin).toBe(`https://127.0.0.1:${String(server.port)}`)
     server.register({
       kind: 'exact',
       path: '/tls',
@@ -579,6 +600,7 @@ describe('real Loader composition', () => {
     const loaded = await loadComposition(0, false, '127.0.0.1', null)
     const server = loaded.webServer
     expect(server.protocol).toBe('http:')
+    expect(server.origin).toBe(`http://127.0.0.1:${String(server.port)}`)
     server.register({ kind: 'exact', path: '/plain', handler: (_req, res) => { res.writeHead(200); res.end('PLAIN') } })
     expect(await request(server.port, '/plain')).toMatchObject({ status: 200, body: 'PLAIN' })
     await expect(tlsRequest(server.port, '/plain')).rejects.toThrow()

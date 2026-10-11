@@ -212,6 +212,14 @@ renderIndex(html: string): string
 
 Source: [`packages/host/webserver/src/index.ts`](../../packages/host/webserver/src/index.ts)
 
+<a id="ctxwebstartup--webstartupvalues"></a>
+
+### `ctx.webStartup` — `WebStartupValues`
+
+What the web rows read from WEB_STARTUP_SERVICE.
+
+Source: [`packages/bundle/web-app/src/startup.ts`](../../packages/bundle/web-app/src/startup.ts)
+
 <a id="connection-events"></a>
 
 ### `connection/*` events
