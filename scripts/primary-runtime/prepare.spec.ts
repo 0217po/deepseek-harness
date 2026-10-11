@@ -55,6 +55,18 @@ it('reports missing distribution metadata before trying to execute a stale nativ
   } finally { await rm(root, { recursive: true, force: true }) }
 })
 
+// Native Windows payloads require python.exe rather than POSIX interpreter aliases.
+it.skipIf(process.platform === 'win32')('rejects expanded interpreter aliases in the native payload smoke', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'primary-expanded-aliases-'))
+  try {
+    await writeFile(join(root, 'runtime.json'), JSON.stringify({ desktopVersion: '1', platform: process.platform, arch: process.arch,
+      python: '3.12.14', pythonPackages: { numpy: '2.3.5' } }))
+    await mkdir(join(root, 'dependencies/python/bin'), { recursive: true })
+    for (const name of ['python', 'python3', 'python3.12']) await writeFile(join(root, 'dependencies/python/bin', name), 'interpreter')
+    expect(() => { smokePrimaryRuntime(root) }).toThrow('Python commands must be relative aliases')
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
 it('extracts a hash-verified cached library without a Python installer or network request', async () => {
   const root = await mkdtemp(join(tmpdir(), 'desktop-wheel-'))
   try {

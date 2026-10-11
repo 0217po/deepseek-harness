@@ -17,6 +17,7 @@ import { parseArgs } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import { resolveLinuxNodePtyAddon, resolveWindowsNodePtyAddons } from './executable-native-pty.ts'
 import { officeSidecarArchives, runtimeNpmArchive, OFFICE_ASSET_IGNORES } from './build-exe-for-python-sdk-office.ts'
+import { syncPythonRuntimeProduct } from './build-exe-for-python-sdk-resources.ts'
 import { deduplicateStagedWorkspacePackages, materializeStagedLinks } from './build-exe-for-python-sdk-staging.ts'
 import { prepareOfficeSkillAssets } from './primary-runtime/prepare.ts'
 import primaryLock from './primary-runtime/lock.json' with { type: 'json' }
@@ -556,11 +557,7 @@ class SingleExeBuild {
     await mkdir(destDir, { recursive: true })
     for (const path of products) {
       const destination = join(destDir, basename(path))
-      if (statSync(path).isDirectory()) {
-        await rm(destination, { recursive: true, force: true })
-        await cp(path, destination, { recursive: true })
-      } else await copyFile(path, destination)
-      await chmod(destination, statSync(path).mode & 0o777)
+      await syncPythonRuntimeProduct(path, destination)
       console.log(`build-exe-for-python-sdk: synced ${destination}`)
     }
   }
