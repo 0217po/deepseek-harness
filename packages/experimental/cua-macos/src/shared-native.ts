@@ -4,11 +4,12 @@ import { lstat, mkdir, readFile, realpath } from 'node:fs/promises'
 import { Socket } from 'node:net'
 import { userInfo } from 'node:os'
 import { join } from 'node:path'
-import { PassThrough, Writable, type Readable } from 'node:stream'
+import { PassThrough, Writable } from 'node:stream'
 import { setTimeout as delay } from 'node:timers/promises'
 import type { SubprocessHandle, SubprocessOutcome, SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { z } from 'zod'
-import type { NativeClientConfig } from './native-client.ts'
+import type { NativeClientConfig, NativeChannel } from '@deepseek-ai/dsh-cua/native-client'
+export type { NativeChannel } from '@deepseek-ai/dsh-cua/native-client'
 
 const Ready = z.object({
   type: z.literal('ready'), protocol: z.literal(1), runtimeKey: z.string(),
@@ -19,16 +20,6 @@ const handshakeByteLimit = 8192
 type LauncherExit = [PromiseSettledResult<SubprocessOutcome>, PromiseSettledResult<boolean>]
 interface RuntimeLocation { helperPath: string; runtimeKey: string; directory: string }
 
-/** One Agent's ordered native protocol stream and its cleanup completion. */
-export interface NativeChannel {
-  readonly stdin: Writable
-  readonly stdout: Readable
-  readonly done: Promise<void>
-  /** Stop writes and release this connection's native state without terminating other clients. */
-  close(): void
-  /** @returns Completion after this socket and its managed startup process have closed. */
-  waitForClose(): Promise<void>
-}
 
 function transportError(code: string, message: string, cause?: unknown): Error & { code: string } {
   return Object.assign(new Error(message, { cause }), { code })

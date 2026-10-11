@@ -19,9 +19,9 @@ import Subprocess from '@deepseek-ai/dsh-subprocess-local'
 import { expect, it } from 'vitest'
 import * as Cua from '../src/index.ts'
 import { installNativeFixture } from './native-fixture.ts'
-import { Request } from '../src/protocol.ts'
+import { Request } from '@deepseek-ai/dsh-cua/protocol'
 
-const bridge = fileURLToPath(new URL('../lib/bridge.js', import.meta.url))
+const bridge = fileURLToPath(new URL('../../cua/lib/bridge.js', import.meta.url))
 const bootstrap = join(dirname(fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-ptc-runtime-node/package.json'))), 'lib/persistent-process.js')
 
 class VisualAdapter extends LlmAdapter {

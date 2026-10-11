@@ -1,6 +1,6 @@
 - insert:
     - id: cua-provider-registry
-      name: '../../computer-use/src/index.ts'
+      name: '../../../computer-use/computer-use/src/index.ts'
     - id: cua
       name: '../src/index.ts'
       config:

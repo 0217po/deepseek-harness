@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-cua",
-  "description": "macOS computer use through application and window objects",
+  "description": "Shared Computer Use application objects, authorization, and logged tool execution",
   "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
@@ -27,21 +27,22 @@
     "./bridge": {
       "types": "./lib/types/bridge.d.ts",
       "default": "./lib/bridge.js"
+    },
+    "./native-client": {
+      "types": "./lib/types/native-client.d.ts",
+      "default": "./lib/native-client.js"
+    },
+    "./protocol": {
+      "types": "./lib/types/protocol.d.ts",
+      "default": "./lib/protocol.js"
     }
   },
   "files": [
     "lib/index.js",
-    "native/bin",
     "lib/api.js",
     "lib/bridge.js",
-    "native/Package.swift",
-    "native/Sources",
-    "native/tests/swift",
-    "native/tests/test_swift.py",
-    "native/LICENSE.cua-driver",
-    "native/upstream.json",
-    "native/README.txt",
-    "native/protocol.schema.json",
+    "lib/native-client.js",
+    "lib/protocol.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -93,8 +94,5 @@
     "@deepseek-ai/dsh-config-editor": "workspace:*",
     "@deepseek-ai/dsh-hmr": "workspace:*",
     "@deepseek-ai/cordis-plugin-timer": "workspace:~"
-  },
-  "scripts": {
-    "build:native": "swift build --package-path native --configuration release"
   }
 }

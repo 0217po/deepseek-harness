@@ -1,13 +1,12 @@
 /** Controlled connection streams exercise the platform-independent native protocol client. */
 import { PassThrough, Writable } from 'node:stream'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import type { NativeChannel } from '../src/shared-native.ts'
+import type { NativeChannel } from '../src/native-client.ts'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
 import { NativeClient, NativeError } from '../src/native-client.ts'
 
 const shared = vi.hoisted(() => ({ create: vi.fn() }))
-vi.mock('../src/shared-native.ts', () => ({ createSharedNativeChannel: shared.create }))
 
 const Request = z.object({ id: z.string(), method: z.string(), params: z.record(z.string(), z.json()) }).strict()
 const Cancel = z.object({ type: z.literal('cancel'), id: z.string() }).strict()
@@ -45,7 +44,7 @@ function fixture(options: {
     maxRequestBytes: options.maxRequestBytes ?? 1024,
     maxResponseBytes: options.maxResponseBytes ?? 1024, graceMs: options.graceMs ?? 10, textEventIntervalMs: 0.5,
   }
-  const client = new NativeClient(owner, config, options.reportDiagnostic)
+  const client = new NativeClient(owner, config, shared.create, options.reportDiagnostic)
   function finish() { done.resolve(); gone.resolve() }
   function reply(value: unknown) { stdout.write(Buffer.from(JSON.stringify(value) + '\n')) }
   function id(index = requests.length - 1) {

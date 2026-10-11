@@ -5,7 +5,7 @@ import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
-import { createSharedNativeChannel, type NativeChannel } from './shared-native.ts'
+import type { Readable, Writable } from 'node:stream'
 
 const Reply = z.union([
   z.object({ id: z.string(), result: z.json() }).strict(),
@@ -45,6 +45,26 @@ export interface NativeClientConfig {
   textEventIntervalMs: number
 }
 
+/** One Agent's ordered connection to native operations and cleanup acknowledgement. */
+export interface NativeChannel {
+  readonly stdin: Writable
+  readonly stdout: Readable
+  readonly done: Promise<void>
+  /** Stop writes and release this connection's native state. */
+  close(): void
+  /** @returns Completion after the connection and its owned startup processes close. */
+  waitForClose(): Promise<void>
+}
+/**
+ * Open the platform connection with the configured resource bounds.
+ * @param owner - Managed subprocess provider for startup and cleanup.
+ * @param config - Executable, operation limits, and deadlines.
+ * @returns Agent-owned native byte stream and its cleanup acknowledgement.
+ */
+export type NativeChannelFactory = (
+  owner: { subprocess: Pick<SubprocessRuntime, 'spawn'> }, config: NativeClientConfig,
+) => NativeChannel
+
 /** One Agent owns this connection and its native handles; other Agents use independent connections. */
 export class NativeClient {
   private readonly handle: NativeChannel
@@ -61,12 +81,13 @@ export class NativeClient {
   /**
    * @param owner - Managed subprocess provider.
    * @param config - Executable, transport bounds and deadlines.
+   * @param createChannel - Platform-owned connection and process lifecycle.
    * @param reportDiagnostic - Optional Host diagnostic sink; never receives captured content.
    */
-  constructor(owner: { subprocess: Pick<SubprocessRuntime, 'spawn'> }, config: NativeClientConfig,
+  constructor(owner: { subprocess: Pick<SubprocessRuntime, 'spawn'> }, config: NativeClientConfig, createChannel: NativeChannelFactory,
     private readonly reportDiagnostic?: (message: string) => void) {
     this.config = config
-    this.handle = createSharedNativeChannel(owner, config)
+    this.handle = createChannel(owner, config)
     this.handle.stdout.on('data', (chunk: Buffer) => { this.receive(chunk) })
     this.handle.stdout.on('error', (error: Error) => { this.fail(new NativeError('NATIVE_IO', `Native connection failed: ${error.message}`, { cause: error })) })
     this.handle.stdout.on('end', () => { this.fail(new NativeError('NATIVE_EOF', 'Native connection ended; acquire fresh application handles')) })

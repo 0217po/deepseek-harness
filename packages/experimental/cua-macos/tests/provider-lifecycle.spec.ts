@@ -24,7 +24,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import Subprocess from '@deepseek-ai/dsh-subprocess'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import * as NativeProvider from '../src/index.ts'
-import type { NativeClient } from '../src/native-client.ts'
+import type { NativeClient } from '@deepseek-ai/dsh-cua/native-client'
 import type { NativeBuildSpec } from '../src/native-build.ts'
 
 const native = vi.hoisted(() => ({
@@ -37,8 +37,8 @@ vi.mock('../src/native-build.ts', async importOriginal => ({
   nativeHostArchitecture: native.architecture,
   prepareNativeExecutable: native.prepare,
 }))
-vi.mock('../src/native-client.ts', async importOriginal => ({
-  ...await importOriginal<typeof import('../src/native-client.ts')>(),
+vi.mock('@deepseek-ai/dsh-cua/native-client', async importOriginal => ({
+  ...await importOriginal<typeof import('@deepseek-ai/dsh-cua/native-client')>(),
   NativeClient: class {
     disposed = false
     constructor() { native.instances.push(this) }
@@ -435,7 +435,7 @@ it('adds an installation-owned bridge URL when persistent PTC is available', asy
   await f.ctx.plugin(Sandbox)
   await f.ctx.plugin(SandboxPolicy)
   await f.ctx.plugin(NodeRuntime, { executionMode: 'persistent-in-memory' })
-  expect(await text()).toContain(new URL('../lib/bridge.js', import.meta.url).href)
+  expect(await text()).toContain(new URL('../../cua/lib/bridge.js', import.meta.url).href)
 })
 
 it('keeps Cordis loading until preparation succeeds and reports preparation failure through the fiber', async () => {

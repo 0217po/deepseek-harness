@@ -20,7 +20,7 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SubprocessLocal from '@deepseek-ai/dsh-subprocess-local'
 import { z } from 'zod'
 import * as NativeProvider from '../src/index.ts'
-import { createCuaApi } from '../src/api.ts'
+import { createCuaApi } from '@deepseek-ai/dsh-cua/api'
 import { installNativeFixture } from './native-fixture.ts'
 
 const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'

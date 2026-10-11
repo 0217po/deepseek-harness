@@ -28,6 +28,8 @@ vi.mock('../src/native-client.ts', async original => ({
   },
 }))
 
+const unusedConnector = () => { throw new Error('Mocked native client does not connect') }
+
 const nativeConfig = { helperPath: '/fixture', cwd: '/', timeoutMs: 1000, connectTimeoutMs: 5000, screenshotTimeoutMs: 5000, axTimeoutMs: 100,
   maxRequestBytes: 4096, maxResponseBytes: 4096, graceMs: 100, textEventIntervalMs: 1 }
 const identity = ApplicationAuthorizationResult.parse({ id: 'a'.repeat(64), name: 'Test application', executablePath: '/Applications/Fixture.app/Contents/MacOS/Fixture', persistable: true })
@@ -48,7 +50,7 @@ async function setup(choice = 'Allow for this task', options: { writable?: boole
   const save = vi.fn(async (next: readonly CuaApplicationGrant[]) => { grants = next })
   let writable = options.writable !== false
   const access = new ApplicationAccess(ctx, { grants: () => grants, get save() { return writable ? save : undefined } })
-  const client = new NativeClient(ctx, nativeConfig)
+  const client = new NativeClient(ctx, nativeConfig, unusedConnector)
   return { ctx, owner, agent: owner.agent, answer, save, access, client, grants: () => grants,
     setWritable(value: boolean) { writable = value },
   }
@@ -68,7 +70,7 @@ it('retains task consent for the exact helper handle without saving it', async (
   await f.access.select(f.agent, f.client, handle, identity, signal)
   expect(f.answer).toHaveBeenCalledOnce()
   expect(f.save).not.toHaveBeenCalled()
-  const replacement = new NativeClient(f.ctx, nativeConfig)
+  const replacement = new NativeClient(f.ctx, nativeConfig, unusedConnector)
   await expect(f.access.run(replacement, handle, signal, async () => null)).rejects.toThrow('APP_ACCESS_REQUIRED')
 })
 
@@ -107,7 +109,7 @@ it('reuses only saved signed identities when a task or helper is replaced', asyn
   const { persistable: _persistable, ...grant } = identity
   const f = await setup('Deny', { initial: [grant] })
   await f.access.select(f.agent, f.client, handle, identity, signal)
-  const replacement = new NativeClient(f.ctx, nativeConfig)
+  const replacement = new NativeClient(f.ctx, nativeConfig, unusedConnector)
   await f.access.select(f.agent, replacement, handle, identity, signal)
   expect(f.answer).not.toHaveBeenCalled()
   await expect(f.access.run(f.client, handle, signal, async () => null)).rejects.toThrow('APP_ACCESS_REQUIRED')
@@ -215,7 +217,7 @@ it('keeps another task allowed when the same application is denied in a new task
   const f = await setup()
   await f.access.select(f.agent, f.client, handle, identity, signal)
   const owner = await f.ctx.agents.create({ sessionId: SessionId('cua-task-denial') })
-  const client = new NativeClient(f.ctx, nativeConfig)
+  const client = new NativeClient(f.ctx, nativeConfig, unusedConnector)
   f.answer.mockResolvedValueOnce({ answers: [{ id: 'cua-app-access', selected: ['Deny'] }] })
   await expect(f.access.select(owner.agent, client, handle, identity, signal)).rejects.toThrow('APP_ACCESS_DENIED')
   expect(f.client.disposed).toBe(false)
@@ -251,7 +253,7 @@ it('cancels native work when saved consent is removed from configuration', async
   expect(f.client.disposed).toBe(true)
   await expect(f.access.run(f.client, handle, signal, async () => null)).rejects.toThrow('APP_ACCESS_REVOKED')
   await f.save([{ id: identity.id, name: identity.name, executablePath: identity.executablePath }])
-  const replacement = new NativeClient(f.ctx, nativeConfig)
+  const replacement = new NativeClient(f.ctx, nativeConfig, unusedConnector)
   await f.access.select(f.agent, replacement, handle, identity, signal)
   await expect(f.access.run(f.client, handle, signal, async () => null)).rejects.toThrow('APP_ACCESS_REQUIRED')
   await expect(f.access.run(replacement, handle, signal, async () => 'fresh')).resolves.toBe('fresh')
@@ -285,7 +287,7 @@ it('refuses closed helpers and forgets one task without removing another task', 
   const f = await setup()
   await f.access.select(f.agent, f.client, handle, identity, signal)
   const owner = await f.ctx.agents.create({ sessionId: SessionId('other-consented-task') })
-  const other = new NativeClient(f.ctx, nativeConfig)
+  const other = new NativeClient(f.ctx, nativeConfig, unusedConnector)
   await f.access.select(owner.agent, other, handle, identity, signal)
   f.ctx.emit('loader/volatile-update', [['allowedApps']])
   f.access.forget(f.agent)
@@ -307,7 +309,7 @@ it('keeps an active task operation running when a different task denies the same
   try {
     const operationSignal = await entered.promise
     const owner = await f.ctx.agents.create({ sessionId: SessionId('denying-task') })
-    const other = new NativeClient(f.ctx, nativeConfig)
+    const other = new NativeClient(f.ctx, nativeConfig, unusedConnector)
     f.answer.mockResolvedValueOnce({ answers: [{ id: 'cua-app-access', selected: ['Deny'] }] })
     await expect(f.access.select(owner.agent, other, handle, identity, signal)).rejects.toThrow('APP_ACCESS_DENIED')
     expect(operationSignal.aborted).toBe(false)

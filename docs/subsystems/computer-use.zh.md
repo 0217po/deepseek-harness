@@ -5,7 +5,7 @@
 计算机操作让模型通过配置的提供方观察并操作本地桌面。DSH 的共享能力称为 **computer use（计算机操作）**；**Cua Driver** 是上游实现的名称。
 
 
-原生 [`dsh-cua`](../../packages/experimental/cua/README.zh.md) 提供方支持显式源码组合，通过 User Questions 和配置文件执行应用授权规则。
+[macOS CUA 提供方](../../packages/experimental/cua-macos/README.zh.md)使用[共享 CUA 对象与执行器](../../packages/experimental/cua/README.zh.md)，通过 User Questions 和配置档设置执行应用授权。
 
 ## 选择提供方
 

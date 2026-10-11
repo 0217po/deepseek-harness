@@ -9,7 +9,7 @@ import { buildNativeExecutable, isSourcePackage, nativeExecutablePath, nativeHos
 async function fixture(diagnostics = true) {
   const root = await mkdtemp(join(tmpdir(), 'cua-native-build-'))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
-  const packageRoot = join(root, 'packages/experimental/cua')
+  const packageRoot = join(root, 'packages/experimental/cua-macos')
   await mkdir(packageRoot, { recursive: true })
   const controller = new AbortController()
   let output: Buffer = Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 0, 255, 128])
