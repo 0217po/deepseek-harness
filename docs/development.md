@@ -136,7 +136,7 @@ DEEPSEEK_BASE_URL=https://... # optional
 
 lefthook is configured in `lefthook.yml` as a fast local checkpoint:
 
-- `pre-commit` verifies staged pairing records against the staged owner blobs, validates staged files with the project-free `.oxlintrc.staged.json` profile and applies Oxlint fixes with one bounded retry, regenerates `THIRD_PARTY_NOTICES.md` when a staged file is one of its inputs, checks the staged diff for whitespace errors, and runs the vendor manifest guard.
+- `pre-commit` verifies staged pairing records against the staged owner blobs, validates staged files with the project-free `.oxlintrc.staged.json` profile and applies Oxlint fixes with one bounded retry, checks the staged diff for whitespace errors, and runs the vendor manifest guard.
 - `pre-merge-commit` performs the same index-backed pairing check before Git creates an automatic merge commit.
 - `pre-push` runs `pnpm run typecheck`, which generates Typert contracts without bundling before the Client TypeScript check and checks both aggregates.
 
