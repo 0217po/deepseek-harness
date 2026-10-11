@@ -103,6 +103,8 @@ export class CredentialScanner {
    * then, because a user name and a password exclude `/`. A password that starts inside a range also
    * ends inside it: the range holds the `:` before the password, so it is a key block, whose `END`
    * line has spaces, or one that runs to the end of the text.
+   * @param text - the complete original text.
+   * @param from - the query offset.
    * @returns the `secret` node, or undefined when no credential starts at or after `from`.
    */
   match(text: string, from: number): UserTextNode<'secret'> | undefined {

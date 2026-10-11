@@ -6,28 +6,46 @@
  */
 
 // Character classes of one ASCII code unit, as bits.
-export const KEY = 1 // [A-Za-z0-9_-]
-export const ALNUM = 2 // [A-Za-z0-9]
-export const WORD = 4 // \w
-export const ALNUM_DASH = 8 // [A-Za-z0-9-]
-export const UPPER_ALNUM = 16 // [A-Z0-9]
-export const LABEL = 32 // [A-Z0-9 ]
-export const SCHEME = 64 // [a-z0-9+.-]
-export const LOWER = 128 // [a-z]
-export const USER = 256 // [^\s/:@?#]
-export const PASSWORD = 512 // [^\s/@?#]
+/** `[A-Za-z0-9_-]` */
+export const KEY = 1
+/** `[A-Za-z0-9]` */
+export const ALNUM = 2
+/** `\w` */
+export const WORD = 4
+/** `[A-Za-z0-9-]` */
+export const ALNUM_DASH = 8
+/** `[A-Z0-9]` */
+export const UPPER_ALNUM = 16
+/** `[A-Z0-9 ]` */
+export const LABEL = 32
+/** `[a-z0-9+.-]` */
+export const SCHEME = 64
+/** `[a-z]` */
+export const LOWER = 128
+/** `[^\s/:@?#]` */
+export const USER = 256
+/** `[^\s/@?#]` */
+export const PASSWORD = 512
 
 // Literal kinds. Same-start candidates resolve by ascending kind, so a token used as an address password is masked completely.
+/** A private key block from its `-----BEGIN` line. */
 export const KEY_BLOCK = 0
+/** The password of an address that carries credentials. */
 export const ADDRESS = 1
+/** A provider key or token after its fixed prefix. */
 export const PREFIXED = 2
 
 // Shapes of a prefixed format's character run after its literal.
-export const RUN = 0 // the whole run, at least `min`
-export const BOUNDED = 1 // `min`..`max`, then `\b`
-export const SK = 2 // at least `min`, with a digit among the first 256
-export const GOOGLE = 3 // exactly `min`
-export const JWT = 4 // three runs joined by `.eyJ` and `.`
+/** The whole run, at least `min`. */
+export const RUN = 0
+/** `min` to `max`, then `\b`. */
+export const BOUNDED = 1
+/** At least `min`, with a digit among the first 256. */
+export const SK = 2
+/** Exactly `min`. */
+export const GOOGLE = 3
+/** Three runs joined by `.eyJ` and `.`. */
+export const JWT = 4
 
 /** One recognized format. */
 export interface CredentialFormat {

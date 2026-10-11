@@ -20,7 +20,11 @@ export class CredentialMasks {
 
   /**
    * The display form of `text[start, end)`, whose earliest candidate has `kind`.
+   * @param text - the queried text.
+   * @param kind - the literal kind of the range's earliest candidate.
    * @param plain - the range holds only prefixed-format characters: ASCII without line breaks.
+   * @param start - first offset of the range.
+   * @param end - offset after the range.
    * @returns the mask; line breaks stay in place, one mark per code point.
    */
   masked(text: string, kind: number, plain: boolean, start: number, end: number): string {
