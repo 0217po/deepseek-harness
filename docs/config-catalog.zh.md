@@ -4283,9 +4283,9 @@ export interface Config {
    */
   surfaceContext: boolean
   /**
-   * Canonical HTTP(S) root to advertise in the printed and opened URL and
-   * `DSH_WEB_URL`, e.g.
-   * `https://app.example/ui/`, normalized to end in `/`. Configures no routing
+   * Canonical HTTP(S) root to advertise in the printed and opened URL,
+   * `DSH_WEB_URL`, and `webApp.getAdvertisedUrl()`, which supplies the Web GUI
+   * URL in agent runtime context, e.g. `https://app.example/ui/`, normalized to end in `/`. Configures no routing
    * or authentication; see [public deployments](../README.md#public-deployments).
    * Absent or YAML `null` advertises the bind-address URL.
    */

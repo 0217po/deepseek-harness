@@ -24,7 +24,7 @@ Status: implemented
 
 | 包 | 职责 |
 |---|---|
-| `@deepseek-ai/dsh-harness-dev-context`（`packages/context/harness-dev-context`） | 两个 section、两个 context、旧格式投影；全部模块私有，只导出插件协议（`name`、`inject`、`apply`）与投影状态类型 `LegacyPrompt` |
+| `@deepseek-ai/dsh-harness-dev-context`（`packages/context/harness-dev-context`） | 两个 section、两个 context、旧格式投影；全部模块私有，只导出插件协议（`name`、`inject`、`apply`） |
 | `@deepseek-ai/dsh-host-webserver` | `WebServer.getOrigin()`（绑定地址的 URL 形式加协议与实际端口）与 `bindUrlHost(host)` |
 | `@deepseek-ai/dsh-web-app` | `web-runtime` 行提供 `webApp`，其 `getAdvertisedUrl()` 返回配置的 `publicUrl`，否则返回监听器 origin，与 `DSH_WEB_URL` 和启动 URL 同值；bundle patch 挂载 `harness-dev-context` 行 |
 | `@deepseek-ai/dsh-system-prompt` | `CONTEXT_ORDERS.HARNESS_SOURCE = 200`、`WEB_SURFACE = 210` |
@@ -49,7 +49,7 @@ Status: implemented
 | 旧模板 | 匹配规则 |
 |---|---|
 | `harness:source` | `The DeepSeek Harness implementation checkout is at ` 开头、旧版固定说明结尾、中间不含换行 |
-| `app:web-surface` | `You are interacting with the user through the DeepSeek Harness Web GUI at ` 开头、`. ` 加现行固定说明结尾、中间不含换行 |
+| `app:web-surface` | `You are interacting with the user through the DeepSeek Harness Web GUI at ` 开头、`. ` 加早期版本渲染的说明结尾（冻结为字面量）、中间不含换行 |
 
 两个 section 的文本提供函数读取 `AssembleContext.agent.session` 的投影状态：有旧段落时原样返回该段落（`interpolate: false`），否则返回新说明。没有 agent 的诊断性组装使用新说明。`sessionProjections` 是插件的必需注入，投影单元由插件自己注册，因此存在 agent 时状态必然可读。
 
@@ -85,7 +85,7 @@ Status: implemented
 - 只保护这两段。其他提示文本在版本之间变化时，不支持 in-history 的路由仍会改写头节点。
 - 不含本修复的旧版本恢复新格式会话时会按旧模板改写头节点；A/B 两个 checkout 都需包含本修复后再交替运行。
 - app-boot 不再导出 `addHarnessSourceSection` 与 `HARNESS_SOURCE_SECTION`；web-app 的 `surfaceContext` 只控制 `DSH_WEB_URL`，关闭这两项上下文改为禁用 `harness-dev-context` 行。
-- Web e2e 录制会话里的运行时上下文多出两行，测试脚手架需把 URL 与 checkout 路径规范化为占位符。
+- Web e2e 录制会话里的运行时上下文多出两行；测试脚手架把 URL 与 checkout 路径规范化为占位符。
 
 ## 测试
 

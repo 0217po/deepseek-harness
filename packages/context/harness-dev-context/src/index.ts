@@ -83,7 +83,7 @@ const LEGACY_PROMPT = 'harnessDevLegacyPrompt'
 const legacyPromptSchema = zod.object({ source: zod.string().nullable(), web: zod.string().nullable() })
 
 /** Value-bearing paragraphs of the latest nonempty system prompt a Session committed; `null` where it has none. */
-export type LegacyPrompt = zod.infer<typeof legacyPromptSchema>
+type LegacyPrompt = zod.infer<typeof legacyPromptSchema>
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionStateMap {

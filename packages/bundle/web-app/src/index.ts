@@ -4,9 +4,9 @@
  * manifest field). The plugin owns the browser-surface glue: it resolves
  * the built frontend dist (workspace knowledge of this bundle, never user
  * config), mounts the `frontend-static` fallback owner over it, registers the
- * bash-visible web runtime
- * variable, the process-token URL line, and the default-browser handoff. An
- * advertised `publicUrl` replaces the published bind-address URL. Non-loopback
+ * bash-visible web runtime variable, the process-token URL line, and the
+ * default-browser handoff, and provides the `webApp` service. An advertised
+ * `publicUrl` replaces the published bind-address URL. Non-loopback
  * HTTP binds trigger an exposure warning. App command-line values arrive
  * through the `webStartup` service expressions in the bundle patch.
  * @module @deepseek-ai/dsh-web-app
@@ -63,9 +63,9 @@ export interface Config {
    */
   surfaceContext: boolean
   /**
-   * Canonical HTTP(S) root to advertise in the printed and opened URL and
-   * `DSH_WEB_URL`, e.g.
-   * `https://app.example/ui/`, normalized to end in `/`. Configures no routing
+   * Canonical HTTP(S) root to advertise in the printed and opened URL,
+   * `DSH_WEB_URL`, and `webApp.getAdvertisedUrl()`, which supplies the Web GUI
+   * URL in agent runtime context, e.g. `https://app.example/ui/`, normalized to end in `/`. Configures no routing
    * or authentication; see [public deployments](../README.md#public-deployments).
    * Absent or YAML `null` advertises the bind-address URL.
    */

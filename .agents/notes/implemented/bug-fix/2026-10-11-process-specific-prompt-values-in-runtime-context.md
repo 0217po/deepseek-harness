@@ -24,7 +24,7 @@ Both values become runtime context and the system prompt keeps only value-free g
 
 | Package | Responsibility |
 |---|---|
-| `@deepseek-ai/dsh-harness-dev-context` (`packages/context/harness-dev-context`) | Both sections, both contexts, and the earlier-format projection; all module-private, exporting only the plugin protocol (`name`, `inject`, `apply`) and the projection state type `LegacyPrompt` |
+| `@deepseek-ai/dsh-harness-dev-context` (`packages/context/harness-dev-context`) | Both sections, both contexts, and the earlier-format projection; all module-private, exporting only the plugin protocol (`name`, `inject`, `apply`) |
 | `@deepseek-ai/dsh-host-webserver` | `WebServer.getOrigin()` (the bind address's URL form with protocol and bound port) and `bindUrlHost(host)` |
 | `@deepseek-ai/dsh-web-app` | The `web-runtime` row provides `webApp`, whose `getAdvertisedUrl()` returns the configured `publicUrl`, otherwise the listener origin, the same value as `DSH_WEB_URL` and the startup URL; the bundle patch mounts the `harness-dev-context` row |
 | `@deepseek-ai/dsh-system-prompt` | `CONTEXT_ORDERS.HARNESS_SOURCE = 200` and `WEB_SURFACE = 210` |
@@ -49,7 +49,7 @@ The plugin registers the host-only session projection `harnessDevLegacyPrompt`, 
 | Earlier template | Matching rule |
 |---|---|
 | `harness:source` | Starts with `The DeepSeek Harness implementation checkout is at `, ends with the earlier fixed guidance, no line break between |
-| `app:web-surface` | Starts with `You are interacting with the user through the DeepSeek Harness Web GUI at `, ends with `. ` plus the current fixed guidance, no line break between |
+| `app:web-surface` | Starts with `You are interacting with the user through the DeepSeek Harness Web GUI at `, ends with `. ` plus the guidance as earlier releases rendered it, frozen as a literal, no line break between |
 
 Both section text providers read the projection state of `AssembleContext.agent.session`: with an earlier paragraph they return it verbatim (`interpolate: false`), otherwise the current guidance. Diagnostic assemblies without an agent use the current guidance. `sessionProjections` is a required injection and the plugin registers its own unit, so the state is readable whenever an agent exists.
 
@@ -85,7 +85,7 @@ The projection computes only on each committed `system/message`, adding no synch
 - Only these two paragraphs are protected. When other prompt text changes between releases, routes without in-history updates still rewrite the head.
 - A release without this fix rewrites the head of a new-format Session with the earlier template on resume; both A/B checkouts need this fix before they alternate.
 - app-boot no longer exports `addHarnessSourceSection` or `HARNESS_SOURCE_SECTION`; web-app's `surfaceContext` controls only `DSH_WEB_URL`, and disabling the `harness-dev-context` row turns both contexts off.
-- Runtime context in recorded Web e2e Sessions gains two lines, and the test scaffold must normalize the URL and checkout path to placeholders.
+- Runtime context in recorded Web e2e Sessions gains two lines; the test scaffold normalizes the URL and checkout path to placeholders.
 
 ## Testing
 
