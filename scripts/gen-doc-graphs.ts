@@ -833,6 +833,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Plain node:http carrier: named-route registry, index transform taps, and the static dist fallback; web-transport plugins register their own routes.',
   },
   {
+    key: 'webStartup',
+    pkg: 'web-app',
+    title: 'Web invocation values',
+    mode: 'core',
+    consumers: ['harness-dev-context'],
+    note: 'The web-startup row parses the Web flag family and provides its immutable values; flag-configured rows read them from lazy config, and harness-dev-context reads the advertised public root.',
+  },
+  {
     key: 'clientModules',
     pkg: 'client-modules',
     title: 'Client plugin graph host',
