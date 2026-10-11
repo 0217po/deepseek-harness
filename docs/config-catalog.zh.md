@@ -3701,6 +3701,8 @@ export interface Config {
 ```ts config-catalog
 /** Plugin config (all optional — `Config` supplies the defaults). */
 export interface Config {
+  /** Tools to register, in canonical order; omitted means all four. Names must be unique and the list non-empty. */
+  tools?: ('read' | 'read_image' | 'write' | 'edit')[]
   /** Default and maximum number of lines returned by one `read` call. */
   readLimit?: number
   /** Maximum characters returned for a single line before truncation. */

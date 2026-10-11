@@ -96,6 +96,7 @@ afterEach(async () => {
 })
 
 interface SetupOptions {
+  tools?: ToolFs.Config['tools']
   models?: LlmModelInfo[]
   resolvedModels?: LlmModelInfo[]
   attachments?: boolean
@@ -126,7 +127,7 @@ async function setup(options: SetupOptions = {}) {
       { provider: 'visual', id: 'legacy-model', name: 'Legacy' },
     ], options.resolvedModels))
   }
-  await ctx.plugin(ToolFs)
+  await ctx.plugin(ToolFs, options.tools === undefined ? {} : { tools: options.tools })
   return ctx
 }
 
@@ -513,9 +514,10 @@ describe('argument and service preconditions', () => {
     expect(text(nonImage)).toContain('the .txt extension does not declare a supported image format')
   })
 
-  it('refuses when no attachment service is mounted', async () => {
+  it.each([{}, { tools: ['read_image'] }] satisfies SetupOptions[])
+  ('refuses when no attachment service is mounted: %j', async (config) => {
     await writeFile(join(dir, 'red.png'), PNG_1X1)
-    const ctx = await setup({ attachments: false })
+    const ctx = await setup({ ...config, attachments: false })
     expect(ctx.tools.get('read_image')).toBeUndefined()
     expect(ctx.tools.schemas().map(schema => schema.name)).not.toContain('read_image')
     const result = await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))
@@ -759,6 +761,43 @@ describe('image admission failures', () => {
 })
 
 describe('registration surface', () => {
+  it('registers only read_image without text guidance', async () => {
+    const ctx = await setup({ tools: ['read_image'] })
+    try {
+      expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['read_image'])
+      expect((await ctx.systemPrompt.assemble()).sections.some(section => section.name.startsWith('tool:'))).toBe(false)
+      await writeFile(join(dir, 'red.png'), PNG_1X1)
+      const result = await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))
+      expect(result.isError).toBe(false)
+      expect(result.content.some(block => block.type === 'image')).toBe(true)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each([{ tools: ['read_image'] }, { tools: ['read', 'read_image', 'write', 'edit'] }] as const)
+  ('withdraws and restores selected image registration with the attachment store: $tools', async ({ tools }) => {
+    const ctx = new Context()
+    try {
+      provideWorkingDirectoryFixture(ctx)
+      await ctx.plugin(SystemPrompt)
+      await ctx.plugin(ToolRuntime)
+      await ctx.plugin(LocalFileSystem, { cwd: dir })
+      const attachment = await ctx.plugin(LocalAttachmentStore, { dshHome: home })
+      const plugin = await ctx.plugin(ToolFs, { tools: [...tools] })
+      const names = () => ctx.tools.schemas().map(tool => tool.name).sort()
+      expect(names()).toEqual([...tools].sort())
+      await attachment.dispose()
+      expect(names()).toEqual(tools.filter(name => name !== 'read_image').sort())
+      await ctx.plugin(LocalAttachmentStore, { dshHome: home })
+      expect(names()).toEqual([...tools].sort())
+      await plugin.dispose()
+      expect(names()).toEqual([])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('withdraws read_image when the tool-fs fiber or the attachment store is disposed (HMR safety)', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)

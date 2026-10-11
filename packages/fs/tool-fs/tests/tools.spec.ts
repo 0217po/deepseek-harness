@@ -105,14 +105,14 @@ class FakeFs extends FileSystem {
   }
 }
 
-async function setup() {
+async function setup(config: ToolFs.Config = {}) {
   const ctx = new Context()
   provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(FakeFs)
   await ctx.plugin(FsPolicy)
-  await ctx.plugin(ToolFs)
+  await ctx.plugin(ToolFs, config)
   const fs = ctx.fs as FakeFs
   return { ctx, fs }
 }
@@ -148,6 +148,42 @@ describe('current directory resolution', () => {
 })
 
 describe('registration', () => {
+  it.each([
+    { tools: ['read'] as const, sections: ['tool:read'] },
+    { tools: ['write'] as const, sections: ['tool:write'] },
+    { tools: ['edit'] as const, sections: ['tool:edit'] },
+    { tools: ['edit', 'read'] as const, sections: ['tool:edit', 'tool:read'] },
+  ])('registers only selected tools and their guidance: $tools', async ({ tools, sections }) => {
+    const { ctx } = await setup({ tools: [...tools] })
+    try {
+      expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual([...tools].sort())
+      expect((await ctx.systemPrompt.assemble()).sections.map(section => section.name)
+        .filter(name => name.startsWith('tool:')).sort()).toEqual(sections)
+      const excluded = ['read', 'write', 'edit'].find(name => !tools.some(tool => tool === name))!
+      expect((await call(ctx, excluded, { file_path: 'a.txt' })).isError).toBe(true)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each([{ tools: [] }, { tools: ['missing'] }])('rejects invalid tool selection at configuration parsing: %j', async (config) => {
+    expect((await ToolFs.Config['~standard'].validate(config)).issues).toBeDefined()
+  })
+
+  it('rejects duplicate selection before registering tools', async () => {
+    const ctx = new Context()
+    try {
+      provideWorkingDirectoryFixture(ctx)
+      await ctx.plugin(SystemPrompt)
+      await ctx.plugin(ToolRuntime)
+      await ctx.plugin(FakeFs)
+      await expect(ctx.plugin(ToolFs, { tools: ['read', 'read'] })).rejects.toThrow('tools must contain unique names')
+      expect(ctx.tools.schemas()).toEqual([])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('registers read, write, and edit', async () => {
     const { ctx } = await setup()
     expect(ctx.tools.schemas().map(s => s.name).sort()).toEqual(['edit', 'read', 'write'])

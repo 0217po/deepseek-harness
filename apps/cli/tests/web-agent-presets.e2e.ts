@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module'
 import { randomUUID } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -63,6 +63,31 @@ class MinimalCompactionAdapter extends LlmAdapter {
     yield { type: 'finish', reason: { kind: 'stop' } }
   }
 }
+/** Emits one image read, then retains the request carrying its settled result. */
+class MinimalImageAdapter extends LlmAdapter {
+  readonly requests: GenerateOptions[] = []
+
+  override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+    return Promise.resolve({ provider, id: model, name: model, context: { contextWindow: 1_000_000 },
+      inputModalities: ['text', 'image'] })
+  }
+
+  override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    if (options.purpose !== undefined) {
+      yield { type: 'block-start', index: 0, blockType: 'text' }
+      yield { type: 'block-end', index: 0, block: { type: 'text', text: 'Image inspection' } }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+      return
+    }
+    this.requests.push(options)
+    const first = this.requests.length === 1
+    yield { type: 'block-start', index: 0, blockType: first ? 'tool-call' : 'text' }
+    yield { type: 'block-end', index: 0, block: first
+      ? { type: 'tool-call', id: ToolCallId('minimal-image-read'), name: 'read_image', arguments: '{"file_path":"red.png"}' }
+      : { type: 'text', text: 'Image inspected.' } }
+    yield { type: 'finish', reason: { kind: first ? 'tool-calls' : 'stop' } }
+  }
+}
 const MINIMAL_BASH_DESCRIPTION = `Run commands in a bash shell
 * When invoking this tool, the contents of the "command" parameter does NOT need to be XML-escaped.
 * Network access depends on the task environment. Prefer configured mirrors/proxies when they are available.
@@ -92,6 +117,7 @@ async function bootWeb(
     { id: 'storage-json', config: { root: storageRoot } },
     // Fixed Session IDs must stay inside this boot's temporary profile root.
     { id: 'session-persistence-jsonl', config: { root: join(profileHome, 'sessions') } },
+    { id: 'attachment-local', config: { dshHome: profileHome } },
     // Host rows with side effects outside this process: a bound port, a served
     // asset tree, a telemetry exporter. `api-gateway` and `directory-picker`
     // stay ENABLED on purpose — the api-proxy is the host row that injects
@@ -328,7 +354,7 @@ describe('the shipped Web composition', () => {
       expect(assembly.sections).toEqual([
         { name: 'deployment:persona-prefix', text: MINIMAL_PROMPT },
       ])
-      expect(assembly.tools.map(tool => tool.name)).toEqual(['bash', 'working_directory'])
+      expect(assembly.tools.map(tool => tool.name)).toEqual(['bash', 'read_image', 'working_directory'])
       expect(assembly.tools.find(tool => tool.name === 'bash')?.description).toBe(MINIMAL_BASH_DESCRIPTION)
       expect(ctx.commands.find(handle.agent, 'goal')).toBeUndefined()
       // serviceFor reports preset-owned providers; unisolated consumers inherit the host fs.
@@ -341,6 +367,37 @@ describe('the shipped Web composition', () => {
       expect(await ctx.commands.execute(handle.agent, '/compact', [], new AbortController().signal))
         .toMatchObject({ result: { kind: 'success', text: 'No compactable history yet.' } })
       expect(handle.agent.session.snapshotEvents().some(event => event.type === 'compaction/start')).toBe(false)
+    } finally {
+      await handle.dispose()
+    }
+  })
+
+  it('reads an image in minimal mode and carries its durable reference into the next request', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'dsh-minimal-image-'))
+    onTestFinished(() => rm(cwd, { recursive: true, force: true }))
+    await writeFile(join(cwd, 'red.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', 'base64'))
+    const adapter = new MinimalImageAdapter()
+    const unregister = ctx.llm.registerAdapter(['minimal-image-test'], adapter)
+    onTestFinished(unregister)
+    const handle = await ctx.agents.create({
+      sessionId: SessionId('preset-minimal-image'), meta: { cwd },
+      agentOptions: { provider: 'minimal-image-test', model: 'minimal-image-test' },
+      setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'minimal').then(() => undefined),
+    })
+    try {
+      handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Inspect red.png.' }], source: { kind: 'user' } }))
+      await handle.agent.whenIdle()
+      expect(adapter.requests).toHaveLength(2)
+      const result = handle.agent.session.snapshotEvents().find(event => event.type === 'tool/result')
+      expect(result?.data.message.isError, JSON.stringify(result?.data.message.content)).toBe(false)
+      const image = handle.agent.session.deriveMessages().flatMap(message => message.content)
+        .find(block => block.type === 'image')
+      expect(image?.type).toBe('image')
+      if (image?.type !== 'image') throw new Error('minimal image read produced no durable image')
+      expect((await ctx.attachments.readImage(image.attachment)).data.byteLength).toBe(image.attachment.bytes)
+      expect(JSON.stringify(adapter.requests[1]?.messages)).toContain(image.attachment.attachmentId)
+      expect(adapter.requests[0]?.tools?.map(tool => tool.name)).toEqual(['bash', 'read_image', 'working_directory'])
+      expect(result?.data.meta).toMatchObject({ path: await realpath(join(cwd, 'red.png')) })
     } finally {
       await handle.dispose()
     }
@@ -374,7 +431,7 @@ describe('the shipped Web composition', () => {
       const last = adapter.requests.at(-1)
       expect(last?.messages.flatMap(message => message.content)
         .some(block => block.type === 'text' && block.text.includes('Preserve the requested project task.'))).toBe(true)
-      expect(toolNames(ctx, handle.agent)).toEqual(['bash', 'working_directory'])
+      expect(toolNames(ctx, handle.agent)).toEqual(['bash', 'read_image', 'working_directory'])
     } finally {
       await handle.dispose()
       unregister()
@@ -420,7 +477,7 @@ describe('the shipped Web composition', () => {
       setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'minimal').then(() => undefined),
     })
     try {
-      expect(toolNames(ctx, minimal.agent)).toEqual(['bash', 'working_directory'])
+      expect(toolNames(ctx, minimal.agent)).toEqual(['bash', 'read_image', 'working_directory'])
       expect(toolNames(ctx, full.agent).length).toBeGreaterThan(10)
       expect(ctx.agentPresets.serviceFor(minimal.agent, 'compaction'))
         .not.toBe(ctx.agentPresets.serviceFor(full.agent, 'compaction'))
@@ -588,7 +645,7 @@ describe('the shipped Web composition', () => {
       // stays the preset's choice — minimal mounts no `tool-skill`, so its
       // tool table has no loader even though the global layer is readable.
       expect((await ctx.skills.list({ scope: handle.agent })).map(skill => skill.name)).toContain('dsh-badge')
-      expect(toolNames(ctx, handle.agent)).toEqual(['bash', 'working_directory'])
+      expect(toolNames(ctx, handle.agent)).toEqual(['bash', 'read_image', 'working_directory'])
     } finally {
       await handle.dispose()
     }
@@ -925,7 +982,7 @@ describe('the default preset as a user setting', () => {
       })
       try {
         // An omitted preset id resolves the stored default instead of the composed default.
-        expect(toolNames(ctx, handle.agent)).toEqual(['bash', 'working_directory'])
+        expect(toolNames(ctx, handle.agent)).toEqual(['bash', 'read_image', 'working_directory'])
       } finally {
         await handle.dispose()
       }
@@ -971,7 +1028,7 @@ describe('a profile patch stored before Developer tools owned preset selection',
       setup: agentCtx => legacy.agentPresets.mount(agentCtx).then(() => undefined),
     })
     try {
-      expect(toolNames(legacy, handle.agent)).toEqual(['bash', 'working_directory'])
+      expect(toolNames(legacy, handle.agent)).toEqual(['bash', 'read_image', 'working_directory'])
     } finally {
       await handle.dispose()
     }

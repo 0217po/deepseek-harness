@@ -1,4 +1,4 @@
-import { mkdir } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
@@ -76,7 +76,7 @@ describe('minimal agent preset', () => {
     if (failures.length > 1) throw new AggregateError(failures, 'minimal preset smoke teardown failed')
   })
 
-  it('sends the exact RL prompt and shell schema, then executes the persistent shell', async () => {
+  it('sends the exact RL prompt with shell and image schemas, then executes the persistent shell', async () => {
     const requestHeader = agentHandle.agent.session.requestHeader()
     if (requestHeader === undefined) throw new Error('the minimal agent issued no model request')
     const systemPrompt = systemPromptText(agentHandle.agent.session)
@@ -129,6 +129,7 @@ describe('minimal agent preset', () => {
         "prompt": "You are a helpful software engineer assistant.",
         "tools": [
           "bash",
+          "read_image",
           "working_directory",
         ],
       }
@@ -190,6 +191,86 @@ describe('minimal agent preset', () => {
       'system-prompt.expected.md',
       'tool-schemas.expected.json',
       'ui.expected.md',
+    ])
+  })
+})
+
+describe('minimal image reading', () => {
+  const snapshotDir = fileURLToPath(new URL('../../../snapshots/web/minimal-read-image', import.meta.url))
+  const prompt = 'Use read_image to inspect red.png. Then reply exactly MINIMAL_IMAGE_OK and stop.'
+  let scaffold: WebScaffold
+  let handle: AgentHandle
+  let browser: Browser | undefined
+  let page: Page | undefined
+
+  beforeAll(async () => {
+    scaffold = await launchWebScaffold({
+      replayFixture: join(snapshotDir, 'session.v4.jsonl'), compareReplaySession: true, paceMs: 10,
+    })
+    await writeFile(join(scaffold.workspaceCwd, 'red.png'), Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', 'base64',
+    ))
+    handle = await scaffold.ctx.agents.create({
+      sessionId: SessionId('minimal-image-smoke'),
+      meta: { cwd: scaffold.workspaceCwd, agentPreset: 'minimal' },
+      agentOptions: { provider: 'deepseek-official', model: 'deepseek-v4-flash-vision-exp' },
+      setup: agentCtx => scaffold.ctx.agentPresets.mount(agentCtx, 'minimal').then(() => undefined),
+    })
+    handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: prompt }], source: { kind: 'user' } }))
+    await handle.agent.whenIdle()
+  })
+
+  afterAll(async () => {
+    const failures: unknown[] = []
+    await page?.close().catch((error: unknown) => failures.push(error))
+    await browser?.close().catch((error: unknown) => failures.push(error))
+    await handle?.dispose().catch((error: unknown) => failures.push(error))
+    await scaffold?.close().catch((error: unknown) => failures.push(error))
+    if (failures.length === 1) throw failures[0]
+    if (failures.length > 1) throw new AggregateError(failures, 'minimal image teardown failed')
+  })
+
+  it('logs a durable image with the minimal tool roster', async () => {
+    const session = handle.agent.session
+    expect(session.requestHeader()?.tools?.map(tool => tool.name)).toEqual(['bash', 'read_image', 'working_directory'])
+    const result = session.snapshotEvents().find(event => event.type === 'tool/result')
+    expect(result?.data.message.isError).toBe(false)
+    expect(result?.data.meta).toEqual({ path: join(scaffold.workspaceCwd, 'red.png') })
+    const image = session.deriveMessages().flatMap(message => message.content).find(block => block.type === 'image')
+    if (image?.type !== 'image') throw new Error('minimal read_image produced no durable image')
+    expect(image.attachment).toMatchObject({ mediaType: 'image/png', width: 1, height: 1, bytes: 69 })
+    expect((await scaffold.ctx.attachments.readImage(image.attachment)).data.byteLength).toBe(69)
+  })
+
+  it.skipIf(MODE === 'record')('renders the existing image tool card and preview', async () => {
+    onTestFailed(() => { if (page !== undefined) void saveFailureShot(page, 'web-minimal-read-image') })
+    browser = await chromium.launch()
+    page = await newEnglishPage(browser)
+    const tripwire = watchConsole(page)
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await page.locator('[role="treeitem"]').first().click()
+    await page.locator('[role="treeitem"]').nth(1).click()
+    await page.getByText('MINIMAL_IMAGE_OK', { exact: true }).waitFor()
+    await page.locator('[data-turn-process]').click()
+    const group = page.locator('[data-chat-group-key]').first()
+    await group.locator('[data-process-activity]').click()
+    const card = group.locator('[data-tool="read_image"]').first()
+    const row = card.locator('[data-disclosure-row]')
+    await row.click()
+    await expect.poll(() => row.getAttribute('aria-expanded')).toBe('true')
+    const preview = card.locator('img').first()
+    await preview.waitFor()
+    await expect.poll(() => preview.evaluate(img => img instanceof HTMLImageElement && img.naturalWidth)).toBe(1)
+    await compareOrRefreshGolden(join(snapshotDir, 'ui.expected.md'),
+      await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd), MODE)
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+  })
+
+  it('keeps its snapshot inventory closed', async () => {
+    await assertFixtureInventory(snapshotDir, [
+      'session.v4.jsonl', 'system-prompt.expected.md', 'tool-schemas.expected.json', 'ui.expected.md',
     ])
   })
 })

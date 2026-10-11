@@ -54,10 +54,11 @@ Field names are snake_case to match Claude Code and existing harness tool schema
 
 ### Configuration
 
-All keys are optional; the defaults are the shipped read caps.
+All keys are optional. Omit `tools` to register the full suite, or select a non-empty list of unique tool names, such as `tools: [read_image]`. Selection controls registration and guidance; it does not bypass filesystem authorization or the image tool's attachment and model requirements. Tools register in canonical order regardless of list order. Read caps remain validated even when `read` is excluded.
 
 | Key | Default | Meaning |
 |---|---|---|
+| `tools` | `[read, read_image, write, edit]` | Tools to register; unknown names, duplicates, and empty lists reject configuration |
 | `readLimit` | `2000` | Default and maximum lines returned by one `read` call |
 | `readMaxLineLength` | `2000` | Characters kept per line before truncation |
 | `readMaxBytes` | `51200` | Byte cap on one `read` call's selected lines; overflow ends the window with a capped footer |
