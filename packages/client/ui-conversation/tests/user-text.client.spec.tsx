@@ -3,9 +3,32 @@
  * Inline projection of sent user text: decoration adds no block containers,
  * preserves whitespace, and folds wire session forms to their label.
  */
-import { describe, expect, it, vi } from 'vitest'
-import { fireEvent, render } from '@testing-library/react'
-import { projectUserText } from '../src/user-text.tsx'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { cleanup, fireEvent, render } from '@testing-library/react'
+import { Context } from '@deepseek-ai/cordis'
+import type { ComponentProps } from 'react'
+import { UserText } from '../src/client/user-text/UserText.tsx'
+import { UserTextRegistry } from '../src/client/conversation/user-text-registry.ts'
+import { createUserTextFixture } from './user-text-component-fixture.client.tsx'
+
+afterEach(cleanup)
+
+function textView(
+  text: string,
+  labels: readonly string[] = [],
+  slashNames: readonly string[] = [],
+  slashKind: 'skill' | 'command' = 'skill',
+  actions?: Parameters<typeof createUserTextFixture>[0],
+) {
+  const head = text.split(/\s/u, 1)[0]
+  const command = slashNames.find(name => head === `/${name}`)
+  const facts = {
+    sessionLabels: labels,
+    ...(slashKind === 'skill' ? { skillNames: slashNames }
+      : { commands: command === undefined ? [] : [{ start: 0, end: command.length + 1, name: command }] }),
+  }
+  return createUserTextFixture(actions)({ text, facts, interactive: actions !== undefined })
+}
 
 const project = (
   text: string,
@@ -13,9 +36,42 @@ const project = (
   slashNames: readonly string[] = [],
   slashKind: 'skill' | 'command' = 'skill',
 ) =>
-  render(<div data-host>{projectUserText(text, labels, slashNames, slashKind)}</div>).container.querySelector('[data-host]')!
+  render(<div data-host>{textView(text, labels, slashNames, slashKind)}</div>).container.querySelector('[data-host]')!
 
-describe('projectUserText', () => {
+describe('UserText projection', () => {
+  it('retains complete original text, reports a cached matching failure once, and recovers', () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    const registry = new UserTextRegistry(ctx)
+    const cause = new Error('matching unavailable')
+    registry.register({ id: 'session', order: 0, match: (text, from, context) => {
+      if (from > 0) return undefined
+      if (context.read('sessionLabels') === undefined) throw cause
+      return { id: 'session', start: 0, end: text.length, data: { label: 'ready' } }
+    } })
+    const evaluate = registry.createEvaluator()
+    const report = vi.fn()
+    const renderSlot = vi.fn(() => <span>recognized output</span>)
+    const text = '  complete /original\n@reference  '
+    const props = {
+      text, facts: {}, createUserTextEvaluator: () => evaluate,
+      useUserTextRevision: selector => selector(registry.getSnapshot()),
+      reportTransformFailure: report, renderSlot,
+    } satisfies Partial<ComponentProps<typeof UserText>>
+    const view = render(<UserText {...props as ComponentProps<typeof UserText>} />)
+    expect(view.container.textContent).toBe(text)
+    expect(renderSlot).not.toHaveBeenCalled()
+    expect(report).toHaveBeenCalledOnce()
+    expect(report.mock.calls[0]?.[0]).toMatchObject({ ruleId: 'session', cause })
+    view.rerender(<UserText {...props as ComponentProps<typeof UserText>} facts={{ collapseWhitespace: false }} />)
+    expect(view.container.textContent).toBe(text)
+    expect(report).toHaveBeenCalledOnce()
+    view.rerender(<UserText {...props as ComponentProps<typeof UserText>} facts={{ sessionLabels: ['ready'] }} />)
+    expect(view.getByText('recognized output')).toBeTruthy()
+    expect(renderSlot).toHaveBeenCalledOnce()
+    expect(report).toHaveBeenCalledOnce()
+  })
+
   it('keeps decorated text inline and preserves whitespace between references', () => {
     const host = project('反反复复 /dsh-acp-test @执行几个命令测试', ['执行几个命令测试'], ['dsh-acp-test'])
     expect(host.querySelectorAll('div').length).toBe(0)
@@ -23,7 +79,8 @@ describe('projectUserText', () => {
     const chips = host.querySelectorAll('[data-ref-chip]')
     expect([...chips].map(c => c.getAttribute('data-ref-chip'))).toEqual(['skill', 'session'])
     // The whitespace between tokens survives as its own inline run.
-    const runs = [...host.querySelectorAll('span')].filter(s => !s.hasAttribute('data-ref-chip') && s.closest('[data-ref-chip]') === null)
+    const runs = [...host.querySelectorAll('span')].filter(s =>
+      s.childElementCount === 0 && !s.hasAttribute('data-ref-chip') && s.closest('[data-ref-chip]') === null)
     expect(runs.map(r => r.textContent)).toEqual(['反反复复 ', ' '])
   })
 
@@ -108,7 +165,7 @@ describe('projectUserText', () => {
   it('opens decoded files and loaded skills without activating session, folder, or command references', () => {
     const openFile = vi.fn()
     const openSkill = vi.fn()
-    const view = render(<div>{projectUserText(
+    const view = render(<div>{textView(
       '@src/a.ts @"notes a.md" /review @history @dir/ @"dir a/"', ['history'], ['review'], 'skill',
       { openFile, openSkill },
     )}</div>)
@@ -118,13 +175,13 @@ describe('projectUserText', () => {
     expect(openFile.mock.calls).toEqual([['src/a.ts'], ['notes a.md']])
     expect(openSkill).toHaveBeenCalledWith('review')
     expect(view.container.querySelectorAll('button')).toHaveLength(3)
-    const command = render(<div>{projectUserText('/help', [], ['help'], 'command', { openFile, openSkill })}</div>)
+    const command = render(<div>{textView('/help', [], ['help'], 'command', { openFile, openSkill })}</div>)
     expect(command.container.querySelector('button')).toBeNull()
   })
 
   it('preserves text-selection gestures and keyboard activation', () => {
     const openFile = vi.fn()
-    const view = render(<div>{projectUserText('@notes.md', [], [], 'skill', { openFile, openSkill: vi.fn() })}</div>)
+    const view = render(<div>{textView('@notes.md', [], [], 'skill', { openFile, openSkill: vi.fn() })}</div>)
     const button = view.getByRole('button', { name: 'notes.md' })
     const selection = document.getSelection()!
     const range = document.createRange()

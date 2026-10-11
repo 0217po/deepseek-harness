@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { renderReasoningSlot as renderSlot } from './reasoning-component-fixture.tsx'
+import { renderReasoningSlot as renderSlot, unusedImageLoader } from './reasoning-component-fixture.tsx'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -19,12 +19,11 @@ afterEach(() => {
 })
 
 const t = makeTranslate(zh, commonZh)
-const renderMessageImages: AssistantMarkdownProps['renderMessageImages'] = () => null
 
 describe('AssistantMarkdown reasoning blocks', () => {
   const props = {
     renderSlot, useDisclosure, useGroupAction: useSearchableHidden,
-    usePresentation: useDetailedPresentation, renderMessageImages, t,
+    usePresentation: useDetailedPresentation, loadImage: unusedImageLoader, t,
   }
 
   it.each([false, true])('omits blank blocks without trimming body text when streaming=%s', (streaming) => {
@@ -224,20 +223,20 @@ describe('ReasoningRow', () => {
     const view = render(
       <AssistantMarkdown renderSlot={renderSlot} useDisclosure={useDisclosure} useGroupAction={useSearchableHidden}
         usePresentation={useDetailedPresentation}
-        t={t} blocks={[reasoning]} streaming renderMessageImages={renderMessageImages} />,
+        t={t} blocks={[reasoning]} streaming loadImage={unusedImageLoader} />,
     )
     expect(view.getByRole('button').getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(view.getByText('思考'))
     view.rerender(
       <AssistantMarkdown renderSlot={renderSlot} useDisclosure={useDisclosure} useGroupAction={useSearchableHidden}
         usePresentation={useDetailedPresentation}
-        t={t} blocks={[reasoning, nextBlock]} streaming renderMessageImages={renderMessageImages} />,
+        t={t} blocks={[reasoning, nextBlock]} streaming loadImage={unusedImageLoader} />,
     )
     expect(view.getByRole('button').getAttribute('aria-expanded')).toBe('true')
     view.rerender(
       <AssistantMarkdown renderSlot={renderSlot} useDisclosure={useDisclosure} useGroupAction={useSearchableHidden}
         usePresentation={useDetailedPresentation}
-        t={t} blocks={[reasoning, nextBlock]} streaming={false} renderMessageImages={renderMessageImages} />,
+        t={t} blocks={[reasoning, nextBlock]} streaming={false} loadImage={unusedImageLoader} />,
     )
     expect(view.getByRole('button').getAttribute('aria-expanded')).toBe('true')
     expect(view.getByText(/Check persistence/)).toBeTruthy()
@@ -252,7 +251,7 @@ describe('ReasoningRow', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text: 'Inspect the session\nDetails\n\nNewest reasoning tokens\n' }]}
         streaming
-        renderMessageImages={renderMessageImages}
+        loadImage={unusedImageLoader}
       />,
     )
     expect(view.getByText('运行中')).toBeTruthy()
@@ -266,7 +265,7 @@ describe('ReasoningRow', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text: 'Inspect the session\nDetails\n\nNewest reasoning tokens\nMore details\n\nChecking boundaries' }]}
         streaming
-        renderMessageImages={renderMessageImages}
+        loadImage={unusedImageLoader}
       />,
     )
     expect(view.getByText('Newest reasoning tokens').closest('[data-streaming]')
@@ -280,7 +279,7 @@ describe('ReasoningRow', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text }]}
         streaming
-        renderMessageImages={renderMessageImages}
+        loadImage={unusedImageLoader}
       />,
     )
     expect(view.getByText('Checking boundaries')).toBeTruthy()
@@ -292,7 +291,7 @@ describe('ReasoningRow', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text }]}
         streaming={false}
-        renderMessageImages={renderMessageImages}
+        loadImage={unusedImageLoader}
       />,
     )
     const settledSummary = view.getByText('Inspect the session')
@@ -308,7 +307,7 @@ describe('ReasoningRow', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text: 'Inspect the session\nCheck persistence' }]}
         streaming={false}
-        renderMessageImages={renderMessageImages}
+        loadImage={unusedImageLoader}
       />,
     )
     const row = view.getByRole('button')
@@ -339,7 +338,7 @@ describe('ReasoningRow', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text }]}
         streaming={streaming}
-        renderMessageImages={renderMessageImages}
+        loadImage={unusedImageLoader}
       />,
     )
 
@@ -360,7 +359,7 @@ describe('ReasoningRow', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text }]}
         streaming={false}
-        renderMessageImages={renderMessageImages}
+        loadImage={unusedImageLoader}
       />,
     )
     const summary = view.getByText('# Section 1')
@@ -386,7 +385,7 @@ describe('ReasoningRow', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text: first }]}
         streaming
-        renderMessageImages={renderMessageImages}
+        loadImage={unusedImageLoader}
       />,
     )
     fireEvent.click(view.getByText('思考'))
@@ -399,7 +398,7 @@ describe('ReasoningRow', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text }]}
         streaming
-        renderMessageImages={renderMessageImages}
+        loadImage={unusedImageLoader}
       />,
     )
     expect(view.getByRole('heading', { name: 'Investigation' })).toBe(heading)
@@ -414,7 +413,7 @@ describe('ReasoningRow', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text: 'Inspect the session\nCheck persistence' }]}
         streaming={false}
-        renderMessageImages={renderMessageImages}
+        loadImage={unusedImageLoader}
       />,
     )
     fireEvent.click(view.getByText('思考'))
@@ -434,7 +433,7 @@ describe('ReasoningRow', () => {
           { kind: 'text', text: 'Answer' },
         ]}
         streaming={false}
-        renderMessageImages={renderMessageImages}
+        loadImage={unusedImageLoader}
       />,
     )
     // Collapsed: no `data-open`, so the sticky rule's gate never matches.
