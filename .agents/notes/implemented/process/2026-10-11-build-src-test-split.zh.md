@@ -1,0 +1,153 @@
+# Agent Note: 拆分 build:src 与 build:test，build 并发执行两者
+
+Status: implemented
+
+[English](2026-10-11-build-src-test-split.md) | 中文
+
+## 问题
+
+`pnpm run build` 串行执行 native addon、包库构建（Host `tsc -b tsconfig.host.json` → Host tsdown → Desktop bundle → Client `tsc -b tsconfig.client.json` → Client tsdown）和 Web 构建。Host 与 Client 聚合配置除了引用各包 project，还各自带有一个 `noEmit` 根程序，覆盖 tests、scripts、benchmarks 与 website。这两个根程序不产出任何文件，也不是后续产物步骤的输入，却位于串行关键路径上：单独计时时 Host 根程序为 68.5 s、Client 根程序为 36.0 s，串行包库构建为 247.3–251.4 s。
+
+开发迭代只需要产物，测试与脚本的类型检查在声明完成前才需要。能跳过两个根程序的只有面向 CI 的 `pnpm run build --artifacts-only`；它没有本地开发命令名，也没有只做这两项检查的对应命令。同时，`pnpm run build` 必须保持完整，能检测出所有类型错误。
+
+## 决策
+
+### 命令
+
+每个命令只做自己的工作。
+
+| 命令 | 职责 | 步骤 | 调度 | client build record |
+|---|---|---|---|---|
+| `pnpm run build:src` | 产出 `build` 的全部产物；包 project 照常完整类型检查，不检查两个聚合根程序 | native → host-src → host-bundle → desktop-bundle → client-src → client-bundle → web | 一条线性链 | 开始时删除，全部通过后写入 |
+| `pnpm run build:test` | 只类型检查两个聚合根程序 | host-test、client-test | 两步并发，无前置步骤 | 不读写 |
+| `pnpm run build` | `build:src` 与 `build:test` 的全部步骤 | 下文依赖图 | run-gates 调度器并发执行 | 开始时删除，全部通过后写入 |
+
+`build:test` 不检测、不重建、也不校验 `build:src` 的产物；前置产物缺失或过期时，由编译器自身的诊断（例如 TS6305、TS2307）报告，任何命令都不增加前置检查、守卫或回退逻辑。`build:src` 产出的产物与 record 和 `build` 相同，并取代 `--artifacts-only`；该参数与 `compile-referenced-projects.ts` 的 `libraries` 模式已删除，Python executable builder 使用 `--build-src`。`build:official` 仍是 `tsx scripts/build.ts --profile official`，执行完整的 `build`。
+
+### 步骤与依赖
+
+| 步骤 | 命令 | `build` 中的 `needs` |
+|---|---|---|
+| native | `pnpm run build:native-system` | — |
+| host-src | `node --max-old-space-size=4096 <tsc> -b <tsconfig.host.json 的 references>` | native |
+| host-bundle | `tsdown --config-loader native --env.DSH_BUILD_FACE host`（运行 Typert） | host-src |
+| desktop-bundle | `pnpm --filter @deepseek-ai/dsh-desktop run bundle` | host-bundle |
+| client-src | `<tsc> -b <tsconfig.client.json 的 references>` | desktop-bundle |
+| client-bundle | `tsdown --config-loader native --env.DSH_BUILD_FACE client` | client-src |
+| web | `pnpm run build:web` | client-bundle |
+| host-test | `node --max-old-space-size=4096 <tsc> -p tsconfig.host.json` | host-src |
+| client-test | `<tsc> -p tsconfig.client.json` | client-src |
+
+```text
+native → host-src ─┬─ host-test ─────────────────────────────────────────────┐
+                   └─ host-bundle → desktop-bundle → client-src ─┬─ client-test ┤ → record
+                                                                 └─ client-bundle → web ┘
+```
+
+- client-src 必须在 host-bundle 之后：Client 包导入 `@deepseek-ai/dsh-*/remote`，其类型 `lib/typert.remote-client.d.ts` 只由 Host tsdown 中的 Typert 写出。host-test 不读取 Typert 输出，干净的串行构建一直在 Host tsdown 之前完成 Host 聚合检查。
+- src 链保留 native → host-src 与 desktop-bundle → client-src 这两条非数据依赖；只有两个 test 步骤并行挂接到链上。
+- [`compile-referenced-projects.ts`](../../../../scripts/compile-referenced-projects.ts) 拥有包库步骤列表 `libraryBuildSteps`、references 参数构造 `referencedProjectsCompilerArgs`（相对路径传参，避开 Windows 命令行长度上限）与聚合检查参数 `aggregateCheckArgs`。vendor 发布演练（`host-libraries`）与 CI benchmark（`--noCheck`）串行执行同一步骤列表。
+- test 步骤使用 project mode（`tsc -p`）：它读取 references 已有的声明而不编译任何 reference，incremental 状态写入聚合配置已有的 `tsconfig.{host,client}.tsbuildinfo`。`build` 与 `build:test` 使用同一条命令，因此诊断相同。
+
+### 调度、失败与输出
+
+- [`scripts/build.ts`](../../../../scripts/build.ts) 拥有步骤表与三个范围，执行复用 [`scripts/run-gates.ts`](../../../../scripts/run-gates.ts) 的 `runAggregate`：每个步骤是一个带 `needs` 的 gate，shell-free 启动、按步骤缓冲输出、fail-fast 进程树终止、Windows `taskkill` 与宿主信号转发都沿用 run-gates 的实现。`build:src` 为 `tsx scripts/build.ts --scope src`，`build:test` 为 `--scope test`，`build` 不带 `--scope`，把两者作为一张图执行；`--profile` 只适用于产生产物的范围，与 `--scope test` 同用时参数解析失败。
+- 并发上限取 `DSH_GATE_CONCURRENCY`，未设置时为可用 CPU 数；依赖图宽度最多为 3（host-test 尚未结束时，client-test 与 client-bundle 可能已开始）。master 串行参考 lane 设置 `DSH_GATE_CONCURRENCY=1`，`build` 在那里按拓扑顺序串行执行，符合[串行参考决策](2026-07-21-serial-cross-platform-ci-reference.zh.md)，无需修改 workflow。
+- 缺省（本地）时，失败步骤的所有依赖方记为 skipped，正在运行的步骤和与失败无关的步骤继续运行到结束；执行集合只取决于各步骤的结果，因此一次运行报告所有相互独立的类型错误。`DSH_GATE_FAIL_FAST=1`（所有构建型 PR lane 已设置）时，第一个失败终止其余正在运行步骤的进程树，所有未完成步骤记为 skipped。
+- 失败步骤打印 `== FAILED <步骤> ==`、命令、退出原因与该步骤完整的缓冲输出，结尾汇总列出 failed 与 skipped 步骤；成功步骤只打印 PASS 行，`DSH_GATE_VERBOSE=1` 打印全部输出。任一步骤 failed 或 skipped 时退出码为 1，且不写 client build record。所有步骤继承 `clientBuildProcessEnvironment` 选定的公开 Client 环境。
+- CI 中 `build` 本身是外层 run-gates 的一个 gate；外层 fail-fast 终止会转发到内层调度。`check:node-compat` 与 `check:ci:lint:contracts-ready` 已使用同样的嵌套。
+
+### 调用方
+
+| 调用方 | 命令 | 聚合根程序检查 |
+|---|---|---|
+| `build`、`build:official`、`Makefile` `build`、`scripts/publish-npm-baseline.ts`、`apps/desktop/scripts/package-target.ts`、`scripts/dev-bundle-registry.ts`、`release-publish.yml`、`sandbox.yml`、`e2e.yml` 与 `release.yml` 的非 PR 分支 | `build` / `build:official` | 有 |
+| `test:web`、`test:web:refresh`、`test:web:perf`、`test:web:stress`、`apps/desktop` `test:updates:local`、`test:bench` / `build:bench` | `build`；`build:bench` 运行 `build:native-system`、`build:lib` 与 benchmark tsdown | 有 |
+| `typecheck`（pre-push hook 运行它） | `build:lib:host`（Host `tsc -b tsconfig.host.json`、Host bundle、Desktop bundle）与 Client `tsc -b tsconfig.client.json` | 有 |
+| `dev:web`（[`scripts/dev-web.ts`](../../../../scripts/dev-web.ts)）、`dev:desktop`（`apps/desktop/scripts/dev.ts`） | `build:src` | 启动前无；`dev:web` 启动后的 `tsc -b tsconfig.client.json --watch` 持续检查 Client 聚合根程序 |
+| `lint`、`lint:fix`、`doc-typecheck` 与 CI 的 Typert contracts gate 的前置步骤 | Host 包编译与 Host bundle（`compile-referenced-projects.ts host-libraries`），不含 Desktop bundle | 无 |
+| CI node 24 / snapshots and artifacts（`check:ci:consumers`）、windows node 24 / build & observational（`check:ci:windows-blocking`） | `build` | 有，两个必需 lane |
+| CI node-compat 22.19 | `build:src`（经 run-gates） | 无 |
+| CI python runtime | `build-exe-for-python-sdk.ts --build-src` | 无 |
+| `e2e.yml`、`release.yml` 的 PR 演练 | `pnpm run build:src --profile official` | 无 |
+| `build-preview-cloudflare.yml` | `pnpm run build:src` | 无 |
+| CI node 24 / benchmarks | `run-ci-bench.ts`（`tsc -b --noCheck`） | 无 |
+| `release-vendor.yml` 的 PR 演练 | `compile-referenced-projects.ts host-libraries` | 无 |
+| `release-vendor.yml` 的非 PR 分支、`release-vendor-publish.yml` | `build:lib:host` | 仅 Host 聚合根程序 |
+
+`lint`、`lint:fix`、`doc-typecheck` 与 Typert contracts gate 只读取 Typert 输出与包声明：两个聚合配置都是 `noEmit`，oxlint 自行构建程序，`doc-typecheck` 只引用包 project，`host-libraries` 的消费方都不读取 `apps/desktop/lib`。它们的前置步骤因此每次省去约 68 s 的 Host 聚合检查与约 4.4 s 的 Desktop bundle。
+
+consumers lane 的 HMR Web 测试启动 `dev:web`，因此在该 lane 内使用 `build:src`；同一 lane 的 `build` gate 仍运行两个聚合检查。CI 不单独调用 `build:test`：两个必需 lane 已通过 `build` 获得同一组检查。[PR 产物构建决策](2026-10-05-pr-artifact-typechecks.zh.md)的必需完整构建、benchmark `--noCheck`、job 与 worker 上限、node-compat 串行 Vitest、覆盖率权重与 pnpm 打包检查仍然有效；其中的 PR 产物构建由 `build:src` 执行。
+
+### 测量
+
+原型测量的条件：256 vCPU 共享 Linux 主机（load average 23–70），Node v24.18.0、TypeScript 6.0.3，React 类型包已提升到根，不含[无损提速 Note](2026-10-11-lossless-build-speedups.zh.md) 的 Typert 改动；范围是包库构建（不含 native 与 web）。每轮从 `pnpm run clean` 开始，按 串行、并发、`build:lib`、`build:lib`、并发、串行 的顺序各运行一次；每个步骤由 `/usr/bin/time -v` 计时，进程树 RSS 每 250 ms 采样求和。原型中的聚合检查以 `tsc -b tsconfig.{host,client}.json` 在 references 已是最新时运行，此时 build mode 只构建聚合根程序。
+
+| 方式 | wall（s） | CPU user+sys（s） | 进程树 RSS 峰值（GiB） |
+|---|---|---|---|
+| 串行 `pnpm run build:lib` | 247.3 / 251.4 | 370.8 / 385.1 | 5.90 / 5.99 |
+| 各步骤依次单独运行 | 269.1 / 241.1 | 377.1 / 370.4 | 5.93 / 5.70 |
+| 按依赖图并发 | 178.0 / 166.2 | 397.4 / 386.8 | 7.99 / 8.01 |
+
+wall 中位数从 249.4 s 降到 172.1 s（−77.3 s，−31%）；CPU 增加约 14 s（+3.7%），来自争用下 Host 聚合检查的 user 时间从 98–100 s 增至 111–124 s；RSS 峰值增加 2.1 GiB，出现在 Host 聚合检查（3.95 GiB）与 Host tsdown（5.65 GiB）重叠时。并发时的关键路径是 host-src → host-bundle → desktop-bundle → client-src → client-test；host-test 在结束前 32.5–33.1 s 完成，client-bundle 在结束前约 21 s 完成。各步骤 wall（串行两次 / 并发两次）：host-src 73.8、61.3 / 70.3、62.6；host-test 68.5、64.0 / 75.1、70.5；host-bundle 23.1、20.5 / 22.1、21.0；desktop-bundle 4.5、4.0 / 4.4、4.4；client-src 50.4、46.3 / 46.3、44.1；client-test 36.0、33.5 / 34.9、34.1；client-bundle 12.9、11.5 / 13.6、12.6。
+
+第 1 轮最终测量：每个场景一个样本，均从 clean 开始，在 64 核 cgroup 中运行（load average 29–87）；基线为 master。
+
+| 场景 | master | 本分支 | CPU user+sys（master → 本分支） | 进程树 RSS 峰值（master → 本分支） |
+|---|---|---|---|---|
+| 完整构建 `pnpm run build` | 318.2 s | 170.1 s（−46.5%） | 425.5 → 373.4 s | 6.13 → 7.55 GiB |
+| 产物构建：master `build --artifacts-only`，本分支 `build:src` | 178.9 s | 152.5 s（−14.8%） | 未测量 | 未测量 |
+| 开发迭代：master `build`，本分支 `build:src` | 318.2 s | 152.5 s（−52%） | 未测量 | 未测量 |
+| `pnpm run build:test`（`build:src` 之后） | — | 67.9 s | 未测量 | 未测量 |
+| `pnpm run build:test` 立即重跑 | — | 19.4 s | 未测量 | 未测量 |
+| `DSH_GATE_CONCURRENCY=1 pnpm run build` | — | 第 2 轮待测 | 第 2 轮待测 | 第 2 轮待测 |
+| `lint` 等的前置步骤：master `build:lib:host`，本分支 `host-libraries` | 第 2 轮待测 | 第 2 轮待测 | 第 2 轮待测 | 第 2 轮待测 |
+
+本分支 `build` 的步骤 wall：native 1.7、host-src 66.5、host-bundle 11.4、desktop-bundle 3.4、client-src 45.6、client-bundle 9.0、web 9.4、host-test 65.3、client-test 34.8 s。按这些值计算，关键路径是 native → host-src → host-bundle → desktop-bundle → client-src → client-test，共 163.4 s；host-test 在第 133.5 s 结束，不在关键路径上。master 串行各段：native 2.5、Host 包编译 66.7、Host 聚合检查 66.1、Host tsdown 22.5、Desktop bundle 3.3、Client 包编译 55.6、Client 聚合检查 68.2、Client tsdown 13.9、web 9.7 s，合计 308.5 s。两者的差异也包含[无损提速 Note](2026-10-11-lossless-build-speedups.zh.md) 的改动：Host tsdown、Client 包编译、Client tsdown 与 Client 聚合检查的缩短来自该 Note，Host 聚合检查移出关键路径来自本 Note 的并发调度。`build:test` 的 67.9 s 中，Host 与 Client 聚合检查并发运行，分别为 65.2 s 与 33.9 s。
+
+### 完整性与无损依据
+
+`build` 运行的编译器程序集合与串行构建相同：host-src 与 client-src 编译两个 face 的全部包 project，host-test 与 client-test 检查两个聚合根程序，且使用与 `build:test` 相同的命令。原型的 6 轮运行中，`{packages,apps,vendor,native}/**/lib/**`（排除 `*.tsbuildinfo`）的 11,580 个文件在串行与并发之间逐字节一致，每轮之后 `tsc -b --dry tsconfig.host.json tsconfig.client.json` 报告没有过期 project。tsbuildinfo 写入方归属为：host-src 292 个，client-src 76 个（恰好是 client-only project），两个聚合检查各 1 个；client-src 不改写 host-test 读取的任何 tsbuildinfo 或声明，因此该依赖图中不存在写入竞争。fixture 测试 `checks only the aggregate program in project mode` 表明 `tsc -p` 写出的 tsbuildinfo 被 `tsc -b --dry` 视为最新，`reports missing package declarations without compiling references` 表明 project mode 不编译 references。本实现中，并发 `build` 与 `DSH_GATE_CONCURRENCY=1 pnpm run build` 产出逐字节一致的 `lib/`（11,584 个文件）、`apps/web/dist`（156 个文件）与 client build record；之后 `tsc -b --dry` 对两个聚合配置报告 372 个 project 全部为最新，没有需要构建的 project。
+
+| 错误 | `build:src` | `build:test` | `build` | `typecheck` | 必需 CI lane |
+|---|---|---|---|---|---|
+| 包源码类型错误 | host-src / client-src | 不报告（读取已有声明） | host-src / client-src | 报告 | 报告 |
+| 只属于聚合根程序的测试、脚本、benchmark、website 类型错误 | 不报告 | host-test / client-test | host-test / client-test | 报告 | consumers、windows-build |
+| 包 tsconfig 配置错误 | host-src / client-src | 不报告（`tsc -p` 不校验被引用 project 的 tsconfig 选项与语法） | host-src / client-src | 报告 | 报告 |
+| Typert 分析错误 | host-bundle | 不报告 | host-bundle | 报告（经 Host bundle） | 报告 |
+| 前置产物缺失 | — | 编译器诊断（TS6305、TS2307） | — | — | — |
+
+负对照：在只属于 Host 聚合根程序的 `scripts/pnpm-invocation.spec.ts` 中加入类型错误（TS2322）后，`build:src` 以 0 退出；`build:test` 以 1 退出，其中 Host 聚合检查失败、Client 聚合检查通过；`build` 以 1 退出，9 个步骤中 8 个通过、1 个失败，且不写 client build record。在临时 fixture 中，被引用 project 的 tsconfig 含无效 `target`、JSON 语法错误或未知编译选项时，`tsc -p` 以 0 退出，`tsc -b` 分别报告 TS6046、TS5092 与 TS1012、TS5023 并以 1 退出；被引用 project 缺少 `composite` 时，两者都报告 TS6306。
+
+### 有意的取舍（非无损）
+
+- **部分命令跳过聚合检查：** `build:src`、`dev:web` 与 `dev:desktop` 的启动构建，以及 `lint`、`lint:fix`、`doc-typecheck` 与 Typert contracts gate 的前置步骤，都不类型检查两个聚合根程序，这些前置步骤也不产出 `apps/desktop/lib`。完整性由 `build`、`build:test`、`typecheck`（pre-push hook）与两个必需 CI lane 负责；`dev:web` 与 `dev:desktop` 不会因测试类型错误而拒绝启动。
+- **`build:test` 不检查新鲜度：** 在 `build:src` 之后修改源码时，`build:test` 基于旧声明（包括 Typert Remote 声明）检查；需要先重跑 `build:src`。完整 `build` 不受影响。
+- **并发 `build` 提高内存峰值：** 本分支完整 `build` 的进程树 RSS 峰值为 7.55 GiB，master 串行构建为 6.13 GiB（+1.42 GiB，各一个样本）；同时 CPU 从 425.5 s 降到 373.4 s，因为[无损提速 Note](2026-10-11-lossless-build-speedups.zh.md) 省去的工作多于并发争用增加的工作。原型（不含 Typert 改动）中，单独的并发调度使 RSS 峰值增加约 2.1 GiB（5.9 → 8.0 GiB）、CPU 增加约 3.7%。上限由 `DSH_GATE_CONCURRENCY` 控制；内存紧张时使用 `DSH_GATE_CONCURRENCY=1 pnpm run build`，或分别运行 `build:src` 与 `build:test`。windows-build lane 中 `build` 与 `docs:build` 同时运行。
+- **成功步骤的输出默认不显示：** 只有失败步骤打印完整输出。
+- **`tsc -p` 不跳过已是最新的根程序：** 无改动时立即重跑 `build:test` 仍需 19.4 s，因为两个程序都要重新解析；`tsc -b` 会跳过已是最新的根。
+- **多核冷启动时 `build:src` 只比 `build` 快 17.6 s：** 本分支冷启动 `build` 为 170.1 s，`build:src` 为 152.5 s（各一个样本），因为 host-test 不在关键路径上，client-test（34.8 s）只比 client-bundle 与 web 之和（18.4 s）长约 16 s。`build:src` 的其余收益是 CPU 与内存：原型中两个聚合检查合计约 148 s CPU，Host 聚合检查与 Host tsdown 重叠时使内存峰值增加约 2 GiB；在少核机器与增量重建中，这部分也转化为 wall。
+- **CI 调用根 manifest 中的公开命令：** PR 产物构建调用 `build:src`，而不是内部 helper 参数；修改根 manifest 中这些 script 的 PR 会激活独立的 Node Addon System 平台矩阵。
+
+## 考虑过的替代方案
+
+- **只在 `typecheck` 中保留聚合检查：** `pnpm run build` 必须完整，能检测出所有错误。
+- **保留 `--artifacts-only` 并新增 `build:src` 别名：** 同一件事有两个名字。
+- **`build:test` 使用 `tsc -b <aggregate>`：** build mode 会编译过期的 references，即执行 `build:src` 的工作。
+- **`build:test` 先补齐或校验前置产物：** 违背每个命令只做自己的工作，并增加前置逻辑；编译器诊断已经指明缺失的输出。
+- **新的调度实现（shell `&`/`wait`、`concurrently`、turbo/nx）：** 重复 run-gates 已有的失败汇总、进程树终止与 Windows 处理。
+- **在 CI 的 run-gates 中把 `build` 展开为多个 gate：** `pnpm run build` 必须是本地与 release workflow 可直接使用的完整命令，record 也由它写入。
+- **放宽 src 链内的非数据依赖（native ∥ host-src、desktop-bundle ∥ client-src）：** 未测量；Desktop bundle 本身只占 4.0–4.5 s。
+- **把测试移入新的 tsconfig：** 现有聚合配置已经把包 references 与根程序分开。
+- **把聚合根程序拆成多个子程序：** 每个子程序都要注入 242 个含模块增强的文件，CPU 增加 9–57%，只降低 wall（见[无损提速 Note](2026-10-11-lossless-build-speedups.zh.md)）。
+- **CI 单独运行 `build:test`：** 必需 lane 已通过 `build` 获得同一组检查，再单独运行是重复工作。
+
+## 后果
+
+开发迭代可以用 `build:src` 跳过两个聚合根程序（冷启动比 master 的 `build` 快 52%），在声明完成前用 `build:test` 或 `build` 补齐检查。`build` 保持完整：Host 聚合检查不在关键路径上，Client 聚合检查与 Client bundle、web 并行，冷启动比 master 快 46.5%（含无损提速 Note 的改动，各一个样本）。代价是更高的内存峰值、并发争用带来的少量额外 CPU、默认更少的成功输出，以及多个开发与前置命令不检查测试类型（见上文取舍）。
+
+删除或改变 consumers 与 windows-build 两个必需 lane 的 `build`，必须先把两个聚合检查转交另一处阻塞型 owner。若 Typert 以后获得独立的生成步骤，步骤表新增该步骤，client-src 改为依赖它；命令语义与调度不变。
+
+[Typert Remote 方法调用](../architecture/2026-08-02-typert-remote-method-calls.zh.md)描述的“Client 编译前先完成 Host 与 Remote 产物”由 client-src 对 host-bundle 的依赖保证。
+
+验证：`scripts/build.spec.ts` 覆盖类型剥离检查、已删除参数与非法范围的拒绝、`--profile` 与 `--scope test` 的冲突、范围选择、步骤依赖与环境；`compile-referenced-projects.spec.ts` 覆盖 project mode 只检查聚合程序、缺失声明的诊断，以及 `tsc -b --dry` 接受 `tsc -p` 写出的 tsbuildinfo；失败传播、输出缓冲与进程树终止沿用 run-gates 的调度实现及其测试；`run-gates.spec.ts`、`ci-workflow.spec.ts`、`preview-workflow.spec.ts`、`build-exe-for-python-sdk.spec.ts`、`dev-web.spec.ts` 与 `tests/ci-release-selfhosted.spec.ts` 固定各调用方的命令。

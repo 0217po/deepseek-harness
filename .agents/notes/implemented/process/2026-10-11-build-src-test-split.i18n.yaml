@@ -1,0 +1,40 @@
+# Bilingual-pair consistency record for 2026-10-11-build-src-test-split.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-10-11-build-src-test-split.md
+/agent-note-split-build-src-and-build-test-with-build-running-both-concurrently:
+  en: db08cc8c6fbc40cc
+  zh: 740e25dede205595
+/agent-note-split-build-src-and-build-test-with-build-running-both-concurrently/problem:
+  en: 3c0f9561851590cd
+  zh: 01510bc8e2dd4a44
+/agent-note-split-build-src-and-build-test-with-build-running-both-concurrently/decision:
+  en: a15c7c13f167e5ac
+  zh: 63bcc2ef60c2f344
+/agent-note-split-build-src-and-build-test-with-build-running-both-concurrently/decision/commands:
+  en: b8e78d0f04961757
+  zh: 6d1603267f713dd4
+/agent-note-split-build-src-and-build-test-with-build-running-both-concurrently/decision/steps-and-dependencies:
+  en: 28407fff5f754c70
+  zh: 8d116fb32322317e
+/agent-note-split-build-src-and-build-test-with-build-running-both-concurrently/decision/scheduling-failure-and-output:
+  en: 5872f92bf06cb776
+  zh: 274fcfbd971d5c5b
+/agent-note-split-build-src-and-build-test-with-build-running-both-concurrently/decision/callers:
+  en: 79559fef50ac3f1f
+  zh: bf327d9b03d4bcf4
+/agent-note-split-build-src-and-build-test-with-build-running-both-concurrently/decision/measurements:
+  en: 5481a604777b29d7
+  zh: 63e330b736f6c7a3
+/agent-note-split-build-src-and-build-test-with-build-running-both-concurrently/decision/completeness-and-lossless-evidence:
+  en: a65438822fc683b2
+  zh: 34d5595110955b8e
+/agent-note-split-build-src-and-build-test-with-build-running-both-concurrently/decision/intentional-trade-offs-not-lossless:
+  en: 7e572606c676e46f
+  zh: f75615dd4a481391
+/agent-note-split-build-src-and-build-test-with-build-running-both-concurrently/alternatives-considered:
+  en: d9492c56ba2a210a
+  zh: feafcad4f632a057
+/agent-note-split-build-src-and-build-test-with-build-running-both-concurrently/consequences:
+  en: 8c4e6eec5bb44b5a
+  zh: 3f86eb0e620b62ff

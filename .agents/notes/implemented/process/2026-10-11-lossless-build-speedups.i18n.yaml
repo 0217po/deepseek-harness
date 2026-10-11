@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for 2026-10-11-lossless-build-speedups.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-10-11-lossless-build-speedups.md
+/agent-note-build-speed-ups-that-keep-outputs-unchanged:
+  en: 48682b646b8f993a
+  zh: 4c26cb4aab5cd08c
+/agent-note-build-speed-ups-that-keep-outputs-unchanged/problem:
+  en: 874d7d87e3d2a7c6
+  zh: 06bdfd1eb91c25e4
+/agent-note-build-speed-ups-that-keep-outputs-unchanged/decision:
+  en: 59f288bb758dde74
+  zh: d2360c02701cf96c
+/agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/measurement-conditions:
+  en: 2ab844073ec7c336
+  zh: b25e39f2f80b0d7e
+/agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/1-only-the-root-manifest-declares-react-type-packages:
+  en: 1cd139ef5c258dfe
+  zh: 9397dc3b8530b9ae
+/agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/2-typert-selects-packages-by-manifest-first:
+  en: 824472b4248bbb9d
+  zh: 411479c8bc830b06
+/agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/3-typert-does-not-expand-aggregate-include:
+  en: 6c2348fd12771991
+  zh: a2b7ea95f471fe20
+/agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/4-typert-parses-package-tsconfigs-lazily:
+  en: 1d6876419e852e68
+  zh: d526c7dc0f94118d
+/agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/5-the-typert-workspace-root-also-requires-packages:
+  en: 7bec99d36d8d3fd0
+  zh: ee4273df6178180a
+/agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/6-typert-generates-in-a-worker-thread:
+  en: 0f2450529c1b1b80
+  zh: c6ed12cb882131e6
+/agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/7-the-typert-transform-hook-filters-by-module-id:
+  en: e738cc16329da590
+  zh: 7d04be9a9f5837d7
+/agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/8-client-tsdown-presets-read-the-manifest-from-the-package-directory:
+  en: 388f070a74bcc18f
+  zh: 23b14fcb96007a6c
+/agent-note-build-speed-ups-that-keep-outputs-unchanged/alternatives-considered:
+  en: 186e42f2f5481c8d
+  zh: 4a1c79a391a268b0
+/agent-note-build-speed-ups-that-keep-outputs-unchanged/consequences:
+  en: 5712ab878322479b
+  zh: f5acdcbffc819bf2
