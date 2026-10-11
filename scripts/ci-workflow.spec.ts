@@ -92,7 +92,7 @@ describe('CI workflow', () => {
   })
 
   it('selects artifact builds only for PR release and API rehearsals', () => {
-    const official = "${{ github.event_name == 'pull_request' && 'pnpm run build --artifacts-only --profile official' || 'pnpm run build:official' }}"
+    const official = "${{ github.event_name == 'pull_request' && 'pnpm run build:src --profile official' || 'pnpm run build:official' }}"
     const vendor = "${{ github.event_name == 'pull_request' && 'pnpm exec tsx scripts/compile-referenced-projects.ts host-libraries' || 'pnpm run build:lib:host' }}"
     for (const [file, jobName, expected] of [
       ['release.yml', 'pack', official],
@@ -102,7 +102,7 @@ describe('CI workflow', () => {
       const job = workflowJob(loadWorkflow('.github/workflows/' + file), jobName)
       if (!Array.isArray(job.steps)) throw new TypeError(`${jobName} must define steps`)
       const step = job.steps.filter(isRecord).find(candidate => typeof candidate.run === 'string'
-        && (candidate.run.includes('--artifacts-only') || candidate.run.includes('host-libraries')))
+        && (candidate.run.includes('build:src') || candidate.run.includes('host-libraries')))
       expect(step?.run).toBe(expected)
       for (const event of ['pull_request', 'push', 'workflow_dispatch']) {
         const expression = expected.slice('${{ '.length, -' }}'.length)
@@ -110,7 +110,7 @@ describe('CI workflow', () => {
         expect(selected).toBe(event === 'pull_request'
           ? file === 'release-vendor.yml'
             ? 'pnpm exec tsx scripts/compile-referenced-projects.ts host-libraries'
-            : 'pnpm run build --artifacts-only --profile official'
+            : 'pnpm run build:src --profile official'
           : file === 'release-vendor.yml' ? 'pnpm run build:lib:host' : 'pnpm run build:official')
       }
     }
@@ -121,20 +121,20 @@ describe('CI workflow', () => {
     if (!Array.isArray(job.steps)) throw new TypeError('Python runtime builder must define steps')
     const steps = job.steps.filter(isRecord)
     const execute = steps.find(step => step.name === 'Build single-exe')
-    expect(steps.some(step => step.run === 'pnpm run build --artifacts-only')).toBe(false)
+    expect(steps.some(step => step.run === 'pnpm run build:src')).toBe(false)
     expect(execute).toMatchObject({
       env: { DSH_BUILD_CLIENT_PROFILE: 'official' },
     })
     if (typeof execute?.run !== 'string') throw new TypeError('Python executable builder must define a command')
     const expression = [...execute.run.matchAll(/\$\{\{ ([^{}]+) \}\}/g)]
       .map(match => match[1]).find(value => value?.startsWith('inputs.ci'))
-    expect(expression).toBe("inputs.ci && github.event_name == 'pull_request' && '--artifacts-only' || ''")
+    expect(expression).toBe("inputs.ci && github.event_name == 'pull_request' && '--build-src' || ''")
     if (expression === undefined) throw new TypeError('Python executable builder must select its build mode')
     for (const ci of [false, true]) {
       for (const event of ['pull_request', 'push', 'workflow_dispatch']) {
         const context = { inputs: { ci }, github: { event_name: event } }
         const selected: unknown = runInNewContext(expression, context, { timeout: 1000 })
-        expect(selected).toBe(ci && event === 'pull_request' ? '--artifacts-only' : '')
+        expect(selected).toBe(ci && event === 'pull_request' ? '--build-src' : '')
       }
     }
   })

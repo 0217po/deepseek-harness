@@ -9,6 +9,22 @@ import { pnpmCommand } from './release/process.ts'
 
 type CompilationMode = 'checked' | 'benchmark-emit'
 
+/** Identifier of one package-library build step. */
+export type LibraryStepId = 'host-src' | 'host-bundle' | 'desktop-bundle' | 'client-src' | 'client-bundle'
+
+/** One package-library build step as a shell-free child-process invocation. */
+export interface LibraryStep {
+  readonly id: LibraryStepId
+  /** Name used in progress and failure reports. */
+  readonly label: string
+  /** Short command shown in failure reports; reference lists are summarized. */
+  readonly displayCommand: string
+  readonly command: string
+  readonly args: readonly string[]
+  /** Steps that must succeed first; together they repeat the serial library order. */
+  readonly needs: readonly LibraryStepId[]
+}
+
 /**
  * Run one package-manager command serially with the inherited build environment.
  * @param root - Repository root supplying the command's working directory.
@@ -25,17 +41,18 @@ export function runPnpmCommand(root: string, args: readonly string[]): void {
 }
 
 /**
- * Compile one aggregate's project references with the serial TypeScript builder.
+ * Resolve the Node arguments that compile one aggregate's project references with the serial TypeScript builder.
  * @param root - Repository root containing the aggregate tsconfig.
  * @param face - Independent compiler face whose package projects are emitted.
  * @param mode - Check package types by default; benchmark emission defers diagnostics to required full builds.
- * @throws If the aggregate emits files, its configuration is invalid, or package compilation fails.
+ * @returns Arguments for `process.execPath`, including the heap limit the Host face needs.
+ * @throws If the aggregate configuration is invalid, has no references, or can emit files.
  */
-export function compileReferencedProjects(
+export function referencedProjectsCompilerArgs(
   root: string,
   face: 'host' | 'client',
   mode: CompilationMode = 'checked',
-): void {
+): string[] {
   const configPath = resolve(root, `tsconfig.${face}.json`)
   const config = ts.getParsedCommandLineOfConfigFile(configPath, {}, {
     ...ts.sys,
@@ -56,43 +73,109 @@ export function compileReferencedProjects(
   if (config.options.noEmit !== true) {
     throw new Error(`compile-referenced-projects: ${configPath} requires noEmit: true to exclude its aggregate program`)
   }
-  const compiler = fileURLToPath(import.meta.resolve('typescript/bin/tsc'))
-  const result = spawnSync(process.execPath, [
-    ...face === 'host' ? ['--max-old-space-size=4096'] : [],
-    compiler,
+  return [
+    ...hostHeapArgs(face),
+    fileURLToPath(import.meta.resolve('typescript/bin/tsc')),
     '-b',
     ...mode === 'benchmark-emit' ? ['--noCheck'] : [],
     // Relative arguments keep the complete workspace graph below Windows' command-line limit.
     ...references.map(reference => relative(root, reference.path)),
-  ], { cwd: root, stdio: 'inherit' })
+  ]
+}
+
+/**
+ * Resolve the Node arguments that type-check one aggregate's own test and script program in project mode.
+ * Project mode reads the declarations that its references already emitted and never compiles a reference,
+ * so missing package outputs surface as compiler diagnostics.
+ * @param face - Compiler face whose aggregate program is checked.
+ * @returns Arguments for `process.execPath`, run from the repository root.
+ */
+export function aggregateCheckArgs(face: 'host' | 'client'): string[] {
+  return [...hostHeapArgs(face), fileURLToPath(import.meta.resolve('typescript/bin/tsc')), '-p', `tsconfig.${face}.json`]
+}
+
+function hostHeapArgs(face: 'host' | 'client'): string[] {
+  return face === 'host' ? ['--max-old-space-size=4096'] : []
+}
+
+/**
+ * Compile one aggregate's project references with the serial TypeScript builder.
+ * @param root - Repository root containing the aggregate tsconfig.
+ * @param face - Independent compiler face whose package projects are emitted.
+ * @param mode - Check package types by default; benchmark emission defers diagnostics to required full builds.
+ * @throws If the aggregate emits files, its configuration is invalid, or package compilation fails.
+ */
+export function compileReferencedProjects(
+  root: string,
+  face: 'host' | 'client',
+  mode: CompilationMode = 'checked',
+): void {
+  runStep(root, compilerStep(root, face, mode))
+}
+
+function compilerStep(root: string, face: 'host' | 'client', mode: CompilationMode): LibraryStep {
+  return {
+    id: face === 'host' ? 'host-src' : 'client-src',
+    label: `${face} compiler`,
+    displayCommand: `tsc -b${mode === 'benchmark-emit' ? ' --noCheck' : ''} <tsconfig.${face}.json references>`,
+    command: process.execPath,
+    args: referencedProjectsCompilerArgs(root, face, mode),
+    needs: face === 'host' ? [] : ['desktop-bundle'],
+  }
+}
+
+function pnpmStep(id: LibraryStepId, label: string, args: readonly string[], needs: readonly LibraryStepId[]): LibraryStep {
+  const [command, ...prefix] = pnpmCommand()
+  return { id, label, displayCommand: `pnpm ${args.join(' ')}`, command, args: [...prefix, ...args], needs }
+}
+
+/**
+ * List the package-library build steps in Host, Desktop, then Client dependency order.
+ * Host bundling runs Typert, whose Remote declarations Client compilation imports.
+ * @param root - Repository root containing the compiler and bundle configurations.
+ * @param faces - `host` lists Host compilation and bundling, which produce the Typert outputs; `all` adds Desktop and Client.
+ * @param mode - Check package types by default; benchmark emission defers diagnostics to required full builds.
+ * @returns The ordered steps; each step needs its predecessor.
+ * @throws If an aggregate configuration is invalid.
+ */
+export function libraryBuildSteps(root: string, faces: 'host' | 'all', mode: CompilationMode = 'checked'): LibraryStep[] {
+  const host: LibraryStep[] = [
+    compilerStep(root, 'host', mode),
+    pnpmStep('host-bundle', 'Host bundle', ['exec', 'tsdown', '--config-loader', 'native', '--env.DSH_BUILD_FACE', 'host'], ['host-src']),
+  ]
+  if (faces === 'host') return host
+  return [
+    ...host,
+    pnpmStep('desktop-bundle', 'Desktop bundle', ['--filter', '@deepseek-ai/dsh-desktop', 'run', 'bundle'], ['host-bundle']),
+    compilerStep(root, 'client', mode),
+    pnpmStep('client-bundle', 'Client bundle', ['exec', 'tsdown', '--config-loader', 'native', '--env.DSH_BUILD_FACE', 'client'], ['client-src']),
+  ]
+}
+
+function runStep(root: string, step: LibraryStep): void {
+  const result = spawnSync(step.command, step.args, { cwd: root, stdio: 'inherit' })
   if (result.error !== undefined) throw result.error
   if (result.status !== 0) {
-    throw new Error(`compile-referenced-projects: ${face} compiler exited with ${String(result.status ?? result.signal)}`)
+    throw new Error(`compile-referenced-projects: ${step.label} exited with ${String(result.status ?? result.signal)}`)
   }
 }
 
 /**
- * Emit package libraries in Host, Desktop, then Client dependency order.
+ * Emit package libraries serially in Host, Desktop, then Client dependency order.
  * @param root - Repository root containing the compiler and bundle configurations.
- * @param hostOnly - Omit the Client compiler and bundler after the Host artifacts are ready.
+ * @param hostOnly - Stop after Host compilation and bundling, which produce the Typert outputs.
  * @param mode - Check package types by default; benchmark emission defers diagnostics to required full builds.
  * @throws If any compiler or bundler fails.
  */
 export function buildLibraryArtifacts(root: string, hostOnly: boolean, mode: CompilationMode = 'checked'): void {
-  compileReferencedProjects(root, 'host', mode)
-  runPnpmCommand(root, ['exec', 'tsdown', '--config-loader', 'native', '--env.DSH_BUILD_FACE', 'host'])
-  runPnpmCommand(root, ['--filter', '@deepseek-ai/dsh-desktop', 'run', 'bundle'])
-  if (hostOnly) return
-  compileReferencedProjects(root, 'client', mode)
-  runPnpmCommand(root, ['exec', 'tsdown', '--config-loader', 'native', '--env.DSH_BUILD_FACE', 'client'])
+  for (const step of libraryBuildSteps(root, hostOnly ? 'host' : 'all', mode)) runStep(root, step)
 }
 
 if (import.meta.main) {
+  const usage = 'compile-referenced-projects: expected exactly one mode: host, client, or host-libraries'
   const { positionals } = parseArgs({ allowPositionals: true })
   const [mode] = positionals
-  if (positionals.length !== 1) {
-    throw new Error('compile-referenced-projects: expected exactly one mode: host, client, host-libraries, or libraries')
-  }
+  if (positionals.length !== 1) throw new Error(usage)
   const root = resolve(import.meta.dirname, '..')
   switch (mode) {
     case 'host':
@@ -102,10 +185,7 @@ if (import.meta.main) {
     case 'host-libraries':
       buildLibraryArtifacts(root, true)
       break
-    case 'libraries':
-      buildLibraryArtifacts(root, false)
-      break
     default:
-      throw new Error('compile-referenced-projects: expected exactly one mode: host, client, host-libraries, or libraries')
+      throw new Error(usage)
   }
 }
