@@ -102,7 +102,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   expect(model.requests).toHaveLength(calls.length + 1)
   const toolMessages = agent.session.deriveMessages().filter(message => message.role === 'tool')
   expect(toolMessages).toHaveLength(calls.length)
-  expect(toolMessages.every(message => !message.isError)).toBe(true)
+  expect(toolMessages.filter(message => message.isError)).toEqual([])
   expect(JSON.stringify(model.requests[0])).toContain('getCapabilities')
   expect(JSON.stringify(model.requests[0])).toContain('appHandle')
   expect(JSON.stringify(model.requests[0])).not.toContain('preloaded')

@@ -201,8 +201,7 @@ class SharedNativeChannel implements NativeChannel {
     let peerEnded = false
     let socketError: Error | undefined
     let bytes = Buffer.alloc(0)
-    let accepted = false
-    let refused = false
+    const admission: { status: 'pending' | 'accepted' | 'refused' } = { status: 'pending' }
     const abort = (): void => { socket.destroy(asError(this.startup.signal.reason)) }
     this.startup.signal.addEventListener('abort', abort, { once: true })
     socket.on('error', (error: Error) => { socketError = error; handshake.reject(error) })
@@ -223,7 +222,7 @@ class SharedNativeChannel implements NativeChannel {
       const newline = chunk.indexOf(10)
       const length = newline < 0 ? chunk.length : newline + 1
       if (bytes.length + length > handshakeByteLimit) {
-        refused = true
+        admission.status = 'refused'
         socket.destroy(transportError('NATIVE_PROTOCOL', 'Native handshake exceeded its byte limit'))
         return
       }
@@ -233,20 +232,20 @@ class SharedNativeChannel implements NativeChannel {
         const value: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, -1)))
         const refusal = Refusal.safeParse(value)
         if (refusal.success) {
-          refused = true
+          admission.status = 'refused'
           socket.destroy(transportError(refusal.data.code, refusal.data.message))
           return
         }
         const ready = Ready.parse(value)
         if (ready.runtimeKey !== runtimeKey) throw transportError('NATIVE_PROTOCOL', 'Native handshake returned a different runtime identity')
-        accepted = true
+        admission.status = 'accepted'
         socket.removeListener('data', receive)
         this.startup.signal.removeEventListener('abort', abort)
         if (chunk.length > length) this.stdout.write(chunk.subarray(length))
         socket.pipe(this.stdout, { end: false })
         handshake.resolve()
       } catch (error) {
-        refused = true
+        admission.status = 'refused'
         socket.destroy(transportError('NATIVE_PROTOCOL', 'Native helper refused or returned an invalid handshake', error))
       }
     }
@@ -258,11 +257,11 @@ class SharedNativeChannel implements NativeChannel {
     } catch (error) {
       socket.destroy()
       await ended.promise.catch(() => {})
-      if (!refused && !accepted && error instanceof Error && 'code' in error
+      if (admission.status === 'pending' && error instanceof Error && 'code' in error
         && ['ENOENT', 'ECONNREFUSED', 'ECONNRESET', 'NATIVE_EOF'].includes(String(error.code))) return undefined
       throw error
     } finally {
-      if (!accepted) socket.removeListener('data', receive)
+      if (admission.status !== 'accepted') socket.removeListener('data', receive)
     }
   }
 
@@ -273,7 +272,9 @@ class SharedNativeChannel implements NativeChannel {
       controller.abort(transportError('NATIVE_CLEANUP', `Native startup cleanup exceeded ${this.config.graceMs}ms`))
     }, this.config.graceMs)
     try {
-      const [, launcher] = await untilAbort(Promise.allSettled([this.socketClosed, this.launcherExit] as const), controller.signal)
+      const [, launcher] = await untilAbort(Promise.allSettled([
+        Promise.resolve(this.socketClosed), Promise.resolve(this.launcherExit),
+      ] as const), controller.signal)
       if (launcher.status === 'fulfilled' && launcher.value) {
         const range = launcher.value[1]
         if (range.status === 'rejected') throw range.reason

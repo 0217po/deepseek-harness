@@ -14,7 +14,7 @@ const Reply = z.union([
 
 const screenshotPrefix = '[cua-screenshot] '
 const ScreenshotDiagnostic = z.object({
-  requestId: z.string(), stage: z.string(), elapsedMs: z.number().finite().nonnegative(), errorCode: z.string().optional(),
+  requestId: z.string(), stage: z.string(), elapsedMs: z.number().nonnegative(), errorCode: z.string().optional(),
 })
 const WireReply = z.union([Reply, ScreenshotDiagnostic.extend({ type: z.literal('diagnostic') })])
 
@@ -225,7 +225,6 @@ export class NativeClient {
   }
 
   private receive(chunk: Buffer): void {
-    if (this.failure) return
     let offset = 0
     while (offset < chunk.length && !this.failure) {
       const newline = chunk.indexOf(10, offset)

@@ -408,12 +408,13 @@ describe('native helper transport', () => {
   it('retains the last screenshot phase after timeout and request cancellation', async () => {
     vi.useFakeTimers()
     try {
-      const reportDiagnostic = vi.fn()
+      const reportDiagnostic = vi.fn<(message: string) => void>()
       const f = fixture({ timeoutMs: 25, reportDiagnostic })
       const pending = f.client.request('screenshot', {}, new AbortController().signal, ToolCallId('capture-timeout'))
-      const rejected = expect(pending).rejects.toMatchObject({ code: 'NATIVE_TIMEOUT',
-        message: expect.stringContaining('"stage":"capture-image.begin"'),
-      })
+      const rejected = Promise.all([
+        expect(pending).rejects.toMatchObject({ code: 'NATIVE_TIMEOUT' }),
+        expect(pending).rejects.toThrow('"stage":"capture-image.begin"'),
+      ])
       f.reply({ type: 'diagnostic', requestId: 'capture-timeout', stage: 'capture-image.begin', elapsedMs: 2 })
       await vi.advanceTimersByTimeAsync(25)
       f.reply({ id: f.id(), error: { code: 'NATIVE_CANCELLED', message: 'Capture stopped' } })
@@ -450,7 +451,7 @@ describe('native helper transport', () => {
   })
 
   it('bounds retained screenshot diagnostics and keeps successful results out of model text', async () => {
-    const reportDiagnostic = vi.fn()
+    const reportDiagnostic = vi.fn<(message: string) => void>()
     const f = fixture({ reportDiagnostic })
     const pending = f.client.request('screenshot', {}, new AbortController().signal, ToolCallId('capture'))
     for (let index = 0; index < 200; index++) {

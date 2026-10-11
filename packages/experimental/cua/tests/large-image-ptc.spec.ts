@@ -144,7 +144,7 @@ it.skipIf(process.platform === 'win32')('delivers a valid PNG larger than 4 MiB 
   const messages = handle.agent.session.deriveMessages()
   const result = messages.find(message => message.role === 'tool' && message.toolCallId === 'large-image-ptc')
   if (result?.role !== 'tool') throw new Error('The PTC result was not recorded')
-  expect(result.isError).toBe(false)
+  expect(result.isError, JSON.stringify(result.content)).toBe(false)
   expect(result.content.filter(block => block.type === 'text').map(block => block.text).join('\n')).toContain(String(encodedLength))
   const nextImages = model.requests[1]?.messages.flatMap(message => message.content).filter(block => block.type === 'image')
   expect(nextImages).toHaveLength(1)

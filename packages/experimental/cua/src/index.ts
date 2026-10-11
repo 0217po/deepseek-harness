@@ -142,7 +142,7 @@ interface CuaExecution extends ToolExecution {
 }
 
 /**
- * Mount logged native operations with a separate helper per agent.
+ * Mount logged native operations with separate Agent connections to the shared helper.
  * @param ctx - Host context with computer-use, subprocess and tool services.
  * @param config - Validated native preparation and operation bounds.
  * @returns Completion after native preparation and tool registration.
@@ -299,7 +299,7 @@ function mount(ctx: Context, config: Config, helperPath: string): void {
             throw new NativeError('APP_ACCESS_REQUIRED', 'Select the application with getApp before reading or controlling it')
           }
           if (!client || (client.disposed && !('appHandle' in request.params))) {
-            client = new NativeClient(ctx, native, message => ctx.logger.debug(message))
+            client = new NativeClient(ctx, native, (message) => { ctx.logger.debug(message) })
             clients.set(agent, client)
           }
           const nativeClient = client

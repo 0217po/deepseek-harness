@@ -57,7 +57,7 @@ async function fixture(options: {
     for (const channel of channels) channel.close()
     for (const socket of sockets) socket.destroy()
     await Promise.all(channels.map(channel => channel.waitForClose().catch(() => {})))
-    await new Promise<void>((resolve) => { server.close(() => resolve()) })
+    await new Promise<void>((resolve) => { server.close(() => { resolve() }) })
     runtime.source = ''
     runtime.directory = ''
     runtime.foreignOwner = false
@@ -184,6 +184,7 @@ describe.skipIf(process.platform === 'win32')('shared native Unix connection', (
     await write(second, 'three\n')
     expect(JSON.parse(String(await remaining))).toEqual({ sequence: 2, request: 'three' })
     expect(f.spawn).toHaveBeenCalledTimes(2)
+    // oxlint-disable-next-line typescript/unbound-method -- Fixture termination methods are spies inspected without invocation.
     for (const handle of f.handles) expect(handle.terminate).not.toHaveBeenCalled()
     expect(f.hellos).toEqual([expect.objectContaining({ type: 'hello', protocol: 1, config: {
       axTimeoutMs: 3000, timeoutMs: 30000, screenshotTimeoutMs: 5000, graceMs: 1000,
@@ -297,6 +298,7 @@ describe.skipIf(process.platform === 'win32')('shared native Unix connection', (
   })
 
   it('reports non-Error provider failures through the Error stream without losing their cause', async () => {
+    // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- The provider's non-Error rejection is the test input.
     const f = await fixture({ launch: () => ({ ...launcherFixture(), done: Promise.reject('provider unavailable') }) })
     const channel = f.open()
     await expect(channel.done).rejects.toMatchObject({ code: 'NATIVE_CONNECT', cause: 'provider unavailable' })
@@ -369,6 +371,7 @@ describe.skipIf(process.platform === 'win32')('shared native Unix connection', (
     channel.close()
     await expect(channel.waitForClose()).rejects.toMatchObject({ code: 'NATIVE_CLEANUP' })
     await expect(channel.done).rejects.toMatchObject({ code: 'NATIVE_CLEANUP' })
+    // oxlint-disable-next-line typescript/unbound-method -- The fixture spy is inspected without invoking the method.
     expect(f.handles[0]?.terminate).not.toHaveBeenCalled()
   })
 
@@ -520,6 +523,7 @@ describe.skipIf(process.platform === 'win32')('shared native Unix connection', (
       if (attempts === 1) socket.end()
       else socket.write(ready)
     } })
+    // oxlint-disable-next-line typescript/unbound-method -- Reflect.apply below supplies the original Socket receiver.
     const originalEmit = Socket.prototype.emit
     let injected = false
     // Unix kernels differ in reporting close as EOF or ECONNRESET; inject only that error event.
