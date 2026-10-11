@@ -7,7 +7,8 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { UserTextNode, UserTextRule, UserTextTransformContext } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { UserTextRegistry } from '@deepseek-ai/dsh-client-ui-conversation/src/client/conversation/user-text-registry.ts'
 import { collapseWhitespaceRule, trimWhitespaceRule } from '@deepseek-ai/dsh-client-ui-conversation/src/client/user-text/whitespace-rules.ts'
-import { createSecretRule, PREFIX_SOURCE } from '../src/client/secret-rule.ts'
+import { formatTables } from '../src/client/format-tables.ts'
+import { createSecretRule } from '../src/client/secret-rule.ts'
 
 // Samples are assembled at run time so the repository holds no literal in a credential format.
 const hex = (length: number): string => '0123456789abcdef'.repeat(8).slice(0, length)
@@ -196,7 +197,7 @@ describe('secretRule masking', () => {
 
 describe('secretRule scheduling', () => {
   it('finds format starts through grouped literals only, so scanning cannot backtrack', () => {
-    const literals = PREFIX_SOURCE.replace(/\\./gu, '').replaceAll('(?:', '').replaceAll(')', '')
+    const literals = formatTables().prefixSource.replace(/\\./gu, '').replaceAll('(?:', '').replaceAll(')', '')
     expect(literals.split('|').length).toBeGreaterThan(20)
     expect(literals).not.toMatch(/[*+?{}()[\].^$]/u)
   })
