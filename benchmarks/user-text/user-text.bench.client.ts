@@ -67,7 +67,7 @@ const ALLOCATION_PER_MASKED_CHARACTER_BYTES = 2
 
 const ADVERSARIAL = [
   'digitless-sk', 'jwt-header-runs', 'jwt-two-segments', 'unterminated-key-blocks', 'address-without-at',
-  'colon-run', 'long-scheme-user', 'short-token-runs', 'tokens-between-digitless-keys',
+  'colon-run', 'long-scheme-user', 'short-token-runs', 'tokens-between-digitless-keys', 'closed-one-line-key-blocks',
 ] as const
 
 function benchmarkCase(id: string, measures: string): BenchmarkCase {

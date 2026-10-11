@@ -183,6 +183,11 @@ describe('secretRule masking', () => {
     expect(found(`${block}\n用这个`)).toEqual([block])
   })
 
+  it('masks each of many one-line private key blocks whole, with text after the last', () => {
+    const block = join('-----BEGIN', ' PRIVATE KEY-----', 'abcd', '-----END', ' PRIVATE KEY-----')
+    expect(masks(`${block} ${block} 完`)).toEqual([stars(block.length), stars(block.length)])
+  })
+
   it('masks a private key block written on one line whole', () => {
     const text = join('-----BEGIN', ' PRIVATE KEY-----', 'MIIEvQIBADANBgkq', '-----END', ' PRIVATE KEY-----')
     expect(masks(text)).toEqual([stars(text.length)])

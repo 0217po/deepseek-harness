@@ -202,7 +202,7 @@ FORMATS.forEach((f, index) => {
 
 const LITERALS: readonly string[] = FORMATS.map(f => f.literal)
 
-/** Index of the literal that PREFIXES matched ending at `end`; one of the literals sharing its ending matches, so the last needs no check. */
+/** Index of the literal that PREFIXES matched ending at `end`; one literal sharing the ending matches, so the last needs no check. */
 function literalEndingAt(text: string, end: number): number {
   const key = text.charCodeAt(end - 2) * 128 + text.charCodeAt(end - 1)
   const literal = ENDING[key] as number
@@ -419,8 +419,8 @@ function maskRange(text: string, start: number, end: number): string {
 }
 
 /**
- * `maskRange` for a key-block body, which ends at a line break or the end of the
- * text, so native runs stop at `end`. One slice of a shared string per line.
+ * `maskRange` for a key-block body that ends at a line break or the end of the
+ * text, where native runs stop. One slice of a shared string per line.
  */
 function maskLines(text: string, start: number, end: number): string {
   let masked = ''
@@ -455,11 +455,25 @@ function masked(text: string, kind: number, plain: boolean, start: number, end: 
     return prefix + (plain ? marks(end - start - VISIBLE_PREFIX) : maskRange(text, start + VISIBLE_PREFIX, end))
   }
   // A key block keeps its `BEGIN` line, its `END` line when present, and every line break; one written on one line is masked whole.
-  const firstBreak = text.indexOf('\n', start)
-  const bodyStart = firstBreak < 0 || firstBreak >= end ? start : firstBreak + 1
-  const endLine = text.lastIndexOf('\n-----END', end - 1)
-  const bodyEnd = endLine < bodyStart ? end : endLine
-  return text.slice(start, bodyStart) + maskLines(text, bodyStart, bodyEnd) + text.slice(bodyEnd, end)
+  // Both searches stay inside the range, so their cost is the range's, like the mask's.
+  let bodyStart = start
+  for (let index = start; index < end; index++) {
+    if (text.charCodeAt(index) === 10) {
+      bodyStart = index + 1
+      break
+    }
+  }
+  let bodyEnd = end
+  for (let index = end - '\n-----END'.length; index >= bodyStart; index--) {
+    if (text.charCodeAt(index) === 10 && text.startsWith('-----END', index + 1)) {
+      bodyEnd = index
+      break
+    }
+  }
+  // Native runs stop at a line break or the end of the text, so they stay inside a body that ends at one.
+  const bounded = bodyEnd === text.length || text.charCodeAt(bodyEnd) === 10 || text.charCodeAt(bodyEnd) === 13
+  const body = bounded ? maskLines(text, bodyStart, bodyEnd) : maskRange(text, bodyStart, bodyEnd)
+  return text.slice(start, bodyStart) + body + text.slice(bodyEnd, end)
 }
 
 /**

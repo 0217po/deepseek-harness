@@ -131,6 +131,8 @@ const ADVERSARIAL_UNITS = {
   'colon-run': ':',
   'long-scheme-user': `abcdefghijklmnop://${'u'.repeat(250)}:`,
   'short-token-runs': `ghp_${fill('a1B2c3', 35)} `,
+  // Closed one-line blocks, each its own credential: mask searches confined to each block keep them linear.
+  'closed-one-line-key-blocks': ['-----BEGIN', ' PRIVATE KEY-----abcd', '-----END', ' PRIVATE KEY----- '].join(''),
   // Each query starts after an accepted digit-free token and meets a digit-free `sk-` whose digit search reaches the end.
   'tokens-between-digitless-keys': ['-', 'sk', '-', 'gh', 'p_', fill('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', 36)].join(''),
 } as const
