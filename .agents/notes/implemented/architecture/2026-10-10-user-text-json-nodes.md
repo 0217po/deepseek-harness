@@ -1,4 +1,4 @@
-# Agent Note: Linear user-text transforms, Facts dependencies, and business-node rendering
+# Agent Note: User-text candidate scheduling and Facts-driven refresh
 
 Status: implemented
 
@@ -6,128 +6,86 @@ English | [中文](<2026-10-10-user-text-json-nodes.zh.md>)
 
 ## Problem
 
-User text contains plain text and structured references from different businesses. Each business needs to extend recognition, JSON data, and presentation independently; a Facts field update must not repeat matching for unrelated businesses. Processing must be deterministic, and text processing, caching, and dependency tracking must remain independent of React component lifecycles.
+User text contains references owned by independent businesses. Recognition must follow original-text positions, resolve collisions deterministically, and reuse unaffected matching work when Facts change. The evaluator must expose its scheduling behavior to pure logic tests without depending on React, browser timing, or elapsed-time benchmarks.
 
 ## Decision
 
-The design is “business registration → linear segment transforms → pure JSON nodes → keyed Slot → the business Slot's own Injection.” The existing UserText registry composes the pipeline, the data-layer runner evaluates and incrementally updates it, and React displays only the final nodes.
+The composition is business registration, lazy candidate matching, a single reconciliation loop, readonly JSON nodes, and business-owned keyed renderers. Initialization and Facts refresh use the same algorithm; they differ only in which query caches remain valid.
 
-### Linear pipeline
+### Rule roles and original coordinates
 
-Nonempty original text starts as one Text segment covering `[0, text.length)`; empty text produces an empty array. Registrations sort only by ascending `order`, then by stable registration ID for ties, independently of plugin load timing and without grouping by processing category. Each stage applies one synchronous `transform` to the preceding stage's result, with no additional passes or repetition to a fixed point. Registration order values explicitly express rule precedence.
+Every rule provides an ID, finite order, and synchronous `match(text, from, context)`. Each call returns its nearest eligible node with `start >= from`, or no candidate anywhere in the remaining original text. It returns one node, not all matches or a replacement document. The original string and UTF-16 offsets remain intact: a search cursor does not create a new word, line, or quoted-token boundary. Matching depends only on original text and Facts, not previously selected node payloads.
 
-Each stage receives the complete current readonly segment array. Segments outside its scope retain their references; changed parts produce new objects. Text recognition operates on the current eligible Text segments, while existing business nodes remain atomic and pass through to later stages. Rules must not independently match the initial full text and substitute global candidate sorting for sequential transforms.
+Each matcher resolves its own alternative spellings by earliest start and then its documented same-start choice; Session labels choose the longer match. A matcher cannot replace a consumed prefix with the remainder of an overlapping candidate. Each business owns its grammar, payload, and renderer; the generic evaluator has no Session, file, skill, or command branches.
 
-The original text remains unchanged, and output retains its original UTF-16 coordinates. Each stage's output is ordered, nonoverlapping, and covers the same original-text range; replacement nodes retain the ranges they consume. A business must not rejoin text separated by structured nodes into adjacent text or scan the preceding stage's JSX or display labels.
+There is one rule type and one candidate protocol. A candidate contains either a business node using the rule ID or a Text node preserving the original substring with an optional `data.display`. Text-producing rules compete by the same start, order, and stable ID as business rules. Order only breaks same-start ties; no rule gets precedence over an earlier position. There is no phase field, post-processing pipeline, or scenario-specific ordering.
 
-### Transform and read Context
+### One reconciliation loop
 
-Each registration contains a unique registration ID, order, and transform function. New business nodes use that rule's ID; rules that only process Text display values need no corresponding business node or renderer. Every rule follows the same original-text coverage and business-node protection constraints. The core interfaces are:
+The evaluator keeps original text, the previous successful segmentation, registered definitions, per-rule Facts reads, and query results. Nonempty text initially has one Text covering `[0, text.length)`; empty text has no nodes. Initialization makes every rule invalid, including rules that read no Facts. It is not modeled merely as a change to every known Facts field.
 
-```ts
-import type { UserTextFacts, UserTextNode } from '@deepseek-ai/dsh-client-ui-conversation/client'
+Each reconciliation starts its result cursor at zero. Every matcher obtains one candidate through the same cache-aware query operation. The evaluator selects the smallest candidate start, breaks same-start ties by ascending rule order and stable ID, emits the preceding raw Text gap, emits the winner, and advances the cursor to the winner's end. No candidate means the remaining raw text is emitted and recognition ends.
 
-interface UserTextTransformContext {
-  read<K extends keyof UserTextFacts>(
-    key: K,
-  ): UserTextFacts[K] | undefined
-}
+Only a consumed candidate or a candidate whose start is before the new cursor needs another query. A cached candidate beginning at or after the cursor remains eligible. A no-candidate result remains eligible as the cursor advances. All ranges are nonempty half-open original-text ranges; candidates cannot move the cursor backward or exceed the original string.
 
-interface UserTextRule<Id extends string = string> {
-  readonly id: Id
-  readonly order: number
-  transform(
-    segments: readonly UserTextNode[],
-    context: UserTextTransformContext,
-  ): readonly UserTextNode[]
-}
-```
+Previously accepted nodes are reusable output, not a complete list of possible matches: a losing candidate can become visible when an earlier winner disappears. The evaluator retains queries for this purpose instead of treating an old Text node or the absence of a business node as unconditional evidence of no match.
 
-Context reads facts and records dependencies for the current synchronous evaluation; it is not a Cordis Context, React Context, or service locator. It exposes only readonly Facts fields, not actions such as opening files, navigation, or attachment loading, and must not be retained beyond the current evaluation.
+### Query cache and traversal
 
-Businesses do not receive the complete Facts object, maintain separate `dependsOn` declarations, or receive `previous` or cache objects. Matching, regular expressions, and table lookups are implementation details of each business transform, not business-specific branches in the shared runner.
+A query record contains its original `from` offset and either the next candidate, no candidate, or a failure. If a query from `q` returned a candidate starting at `s`, its result is valid for any requested cursor `c` with `q <= c <= s`. A no-candidate result is valid for every `c >= q`. Neither result proves anything before `q`. A failed query is reusable only at the same requested offset while its dependencies remain valid.
 
-### Actual read dependencies
+During a reconciliation, each matcher has one active candidate. The evaluator also retains the sorted query records already produced for that matcher across reconciliations; it does not enumerate all possible matches eagerly. Forward cursors walk these records monotonically. Queries generated in newly exposed gaps are merged with retained records in source order, with one record per query offset. Unsearched intervals require matching rather than an invented negative result.
 
-The runner creates a read record for each stage evaluation. `context.read(key)` returns the value from the current Facts snapshot and records the field and its version or value reference. Reading `undefined` also establishes a dependency, so the field's later appearance can trigger recomputation.
+The result cursor and matcher search cursors are distinct. Starting result reconciliation at zero does not require unchanged matchers to scan from zero again: their recorded queries answer valid requests. Each matcher must implement a forward search rather than repeatedly materializing every match in the remaining text. Internal scans, candidate selection, and result comparison still have costs; the scheduling guarantees concern actual matcher calls, not a claim that arbitrary regular expressions are linear.
 
-Each execution collects its actual read set anew and replaces the old record rather than permanently accumulating fields it no longer reads. A business may return early for irrelevant input; a stage that does not call `read('skillNames')` is not invalidated when that field changes.
+### Actual Facts dependencies
 
-Dependency tracking operates at Facts-field granularity. Reading `skillNames` depends on that field, without automatically tracking individual array elements. Fields update immutably; a new outer Facts object reference does not mean every field changed.
+`context.read(key)` returns the borrowed readonly value from the current Facts snapshot and records the read, including `undefined`. The reader is valid only during its owning synchronous call and cannot be retained. Businesses receive neither a whole Facts object, a manual `dependsOn` list, nor previous-output/cache objects.
 
-### Incremental updates and caching
+A matcher's dependency set is the union of reads for the queries retained in its current cache generation, including losing candidates, no-match queries, and failed calls. Changed fields are detected with `Object.is` at field granularity. A new outer Facts object alone does not invalidate matching. When a rule is invalidated, its old queries and read set are discarded; subsequent calls establish the replacement read set, so obsolete conditional dependencies do not remain permanently attached.
 
-For each document and stage, the runner stores input segments, actually read fields and their versions, the rule version, and output segments, plus a reverse index from Facts fields to the stages that read them. Linear order already expresses upstream relationships, so there is no general dependency graph of arbitrary form.
+Text-producing rules use the same query cache and dependency generation as every other rule. Updating a whitespace switch invalidates only its readers; it does not trigger an unconditional pass over the completed nodes.
 
-When Facts update, only stages that actually read changed fields are marked invalid. The runner proceeds in pipeline order: a stage recomputes only when its own dependencies, rule, or upstream output change; otherwise it reuses the cache. Unchanged stage output stops downstream invalidation caused by that stage, but later stages that directly read other changed fields still execute.
+### Facts, text, and registration refresh
 
-Original-text changes recompute every stage from the single initial Text segment; character-level incremental parsing is not required. Rule additions, removals, reordering, or implementation updates cause reevaluation from the earliest affected stage; earlier unaffected caches can be reused.
+A Facts update invalidates only rules that read changed fields. Their first query starts at original offset zero; all other rules retain their query records. The same reconciliation loop then compares fresh candidates with reusable ones. Refreshing a rule does not give it priority, and a new first candidate does not hide the removal of an earlier old winner.
 
-The document's data-layer evaluation instance owns its cache. The registry creates a document evaluation callback but retains neither the callback nor the document and adds no registry subscription for the document; releasing the callback from the display binding also releases the document cache. Separate text instances do not share evaluators, and caches are not shared across Sessions by original-text string. Unmounted history does not need to reread Session logs for display-rule updates.
+A fresh candidate confined to previously plain text can split that Text without invoking unrelated matchers whose cached queries still cover the new cursors. A fresh candidate that loses to an earlier unchanged winner is discarded without invalidating that winner. When a fresh winner covers another candidate, only expired heads advance. When a winner disappears or shrinks, cached losing candidates can compete again; any previously unsearched interval causes a query at the newly exposed cursor. There is no separate insertion, deletion, or suffix-repair execution mode.
 
-### Reference reuse and determinism
+Several changed Facts fields form one snapshot and one invalidation set. All affected matchers participate in the same reconciliation; one update is not committed before processing the next. Equivalent refreshed results reuse previous nodes and, when all elements remain identical, the entire result array. Matching continues until the document is settled, rather than declaring an unchanged suffix from one coincidentally equal node.
 
-Input arrays, nodes, and Facts use readonly TypeScript types; the runner borrows values without freezing or copying them. Rules must not `splice` input in place, mutate node payloads, or use retained references to modify later results. Unchanged input nodes remain shared; entirely unchanged results retain the array reference instead of using full deep copies for isolation.
+Original-text changes discard all query caches and supply one full-range Text as the previous segmentation. New or replaced rule definitions start with empty caches; unchanged definitions retain their independent queries. Removed rules lose their dependencies and candidates. Reconciliation after additions, removals, or order changes uses the same selection logic and can expose formerly blocked candidates.
 
-The runner retains its previous output internally to align recomputed results. When new business nodes are equivalent to old nodes in ID, original-text range, and JSON data, the old objects can be reused; when all result elements are identical, the old array is reused. Comparison occurs only in stages that need recomputation, with a reference-equality fast path first, rather than serializing the whole pipeline on every refresh.
+### Output, ownership, and publication
 
-Old results serve only the runner's object reuse, not business decisions. The same original text, rule order, and Facts snapshot must produce the same JSON content on initial evaluation, repeated evaluation, and incremental updates.
+Nodes retain `{ id, start, end, data }`. Business nodes use their matcher's ID; Text retains the exact source substring in `data.text` and optional display text in `data.display`. Output is ordered, nonoverlapping, and completely covers the original text. JSON compatibility and readonly ownership are TypeScript obligations: the evaluator neither freezes borrowed objects nor deep-copies Facts or payloads for isolation.
 
-### Facts and display Props
+The document evaluator owns all caches; the registry retains neither evaluators nor document subscriptions. Separate text instances do not share state through a global cache. Only fully successful evaluation publishes a new result. A matcher failure carries the rule ID and cause and publishes no partial segmentation; its actual reads remain available for dependency-driven retry. Reentrant evaluation and escaped synchronous read contexts are rejected.
 
-The document runner receives only `{ text, facts }`. Facts contain only business context and processing parameters actually needed by transforms, consumed through `Context.read`; a value does not belong in Facts merely because it is configuration. Pure display behavior, such as UserText interaction and CSS ellipsis, uses ordinary React Props that the runner does not read. The core does not branch on scenario names such as message body, queue, or Goal.
+`conversation.user.text` remains a session-scoped Factory owning `conversation.user.text.node`, a keyed inline Slot. React consumes final nodes and forwards `raw` and `interactive` to the business renderer. Session, skill, file/folder, and command matching remain owned by their respective plugins, and actions remain in each renderer's Injection. No matching work or cache subscription moves into React.
 
-Each node has `{ id, start, end, data }`. `id` is the business type and the node Slot's key; `start` and `end` define a nonempty half-open UTF-16 range in the original text; `data` is that business's JSON payload. Text's `data.text` always retains the original text, while `data.display` is optional display text. Ordinary transforms may set display values or perform valid Text-segment transforms, but must not change the original text, break coverage, or consume existing business nodes. Node identity within a document combines the business ID and original-text position, never just the business ID or array index.
-
-Nodes and Facts contain no functions, ReactNode, service handles, DOM, observables, Date, or Map. `UserTextDataMap` and `UserTextFacts` are extensible declarations on the public `/client` entry point, and internal types reference those same declarations; business declaration merging must survive in published type files. Type constraints and unit tests ensure JSON compatibility, without repeatedly serializing and validating entire trees of trusted same-process input.
-
-Callers supply business Facts; the runner does not query global state for them. Skills use confirmed names, session references use associated labels, commands use actual execution ranges. Ordinary file paths can be recognized from text alone; an attachment display name is not a file path and must not be used to guess an attachmentId.
-
-`collapseWhitespace` and `trimWhitespace` each control one text-display transform and are disabled by default. Each rule reads only its own switch and uses the preceding stage's display result. Whitespace collapsing continues across consecutive Text segments but not business nodes; trimming affects only the document's two ends without removing normal spaces between references. Built-in rules use ordinary `order` values to place these transforms after existing reference recognition, preserving characters and identity within references; there is no additional category priority.
-
-`interactive` and CSS `ellipsis` are React Props, not Facts. Ellipsis neither removes original text nor limits the number of input characters. The queue enables whitespace collapsing and trimming through Facts and ellipsis through display Props; message bodies and Goal retain full display. Callers retain no `previewOf`, 200-character pre-truncation, or concatenated unknown-block placeholders; nontext attachments continue through the existing attachment display.
-
-Reference summaries obtain display data from `UserContentData.referenceLabels`, not Facts. The session-reference transform still obtains recognition input through `Context.read('sessionLabels')`. Callers pass the same label array by reference to both consumers, without copying it or introducing a second state.
-
-### Rendering and interaction ownership
-
-`conversation.user.text` is a session-scoped Factory that independently owns the session/keyed `conversation.user.text.node`. UserText traverses final nodes in order and selects each renderer by node ID, without centralized skill or file rendering branches. Default entries use `priority: 100`; external businesses override the corresponding keys through the existing Slot mechanism.
-
-`ui-conversation` provides `text` and session labels; `ui-skill` provides skills; `ui-reference` provides ordinary file and directory references; `ui-goal` provides Goal command markers. Each business's own Slot registration declares its action dependencies. Parsed data carries no callbacks, and parent layouts do not forward node-specific actions.
-
-The display layer passes the `interactive` Prop and original-text fragment `raw` to node renderers; these are ordinary data, not execution capabilities. Reference actions may appear only when `interactive` is true. Queues, submission echoes, and pending incoming input remain nonclickable; sessions, directories, and commands remain labels by default. Native attachments remain outside the text pipeline: file cards retain their name and size, and image galleries use the existing Session-authorized loader.
-
-The file-reference business handles file-navigation failures rather than returning them to the Chat action aggregator. A local Modal provides retry and close actions; synchronous navigation adds neither request sequence numbers nor fictitious aborts. Document previews still handle file-read errors, and Sidebar retains its existing public location semantics. Existing Assistant Markdown feedback and component responsibilities remain separate.
-
-Inline node Slots use span anchors with `inline: true` and inline error placeholders, retaining `data-slot` and `display: contents`; default DOM for other Slots is unchanged. Text selection, keyboard activation, protection against unintended opening on double-click, line wrapping, and queue ellipsis behavior are preserved. This introduces no business Context, React transform stages, or general injection inheritance.
-
-### Publication and failure
-
-Only fully successful evaluation results may be published. Failures publish no partial segments; the display layer retains the original text and reports the business ID. Fields read during a failed execution still establish dependencies for later retries. Missing node renderers fall back to the node's original-text fragment, while component exceptions use the framework's existing isolation mechanism.
-
-React learns about rule-version changes through the existing framework, passes the current original text and Facts to an independent document evaluation callback, and consumes only final node results. Stage dependencies, cache updates, and result alignment all stay in the data layer. The display layer does not feed input or segments back through effects and reuses rendered elements when the node array is unchanged. Unloading a rule revokes its registration, and the document's next evaluation removes the corresponding dependencies; the fact-reading Context must not leak into nodes or display components.
-
-### Scope
-
-UserContent retains attachments, the body container, unknown content, and reference summaries, while the message wrapper retains ownership of keys, timestamps, copying, and pending/echo state. Queue, Goal, and Chat reuse UserText's data processing and rendering entry point. The native attachment-list loader, draft editing model, persisted Session original text, and Assistant responsibilities are outside this pipeline refactor.
+`collapseWhitespace` and `trimWhitespace` each control one ordinary matcher and default to off. Collapse offers whitespace runs as Text candidates with display `" "`; trim offers original leading/trailing whitespace runs with display `""`. Trim has lower order than collapse, so it wins their same-start edge collisions. An earlier reference candidate consumes its whole range and naturally excludes internal whitespace candidates. Every Text candidate retains its exact raw substring; emoji and spaces between references remain intact. `interactive` and CSS `ellipsis` remain React Props, not matching Facts. Queue uses full original text with CSS ellipsis; native attachments remain in their existing cards and image Slots, outside text recognition.
 
 ## Verification requirements
 
-- Registering a new business requires only a transform, JSON type, and keyed renderer, with no new business branches in the shared runner or UserText.
-- After an earlier rule claims text, later rules calculate from the actual remaining segments rather than presenting initial full-text candidates as current matches.
-- Changes to unread Facts fields do not execute a stage; reading an absent field allows its later appearance to trigger recomputation; conditional read dependencies can be added or removed.
-- When a stage's Facts change but its output remains equivalent, old node and array references are reused and unrelated downstream stages do not execute; later stages that directly depend on other changed fields still execute.
-- Original-text changes run the entire pipeline; incremental results match a newly created evaluation instance with the same input.
-- Readonly type assertions cover arrays and payloads; node output is ordered, fully covers the original text without overlaps, and survives a JSON round-trip.
-- Only `order/id` determines sequence; transform unit tests cover ordinary registration order for built-in display transforms, independent switches, whitespace across adjacent segments, document-edge trimming, emoji preservation, and reference atomicity.
-- Text processing executes no UI actions; Slot-injected actions do not make previews clickable; registration and unloading leak no evaluation state or subscriptions.
+Pure logic tests assert both the final nodes and each matcher's ordered calls with their `from` offsets. They use deterministic input and spies rather than clocks or performance thresholds.
+
+- Initialization calls every matcher, including Facts-free and no-match rules; empty input has explicit terminal-query behavior.
+- Earlier starts beat stronger order values; same-start ties use order and stable ID, and each matcher preserves its own longest-match choice.
+- A future candidate and a no-match answer are not requested again during forward traversal; only the winner and overlapping heads advance.
+- Unread Facts changes and new outer Facts objects with unchanged field values cause no matcher calls.
+- One or several changed fields rerun exactly their readers; missing fields, losing candidates, no-match results, failures, and conditional read-set replacement remain covered.
+- Equivalent refreshes preserve node/array identity and do not invoke unrelated matchers; payload-only changes preserve unaffected nodes.
+- Insertions in plain text, losing new candidates, same-start winner changes, extending/shrinking matches, and removal of an early winner assert the exact affected query offsets and counts.
+- Removing or shrinking a winner exposes cached losers and unsearched gaps; an old tail no-match result cannot answer a query before its recorded origin.
+- Batched Facts updates equal a fresh evaluation under the same snapshot and do not give the first refreshed matcher precedence.
+- Text and rule-definition changes, registration/disposal, range validation, synchronous failure containment, Context lifetime, and independent evaluator state have deterministic tests.
+- Real Session/file/skill/command combinations preserve full quoted references, original word boundaries, and same-start precedence; whitespace candidates use exactly the same scheduling and cache rules.
 
 ## Alternatives considered
 
-**Independent full-text matching with global arbitration.** This cannot express each stage's input after earlier rules consume text.
-
-**React component transform chain.** Text processing, dependency tracking, and caching must remain independent of display lifecycles.
+**Ordered whole-document business transforms.** A business can consume later text before an earlier reference from another business is considered, so fixed type order does not express leftmost recognition.
 
 ## Consequences
 
-Field-level dependencies do not promise element-level invalidation within a field; a changed field that a stage reads can still require that stage to execute. Result alignment also has comparison costs, so reference reuse is not zero computation. Any rule update may affect previously plain text, so history updates cannot be filtered solely by existing business-node IDs. Every business must honor readonly inputs and synchronous determinism; external mutable state, hidden reads, or asynchronous Context use break dependency correctness. File-feedback ownership changes and inline Slot behavior require independent display-layer verification rather than data-layer tests alone.
+Field-level invalidation can require a matcher to traverse the document again; it does not promise per-element Facts invalidation. Query history consumes memory proportional to the distinct recorded search positions for the current text and definitions. Reconciliation and JSON identity alignment can still traverse output without invoking matchers. The performance evidence is the exact scheduling count and query offsets, while semantic evidence compares refreshed output with a fresh evaluator. This mechanism requires no browser end-to-end or elapsed-time benchmark tests.

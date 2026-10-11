@@ -10,7 +10,7 @@ export class UserTextRegistry extends ConversationDefinitionRegistry<UserTextRul
 
   /**
    * Register a uniquely named rule; invalid IDs, duplicate IDs and non-finite order throw before publication.
-   * @param rule - immutable synchronous transform with a nonempty ID other than the reserved `text` ID.
+   * @param rule - readonly synchronous candidate matcher with a nonempty ID other than the reserved `text` ID.
    * @returns idempotent disposer; removal synchronously publishes a new revision.
    */
   register(rule: UserTextRule): () => void {

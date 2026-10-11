@@ -1,5 +1,4 @@
-/** Synchronous ordered transformations over immutable JSON nodes and caller-supplied facts. */
-
+/** Readonly JSON candidates, forward matching, and tracked caller Facts. */
 import type { UserTextDataMap, UserTextFacts } from '../index.ts'
 
 /** Registered business IDs plus the document-owned `text` ID. */
@@ -11,7 +10,7 @@ type JsonPayload<T> = T extends string | number | boolean | null ? T
       : T extends object ? { readonly [K in keyof T]: JsonPayload<T[K]> }
         : never
 
-/** Original UTF-16 text and immutable facts; absence is observable through `context.read`. */
+/** Original UTF-16 text and readonly Facts; absence is observable through `context.read`. */
 export interface UserTextDocumentInput {
   readonly text: string
   readonly facts: Readonly<Partial<UserTextFacts>>
@@ -27,38 +26,38 @@ export type UserTextNode<K extends UserTextId = UserTextId> = {
   }
 }[K]
 
-/** Facts reader valid only during its owning synchronous transform call; never retain it. */
+/** Facts reader valid only during its owning synchronous query; never retain it. */
 export interface UserTextTransformContext {
   /**
-   * Record a field dependency, including an absent value; throws after the transform returns or throws.
-   * @param key - field of the caller's immutable facts snapshot.
-   * @returns the borrowed read-only value, or undefined when absent.
+   * Record a field dependency, including an absent value; throws after the call returns or throws.
+   * @param key - field of the caller's readonly Facts snapshot.
+   * @returns the borrowed readonly value, or undefined when absent.
    */
   read<K extends keyof UserTextFacts>(key: K): UserTextFacts[K] | undefined
 }
 
-/** One synchronous linear stage; rule IDs need not be node kinds, but `text` remains reserved. */
-export interface UserTextRule<Id extends string = string> {
+/** One forward matcher for business references or Text replacements; order only resolves same-start candidates. */
+export interface UserTextRule<out Id extends string = string> {
   readonly id: Id
-  /** Finite order, ascending; ties use code-unit ID ordering, not registration order. */
+  /** Finite ascending priority; equal values use stable ID ordering, never plugin load order. */
   readonly order: number
   /**
-   * May split or merge adjacent Text nodes, update their `data.display`, and create business nodes using this rule's ID.
-   * Text `data.text` always retains its original substring; display transforms compose from `display ?? text`.
-   * Must not mutate inputs or consume or rewrite existing business nodes.
-   * @param segments - complete, readonly upstream nodes in original UTF-16 coordinates.
-   * @param context - synchronous facts reader; reads replace this stage's previous dependencies.
-   * @returns full ordered source coverage; new business nodes stay within one input Text segment.
-   * Preserve unchanged input objects and return the input array when nothing changes.
+   * Find one nearest original-text candidate at or after `from`, resolving own same-start alternatives deterministically.
+   * Search uses original lexical boundaries, not the beginning of a sliced suffix. Queries are independent of accepted nodes.
+   * @param text - complete original text; neither this string nor caller Facts may be mutated.
+   * @param from - inclusive original UTF-16 start offset, advancing within one reconciliation.
+   * @param context - synchronous Facts reader; all retained queries contribute dependencies.
+   * @returns one nonempty node using this rule's ID or `text`, or undefined when no later candidate exists.
+   * Text candidates preserve the exact source substring and may supply `data.display`.
    */
-  transform(segments: readonly UserTextNode[], context: UserTextTransformContext): readonly UserTextNode[]
+  match(this: void, text: string, from: number, context: UserTextTransformContext): (UserTextNode & { readonly id: Id }) | UserTextNode<'text'> | undefined
 }
 
 /**
- * Evaluate one document with current registered rules; the caller alone owns its cache lifetime.
- * Reentrant calls throw. A failed stage throws an Error carrying ruleId and cause, never partial output;
- * its failure and reads are cached until its definition, upstream input, text or a read field changes.
- * @param input - original text and immutable JSON facts; fields are compared with Object.is.
+ * Reconcile one document using current rules and independently cached candidate queries.
+ * Reentrant calls throw. Failures carry ruleId and cause without publishing partial output;
+ * failed queries retry when their offset, definition, original text, or read Facts change.
+ * @param input - original text and readonly JSON Facts; fields are compared with Object.is.
  * @returns readonly nodes covering the text, or [] for empty text; equivalent results retain identities.
  */
 export type UserTextEvaluator = (input: UserTextDocumentInput) => readonly UserTextNode[]

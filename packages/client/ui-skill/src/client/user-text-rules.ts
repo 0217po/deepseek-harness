@@ -1,5 +1,5 @@
-/** Pure skill-reference transforms over current Text segments and caller-confirmed names. */
-import type { UserTextNode, UserTextRule } from '@deepseek-ai/dsh-client-ui-conversation/client'
+/** Original-text skill candidates restricted to caller-confirmed names. */
+import type { UserTextRule } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
   interface UserTextDataMap {
@@ -13,48 +13,24 @@ declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
   }
 }
 
-function textSlice(segment: UserTextNode<'text'>, start: number, end: number): UserTextNode<'text'> {
-  return {
-    id: 'text', start, end,
-    data: { text: segment.data.text.slice(start - segment.start, end - segment.start) },
-  }
-}
-
-/** Replace complete slash tokens; confirmed names are read only after a syntactically valid candidate. */
+/** Return one nearest confirmed slash token, retaining its original word boundaries. */
 export const skillReferenceRule: UserTextRule<'skill'> = {
   id: 'skill',
   order: 20,
-  transform(segments, context) {
-    let names: ReadonlySet<string> | undefined
-    let output: UserTextNode[] | undefined
-    for (const [index, segment] of segments.entries()) {
-      if (segment.id !== 'text') {
-        output?.push(segment)
-        continue
+  match(text, from, context) {
+    const tokens = /(?<!\S)\/([\w-]+)(?!\S)/gu
+    tokens.lastIndex = from
+    let names: readonly string[] | undefined
+    for (let token = tokens.exec(text); token !== null; token = tokens.exec(text)) {
+      if (names === undefined) {
+        names = context.read('skillNames')
+        if (names === undefined || names.length === 0) return undefined
       }
-      let cursor = segment.start
-      for (const token of segment.data.text.matchAll(/\S+/gu)) {
-        const raw = token[0]
-        if (!/^\/[\w-]+$/u.test(raw)) continue
-        if (names === undefined) {
-          const confirmed = context.read('skillNames')
-          if (confirmed === undefined || confirmed.length === 0) return segments
-          names = new Set(confirmed)
-        }
-        const name = raw.slice(1)
-        if (!names.has(name)) continue
-        const start = segment.start + token.index
-        const end = start + raw.length
-        output ??= segments.slice(0, index)
-        if (cursor < start) output.push(textSlice(segment, cursor, start))
-        output.push({ id: 'skill', start, end, data: { name } })
-        cursor = end
-      }
-      if (output !== undefined) {
-        if (cursor === segment.start) output.push(segment)
-        else if (cursor < segment.end) output.push(textSlice(segment, cursor, segment.end))
+      const name = token[1] as string
+      if (names.includes(name)) return {
+        id: 'skill', start: token.index, end: token.index + token[0].length, data: { name },
       }
     }
-    return output ?? segments
+    return undefined
   },
 }

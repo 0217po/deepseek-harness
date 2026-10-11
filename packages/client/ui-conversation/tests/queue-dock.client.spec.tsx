@@ -452,7 +452,7 @@ describe('QueueDock', () => {
     expect(renderFactory).toHaveBeenCalledWith('conversation.user.text', {
       text, facts: { collapseWhitespace: true, trimWhitespace: true }, interactive: false, ellipsis: true,
     })
-    expect(view.getByText(`before ${'🙂'.repeat(201)} after`).textContent).toBe(`before ${'🙂'.repeat(201)} after`)
+    expect(view.getByRole('listitem').textContent).toBe(`before ${'🙂'.repeat(201)} after`)
     fireEvent.click(view.getByLabelText('编辑排队消息'))
     expect((view.getByRole('textbox') as HTMLTextAreaElement).value).toBe(text)
   })

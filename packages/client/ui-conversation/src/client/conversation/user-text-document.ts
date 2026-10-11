@@ -1,4 +1,4 @@
-/** Per-document linear evaluation, dynamic fact dependencies, failure caching and JSON identity reuse. */
+/** Per-document candidate reconciliation, query coverage, tracked Facts and JSON identity reuse. */
 import type { UserTextFacts } from '../index.ts'
 import type {
   UserTextDocumentInput, UserTextNode, UserTextRule, UserTextTransformContext,
@@ -8,189 +8,219 @@ type FactKey = keyof UserTextFacts
 
 class UserTextTransformError extends Error {
   constructor(readonly ruleId: string, cause: unknown) {
-    super(`user-text rule "${ruleId}" failed to transform`, { cause })
+    super(`user-text rule "${ruleId}" failed to evaluate`, { cause })
     this.name = 'UserTextTransformError'
   }
 }
 
-interface Stage {
-  definition: UserTextRule
-  input: readonly UserTextNode[]
-  /** Most recent valid nodes, initially the input, retained for reuse after a failed attempt. */
-  output: readonly UserTextNode[]
-  error: UserTextTransformError | undefined
-  reads: ReadonlyMap<FactKey, unknown>
-  dirty: boolean
+interface Query {
+  readonly from: number
+  readonly node: UserTextNode | undefined
+  readonly error: UserTextTransformError | undefined
 }
 
-/** Internal cache owned by one evaluator; no registry or React lifetime is retained here. */
+interface Matcher {
+  readonly definition: UserTextRule
+  readonly reads: Map<FactKey, unknown>
+  queries: readonly Query[]
+}
+
+interface Traversal {
+  readonly matcher: Matcher
+  readonly added: Query[]
+  index: number
+  head: Query | undefined
+}
+
+/** Data-layer cache owned by one caller; initialization and refresh share one reconciliation. */
 export class UserTextDocument {
   private text: string | undefined
-  private initial: readonly UserTextNode[] = []
   private rules: readonly UserTextRule[] | undefined
-  private readonly stages = new Map<string, Stage>()
-  private readonly readers = new Map<FactKey, Set<Stage>>()
+  private initial: readonly UserTextNode[] = []
+  private output: readonly UserTextNode[] = []
+  private readonly matchers = new Map<string, Matcher>()
+  private complete = false
   private evaluating = false
 
   /**
-   * Evaluate current ordered definitions, retaining only this document's stage state.
-   * @param input - original text and immutable caller facts.
-   * @param rules - immutable definitions sorted by order and ID.
-   * @returns complete immutable nodes; failures throw with ruleId and cause, without partial publication.
+   * Reconcile original text using current rule definitions and valid query records.
+   * @param input - original text and readonly Facts, compared by fields actually read.
+   * @param rules - unique definitions ordered by ascending order and stable ID.
+   * @returns complete readonly nodes; failures retain caches but publish no partial result.
    */
   evaluate(input: UserTextDocumentInput, rules: readonly UserTextRule[]): readonly UserTextNode[] {
     if (this.evaluating) throw new Error('user-text document evaluation cannot be reentrant')
     this.evaluating = true
     try {
-      this.prepare(input, rules)
-      let segments = this.initial
-      for (const definition of rules) {
-        let stage = this.stages.get(definition.id)
-        if (!stage) {
-          stage = { definition, input: segments, output: segments, error: undefined, reads: new Map(), dirty: true }
-          this.stages.set(definition.id, stage)
-        }
-        if (stage.dirty || stage.definition !== definition || stage.input !== segments) {
-          this.run(stage, definition, segments, input)
-        }
-        if (stage.error) throw stage.error
-        segments = stage.output
-      }
-      return segments
+      const { changed, matchers } = this.prepare(input, rules)
+      if (!changed && this.complete) return this.output
+      this.complete = false
+      this.output = alignNodes(this.reconcile(input, matchers), this.output, this.initial)
+      this.complete = true
+      return this.output
     } finally {
       this.evaluating = false
     }
   }
 
-  private prepare(input: UserTextDocumentInput, rules: readonly UserTextRule[]): void {
+  private prepare(input: UserTextDocumentInput, rules: readonly UserTextRule[]): { changed: boolean; matchers: Matcher[] } {
+    let changed = this.rules !== rules
     if (this.text !== input.text) {
+      changed = true
       this.text = input.text
-      this.stages.clear()
-      this.readers.clear()
-      this.initial = input.text.length === 0 ? [] : [
-        { id: 'text', start: 0, end: input.text.length, data: { text: input.text } },
-      ]
+      this.matchers.clear()
+      this.initial = input.text.length === 0 ? [] : [textNode(input.text, 0, input.text.length)]
+      this.output = this.initial
     }
-    if (this.rules !== rules) {
-      const ids = new Set(rules.map(rule => rule.id))
-      for (const [id, stage] of this.stages) {
-        if (ids.has(id)) continue
-        this.replaceReads(stage, new Map())
-        this.stages.delete(id)
+    const ids = new Set(rules.map(rule => rule.id))
+    const matchers: Matcher[] = []
+    for (const definition of rules) {
+      let matcher = this.matchers.get(definition.id)
+      if (matcher === undefined || matcher.definition !== definition || factsChanged(matcher.reads, input)) {
+        matcher = { definition, queries: [], reads: new Map() }
+        this.matchers.set(definition.id, matcher)
+        changed = true
       }
-      this.rules = rules
+      matchers.push(matcher)
     }
-    // Dirty flags persist until their stage executes, including stages blocked by an upstream failure.
-    for (const [key, stages] of this.readers) {
-      const value = input.facts[key]
-      for (const stage of stages) {
-        if (!Object.is(stage.reads.get(key), value)) stage.dirty = true
+    for (const id of this.matchers.keys()) if (!ids.has(id)) this.matchers.delete(id)
+    this.rules = rules
+    return { changed, matchers }
+  }
+
+  private reconcile(input: UserTextDocumentInput, matchers: readonly Matcher[]): readonly UserTextNode[] {
+    const traversals: Traversal[] = matchers.map(matcher => ({ matcher, added: [], index: -1, head: undefined }))
+    const nodes: UserTextNode[] = []
+    let cursor = 0
+    try {
+      while (true) {
+        let winner: UserTextNode | undefined
+        for (const traversal of traversals) {
+          const node = nextCandidate(traversal, input, cursor)
+          // Definitions arrive in stable priority order; earlier starts always take precedence.
+          if (node !== undefined && (winner === undefined || node.start < winner.start)) winner = node
+        }
+        if (winner === undefined) {
+          if (cursor < input.text.length) nodes.push(textNode(input.text, cursor, input.text.length))
+          return nodes
+        }
+        if (cursor < winner.start) nodes.push(textNode(input.text, cursor, winner.start))
+        nodes.push(winner)
+        cursor = winner.end
+      }
+    } finally {
+      for (const { matcher, added } of traversals) {
+        if (added.length > 0) matcher.queries = mergeQueries(matcher.queries, added)
       }
     }
   }
 
-  private run(stage: Stage, definition: UserTextRule, segments: readonly UserTextNode[], input: UserTextDocumentInput): void {
-    const reads = new Map<FactKey, unknown>()
-    let active = true
-    const context: UserTextTransformContext = {
+}
+
+function factsChanged(reads: ReadonlyMap<FactKey, unknown>, input: UserTextDocumentInput): boolean {
+  for (const [key, value] of reads) if (!Object.is(value, input.facts[key])) return true
+  return false
+}
+
+function withFacts<T>(input: UserTextDocumentInput, reads: Map<FactKey, unknown>, run: (context: UserTextTransformContext) => T): T {
+  let active = true
+  try {
+    return run({
       read: <K extends FactKey>(key: K): UserTextFacts[K] | undefined => {
         if (!active) throw new Error('user-text transform context is closed; read is synchronous only')
         const value = input.facts[key]
         reads.set(key, value)
         return value
       },
+    })
+  } finally {
+    active = false
+  }
+}
+
+function nextCandidate(traversal: Traversal, input: UserTextDocumentInput, cursor: number): UserTextNode | undefined {
+  const { matcher } = traversal
+  if (traversal.head === undefined || (traversal.head.node !== undefined && traversal.head.node.start < cursor)) {
+    let next = matcher.queries[traversal.index + 1]
+    while (next !== undefined && next.from <= cursor) {
+      traversal.index++
+      next = matcher.queries[traversal.index + 1]
     }
-    stage.definition = definition
-    stage.input = segments
-    stage.dirty = false
-    stage.error = undefined
-    try {
-      let output: readonly UserTextNode[]
+    const recorded = matcher.queries[traversal.index]
+    if (recorded !== undefined && (recorded.error !== undefined
+      ? recorded.from === cursor : recorded.node === undefined || recorded.node.start >= cursor)) {
+      traversal.head = recorded
+    } else {
+      let node: UserTextNode | undefined
+      let error: UserTextTransformError | undefined
       try {
-        output = definition.transform(segments, context)
-      } finally {
-        active = false
+        node = withFacts(input, matcher.reads, context => matcher.definition.match(input.text, cursor, context))
+        if (node !== undefined) validateCandidate(input.text, matcher.definition.id, cursor, node)
+      } catch (cause) {
+        error = new UserTextTransformError(matcher.definition.id, cause)
       }
-      validateOutput(input.text, definition.id, segments, output)
-      stage.output = alignNodes(output, stage.output, segments)
-    } catch (cause) {
-      stage.error = new UserTextTransformError(definition.id, cause)
-    } finally {
-      this.replaceReads(stage, reads)
+      traversal.head = { from: cursor, node, error }
+      traversal.added.push(traversal.head)
     }
   }
+  if (traversal.head.error !== undefined) throw traversal.head.error
+  return traversal.head.node
+}
 
-  private replaceReads(stage: Stage, reads: ReadonlyMap<FactKey, unknown>): void {
-    for (const key of stage.reads.keys()) {
-      const readers = this.readers.get(key)
-      if (readers) {
-        readers.delete(stage)
-        if (readers.size === 0) this.readers.delete(key)
-      }
-    }
-    stage.reads = reads
-    for (const key of reads.keys()) {
-      let readers = this.readers.get(key)
-      if (!readers) this.readers.set(key, readers = new Set())
-      readers.add(stage)
-    }
+function validateCandidate(text: string, ruleId: string, from: number, node: UserTextNode): void {
+  if (!Number.isInteger(node.start) || !Number.isInteger(node.end)
+    || node.start < from || node.end <= node.start || node.end > text.length) {
+    throw new Error(`invalid candidate range [${node.start}, ${node.end}); expected a nonempty range from ${from} to ${text.length}`)
+  }
+  if (node.id === 'text') {
+    if (node.data.text !== text.slice(node.start, node.end)) throw new Error('text candidate must preserve its original substring')
+  } else if (node.id !== ruleId) {
+    throw new Error(`candidate must use rule ID "${ruleId}" or text`)
   }
 }
 
-function assertSynchronousOutput(output: unknown): void {
-  if (!Array.isArray(output)) throw new Error('transform must return a synchronous node array')
+function mergeQueries(previous: readonly Query[], added: readonly Query[]): readonly Query[] {
+  if (previous.length === 0) return added
+  const merged: Query[] = []
+  const remaining = previous.values()
+  let old = remaining.next().value
+  // New queries only fill offsets not covered by retained records.
+  for (const query of added) {
+    while (old !== undefined && old.from < query.from) {
+      merged.push(old)
+      old = remaining.next().value
+    }
+    merged.push(query)
+  }
+  while (old !== undefined) {
+    merged.push(old)
+    old = remaining.next().value
+  }
+  return merged
 }
 
-function validateOutput(
-  text: string, ruleId: string, input: readonly UserTextNode[], output: readonly UserTextNode[],
-): void {
-  assertSynchronousOutput(output)
-  if (output === input) return
-  let cursor = 0
-  const sources = input.values()
-  let source = sources.next().value
-  for (const node of output) {
-    if (!Number.isInteger(node.start) || !Number.isInteger(node.end)
-      || node.start !== cursor || node.end <= node.start || node.end > text.length) {
-      throw new Error(`invalid range [${node.start}, ${node.end}); expected contiguous coverage from ${cursor} to ${text.length}`)
-    }
-    if (!source) throw new Error('output exceeds input text coverage')
-    if (source.id !== 'text') {
-      if (!equalNode(node, source)) throw new Error(`cannot replace atomic node "${source.id}" at ${source.start}`)
-    } else if (node.id === 'text') {
-      if (node.data.text !== text.slice(node.start, node.end)) throw new Error('text node must preserve its original substring')
-      while (node.end > source.end) {
-        source = sources.next().value
-        if (!source || source.id !== 'text') throw new Error('text node cannot consume an atomic node or exceed input coverage')
-      }
-    } else if (node.id !== ruleId || node.end > source.end) {
-      throw new Error(`new business node must use "${ruleId}" within one input text segment`)
-    }
-    cursor = node.end
-    if (node.end === source.end) source = sources.next().value
-  }
-  if (cursor !== text.length) throw new Error(`incomplete text coverage: ended at ${cursor}, expected ${text.length}`)
+function textNode(text: string, start: number, end: number): UserTextNode<'text'> {
+  return { id: 'text', start, end, data: { text: text.slice(start, end) } }
 }
 
 function alignNodes(
-  output: readonly UserTextNode[], previous: readonly UserTextNode[] | undefined, input: readonly UserTextNode[],
+  output: readonly UserTextNode[], previous: readonly UserTextNode[], input: readonly UserTextNode[],
 ): readonly UserTextNode[] {
-  if (output === previous || output === input) return output
   let previousIndex = 0
   let inputIndex = 0
   let aligned: UserTextNode[] | undefined
   for (const [index, node] of output.entries()) {
     let inputNode = input[inputIndex]
     while (inputNode && inputNode.start < node.start) inputNode = input[++inputIndex]
-    let previousNode = previous?.[previousIndex]
-    while (previousNode && previousNode.start < node.start) previousNode = previous?.[++previousIndex]
+    let previousNode = previous[previousIndex]
+    while (previousNode && previousNode.start < node.start) previousNode = previous[++previousIndex]
     const reused = inputNode && equalNode(node, inputNode) ? inputNode
       : previousNode && equalNode(node, previousNode) ? previousNode : node
     if (reused !== node && !aligned) aligned = output.slice(0, index)
     aligned?.push(reused)
   }
   const nodes = aligned ?? output
-  if (previous && equalElements(nodes, previous)) return previous
+  if (equalElements(nodes, previous)) return previous
   return equalElements(nodes, input) ? input : nodes
 }
 

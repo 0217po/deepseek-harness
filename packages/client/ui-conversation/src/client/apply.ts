@@ -16,7 +16,7 @@ import type { ShortcutCommandId, ShortcutFixedCommand } from '@deepseek-ai/dsh-c
 import { UiConversation } from './conversation/assembly.ts'
 import { UserText, PlainUserText, SessionReference } from './user-text/UserText.tsx'
 import { sessionReferenceRule } from './user-text/session-reference-rule.ts'
-import { collapseWhitespaceRule, trimWhitespaceRule } from './user-text/display-rules.ts'
+import { collapseWhitespaceRule, trimWhitespaceRule } from './user-text/whitespace-rules.ts'
 import type { ViewTab } from './contract/views.ts'
 import type {
   ComposerBarInjected, ConversationInjected, ConversationSessionHeaderInjected,

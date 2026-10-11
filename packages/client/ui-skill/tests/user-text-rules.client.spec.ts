@@ -15,27 +15,27 @@ function setup(rule: UserTextRule = skillReferenceRule) {
 describe('skillReferenceRule', () => {
   it('does not read names or rerun when text has no slash-token candidate', () => {
     const read = vi.fn()
-    const transform = vi.fn<UserTextRule['transform']>((segments, context) => skillReferenceRule.transform(segments, {
+    const match = vi.fn<UserTextRule<'skill'>['match']>((text, from, context) => skillReferenceRule.match(text, from, {
       read: (key) => { read(key); return context.read(key) },
     }))
-    const evaluate = setup({ ...skillReferenceRule, transform })
+    const evaluate = setup({ ...skillReferenceRule, match })
     const text = 'plain text /review.md /path/to/file'
     const before = evaluate({ text, facts: {} })
     expect(evaluate({ text, facts: { skillNames: ['review', 'path'] } })).toBe(before)
     expect(read).not.toHaveBeenCalled()
-    expect(transform).toHaveBeenCalledOnce()
+    expect(match).toHaveBeenCalledOnce()
   })
 
   it('reacts to missing names appearing and retains node identities when unrelated names are added', () => {
-    const transform = vi.fn<UserTextRule['transform']>((segments, context) => skillReferenceRule.transform(segments, context))
-    const evaluate = setup({ ...skillReferenceRule, transform })
+    const match = vi.fn<UserTextRule<'skill'>['match']>((text, from, context) => skillReferenceRule.match(text, from, context))
+    const evaluate = setup({ ...skillReferenceRule, match })
     const text = 'use /review now'
     expect(evaluate({ text, facts: {} }).every(node => node.id === 'text')).toBe(true)
     const before = evaluate({ text, facts: { skillNames: ['review'] } })
     const after = evaluate({ text, facts: { skillNames: ['review', 'unrelated'] } })
     expect(after).toBe(before)
     expect(after.find(node => node.id === 'skill')).toBe(before.find(node => node.id === 'skill'))
-    expect(transform).toHaveBeenCalledTimes(3)
+    expect(match.mock.calls.map(([, from]) => from)).toEqual([0, 0, 11, 0, 11])
   })
 
   it('recognizes only names explicitly resolved for this message', () => {

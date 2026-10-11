@@ -1,5 +1,5 @@
-/** Pure command-reference transforms restricted to confirmed ranges within current Text segments. */
-import type { UserTextNode, UserTextRule } from '@deepseek-ai/dsh-client-ui-conversation/client'
+/** Original-text command candidates restricted to confirmed execution ranges. */
+import type { UserTextRule, UserTextNode } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
   interface UserTextDataMap {
@@ -13,40 +13,24 @@ declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
   }
 }
 
-/** Replace exact confirmed command ranges; facts are read only for Text with a slash-token candidate. */
+/** Return the nearest exact confirmed command, checking boundaries against the original string. */
 export const goalCommandReferenceRule: UserTextRule<'command'> = {
   id: 'command',
   order: 20,
-  transform(segments, context) {
-    if (!segments.some(segment => segment.id === 'text' && /(?:^|\s)\//u.test(segment.data.text))) return segments
+  match(text, from, context) {
+    const slash = /(?<!\S)\//gu
+    slash.lastIndex = from
+    if (!slash.test(text)) return undefined
     const commands = context.read('commands')
-    if (commands === undefined || commands.length === 0) return segments
-    const ordered = [...commands].sort((a, b) => a.start - b.start || a.end - b.end)
-    let output: UserTextNode[] | undefined
-    for (const [index, segment] of segments.entries()) {
-      if (segment.id !== 'text') {
-        output?.push(segment)
-        continue
+    let best: UserTextNode<'command'> | undefined
+    for (const { start, end, name } of commands ?? []) {
+      if (start < from || end > text.length || text.slice(start, end) !== `/${name}`
+        || (start !== 0 && !/\s/u.test(text.slice(start - 1, start)))
+        || (end !== text.length && !/\s/u.test(text.slice(end, end + 1)))) continue
+      if (best === undefined || start < best.start || (start === best.start && end > best.end)) {
+        best = { id: 'command', start, end, data: { name } }
       }
-      let remainder = segment
-      for (const { start, end, name } of ordered) {
-        if (start >= remainder.end) break
-        if (start < remainder.start || end > remainder.end) continue
-        const text = remainder.data.text
-        const localStart = start - remainder.start
-        const localEnd = end - remainder.start
-        if (text.slice(localStart, localEnd) !== `/${name}`
-          || (localStart !== 0 && !/\s/u.test(text.slice(localStart - 1, localStart)))
-          || (localEnd !== text.length && !/\s/u.test(text.slice(localEnd, localEnd + 1)))) continue
-        output ??= segments.slice(0, index)
-        if (localStart > 0) output.push({
-          id: 'text', start: remainder.start, end: start, data: { text: text.slice(0, localStart) },
-        })
-        output.push({ id: 'command', start, end, data: { name } })
-        remainder = { id: 'text', start: end, end: remainder.end, data: { text: text.slice(localEnd) } }
-      }
-      if (remainder.start < remainder.end) output?.push(remainder)
     }
-    return output ?? segments
+    return best
   },
 }

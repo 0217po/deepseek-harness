@@ -15,20 +15,20 @@ function setup(rules: readonly UserTextRule[] = [folderReferenceRule, fileRefere
 describe('fileReferenceRule and folderReferenceRule', () => {
   it('reads no facts and reuses the entire result across fact updates', () => {
     const read = vi.fn()
-    const file = vi.fn<UserTextRule['transform']>((segments, context) => fileReferenceRule.transform(segments, {
+    const file = vi.fn<UserTextRule<'file'>['match']>((text, from, context) => fileReferenceRule.match(text, from, {
       read: (key) => { read(key); return context.read(key) },
     }))
-    const folder = vi.fn<UserTextRule['transform']>((segments, context) => folderReferenceRule.transform(segments, {
+    const folder = vi.fn<UserTextRule<'folder'>['match']>((text, from, context) => folderReferenceRule.match(text, from, {
       read: (key) => { read(key); return context.read(key) },
     }))
-    const evaluate = setup([{ ...fileReferenceRule, transform: file }, { ...folderReferenceRule, transform: folder }])
+    const evaluate = setup([{ ...fileReferenceRule, match: file }, { ...folderReferenceRule, match: folder }])
     const text = '@src/a.ts @docs/'
     const before = evaluate({ text, facts: {} })
     expect(before.filter(node => node.id !== 'text').map(node => node.id)).toEqual(['file', 'folder'])
     expect(evaluate({ text, facts: { sessionLabels: ['new label'] } })).toBe(before)
     expect(read).not.toHaveBeenCalled()
-    expect(file).toHaveBeenCalledOnce()
-    expect(folder).toHaveBeenCalledOnce()
+    expect(file.mock.calls.map(([, from]) => from)).toEqual([0, text.indexOf(' ')])
+    expect(folder.mock.calls.map(([, from]) => from)).toEqual([0, text.length])
   })
 
   it('separates ordinary files from directories and decodes quoted paths', () => {
