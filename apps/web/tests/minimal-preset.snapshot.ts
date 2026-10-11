@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
@@ -6,6 +6,7 @@ import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { AgentHandle } from '@deepseek-ai/dsh-agent'
 import { ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
@@ -14,6 +15,7 @@ import {
   assertFixtureInventory,
   captureStableAria,
   compareOrRefreshGolden,
+  fixtureUserPrompts,
   launchWebScaffold,
   watchConsole,
   webSnapshotMode,
@@ -191,6 +193,122 @@ describe('minimal agent preset', () => {
       'system-prompt.expected.md',
       'tool-schemas.expected.json',
       'ui.expected.md',
+    ])
+  })
+})
+
+describe('minimal manual compaction', () => {
+  const snapshotDir = fileURLToPath(new URL('../../../snapshots/web/minimal-compact', import.meta.url))
+  let scaffold: WebScaffold
+  let handle: AgentHandle
+  let browser: Browser | undefined
+  let page: Page | undefined
+  const requests: GenerateOptions[] = []
+
+  beforeAll(async () => {
+    const fixture = join(snapshotDir, 'session.v4.jsonl')
+    const prompts = fixtureUserPrompts(await readFile(fixture, 'utf8'))
+    expect(prompts).toHaveLength(2)
+    const [initial, continuation] = prompts
+    if (initial === undefined || continuation === undefined) throw new Error('minimal compaction fixture requires two user prompts')
+    scaffold = await launchWebScaffold({ replayFixture: fixture, compareReplaySession: true })
+    scaffold.ctx.on('llm/stream', async function* (options, next) {
+      requests.push(options)
+      yield* next()
+    })
+    handle = await scaffold.ctx.agents.create({
+      sessionId: SessionId('minimal-compact-smoke'),
+      meta: { cwd: scaffold.workspaceCwd, agentPreset: 'minimal' },
+      agentOptions: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      setup: agentCtx => scaffold.ctx.agentPresets.mount(agentCtx, 'minimal').then(() => undefined),
+    })
+    handle.agent.followup(createUserMessage({
+      content: [{ type: 'text', text: initial }], source: { kind: 'user' },
+    }))
+    await handle.agent.whenIdle()
+    const session = handle.agent.session
+    expect(session.snapshotEvents().some(event => event.type === 'compaction/start')).toBe(false)
+    const generation = session.surface.replaceGeneration
+    const execution = await scaffold.ctx.commands.execute(handle.agent, '/compact', [], new AbortController().signal)
+    expect(execution?.result.kind).toBe('success')
+    expect(session.surface.replaceGeneration).toBe(generation + 1)
+    handle.agent.followup(createUserMessage({
+      content: [{ type: 'text', text: continuation }], source: { kind: 'user' },
+    }))
+    await handle.agent.whenIdle()
+  })
+
+  afterAll(async () => {
+    const failures: unknown[] = []
+    await page?.close().catch((error: unknown) => failures.push(error))
+    await browser?.close().catch((error: unknown) => failures.push(error))
+    await handle?.dispose().catch((error: unknown) => failures.push(error))
+    await scaffold?.close().catch((error: unknown) => failures.push(error))
+    if (failures.length === 1) throw failures[0]
+    if (failures.length > 1) throw new AggregateError(failures, 'minimal compaction teardown failed')
+  })
+
+  it('records the manual command, summary, and durable history replacement', () => {
+    const session = handle.agent.session
+    const events = session.snapshotEvents()
+    const command = events.find(event => event.type === 'command/run')
+    const start = events.find(event => event.type === 'compaction/start')
+    const summary = events.find(event => event.type === 'compaction/summary')
+    const end = events.find(event => event.type === 'compaction/end')
+    const done = events.find(event => event.type === 'command/done')
+    expect(command?.data.name).toBe('compact')
+    expect(start?.data).toMatchObject({ turn: null, sourceCommandId: command?.data.commandId })
+    expect(summary?.data).toMatchObject({ sourceCommandId: command?.data.commandId, llmStreamCall: true })
+    expect(end?.data).toEqual(start?.data)
+    expect(done?.data).toMatchObject({ kind: 'success', sourceEventSeq: summary?.seq })
+    const checkpoint = events.find(event => event.type === 'user/message' && event.data.source.kind === 'compact-checkpoint')
+    if (checkpoint?.type !== 'user/message') throw new Error('manual compaction produced no checkpoint')
+    expect(checkpoint.surfaceOp).toMatchObject({
+      op: 'replace', startSeq: summary?.data.shadowedRange.start, endSeq: summary?.data.shadowedRange.end,
+    })
+    expect(session.deriveMessages().some(message => message.id === checkpoint.data.id)).toBe(true)
+    const original = events.find(event => event.type === 'user/message' && event.data.source.kind === 'user')
+    if (original?.type !== 'user/message') throw new Error('minimal compaction has no original user message')
+    expect(session.deriveMessages().some(message => message.id === original.data.id)).toBe(false)
+  })
+
+  it('continues with the summary and the same minimal prompt and tools', () => {
+    expect(requests.map(request => request.purpose)).toEqual([undefined, 'compaction', undefined])
+    const summary = handle.agent.session.snapshotEvents().find(event => event.type === 'compaction/summary')
+    if (summary === undefined) throw new Error('minimal compaction produced no summary')
+    const [initial, , continuation] = requests
+    if (initial === undefined || continuation === undefined) throw new Error('minimal compaction did not continue')
+    expect(continuation.messages.flatMap(message => message.content)).toEqual(expect.arrayContaining(summary.data.summary))
+    expect(continuation.messages[0]).toEqual(initial.messages[0])
+    expect(continuation.tools).toEqual(initial.tools)
+    expect(continuation.messages.flatMap(message => message.content)
+      .some(block => block.type === 'text' && block.text === 'MINIMAL_COMPACT_READY')).toBe(true)
+    expect(handle.agent.session.deriveMessages().at(-1)?.content)
+      .toEqual([{ type: 'text', text: 'MINIMAL_COMPACT_OK' }])
+  })
+
+  it.skipIf(MODE === 'record')('renders the manual compaction card and its summary', async () => {
+    onTestFailed(() => { if (page !== undefined) void saveFailureShot(page, 'web-minimal-compact') })
+    browser = await chromium.launch()
+    page = await newEnglishPage(browser)
+    const tripwire = watchConsole(page)
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await page.locator('[role="treeitem"]').first().click()
+    await page.locator('[role="treeitem"]').nth(1).click()
+    await page.getByText('MINIMAL_COMPACT_OK', { exact: true }).waitFor()
+    const card = page.getByRole('button', { name: /^compact Compacted / })
+    await card.click()
+    await expect.poll(() => card.getAttribute('aria-expanded')).toBe('true')
+    await compareOrRefreshGolden(join(snapshotDir, 'ui.expected.md'),
+      await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd), MODE)
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+  })
+
+  it('keeps its snapshot inventory closed', async () => {
+    await assertFixtureInventory(snapshotDir, [
+      'session.v4.jsonl', 'system-prompt.expected.md', 'tool-schemas.expected.json', 'ui.expected.md',
     ])
   })
 })
