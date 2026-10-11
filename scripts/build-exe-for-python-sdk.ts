@@ -165,8 +165,8 @@ class BuildCli {
     readonly targets: readonly Target[],
     /** Skip the package build; lib/ artifacts must already exist. */
     readonly skipBuild: boolean,
-    /** Emit package and Web artifacts without repository test and script typechecks. */
-    readonly artifactsOnly: boolean,
+    /** Build through `pnpm run build:artifacts`, which omits the aggregate test and script typechecks. */
+    readonly buildArtifacts: boolean,
     /** Print every command and config patch instead of executing. */
     readonly dryRun: boolean,
   ) {}
@@ -190,8 +190,8 @@ class BuildCli {
       console.log(BuildCli.usage())
       process.exit(0)
     }
-    if (values['skip-build'] && values['artifacts-only']) {
-      throw new Error('build-exe-for-python-sdk: --skip-build and --artifacts-only cannot be combined.')
+    if (values['skip-build'] && values['build-artifacts']) {
+      throw new Error('build-exe-for-python-sdk: --skip-build and --build-artifacts cannot be combined.')
     }
     const targets = values.targets === undefined
       ? [Target.host()]
@@ -205,7 +205,7 @@ class BuildCli {
       }
       seen.add(key)
     }
-    return new BuildCli(targets, values['skip-build'], values['artifacts-only'], values['dry-run'])
+    return new BuildCli(targets, values['skip-build'], values['build-artifacts'], values['dry-run'])
   }
 
   private static parseRaw(argv: string[]) {
@@ -214,7 +214,7 @@ class BuildCli {
       options: {
         'targets': { type: 'string' },
         'skip-build': { type: 'boolean', default: false },
-        'artifacts-only': { type: 'boolean', default: false },
+        'build-artifacts': { type: 'boolean', default: false },
         'dry-run': { type: 'boolean', default: false },
         'help': { type: 'boolean', default: false },
       },
@@ -228,7 +228,7 @@ class BuildCli {
       '  --targets=<t1,t2,...>  pkg targets, e.g. node24-linux-x64,node24-linux-arm64,node24-macos-arm64,node24-macos-x64,node24-win-x64.',
       '                         Default: the host platform only (on node24).',
       '  --skip-build           skip `pnpm run build` (lib/ artifacts must already exist).',
-      '  --artifacts-only       omit repository test and script typechecks from the artifact build.',
+      '  --build-artifacts      run `pnpm run build:artifacts` instead, omitting the aggregate test and script typechecks.',
       '  --dry-run              print every command and config patch without executing.',
       '  --help                 print this help.',
       '',
@@ -272,7 +272,7 @@ class SingleExeBuild {
       console.log('build-exe-for-python-sdk: skipping pnpm run build (--skip-build)')
       return
     }
-    const args = this.cli.artifactsOnly ? ['run', 'build', '--artifacts-only'] : ['run', 'build']
+    const args = this.cli.buildArtifacts ? ['run', 'build:artifacts'] : ['run', 'build']
     await this.runPnpm('build', args)
   }
 

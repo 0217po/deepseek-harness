@@ -45,13 +45,15 @@ After the build, `lib/typert.host.js` and `lib/typert.host.d.ts` exist and the [
 
 ### Analyzing a workspace statically
 
-Static consumers call `WorkspaceAnalyzer` directly against the workspace's `tsconfig.host.json` and `tsconfig.client.json` aggregates, select a face and package subset, and read the resulting `FaceModel` and type graph without emitting or loading runtime artifacts. `analyzeInBatches()` processes a large package selection through bounded compiler programs with the same model shape, and `discoverPackages()` finds contributing packages without building a type-checker program.
+Static consumers call `WorkspaceAnalyzer` directly against the workspace's `tsconfig.host.json` and `tsconfig.client.json` aggregates, select a face and package subset, and read the resulting `FaceModel` and type graph without emitting or loading runtime artifacts. `analyzeInBatches()` processes a large package selection through bounded compiler programs with the same model shape, and `discoverPackages()` finds contributing packages without building a type-checker program; its optional `package.json` predicate skips a package before its sources or project config are read. Typert parses only the tsconfigs of packages it analyzes; validating every referenced tsconfig belongs to the preceding `tsc -b`.
 
 JSON, YAML, SVG, PNG, JPEG, and WebP resource exports contribute no TypeScript declarations and are excluded from the API model. Missing JavaScript or TypeScript export sources remain errors.
 
 ### Running generation inside a tsdown build
 
-The package's `./tsdown` subpath provides `typertPlugin()` for the root tsdown config: it lowers standard decorators in TypeScript dependencies before bundling and emits the model-driven face artifacts at the package output root. In `package` mode it emits only the bundled package; in `workspace` mode it emits every explicit contributor once.
+The package's `./tsdown` subpath provides `typertPlugin()` for the root tsdown config: it lowers standard decorators in TypeScript dependencies before bundling and emits the model-driven face artifacts at the package output root. A module-id filter on its `transform` hook keeps non-TypeScript modules out of JavaScript. The workspace root is the nearest ancestor of the bundle that contains both `tsconfig.host.json` and `packages/`, so a package's own face leaf config never qualifies. In `package` mode it generates synchronously in the bundled package's `writeBundle` and emits only that package.
+
+In `workspace` mode it emits every explicit contributor once without blocking bundling: the first package build's `buildStart` starts generation in a Worker Thread, and the first `writeBundle` awaits the result and writes every artifact while later bundles return immediately. An analysis error, a worker crash or early exit, or a malformed worker response fails that bundle, and therefore the tsdown pass, with a `TypertWorkerError` naming the workspace and cause; the worker is terminated before the failure is reported.
 
 -----
 
@@ -77,6 +79,7 @@ The generator is built on one separation: extraction and emission are decoupled 
 | [`src/emitter.ts`](src/emitter.ts) | `FaceModelEmitter`: Zod schema and declaration emission, Remote declarations |
 | [`src/workspace.ts`](src/workspace.ts) | `WorkspaceTypertGenerator`: discovery, generation, export and files validation |
 | [`src/tsdown-plugin.ts`](src/tsdown-plugin.ts) | tsdown plugin face: decorator lowering and artifact emission |
+| [`src/worker.ts`](src/worker.ts) | Worker Thread entry for workspace-mode generation |
 | [`src/cordis-catalog.ts`](src/cordis-catalog.ts) | Catalog projection used by the generated Cordis catalogs |
 
 ### Analysis and faces
