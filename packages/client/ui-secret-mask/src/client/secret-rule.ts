@@ -72,12 +72,12 @@ function isWideSpace(code: number): boolean {
 /** `\w` at `index`; out of range is not a word character. */
 function isWordAt(text: string, index: number): boolean {
   const code = text.charCodeAt(index)
-  return code < 128 && (CLASSES[code]! & WORD) !== 0
+  return code < 128 && ((CLASSES[code] as number) & WORD) !== 0
 }
 
 /** `[^\s/:@?#]` for one UTF-16 code unit; NaN, read out of range, is not one. */
 function isUserCode(code: number): boolean {
-  return code < 128 ? (CLASSES[code]! & USER) !== 0 : code === code && !isWideSpace(code)
+  return code < 128 ? ((CLASSES[code] as number) & USER) !== 0 : code === code && !isWideSpace(code)
 }
 
 /**
@@ -193,22 +193,27 @@ FORMATS.forEach((f, index) => {
     ENDING[key] = index + 1
     return
   }
-  if (ENDING[key]! > 0) {
-    SHARED_ENDINGS[key] = [ENDING[key]! - 1]
+  if ((ENDING[key] as number) > 0) {
+    SHARED_ENDINGS[key] = [(ENDING[key] as number) - 1]
     ENDING[key] = -1
   }
-  SHARED_ENDINGS[key]!.push(index)
+  (SHARED_ENDINGS[key] as number[]).push(index)
 })
 
-/** Index of the literal that PREFIXES matched ending at `end`; one of the literals sharing its ending matches. */
+const LITERALS: readonly string[] = FORMATS.map(f => f.literal)
+
+/** Index of the literal that PREFIXES matched ending at `end`; one of the literals sharing its ending matches, so the last needs no check. */
 function literalEndingAt(text: string, end: number): number {
   const key = text.charCodeAt(end - 2) * 128 + text.charCodeAt(end - 1)
-  const literal = ENDING[key]!
+  const literal = ENDING[key] as number
   if (literal > 0) return literal - 1
-  const shared = SHARED_ENDINGS[key]!
+  const shared = SHARED_ENDINGS[key] as readonly number[]
   let index = 0
-  while (!text.startsWith(FORMATS[shared[index]!]!.literal, end - LITERAL_LENGTH[shared[index]!]!)) index++
-  return shared[index]!
+  for (; index < shared.length - 1; index++) {
+    const candidate = shared[index] as number
+    if (text.startsWith(LITERALS[candidate] as string, end - (LITERAL_LENGTH[candidate] as number))) break
+  }
+  return shared[index] as number
 }
 
 // Memo layout: [start, end] pairs. A lookup at `offset` hits when start <= offset <= end; -1 pairs hold nothing.
@@ -231,13 +236,16 @@ const MEMO_SIZE = 27
 const LITERAL_SLOT = Uint8Array.from(FORMATS, f => f.run === ALNUM ? ALNUM_SLOT : f.run === WORD ? WORD_SLOT
   : f.run === ALNUM_DASH ? ALNUM_DASH_SLOT : f.run === UPPER_ALNUM ? UPPER_ALNUM_SLOT : 0)
 
+/** Memo entry at `index`; the layout keeps every index inside the array. */
+const slotAt = (memo: Int32Array, index: number): number => memo[index] as number
+
 /** End of the `[A-Za-z0-9_-]*` run at `start`, through four memo pairs replaced in turn. */
 function keyRunEnd(text: string, start: number, memo: Int32Array): number {
   for (let slot = KEY_SLOTS; slot < KEY_NEXT; slot += 2) {
-    if (memo[slot]! <= start && start <= memo[slot + 1]!) return memo[slot + 1]!
+    if (slotAt(memo, slot) <= start && start <= slotAt(memo, slot + 1)) return slotAt(memo, slot + 1)
   }
   const end = runEnd(KEY_RUN, text, start)
-  const next = (memo[KEY_NEXT]! + 1) & 3
+  const next = (slotAt(memo, KEY_NEXT) + 1) & 3
   memo[KEY_NEXT] = next
   memo[KEY_SLOTS + 2 * next] = start
   memo[KEY_SLOTS + 2 * next + 1] = end
@@ -246,7 +254,7 @@ function keyRunEnd(text: string, start: number, memo: Int32Array): number {
 
 /** End of the run `pattern` matches at `start`, through the memo pair at `slot`. */
 function memoRunEnd(pattern: RegExp, text: string, start: number, slot: number, memo: Int32Array): number {
-  if (memo[slot]! <= start && start <= memo[slot + 1]!) return memo[slot + 1]!
+  if (slotAt(memo, slot) <= start && start <= slotAt(memo, slot + 1)) return slotAt(memo, slot + 1)
   const end = runEnd(pattern, text, start)
   memo[slot] = start
   memo[slot + 1] = end
@@ -255,10 +263,10 @@ function memoRunEnd(pattern: RegExp, text: string, start: number, slot: number, 
 
 /** Offset of the first digit at or after `start`, or the text length. */
 function nextDigit(text: string, start: number, memo: Int32Array): number {
-  if (memo[DIGIT_FROM]! <= start && start <= memo[DIGIT_AT]!) return memo[DIGIT_AT]!
+  if (slotAt(memo, DIGIT_FROM) <= start && start <= slotAt(memo, DIGIT_AT)) return slotAt(memo, DIGIT_AT)
   memo[DIGIT_FROM] = start
   memo[DIGIT_AT] = runEnd(NON_DIGITS, text, start)
-  return memo[DIGIT_AT]!
+  return slotAt(memo, DIGIT_AT)
 }
 
 /** Offset after `[A-Z0-9 ]{0,40}PRIVATE KEY-----` at `start`, or -1; reads at most 52 characters. */
@@ -267,7 +275,7 @@ function labelEnd(text: string, start: number): number {
   let index = start
   while (index < limit) {
     const code = text.charCodeAt(index)
-    if (code > 127 || (CLASSES[code]! & LABEL) === 0) break
+    if (code > 127 || ((CLASSES[code] as number) & LABEL) === 0) break
     index++
   }
   // "PRIVATE KEY" is label characters and the `-` after it is not, so the run ends right after it.
@@ -277,7 +285,7 @@ function labelEnd(text: string, start: number): number {
 
 /** Offset after the first complete `END` line at or after `start`, or the text length. */
 function keyBlockEnd(text: string, start: number, memo: Int32Array): number {
-  if (memo[BLOCK_FROM]! <= start && start <= memo[BLOCK_END_START]!) return memo[BLOCK_END]!
+  if (slotAt(memo, BLOCK_FROM) <= start && start <= slotAt(memo, BLOCK_END_START)) return slotAt(memo, BLOCK_END)
   memo[BLOCK_FROM] = start
   memo[BLOCK_END_START] = text.length
   memo[BLOCK_END] = text.length
@@ -288,7 +296,7 @@ function keyBlockEnd(text: string, start: number, memo: Int32Array): number {
     memo[BLOCK_END] = end
     break
   }
-  return memo[BLOCK_END]!
+  return slotAt(memo, BLOCK_END)
 }
 
 /** End of the `-----BEGIN [A-Z0-9 ]{0,40}PRIVATE KEY-----` block at `at` through its first `END` line or the end of the text, or -1. */
@@ -301,7 +309,7 @@ function keyBlockCandidate(text: string, at: number, memo: Int32Array): number {
 function schemeBefore(text: string, at: number): boolean {
   for (let start = at - 1; start >= 0 && start >= at - 16; start--) {
     const code = text.charCodeAt(start)
-    const bits = code < 128 ? CLASSES[code]! : 0
+    const bits = code < 128 ? (CLASSES[code] as number) : 0
     if ((bits & SCHEME) === 0) return false
     if ((bits & LOWER) !== 0 && at - start >= 2 && !isWordAt(text, start - 1)) return true
   }
@@ -360,9 +368,9 @@ function addressBefore(text: string, from: number, memo: Int32Array): number {
 /** End of the prefixed credential whose literal starts at `at`, or -1. */
 function prefixedEnd(text: string, literal: number, at: number, memo: Int32Array): number {
   if (isWordAt(text, at - 1)) return -1
-  const start = at + LITERAL_LENGTH[literal]!
-  const shape = LITERAL_SHAPE[literal]!
-  const min = LITERAL_MIN[literal]!
+  const start = at + (LITERAL_LENGTH[literal] as number)
+  const shape = (LITERAL_SHAPE[literal] as number)
+  const min = (LITERAL_MIN[literal] as number)
   if (shape === SK) {
     // `(?=[A-Za-z0-9_-]{0,255}\d)[A-Za-z0-9_-]{20,}`: the memoized next digit rejects a digit-free `sk-` before any run is measured.
     const digit = nextDigit(text, start, memo)
@@ -370,15 +378,15 @@ function prefixedEnd(text: string, literal: number, at: number, memo: Int32Array
     const end = keyRunEnd(text, start, memo)
     return end - start >= min && digit < end ? end : -1
   }
-  const slot = LITERAL_SLOT[literal]!
-  const end = slot === 0 ? keyRunEnd(text, start, memo) : memoRunEnd(LITERAL_RUN[literal]!, text, start, slot, memo)
+  const slot = (LITERAL_SLOT[literal] as number)
+  const end = slot === 0 ? keyRunEnd(text, start, memo) : memoRunEnd((LITERAL_RUN[literal] as RegExp), text, start, slot, memo)
   const length = end - start
   if (length < min) return -1
   if (shape === RUN) return end
   if (shape === GOOGLE) return start + min
-  if (shape === BOUNDED) return length <= LITERAL_MAX[literal]! && !isWordAt(text, end) ? end : -1
+  if (shape === BOUNDED) return length <= (LITERAL_MAX[literal] as number) && !isWordAt(text, end) ? end : -1
   // `[A-Za-z0-9_-]{8,2048}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}` after `eyJ`.
-  if (length > LITERAL_MAX[literal]! || !text.startsWith('.eyJ', end)) return -1
+  if (length > (LITERAL_MAX[literal] as number) || !text.startsWith('.eyJ', end)) return -1
   const payloadStart = end + '.eyJ'.length
   const payloadEnd = keyRunEnd(text, payloadStart, memo)
   if (payloadEnd - payloadStart < min || text.charCodeAt(payloadEnd) !== 46) return -1
@@ -486,13 +494,13 @@ export function createSecretRule(): UserTextRule<'secret'> {
       let kind = PREFIXED
       let plain = true
       let deferredEnd = addressBefore(text, from, memo)
-      let deferredStart = deferredEnd < 0 ? -1 : memo[CANDIDATE_START]!
+      let deferredStart = deferredEnd < 0 ? -1 : slotAt(memo, CANDIDATE_START)
       PREFIXES.lastIndex = from
       while (PREFIXES.test(text)) {
         const literalEnd = PREFIXES.lastIndex
         const literal = literalEndingAt(text, literalEnd)
-        const at = literalEnd - LITERAL_LENGTH[literal]!
-        PREFIXES.lastIndex = literalEnd - LITERAL_OVERLAP[literal]!
+        const at = literalEnd - (LITERAL_LENGTH[literal] as number)
+        PREFIXES.lastIndex = literalEnd - (LITERAL_OVERLAP[literal] as number)
         if (deferredStart >= 0 && deferredStart <= at) {
           if (start < 0) {
             start = deferredStart
@@ -505,10 +513,10 @@ export function createSecretRule(): UserTextRule<'secret'> {
         }
         // A candidate starts at or after its literal, so none past the range reaches it; nothing extends a range to the end.
         if (start >= 0 && (at >= end || end === length)) break
-        const literalKind = LITERAL_KIND[literal]!
+        const literalKind = (LITERAL_KIND[literal] as number)
         if (literalKind === ADDRESS) {
           deferredEnd = addressPassword(text, at, memo)
-          deferredStart = deferredEnd < 0 ? -1 : memo[CANDIDATE_START]!
+          deferredStart = deferredEnd < 0 ? -1 : slotAt(memo, CANDIDATE_START)
           continue
         }
         const candidateEnd = literalKind === KEY_BLOCK ? keyBlockCandidate(text, at, memo) : prefixedEnd(text, literal, at, memo)
