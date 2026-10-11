@@ -36,7 +36,7 @@ The Claude distribution tests prove that only the exact direct SDK identity bypa
 
 **Keep the hand-written file and review it at release time.** Reviewing a hundred derived rows by eye is exactly the work a generator does correctly, and the file's own claim — that it lists every direct dependency — would be unverified between releases.
 
-**Verify through a dedicated `doc-sync` gate.** That is how every other generated artifact here is checked, and it was the first shape of this change. It costs a gate process and a scheduler slot in a matrix that is already long, and — worse — its only failure mode is telling a contributor, minutes after they pushed an unrelated dependency bump, to go rerun a generator. Regenerating at commit time removes the interruption, and the assertion inside a spec the test lane already runs keeps the guarantee at no additional CI cost.
+**Verify through a dedicated `doc-sync` gate.** That is how every other generated artifact here is checked, and it was the first shape of this change. It costs a gate process and a scheduler slot in a matrix that is already long, while the assertion inside a spec the test lane already runs reports the same staleness at no additional CI cost.
 
 **Enumerate the full transitive closure.** The closure is thousands of packages, already recorded in the lock files with exact versions, and would bury the direct dependencies that a reader actually evaluates. The file points at the lock files and the `pnpm licenses list` renderer instead.
 
