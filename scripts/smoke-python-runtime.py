@@ -884,10 +884,18 @@ def main() -> None:
 
 def smoke_sdk_authoring(base_url: str, executable: Path, update_snapshots: bool) -> None:
     """Query the bundled Python and switch skills without replacing that environment."""
+
+    with tempfile.TemporaryDirectory(prefix="dsh-sdk-authoring-cache-") as cache_directory:
+        _smoke_sdk_authoring_cached(base_url, executable, update_snapshots, Path(cache_directory))
+
+
+def _smoke_sdk_authoring_cached(base_url: str, executable: Path, update_snapshots: bool, cache: Path) -> None:
     from deepseek_harness import DeepSeekHarness
 
-    resources = executable.with_name(executable.name.removeprefix("deepseek-harness-sdk-runtime-").removesuffix(".exe"))
-    manifest = json.loads((resources / "primary-runtime/runtime.json").read_text())
+    cache_environment = {**os.environ, "DSH_RESOURCE_CACHE": str(cache), "DSH_RUNTIME_DOWNLOAD": "primary"}
+    primary = Path(json.loads(subprocess.check_output([str(executable)], encoding="utf-8", env=cache_environment)))
+    resources = primary.parent
+    manifest = json.loads((primary / "runtime.json").read_text())
     for mode in ("default", "replacement", "disabled"):
         with tempfile.TemporaryDirectory(prefix="dsh-sdk-authoring-") as temporary:
             root = Path(temporary).resolve()
@@ -903,7 +911,7 @@ def smoke_sdk_authoring(base_url: str, executable: Path, update_snapshots: bool)
                 provider="deepseek-official", model="smoke-model", cwd=str(root),
                 dsh_bin=str(executable), dsh_home=str(home), patches=(str(patch),),
                 api_key="sk-keyless-smoke", base_url=base_url,
-                env={"DSH_PERMISSION_MODE": "danger-full-access", "DSH_TELEMETRY_DISABLED": "1"},
+                env={"DSH_PERMISSION_MODE": "danger-full-access", "DSH_TELEMETRY_DISABLED": "1", "DSH_RESOURCE_CACHE": str(cache)},
                 request_timeout_seconds=60,
             ) as harness:
                 result = harness.run(AUTHORING_PROMPT, session_id="authoring")
@@ -958,7 +966,9 @@ def smoke_sdk_office(executable: Path) -> None:
                 shutil.copytree(source, destination)
             else:
                 shutil.copy2(source, destination)
-        office = root / f"{stem}-office"
+        cache_environment = {**os.environ, "DSH_RESOURCE_CACHE": str(root / "cache")}
+        office = Path(json.loads(subprocess.check_output([str(relocated)], encoding="utf-8", env={**cache_environment, "DSH_RUNTIME_DOWNLOAD": "office"})))
+        assert not (office.parent / "primary").exists(), "Office download unexpectedly prepared the authoring environment"
         adapter = office / "node_modules/@deepseek-ai/libreoffice-kit/package.json"
         native = stem.removeprefix("deepseek-harness-sdk-runtime-").replace("win-", "win32-").replace("macos-", "darwin-")
         declared = json.loads(adapter.read_text(encoding="utf-8")).get("optionalDependencies", {})
@@ -997,7 +1007,7 @@ def smoke_sdk_office(executable: Path) -> None:
             patches=(str(patch),),
             api_key="sk-keyless-smoke",
             base_url="http://127.0.0.1:9",
-            env={"DSH_PERMISSION_MODE": "danger-full-access", "DSH_TELEMETRY_DISABLED": "1"},
+            env={"DSH_PERMISSION_MODE": "danger-full-access", "DSH_TELEMETRY_DISABLED": "1", "DSH_RESOURCE_CACHE": str(root / "cache")},
             # The startup plugin awaits a converter with a 120-second deadline before JSON-RPC is ready.
             initialize_timeout_seconds=180,
             request_timeout_seconds=180,
@@ -1007,10 +1017,32 @@ def smoke_sdk_office(executable: Path) -> None:
         if result["backend"] != expected_backend:
             raise AssertionError(f"Office conversion did not use {expected_backend}: {result}")
         if not result["moduleUrl"].startswith(office.as_uri() + "/"):
-            raise AssertionError(f"Office module was not loaded from the relocated wheel: {result}")
+            raise AssertionError(f"Office module was not loaded from the downloaded sidecar: {result}")
         pdf = output.read_bytes()
         if len(pdf) < 100 or not pdf.startswith(b"%PDF-"):
             raise AssertionError(f"Office conversion produced an invalid PDF at {output}")
+        workbook = root / "input.xlsx"
+        with zipfile.ZipFile(workbook, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("[Content_Types].xml", '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>')
+            archive.writestr("_rels/.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>')
+            archive.writestr("xl/workbook.xml", '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>')
+            archive.writestr("xl/_rels/workbook.xml.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>')
+            archive.writestr("xl/worksheets/sheet1.xml", '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><f>1+2</f><v>0</v></c></row></sheetData></worksheet>')
+        subprocess.run([sys.executable, "-c", """
+import sys, zipfile
+from pathlib import Path
+from xml.etree import ElementTree
+from deepseek_harness.office import convert, render_images, recalculate
+root = Path(sys.argv[1])
+assert convert(root / 'document.docx', root / 'python.pdf').backend == sys.argv[2]
+rendered = render_images(root / 'python.pdf', root / 'images', pages=[1])
+assert rendered.images and rendered.images[0].path.read_bytes().startswith(b'\\x89PNG')
+recalculate(root / 'input.xlsx', root / 'calculated.xlsx')
+with zipfile.ZipFile(root / 'calculated.xlsx') as archive:
+    sheet = ElementTree.fromstring(archive.read('xl/worksheets/sheet1.xml'))
+    assert sheet.find('.//{*}c[@r="A1"]/{*}v').text == '3'
+""", str(root), expected_backend], env={name: value for name, value in cache_environment.items() if name != "DSH_OFFICE_SIDECAR"}, check=True, timeout=180)
+        assert not (office.parent / "primary").exists(), "Python Office API unexpectedly downloaded authoring resources"
         print(f"smoke-python-runtime: relocated Office {result['backend']} DOCX produced {len(pdf)} PDF bytes")
 
 
@@ -1336,6 +1368,8 @@ def smoke_sdk_dynamic_tools(base_url: str, executable: Path, update_snapshots: b
                 "DSH_PERMISSION_MODE": "danger-full-access", "DSH_TELEMETRY_DISABLED": "1",
                 "HOME": str(user_home), "USERPROFILE": str(user_home),
                 "DSH_AGENTS_HOME": str(user_home / ".agents"),
+                # Pin the tool baseline independently of optional resources in the host cache.
+                "DSH_PRIMARY_RUNTIME": "",
             },
             api_key="sk-keyless-smoke", base_url=base_url, request_timeout_seconds=60,
         ) as harness:
@@ -2307,11 +2341,17 @@ def build_dynamic_tools_snapshot_files(
     assert changes == [[], [{"type": "tool_addition", "tool": {"type": "tool_reference", "name": "snapshot_ping"}}], []], changes
     assert requests[1]["messages"][:len(requests[0]["messages"])] == requests[0]["messages"], "tool addition changed earlier messages"
     replacements = [(str(cwd), "{{cwd}}"), (result.session_id, "{{session}}")]
+    header_references = {header["seq"]: f"{{{{header:{index + 1}}}}}" for index, header in enumerate(headers)}
+    snapshot_events = [
+        {**event, "data": {**event["data"], "headerSeq": header_references[event["data"]["headerSeq"]]}}
+        if event["type"] == "developer/message" and "headerSeq" in event["data"] else event
+        for event in events if event["type"] in {"request/header", "request/context", "developer/message"}
+    ]
     evidence = {
         "finalResponse": result.final_response,
         "declarations": declarations,
         "requestToolChanges": changes,
-        "events": [event for event in events if event["type"] in {"request/header", "request/context", "developer/message"}],
+        "events": snapshot_events,
         "toolCalls": calls,
         "pingResult": ping,
     }

@@ -131,14 +131,16 @@ Work details uses the Host setting `ui-chat.transcriptView`. The client reads it
 - Legacy `normal` and `expanded` values display as `detailed`, without automatically rewriting the saved values on disk.
 - When the setting is missing, `null`, or invalid, Desktop uses `standard` and non-Desktop Web uses `detailed`. Each client also uses its default before Host settings arrive; invalid values in other settings still fail validation.
 
-Reading a default does not automatically save configuration. When the user changes modes, the selected value is saved through Host settings; memory mode does not write to disk. Desktop onboarding writes preferences according to its rules when completed or skipped.
+Reading a default does not automatically save configuration. When the user changes modes, the selected value is saved through Host settings and stays process-local when settings cannot persist writes. Desktop onboarding writes preferences according to its rules when completed or skipped.
 
 <a id="collapse-timing"></a>
 ### Collapse timing
 
-Settings → General → Collapse work details appears directly below Work details and is independent of the display mode. On completion is the default and retains immediate folding and tail positioning. On next message enables delayed folding and its coordinated transitions. The choice lasts for the current Client instance: closing Settings preserves it; reloading or reopening the app resets it to On completion. It never writes Host settings, browser storage, or Session data.
+Settings → General → Collapse work details appears directly below Work details and is independent of the display mode. On completion is the default and retains immediate folding and tail positioning. On next message enables delayed folding and its coordinated transitions. The choice is saved as `ui-chat.collapseTiming` through the same Host profile settings as Work details and is restored after reload or reopening the app. Profiles without a saved value use On completion without writing that default. It does not write browser storage or Session data.
 
 With On next message, the latest Turn keeps its running presentation after completion: Compact and Standard retain their process headers, and Detailed retains its flat process rows. A pending ordinary transcript submission or a newer Turn ends this exemption without clearing the reader's manual whole-Turn choice. Inner disclosures reset only when their outer process actually hides. Queued input and steering alone do not end it. The latest Turn of a reopened Session also receives the exemption; manual whole-Turn choices still take precedence. Switching back to On completion ends the exemption immediately.
+
+When a new message triggers a fold, process details close and the transcript follows the new message in one upward movement, without a second scroll after the fold. Off-screen steps do not add bottom space; only the space needed to preserve the visible movement remains when the retained answer and new message cannot fill it. Content added during the fold updates its remaining movement. Reopening every closing row cancels that movement and releases obsolete bottom space. A reading gesture interrupts automatic following; finishing the fold does not resume it.
 
 Verbose retains its flat process rows under either timing. Failed, stopped, and interleaved-input Turns retain their existing whole-Turn eligibility rules; delayed folding can still postpone Detailed's conversion from flat rows to historical groups.
 
@@ -183,7 +185,7 @@ Group headers show a category icon, replace it with a down arrow on hover or key
 
 An open capped group follows content growth only while its own scroll position is at the bottom. Scrolling away pauses that group's following; returning to the bottom resumes it, independently of outer transcript following. Manually opening an unclosed group starts at the bottom and follows growth; manually opening a closed group starts at the top with following disabled, even when its initial content fits without scrolling. Closing the group in the data or restoring its height cap through a mode change does not reset an already-open reader's position. Browser find retains its own reveal position.
 
-Individual reasoning starts collapsed, including while streaming. All modes preview the latest paragraph whose first line ends with a newline; an unfinished single line has no preview. Later text in that paragraph does not change the preview. After settlement, the mode table applies. Expanded reasoning uses compact Markdown typography.
+Only reasoning blocks with non-whitespace text produce individual rows; each retains its original text and expands independently. A blank streaming tail produces no row and does not transfer its running state to an earlier block. Individual reasoning starts collapsed, including while streaming. All modes preview the latest paragraph whose first line ends with a newline; an unfinished single line has no preview. Later text in that paragraph does not change the preview. After settlement, the mode table applies. Expanded reasoning uses compact Markdown typography.
 
 Switching modes retains manually opened groups and inner disclosures. It changes visibility and sizing without recreating the message rows. Detailed and Verbose do not open every individual disclosure. Only Verbose keeps the whole Turn open.
 
