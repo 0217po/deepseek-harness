@@ -2,8 +2,8 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } f
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import ts from 'typescript'
-import { afterEach, describe, expect, it } from 'vitest'
-import { TypertAnalysisError, WorkspaceAnalyzer } from '../src/analyzer.ts'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { TypertAnalysisError, WorkspaceAnalyzer, WorkspaceCaches } from '../src/analyzer.ts'
 import { FaceModelEmitter } from '../src/emitter.ts'
 import type {
   KeywordTypeName,
@@ -1045,6 +1045,51 @@ describe('WorkspaceAnalyzer', { timeout: 60_000 }, () => {
       .toEqual({ faces: [], crossFaceLinks: [] })
   })
 
+  it('reads aggregate options and references without expanding include patterns', () => {
+    const root = copyFixture('typert-aggregate-include-')
+    const aggregatePath = join(root, 'tsconfig.host.json')
+    const aggregate = JSON.parse(readFileSync(aggregatePath, 'utf8')) as Record<string, unknown>
+    delete aggregate.files
+    aggregate.include = ['packages/host/src']
+    writeFileSync(aggregatePath, `${JSON.stringify(aggregate, null, 2)}\n`)
+    const caches = new WorkspaceCaches()
+    const listing = vi.spyOn(ts.sys, 'readDirectory')
+    const expanded = caches.config(aggregatePath).parsed
+    const expandedListings = listing.mock.calls.length
+    const unexpanded = caches.aggregate(aggregatePath)
+    const aggregateListings = listing.mock.calls.length - expandedListings
+    listing.mockRestore()
+
+    expect(expanded.fileNames).not.toEqual([])
+    expect(expandedListings).toBeGreaterThan(0)
+    expect(aggregateListings).toBe(0)
+    expect(unexpanded).toEqual({
+      path: aggregatePath,
+      options: expanded.options,
+      projectReferences: expanded.projectReferences,
+    })
+  })
+
+  it('reports an aggregate without references or inputs', () => {
+    const root = mkdtempSync(join(import.meta.dirname, '.typert-aggregate-no-inputs-'))
+    temporaryRoots.push(root)
+    writeFileSync(join(root, 'tsconfig.host.json'), '{ "include": ["missing"] }\n')
+
+    expect(() => new WorkspaceAnalyzer({ root }).discoverPackages()).toThrow('No inputs were found')
+  })
+
+  it('reads only the project configs of manifests selected for discovery', () => {
+    const root = copyFixture('typert-manifest-selection-')
+    const hostConfig = join(root, 'packages/host/tsconfig.json')
+    writeFileSync(hostConfig, JSON.stringify({ compilerOptions: { target: 'invalid' } }))
+    const caches = new WorkspaceCaches()
+
+    expect(new WorkspaceAnalyzer({ root, caches }).discoverPackages(manifest => manifest.name !== '@fixture/host'))
+      .toEqual([{ package: '@fixture/client', root: 'packages/client', faces: ['client'] }])
+    expect(caches.configs.has(hostConfig)).toBe(false)
+    expect(() => new WorkspaceAnalyzer({ root, caches }).analyze()).toThrow(TypertAnalysisError)
+  })
+
   it('ignores empty Cordis augmentations during package discovery', () => {
     const root = copyFixture('typert-empty-augmentation-')
     const hostRoot = join(root, 'packages/host')
@@ -1365,6 +1410,18 @@ describe('WorkspaceTypertGenerator', { timeout: 60_000 }, () => {
       { package: '@fixture/client', face: 'client' },
     ])
     expect(artifacts.every(artifact => artifact.dts.includes('export declare const TYPERT: unknown'))).toBe(true)
+  })
+
+  it('generates only contributors whose manifests declare a Typert export', () => {
+    const root = copyFixture('typert-contributors-')
+    const manifestPath = join(root, 'packages/client', 'package.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { exports: Record<string, unknown> }
+    delete manifest.exports['./client/typert']
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+
+    expect(new WorkspaceTypertGenerator(root).generateContributors().map(artifact => artifact.package))
+      .toEqual(['@fixture/host'])
+    expect(new WorkspaceTypertGenerator(root).generateContributors(['client'])).toEqual([])
   })
 
   it('rejects a public Typert subpath that points outside the root-level face artifact', () => {

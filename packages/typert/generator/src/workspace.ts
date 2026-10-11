@@ -47,14 +47,18 @@ export class WorkspaceTypertGenerator {
    * Find public package faces that contribute Cordis services/events or
    * explicitly tagged Typert roots.
    * @param faces - optional independent program faces to inspect.
+   * @param includeManifest - optional `package.json` predicate; a rejected package's sources and project config are not read.
    * @returns discovered packages in stable package-name order.
    */
-  discover(faces?: readonly TypertFace[]): DiscoveredTypertPackage[] {
+  discover(
+    faces?: readonly TypertFace[],
+    includeManifest?: (manifest: Readonly<Record<string, unknown>>) => boolean,
+  ): DiscoveredTypertPackage[] {
     return new WorkspaceAnalyzer({
       root: this.root,
       caches: this.caches,
       ...(faces === undefined ? {} : { faces }),
-    }).discoverPackages()
+    }).discoverPackages(includeManifest)
   }
 
   /**
@@ -85,6 +89,18 @@ export class WorkspaceTypertGenerator {
       }
     }
     return artifacts
+  }
+
+  /**
+   * Generate every explicit contributor: a package whose manifest declares a
+   * Typert artifact export and whose public graph has a Typert surface.
+   * @param faces - optional independent program faces to analyze.
+   * @returns one artifact per contributor face.
+   */
+  generateContributors(faces?: readonly TypertFace[]): WorkspaceEmitResult[] {
+    const packages = this.discover(faces, manifest => hasTypertExport(manifest.exports))
+      .map(candidate => candidate.package)
+    return packages.length === 0 ? [] : this.generate(packages, faces)
   }
 
   private validateExport(artifact: WorkspaceEmitResult): void {
@@ -146,6 +162,19 @@ export class WorkspaceTypertGenerator {
       }
     }
   }
+}
+
+/**
+ * Whether a `package.json#exports` field declares a Typert artifact subpath
+ * (`./typert`, `./client/typert`, or `./remote`).
+ * @param exportsField - the manifest's `exports` value.
+ * @returns true when the package opts in to Typert publication.
+ */
+export function hasTypertExport(exportsField: unknown): boolean {
+  if (exportsField === null || typeof exportsField !== 'object' || Array.isArray(exportsField)) return false
+  return Object.hasOwn(exportsField, './typert')
+    || Object.hasOwn(exportsField, './client/typert')
+    || Object.hasOwn(exportsField, './remote')
 }
 
 function sameExport(actual: unknown, expected: { types: string; default: string }): boolean {
