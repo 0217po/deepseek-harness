@@ -967,6 +967,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-chat':
         specifier: workspace:*
         version: link:../packages/client/ui-chat
+      '@deepseek-ai/dsh-client-ui-conversation':
+        specifier: workspace:*
+        version: link:../packages/client/ui-conversation
       '@deepseek-ai/dsh-deque':
         specifier: workspace:*
         version: link:../packages/util/deque
@@ -2627,6 +2630,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-schedule':
         specifier: workspace:*
         version: link:../../client/ui-schedule
+      '@deepseek-ai/dsh-client-ui-secret-mask':
+        specifier: workspace:*
+        version: link:../../client/ui-secret-mask
       '@deepseek-ai/dsh-client-ui-session':
         specifier: workspace:*
         version: link:../../client/ui-session
@@ -4678,6 +4684,30 @@ importers:
       react-dom:
         specifier: ^18.2.0
         version: 18.3.1(react@18.3.1)
+
+  packages/client/ui-secret-mask:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-client-locale':
+        specifier: workspace:*
+        version: link:../locale
+      '@deepseek-ai/dsh-client-test-runtime':
+        specifier: workspace:*
+        version: link:../../test-support/client-runtime
+      '@deepseek-ai/dsh-client-ui-conversation':
+        specifier: workspace:*
+        version: link:../ui-conversation
+      '@deepseek-ai/dsh-client-ui-renderer':
+        specifier: workspace:*
+        version: link:../ui-renderer
+      '@deepseek-ai/dsh-client-ui-slots':
+        specifier: workspace:*
+        version: link:../ui-slots
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
 
   packages/client/ui-session:
     devDependencies:
