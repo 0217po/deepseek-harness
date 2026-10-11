@@ -220,11 +220,11 @@ describe('typertPlugin', () => {
 describe('typertPlugin workspace mode', () => {
   it('generates in one Worker Thread from the first buildStart and writes its artifacts once', async () => {
     const root = await workspace()
-    const trigger = await packageOutput(root, 'generator', { name: '@deepseek-ai/dsh-typert-generator' })
+    const trigger = await packageOutput(root, 'typert/generator', { name: '@deepseek-ai/dsh-typert-generator' })
     const later = await packageOutput(root, 'core/tools', { name: '@deepseek-ai/dsh-tools' })
     const plugin = typertPlugin({ mode: 'workspace', faces: ['host'] })
 
-    plugin.buildStart({ cwd: join(root, 'packages/generator') })
+    plugin.buildStart({ cwd: join(root, 'packages/typert/generator') })
     plugin.buildStart({ cwd: join(root, 'packages/core/tools') })
     const worker = onlyWorker()
     expect(worker.options).toMatchObject({
