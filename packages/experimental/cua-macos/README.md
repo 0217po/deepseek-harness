@@ -197,7 +197,7 @@ The queue orders individual native requests. Holding an app object does not rese
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Only the macOS native implementation is provided. Windows support is in development; this package remains in `experimental` until that support is complete, then moves to the `packages/computer-use/cua-macos` directory. Browser tabs, AX diffs, unassociated system panels and accessory-only apps are unsupported.
+- Only the macOS native implementation is provided. Windows support is in development; this package remains in `experimental` until that support is complete, then moves to the `computer-use` group. Browser tabs, AX diffs, unassociated system panels and accessory-only apps are unsupported.
 - Coordinates use window-local points including the title bar. PNG pixel dimensions can differ. Window movement, application changes and other desktop users can race observations and input.
 - macOS Stage Manager can reduce background window bounds and screenshots to thumbnails. Full-window observation and coordinate input in this state are not guaranteed; model guidance requires explaining foreground needs and avoiding repeated focus reclamation.
 - Background input depends on private SkyLight symbols; macOS updates can make them unavailable. Validate each target OS version.

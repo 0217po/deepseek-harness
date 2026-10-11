@@ -83,7 +83,7 @@ kind: "package-library"
 
 - 当前原生执行使用 macOS 提供方。Windows 支持在独立目录中开发。
 - 持久变量不会在一组连续操作期间独占应用。其他 Agent 和用户可能改变其状态。
-- 本包保留在 `experimental`，Windows 支持和平台验证完成后可迁至 `packages/computer-use/cua`。
+- 本包保留在 `experimental`，Windows 支持和平台验证完成后可迁至 `computer-use` 组。
 
 -----
 

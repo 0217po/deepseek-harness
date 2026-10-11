@@ -83,7 +83,7 @@ Results append to history. Retaining objects does not rewrite previous messages;
 
 - Native execution currently uses the macOS provider. Windows support is in development in a separate directory.
 - Persistent variables do not reserve an application across a sequence of operations. Other Agents and the user can change its state.
-- The package stays in `experimental` until Windows support and platform validation permit promotion to `packages/computer-use/cua`.
+- The package stays in `experimental` until Windows support and platform validation permit promotion to the `computer-use` group.
 
 -----
 
