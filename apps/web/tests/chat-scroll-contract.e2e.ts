@@ -111,6 +111,8 @@ interface ScrollWorld {
 
 interface ScrollWorldOptions {
   readonly failureShot: string
+  /** Install a controllable browser clock before boot; omitted worlds use real time. */
+  readonly controlledClock?: boolean
   readonly paceMs?: number
   readonly replay?: ReplayOverrideDoc
   readonly seeds: readonly { fixture: ChatScrollFixture; id: string }[]
@@ -206,6 +208,7 @@ async function launchScrollWorld(options: ScrollWorldOptions): Promise<ScrollWor
     scaffold.ctx.on('session/event', (_session, event: SessionEvent) => { events.push(event) })
     scaffold.ctx.on('agent/assistant-stream', ({ frame }) => { assistantFrames.push(frame) })
     page = await newEnglishPage(browser, 900)
+    if (options.controlledClock) await page.clock.install()
     const tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
@@ -590,8 +593,10 @@ describe('web e2e: long Chat scroll contract', () => {
       const artifactRoot = fileURLToPath(new URL('../../../.artifacts/screenshots/visible-fold/', import.meta.url))
       await mkdir(artifactRoot, { recursive: true })
       const evidence = await mkdtemp(join(artifactRoot, `${scenario.name}-`))
+      const controlledClock = scenario.name === 'content-growth-during-fold' || scenario.name === 'cancel-all-during-fold'
       await withScrollWorld({
         failureShot: `visible-fold-${scenario.name}`,
+        controlledClock,
         replay: [replayEntry(textStream('VISIBLE_FOLD_REPLY', 'VISIBLE_FOLD_DONE', 2))],
         seeds: [{ fixture, id: `visible-fold-${scenario.name}` }],
       }, async (world) => {
@@ -727,6 +732,7 @@ describe('web e2e: long Chat scroll contract', () => {
                 raceApplied = true
                 column.style.paddingBottom = '320px'
               }
+              if (raceApplied) host.setAttribute('data-fold-race-applied', '')
             }
             const message = [...column.querySelectorAll<HTMLElement>('[data-submission-echo], [data-chat-flow-kind="user"]')]
               .find(element => element.textContent?.includes(marker))
@@ -743,6 +749,7 @@ describe('web e2e: long Chat scroll contract', () => {
           host.addEventListener('dsh-test-fold-stop', () => {
             cancelAnimationFrame(frame); sample()
             host.removeEventListener('dsh-test-fold-growth', markGrowth)
+            host.removeAttribute('data-fold-race-applied')
             host.removeAttribute('data-fold-probe-ready'); resolveTrace(samples)
           }, { once: true })
           sample(); host.setAttribute('data-fold-probe-ready', ''); frame = requestAnimationFrame(tick)
@@ -752,11 +759,25 @@ describe('web e2e: long Chat scroll contract', () => {
         let samples: Awaited<typeof trace> = []
         try {
           settled = world.scaffold.whenTurnSettled(30_000)
-          if (scenario.name === 'cancel-all-during-fold') {
-            await page.getByRole('button', { name: 'Send message', exact: true }).evaluate((button) => {
-              if (!(button instanceof HTMLButtonElement)) throw new Error('Send control is not a button')
-              button.click()
-            })
+          if (controlledClock) {
+            // Advance every animation frame so the race cannot miss the intermediate fold height.
+            await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000))
+            try {
+              await page.getByRole('button', { name: 'Send message', exact: true }).evaluate((button) => {
+                if (!(button instanceof HTMLButtonElement)) throw new Error('Send control is not a button')
+                button.click()
+              })
+              await expect.poll(async () => {
+                await page.clock.runFor(16)
+                return page.locator('[data-fold-race-applied]').count()
+              }, { timeout: 10_000 }).toBe(1)
+              await expect.poll(async () => {
+                await page.clock.runFor(16)
+                return page.locator('[data-chat-motion="collapse"]').count()
+              }, { timeout: 10_000 }).toBe(0)
+            } finally {
+              await page.clock.resume()
+            }
           } else await page.getByRole('button', { name: 'Send message', exact: true }).click()
           await promptBlocked.promise
           await page.getByText(input, { exact: true }).waitFor()
