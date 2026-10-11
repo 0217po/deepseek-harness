@@ -193,7 +193,7 @@ export function apply(ctx: Context, config: Config): void {
   // through a local forwarding address that this process cannot derive.
   const handoffBrowser = config.openBrowser && !launchedThroughSsh(launchEnvironmentOf(ctx))
   /** The advertised root: the canonical `publicUrl`, or the listener's own origin. */
-  const appRootUrl = (): string => publicUrl ?? ctx.webServer.origin
+  const appRootUrl = (): string => publicUrl ?? ctx.webServer.getOrigin()
   ctx.plugin(FrontendStatic, { distIndex: internals.resolveDistIndex() })
   if (config.surfaceContext) {
     ctx.inject(['shellEnv'], (runtimeCtx) => {

@@ -25,11 +25,11 @@ Both values become runtime context and the system prompt keeps only value-free g
 | Package | Responsibility |
 |---|---|
 | `@deepseek-ai/dsh-harness-dev-context` (`packages/context/harness-dev-context`) | Both sections, both contexts, and the earlier-format projection; all module-private, exporting only the plugin protocol (`name`, `inject`, `apply`) and the projection state type `LegacyPrompt` |
-| `@deepseek-ai/dsh-host-webserver` | `WebServer.origin` (the bind address's URL form with protocol and bound port) and `bindUrlHost(host)` |
+| `@deepseek-ai/dsh-host-webserver` | `WebServer.getOrigin()` (the bind address's URL form with protocol and bound port) and `bindUrlHost(host)` |
 | `@deepseek-ai/dsh-web-app` | The `web-startup` plugin provides `webStartup` and publishes a canonical `publicUrl`; the package root declares `Context.webStartup`; the bundle patch mounts the `harness-dev-context` row; the runtime plugin keeps only `DSH_WEB_URL`, the startup URL, and the browser handoff |
 | `@deepseek-ai/dsh-system-prompt` | `CONTEXT_ORDERS.HARNESS_SOURCE = 200` and `WEB_SURFACE = 210` |
 
-The plugin injects `systemPrompt`, `sessionProjections`, `webServer`, and `webStartup` and reads those services in code; its patch row carries no configuration expression. The checkout path is four directories above this package's source or built entry, the same depth as the former web-app location, so source, npm, and Desktop installations resolve the same root. The URL is `webStartup.publicUrl`, or `webServer.origin` without one. The plugin reaches the `webStartup` type through `import type {} from '@deepseek-ai/dsh-web-app'`, the package root that declares it; the import is erased at runtime, so the web-app bundle's dependency on this package remains the only runtime edge.
+The plugin injects `systemPrompt`, `sessionProjections`, `webServer`, and `webStartup` and reads those services in code; its patch row carries no configuration expression. The checkout path is four directories above this package's source or built entry, the same depth as the former web-app location, so source, npm, and Desktop installations resolve the same root. The URL is `webStartup.publicUrl`, or `webServer.getOrigin()` without one. The plugin reaches the `webStartup` type through `import type {} from '@deepseek-ai/dsh-web-app'`, the package root that declares it; the import is erased at runtime, so the web-app bundle's dependency on this package remains the only runtime edge.
 
 ### New Sessions
 
@@ -90,6 +90,6 @@ The projection computes only on each committed `system/message`, adding no synch
 ## Testing
 
 - `packages/context/harness-dev-context/tests/harness-dev-context.spec.ts`: on a production AgentLoop, an earlier-format Session resumed on another port emits no `system/message`, the request's system prompt is byte-identical to the log, and runtime context carries the current URL; a second port change keeps this; replace-only and in-history routes each run. When a series consolidation only empties a later version, the next turn keeps the earlier paragraphs. Similar text without the fixed ending or broken across lines receives the current guidance. A new Session keeps its system prompt across a port change and only appends a runtime-context snapshot. Sections carry no values, the context carries the origin or `publicUrl`, and disposing the plugin fiber removes every registration.
-- `packages/host/webserver/tests/webserver.spec.ts`: `bindUrlHost` across address forms; `origin` on HTTP and HTTPS listeners, and its error for a zoned non-loopback address.
+- `packages/host/webserver/tests/webserver.spec.ts`: `bindUrlHost` across address forms; `getOrigin()` on HTTP and HTTPS listeners, and its errors before binding and for a zoned non-loopback address.
 - `packages/bundle/web-app/tests/startup.spec.ts`: `webStartup.publicUrl` publishes the canonical form.
 - `packages/core/system-prompt/tests/system-prompt.spec.ts`: the added context positions are unique integers.

@@ -311,7 +311,7 @@ export class WebServer extends Service {
   private readonly indexTaps: ((html: string) => string)[] = []
   private fallback: WebRoute['handler'] | undefined
   private server!: Server
-  private listenedPort!: number
+  private listenedPort: number | undefined
   private readonly gzip: NodeMiddleware | undefined
   private readonly tlsConfig: TlsConfig | undefined
 
@@ -325,7 +325,7 @@ export class WebServer extends Service {
 
   /** The listening port (the OS-assigned value when config.port is 0). */
   get port(): number {
-    return this.listenedPort
+    return this.listenedPort as number
   }
 
   /** The configured bind address (one concrete local interface). */
@@ -345,14 +345,15 @@ export class WebServer extends Service {
   /**
    * The root URL local clients use to reach the bound listener: the protocol,
    * the {@link bindUrlHost} form of the bind address, and the listening port.
-   * Read it after `listen` binds, like {@link port}.
-   * @throws when the bind address has no URL form.
+   * @returns the origin, for example `http://127.0.0.1:3080`.
+   * @throws before `listen` binds a port, or when the bind address has no URL form.
    */
-  get origin(): string {
+  getOrigin(): string {
     const host = bindUrlHost(this.config.host)
     if (host === undefined) {
       throw new Error(`webserver: bind address ${JSON.stringify(this.config.host)} carries an interface zone id, which no URL can express`)
     }
+    if (this.listenedPort === undefined) throw new Error('webserver: origin read before the listener bound a port')
     return `${this.protocol}//${host}:${String(this.listenedPort)}`
   }
 

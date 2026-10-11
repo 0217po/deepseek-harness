@@ -213,7 +213,7 @@ describe('web e2e: fresh round trip through the real assembly', () => {
     }
   }, 200_000)
 
-  it('keeps source checkout and Web context in the system prompt and cwd in user context', async () => {
+  it('keeps value-free Web guidance in the system prompt and process values in runtime context', async () => {
     if (settledSessionId === undefined) throw new Error('the drive turn did not publish a session id')
     const agent = scaffold.ctx.agents.get(settledSessionId)
     if (agent === undefined) throw new Error(`the settled Web agent ${settledSessionId} is no longer live`)

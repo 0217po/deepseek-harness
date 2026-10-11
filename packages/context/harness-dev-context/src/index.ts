@@ -52,8 +52,10 @@ const WEB_SURFACE_GUIDANCE = 'When the user refers to "this page", "this GUI", o
 const WEB_SURFACE_PROMPT = `You are interacting with the user through the DeepSeek Harness Web GUI whose URL the runtime context names. ${WEB_SURFACE_GUIDANCE}`
 
 /**
- * Fixed text around the value in each paragraph that embedded it. The source
- * suffix keeps its original wording, which differs from the current guidance.
+ * Fixed text around the value in each paragraph that embedded it, frozen as
+ * those releases rendered it: never edit these together with the current
+ * guidance, or Sessions holding the earlier paragraphs stop matching and
+ * rewrite their logged prompt.
  */
 const LEGACY_SOURCE = {
   prefix: 'The DeepSeek Harness implementation checkout is at ',
@@ -61,10 +63,20 @@ const LEGACY_SOURCE = {
     + 'never infer the working directory from this path. Use pwd to determine the current working directory. '
     + 'Use this checkout only to inspect or extend DSH itself.',
 }
+// The frozen copy repeats today's guidance on purpose; the two may diverge.
+/* jscpd:ignore-start */
 const LEGACY_WEB_SURFACE = {
   prefix: 'You are interacting with the user through the DeepSeek Harness Web GUI at ',
-  suffix: `. ${WEB_SURFACE_GUIDANCE}`,
+  suffix: '. When the user refers to "this page", "this GUI", or "this app" without naming another target, they mean this GUI. '
+    + 'The browser provides no implicit DOM, route, or screenshot context. '
+    + 'The client-plugin HMR receiver is active, but client-plugin changes reload without a refresh only while '
+    + '`pnpm run dev:web` is also running from this same checkout to rebuild their bundles; verify that watcher before promising automatic updates. '
+    + 'Every other change — the apps/web shell and plain packages — requires rebuilding the affected Web artifacts and verifying this existing URL after a page refresh. '
+    + 'Starting another server does not update this GUI. '
+    + 'The apps/web Vite entry builds the shell but is not a standalone application because only dsh web injects window.__DSH_BOOT__. '
+    + 'Do not start a replacement server unless the user asks; if one is needed, use a managed background job and verify its exact URL.',
 }
+/* jscpd:ignore-end */
 
 /** Host-only projection key of the value-bearing paragraphs a Session admitted. */
 const LEGACY_PROMPT = 'harnessDevLegacyPrompt'
@@ -91,11 +103,17 @@ function legacyParagraph(prompt: string, { prefix, suffix }: { prefix: string; s
   return paragraph.includes('\n') ? null : paragraph
 }
 
-/** Fold one committed event into the admitted paragraphs; empty prompt versions admit nothing. */
+/**
+ * Fold one committed event into the admitted paragraphs. Like the loop's own
+ * prompt-version reading, only a single nonempty text block is a prompt
+ * version; an emptied or other version keeps the previous state, because a
+ * series consolidation can log only the emptied later version.
+ */
 function foldLegacyPrompt(state: LegacyPrompt, event: SessionEvent): LegacyPrompt {
   if (event.type !== 'system/message') return state
-  const [block] = event.data.message.content
-  if (block?.type !== 'text' || block.text === '') return state
+  const { content } = event.data.message
+  const [block] = content
+  if (content.length !== 1 || block?.type !== 'text' || block.text === '') return state
   const source = legacyParagraph(block.text, LEGACY_SOURCE)
   const web = legacyParagraph(block.text, LEGACY_WEB_SURFACE)
   return source === state.source && web === state.web ? state : { source, web }
@@ -143,6 +161,6 @@ export function apply(ctx: Context): void {
     name: WEB_SURFACE,
     order: ctx.systemPrompt.getContextOrder('WEB_SURFACE'),
     interpolate: false,
-    text: () => `Current DeepSeek Harness Web GUI URL: ${JSON.stringify(ctx.webStartup.publicUrl ?? ctx.webServer.origin)}.`,
+    text: () => `Current DeepSeek Harness Web GUI URL: ${JSON.stringify(ctx.webStartup.publicUrl ?? ctx.webServer.getOrigin())}.`,
   })
 }

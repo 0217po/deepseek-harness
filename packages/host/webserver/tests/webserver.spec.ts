@@ -295,8 +295,10 @@ describe('real Loader composition', () => {
     for (const [host, text] of rows) expect(bindUrlHost(host)).toBe(text)
   })
 
-  it('reports no origin for a bind address that no URL can express', () => {
-    expect(() => new HttpServer(new Context(), HttpServer.Config({ host: 'fe80::1%eth0', port: 0 })).origin)
+  it('reports no origin before binding or for a bind address that no URL can express', () => {
+    expect(() => new HttpServer(new Context(), HttpServer.Config({ host: '127.0.0.1', port: 0 })).getOrigin())
+      .toThrow('webserver: origin read before the listener bound a port')
+    expect(() => new HttpServer(new Context(), HttpServer.Config({ host: 'fe80::1%eth0', port: 0 })).getOrigin())
       .toThrow('webserver: bind address "fe80::1%eth0" carries an interface zone id, which no URL can express')
   })
 
@@ -574,7 +576,7 @@ describe('real Loader composition', () => {
     const loaded = await loadComposition(0, false, '127.0.0.1', tls)
     const server = loaded.webServer
     expect(server.protocol).toBe('https:')
-    expect(server.origin).toBe(`https://127.0.0.1:${String(server.port)}`)
+    expect(server.getOrigin()).toBe(`https://127.0.0.1:${String(server.port)}`)
     server.register({
       kind: 'exact',
       path: '/tls',
@@ -600,7 +602,7 @@ describe('real Loader composition', () => {
     const loaded = await loadComposition(0, false, '127.0.0.1', null)
     const server = loaded.webServer
     expect(server.protocol).toBe('http:')
-    expect(server.origin).toBe(`http://127.0.0.1:${String(server.port)}`)
+    expect(server.getOrigin()).toBe(`http://127.0.0.1:${String(server.port)}`)
     server.register({ kind: 'exact', path: '/plain', handler: (_req, res) => { res.writeHead(200); res.end('PLAIN') } })
     expect(await request(server.port, '/plain')).toMatchObject({ status: 200, body: 'PLAIN' })
     await expect(tlsRequest(server.port, '/plain')).rejects.toThrow()

@@ -12,8 +12,8 @@
   en: 5222f00fd05d3801
   zh: fcfa430a0fa5588c
 /agent-note-process-specific-checkout-path-and-web-url-move-to-runtime-context/decision/ownership:
-  en: 819556fd85d945dd
-  zh: 7c346c261e2940a1
+  en: a98a00946a0dbaf0
+  zh: c272d6bf29c08ef8
 /agent-note-process-specific-checkout-path-and-web-url-move-to-runtime-context/decision/new-sessions:
   en: 1ee144c39905bb89
   zh: a6669d7ad394e41c
@@ -27,5 +27,5 @@
   en: dc4c15a88ac09de0
   zh: 0d65b4b3f2471d5c
 /agent-note-process-specific-checkout-path-and-web-url-move-to-runtime-context/testing:
-  en: 0f2be07092471cdc
-  zh: bd2771ca1b970be8
+  en: 34e1b557ce2d7bef
+  zh: 069bb16cab1a659c
