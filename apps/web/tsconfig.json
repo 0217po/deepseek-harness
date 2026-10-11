@@ -23,6 +23,7 @@
   // cannot see both sides of the cordis Context merges).
   "exclude": [
     "tests/collapse-timing.e2e.ts",
+    "tests/notice-wake-tail.e2e.ts",
     "tests/chat-flow-layout.e2e.ts",
     "tests/layout-bottom.e2e.ts",
     "tests/shortcuts-desktop.e2e.ts",
