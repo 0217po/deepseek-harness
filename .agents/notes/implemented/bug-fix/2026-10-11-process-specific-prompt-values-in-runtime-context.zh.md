@@ -26,10 +26,10 @@ Status: implemented
 |---|---|
 | `@deepseek-ai/dsh-harness-dev-context`（`packages/context/harness-dev-context`） | 两个 section、两个 context、旧格式投影；全部模块私有，只导出插件协议（`name`、`inject`、`apply`）与投影状态类型 `LegacyPrompt` |
 | `@deepseek-ai/dsh-host-webserver` | `WebServer.getOrigin()`（绑定地址的 URL 形式加协议与实际端口）与 `bindUrlHost(host)` |
-| `@deepseek-ai/dsh-web-app` | `web-startup` 插件提供 `webStartup`，并发布规范化的 `publicUrl`；包根声明 `Context.webStartup`；bundle patch 挂载 `harness-dev-context` 行；运行时插件只保留 `DSH_WEB_URL`、启动 URL 与浏览器交接 |
+| `@deepseek-ai/dsh-web-app` | `web-runtime` 行提供 `webApp`，其 `getAdvertisedUrl()` 返回配置的 `publicUrl`，否则返回监听器 origin，与 `DSH_WEB_URL` 和启动 URL 同值；bundle patch 挂载 `harness-dev-context` 行 |
 | `@deepseek-ai/dsh-system-prompt` | `CONTEXT_ORDERS.HARNESS_SOURCE = 200`、`WEB_SURFACE = 210` |
 
-插件 `inject` 为 `systemPrompt`、`sessionProjections`、`webServer`、`webStartup`，在代码里直接读取这些服务；patch 行不写任何配置表达式。checkout 路径取本包源码或构建入口上溯四层，与原 web-app 位置同深度，源码、npm 与 Desktop 安装下结果不变。URL 取 `webStartup.publicUrl`，没有时取 `webServer.getOrigin()`。插件通过 `import type {} from '@deepseek-ai/dsh-web-app'` 从声明它的包根取得 `webStartup` 类型；该导入在运行时被擦除，因此 web-app bundle 对本包的依赖仍是唯一的运行时依赖。
+插件 `inject` 为 `systemPrompt`、`sessionProjections`、`webApp`，在代码里直接读取这些服务；patch 行不写任何配置表达式。checkout 路径取本包源码或构建入口上溯四层，与原 web-app 位置同深度，源码、npm 与 Desktop 安装下结果不变。URL 取 `webApp.getAdvertisedUrl()`，因此 profile 覆盖 `web-runtime` 行的 `publicUrl` 时模型也能看到。插件通过 `import type {} from '@deepseek-ai/dsh-web-app'` 取得 `webApp` 类型；该导入在运行时被擦除，因此 web-app bundle 对本包的依赖仍是唯一的运行时依赖。
 
 ### 新会话
 
@@ -74,7 +74,7 @@ Status: implemented
 
 **留在 web-app 与 app-boot 中实现。** 面向开发的上下文与旧格式兼容逻辑会扩大两个核心包的公开 API；app-boot 的 `addHarnessSourceSection` 当时只有 web-app 一个调用方。
 
-**由 patch 行用配置表达式传入 `publicUrl`。** 插件把 `webStartup` 当作服务注入后在代码里读取，行内不需要任何配置。
+**读取 `webStartup.publicUrl`。** 它只携带 `--public-url` 参数，profile 覆盖 `web-runtime` 行的 `publicUrl` 时只会影响 `DSH_WEB_URL`，到不了模型；生效值只存在于 web-app 内部，现在由它以 `webApp` 提供。
 
 **直接读取会话历史中的头节点文本。** 同步读取任意历史事件的 API 已弃用，新调用被禁止；投影是恢复后取得该状态的既定方式。
 
@@ -89,7 +89,7 @@ Status: implemented
 
 ## 测试
 
-- `packages/context/harness-dev-context/tests/harness-dev-context.spec.ts`：真实 AgentLoop 上，旧格式会话在另一端口恢复时不产生 `system/message`、请求中的 system prompt 与日志逐字相同、运行时上下文携带当前 URL；再换一次端口仍成立；不支持与支持 in-history 的路由各跑一遍。series 合并只清空后续版本时，下一轮仍沿用旧段落。缺少固定结尾或跨行的相似文本得到新说明。新会话换端口后 system prompt 不变、只追加运行时上下文快照。section 不含值、context 携带 origin 或 `publicUrl`，销毁插件 fiber 后全部注册消失。
+- `packages/context/harness-dev-context/tests/harness-dev-context.spec.ts`：真实 AgentLoop 上，旧格式会话在另一端口恢复时不产生 `system/message`、请求中的 system prompt 与日志逐字相同、运行时上下文携带当前 URL；再换一次端口仍成立；不支持与支持 in-history 的路由各跑一遍。series 合并只清空后续版本时，下一轮仍沿用旧段落。缺少固定结尾或跨行的相似文本得到新说明。新会话换端口后 system prompt 不变、只追加运行时上下文快照。section 不含值、context 携带公告 URL，销毁插件 fiber 后全部注册消失。
 - `packages/host/webserver/tests/webserver.spec.ts`：`bindUrlHost` 各地址形式；`getOrigin()` 在 HTTP 与 HTTPS 监听上的值，绑定前与带 zone 的非回环地址抛错。
-- `packages/bundle/web-app/tests/startup.spec.ts`：`webStartup.publicUrl` 发布规范化形式。
+- `packages/bundle/web-app/tests/web-app.spec.ts`：`webApp.getAdvertisedUrl()` 返回监听器 origin，或该行配置的 `publicUrl`。
 - `packages/core/system-prompt/tests/system-prompt.spec.ts`：新增的 context 位置唯一且为整数。

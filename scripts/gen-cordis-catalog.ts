@@ -95,7 +95,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   schedule: 'schedule.md',
   inspector: 'extensions.md',
   webServer: 'web-server.md',
-  webStartup: 'web-server.md',
+  webApp: 'web-server.md',
   llm: 'llm-streaming.md',
   lsp: 'lsp.md',
   messageFeedback: 'feedback.md',

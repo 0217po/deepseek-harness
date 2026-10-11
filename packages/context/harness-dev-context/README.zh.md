@@ -25,11 +25,11 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-随附的 Web bundle 以 `harness-dev-context` 行挂载此插件。不希望 agent 得知 harness checkout 或 GUI URL 时，在 profile patch 中禁用该行。插件不接受配置，只在每个注入服务都存在时激活：`systemPrompt`、`sessionProjections`、已绑定的 `webServer` 监听器，以及 `webStartup` 调用参数，因此 `--help` 与非 Web 组合永远不会挂载它。
+随附的 Web bundle 以 `harness-dev-context` 行挂载此插件。不希望 agent 得知 harness checkout 或 GUI URL 时，在 profile patch 中禁用该行。插件不接受配置，只在每个注入服务都存在时激活：`systemPrompt`、`sessionProjections`，以及 Web 运行时的 `webApp` 服务，因此 `--help` 与非 Web 组合永远不会挂载它。
 
 ### 模型得到什么
 
-两个系统提示词段落说明 checkout 与工作目录不同、「this page」指此 GUI，并给出 GUI 的更新约定。两行运行时上下文给出当前值：本包上方四层目录处的安装根，以及公告的 `--public-url` 根；没有该参数时为监听器自身的 origin。运行时上下文遵循共享的快照规则：值不变不追加内容，值变化时在本步输入之前追加一份快照，而不是改写更早的消息。
+两个系统提示词段落说明 checkout 与工作目录不同、「this page」指此 GUI，并给出 GUI 的更新约定。两行运行时上下文给出当前值：本包上方四层目录处的安装根，以及 `webApp.getAdvertisedUrl()` 给出的 Web GUI 公告 URL，与 `DSH_WEB_URL` 和启动 URL 相同。运行时上下文遵循共享的快照规则：值不变不追加内容，值变化时在本步输入之前追加一份快照，而不是改写更早的消息。
 
 ### 早期版本的会话
 
@@ -57,7 +57,7 @@ kind: "package-reference"
 
 ### 主流程
 
-激活时注册投影单元、两个段落与两个上下文。每次组装时，段落在已提交的早期段落与当前说明之间选择；每次请求准入时，上下文读取监听器 origin 与调用的公开根。销毁插件 fiber 会移除全部注册。
+激活时注册投影单元、两个段落与两个上下文。每次组装时，段落在已提交的早期段落与当前说明之间选择；每次请求准入时，上下文读取公告 URL。销毁插件 fiber 会移除全部注册。
 
 </details>
 
@@ -70,8 +70,7 @@ kind: "package-reference"
 
 - [进程相关值改走运行时上下文](../../../.agents/notes/implemented/bug-fix/2026-10-11-process-specific-prompt-values-in-runtime-context.zh.md)——这些值为什么离开系统提示词，以及早期会话如何保持稳定。
 - [会话投影子系统](../../../docs/subsystems/session-projection.zh.md)——早期格式状态使用的投影约定。
-- [Web server 包](../../host/webserver/README.zh.md)——本插件读取的监听器 origin。
-- [Web app bundle](../../bundle/web-app/README.zh.md)——`webStartup` 服务与挂载本插件的行。
+- [Web app bundle](../../bundle/web-app/README.zh.md)——`webApp` 服务与挂载本插件的行。
 - [Context 组地图](../README.zh.md)——同组的请求上下文包。
 
 -----
@@ -98,7 +97,7 @@ You are interacting with the user through the DeepSeek Harness Web GUI whose URL
 ```markdown
 Current DeepSeek Harness implementation checkout: "<installation root>".
 
-Current DeepSeek Harness Web GUI URL: "<public root or listener origin>".
+Current DeepSeek Harness Web GUI URL: "<advertised URL>".
 ```
 
 #### Token 影响

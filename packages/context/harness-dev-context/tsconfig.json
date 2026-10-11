@@ -24,9 +24,6 @@
       "path": "../../core/system-prompt"
     },
     {
-      "path": "../../host/webserver"
-    },
-    {
       "path": "../../session/session-projection"
     },
     {

@@ -26,12 +26,20 @@ import { scrubbedParentEnv } from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-shell-env'
 import { parsePublicUrl } from './public-url.ts'
-import type { WebStartupValues } from './startup.ts'
+
+/** The Web GUI this process serves, provided by the `web-runtime` row. */
+export interface WebApp {
+  /**
+   * The URL this GUI advertises, also used for `DSH_WEB_URL` and the startup URL line.
+   * @returns the configured `publicUrl`, otherwise the listener origin.
+   */
+  getAdvertisedUrl(): string
+}
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    /** Values of this Web invocation, provided by the `web-startup` row; absent when no server starts. */
-    webStartup: WebStartupValues
+    /** The Web GUI this process serves; absent when no Web runtime is mounted. */
+    webApp: WebApp
   }
 }
 
@@ -194,6 +202,7 @@ export function apply(ctx: Context, config: Config): void {
   const handoffBrowser = config.openBrowser && !launchedThroughSsh(launchEnvironmentOf(ctx))
   /** The advertised root: the canonical `publicUrl`, or the listener's own origin. */
   const appRootUrl = (): string => publicUrl ?? ctx.webServer.getOrigin()
+  ctx.provide('webApp', { getAdvertisedUrl: appRootUrl } satisfies WebApp)
   ctx.plugin(FrontendStatic, { distIndex: internals.resolveDistIndex() })
   if (config.surfaceContext) {
     ctx.inject(['shellEnv'], (runtimeCtx) => {

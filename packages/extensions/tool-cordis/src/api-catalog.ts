@@ -3555,6 +3555,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'webApp',
+    summary: 'The Web GUI this process serves, provided by the `web-runtime` row.',
+    description: 'The Web GUI this process serves, provided by the `web-runtime` row.',
+    methods: [
+      {
+        signature: 'getAdvertisedUrl(): string',
+        description: 'The URL this GUI advertises, also used for `DSH_WEB_URL` and the startup URL line.',
+        parameters: [],
+        returns: 'the configured `publicUrl`, otherwise the listener origin.',
+      },
+    ],
+  },
+  {
     key: 'webhookRuntime',
     summary: 'Fire-and-forget rule runtime.',
     description: 'Fire-and-forget rule runtime. Session creation is the only built-in action.',
@@ -3626,43 +3639,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Render one index.html body: the structured injection table first, then the raw `tapIndex` transforms over the result.',
         parameters: [{ name: 'html', description: 'the raw index.html body.' }],
         returns: 'the transformed body.',
-      },
-    ],
-  },
-  {
-    key: 'webStartup',
-    summary: 'What the web rows read from WEB_STARTUP_SERVICE.',
-    description: 'What the web rows read from WEB_STARTUP_SERVICE.',
-    methods: [
-      {
-        signature: 'openBrowser: boolean',
-        description: 'Whether this invocation opens the default browser after startup.',
-        parameters: [],
-      },
-      {
-        signature: 'host?: string',
-        description: '`--host`, absent when the invocation did not name one.',
-        parameters: [],
-      },
-      {
-        signature: 'port?: number',
-        description: '`--port`, absent when the invocation did not name one.',
-        parameters: [],
-      },
-      {
-        signature: 'publicUrl?: string',
-        description: '`--public-url` as its canonical root ending in `/`, absent when not specified: the advertised HTTP(S) root. See [public deployments](../README.md#public-deployments).',
-        parameters: [],
-      },
-      {
-        signature: 'trustedHosts: string[]',
-        description: 'Explicit `--trusted-host` authorities, in argument order.',
-        parameters: [],
-      },
-      {
-        signature: 'tls?: TlsConfig',
-        description: 'Server certificate chain and unencrypted private key supplied together.',
-        parameters: [],
       },
     ],
   },
@@ -7923,10 +7899,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TimeOutOfRangeError',
     declaration: 'export interface TimeOutOfRangeError {\n    readonly code: \'time_out_of_range\';\n    readonly message: string;\n}',
-  },
-  {
-    name: 'TlsConfig',
-    declaration: 'export interface TlsConfig {\n    certFile: string;\n    keyFile: string;\n}',
   },
   {
     name: 'ToastOptions',

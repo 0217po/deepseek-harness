@@ -4,7 +4,6 @@ import { describe, expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import type { WebServer } from '@deepseek-ai/dsh-host-webserver'
 import {
   createUserMessage, LlmAdapter,
   type GenerateOptions, type LlmResolvedModelInfo, type StreamChunk, type SystemPromptUpdate,
@@ -64,13 +63,12 @@ class RecordingAdapter extends LlmAdapter {
 
 const ROUTE = { provider: 'route', model: 'model' }
 
-/** The listener and invocation services with a port the test can move, as restarted processes see them. */
-function provideWebServices(ctx: Context, startup: { publicUrl?: string } = {}): { port: number } {
+/** The Web GUI service with a port the test can move, as restarted processes see it. */
+function provideWebServices(ctx: Context): { port: number } {
   const listener = { port: 4567 }
-  ctx.provide('webServer', {
-    getOrigin: () => `http://127.0.0.1:${String(listener.port)}`,
-  } as Pick<WebServer, 'getOrigin'> as WebServer)
-  ctx.provide('webStartup', { openBrowser: false, trustedHosts: [], ...startup } satisfies Context['webStartup'])
+  ctx.provide('webApp', {
+    getAdvertisedUrl: () => `http://127.0.0.1:${String(listener.port)}`,
+  } satisfies Context['webApp'])
   return listener
 }
 
@@ -152,17 +150,6 @@ describe('harness-dev-context', () => {
     const disposed = await ctx.systemPrompt.assemble()
     expect(disposed.sections.some(entry => entry.name === 'harness:source' || entry.name === 'app:web-surface')).toBe(false)
     expect(disposed.contexts).toEqual([])
-  })
-
-  it('reports the advertised public root instead of the listener origin', async () => {
-    const ctx = new Context()
-    onTestFinished(() => ctx.fiber.dispose())
-    provideWebServices(ctx, { publicUrl: 'https://proxy.example:8443/web/' })
-    await mountAgentLoopTestDependencies(ctx)
-    await ctx.plugin(HarnessDevContext)
-    const assembly = await ctx.systemPrompt.assemble()
-    expect(assembly.contexts.find(entry => entry.name === 'app:web-surface')?.text)
-      .toBe('Current DeepSeek Harness Web GUI URL: "https://proxy.example:8443/web/".')
   })
 
   it.each([

@@ -138,6 +138,7 @@ describe('web-app runtime glue', () => {
     ])
     const webRuntime = contributions.find(contribution => contribution.name === 'web-runtime')
     expect(webRuntime?.resolve()).toEqual({ DSH_WEB_URL: 'http://127.0.0.1:4567' })
+    expect(ctx.webApp.getAdvertisedUrl()).toBe('http://127.0.0.1:4567')
   })
 
   it('advertises and opens the configured public root behind a prefix-stripping proxy', async () => {
@@ -174,6 +175,8 @@ describe('web-app runtime glue', () => {
     ])
     const urlContribution = contributions.find(contribution => contribution.name === 'web-runtime')
     expect(urlContribution?.resolve()).toEqual({ DSH_WEB_URL: 'https://proxy.example:8443/web/' })
+    // The service advertises the row's effective publicUrl, whether it came from --public-url or a profile override.
+    expect(ctx.webApp.getAdvertisedUrl()).toBe('https://proxy.example:8443/web/')
   })
 
   it('publishes no readiness side effect when printing and browser opening are disabled', async () => {

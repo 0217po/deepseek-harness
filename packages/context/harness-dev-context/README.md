@@ -25,11 +25,11 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-The shipped Web bundle mounts this plugin as its `harness-dev-context` row. Disable that row in a profile patch when the agent should not learn the harness checkout or GUI URL. The plugin takes no configuration and activates only where every injected service exists: `systemPrompt`, `sessionProjections`, the bound `webServer` listener, and the `webStartup` invocation values, so `--help` and non-Web compositions never mount it.
+The shipped Web bundle mounts this plugin as its `harness-dev-context` row. Disable that row in a profile patch when the agent should not learn the harness checkout or GUI URL. The plugin takes no configuration and activates only where every injected service exists: `systemPrompt`, `sessionProjections`, and the `webApp` service of the Web runtime, so `--help` and non-Web compositions never mount it.
 
 ### What the model gets
 
-Two system-prompt sections explain that the checkout differs from the working directory and that "this page" means this GUI, together with the GUI update contract. Two runtime-context lines state the current values: the installation root four directories above this package, and the advertised `--public-url` root or, without one, the listener's own origin. Runtime context follows the shared snapshot rules: an unchanged value adds nothing, and a changed one appends a snapshot before the step's input instead of rewriting earlier messages.
+Two system-prompt sections explain that the checkout differs from the working directory and that "this page" means this GUI, together with the GUI update contract. Two runtime-context lines state the current values: the installation root four directories above this package, and the Web GUI's advertised URL from `webApp.getAdvertisedUrl()`, the same value as `DSH_WEB_URL` and the startup URL. Runtime context follows the shared snapshot rules: an unchanged value adds nothing, and a changed one appends a snapshot before the step's input instead of rewriting earlier messages.
 
 ### Sessions from earlier releases
 
@@ -57,7 +57,7 @@ A host-only session projection, `harnessDevLegacyPrompt`, folds every committed 
 
 ### Main flow
 
-Activation registers the projection unit, both sections, and both contexts. At each assembly the sections choose the admitted earlier paragraph or the current guidance; at each request admission the contexts read the listener origin and the invocation's public root. Disposing the plugin fiber removes every registration.
+Activation registers the projection unit, both sections, and both contexts. At each assembly the sections choose the admitted earlier paragraph or the current guidance; at each request admission the contexts read the advertised URL. Disposing the plugin fiber removes every registration.
 
 </details>
 
@@ -70,8 +70,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 - [Process-specific values as runtime context](../../../.agents/notes/implemented/bug-fix/2026-10-11-process-specific-prompt-values-in-runtime-context.md) — why the values left the system prompt and how earlier Sessions stay stable.
 - [Session projections subsystem](../../../docs/subsystems/session-projection.md) — the projection contract the earlier-format state uses.
-- [Web server package](../../host/webserver/README.md) — the listener origin this plugin reads.
-- [Web app bundle](../../bundle/web-app/README.md) — the `webStartup` service and the row that mounts this plugin.
+- [Web app bundle](../../bundle/web-app/README.md) — the `webApp` service and the row that mounts this plugin.
 - [Context group map](../README.md) — sibling request-context packages.
 
 -----
@@ -98,7 +97,7 @@ You are interacting with the user through the DeepSeek Harness Web GUI whose URL
 ```markdown
 Current DeepSeek Harness implementation checkout: "<installation root>".
 
-Current DeepSeek Harness Web GUI URL: "<public root or listener origin>".
+Current DeepSeek Harness Web GUI URL: "<advertised URL>".
 ```
 
 #### Token effect

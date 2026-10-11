@@ -143,6 +143,22 @@ authenticatedUrl(baseUrl: string): string
 
 Source: [`packages/client/connection/src/rpc.ts`](../../packages/client/connection/src/rpc.ts)
 
+<a id="ctxwebapp--webapp"></a>
+
+### `ctx.webApp` — `WebApp`
+
+The Web GUI this process serves, provided by the `web-runtime` row.
+
+```ts cordis-catalog
+/**
+ * The URL this GUI advertises, also used for `DSH_WEB_URL` and the startup URL line.
+ * @returns the configured `publicUrl`, otherwise the listener origin.
+ */
+getAdvertisedUrl(): string
+```
+
+Source: [`packages/bundle/web-app/src/index.ts`](../../packages/bundle/web-app/src/index.ts)
+
 <a id="ctxwebserver--webserver"></a>
 
 ### `ctx.webServer` — `WebServer`
@@ -219,14 +235,6 @@ renderIndex(html: string): string
 ```
 
 Source: [`packages/host/webserver/src/index.ts`](../../packages/host/webserver/src/index.ts)
-
-<a id="ctxwebstartup--webstartupvalues"></a>
-
-### `ctx.webStartup` — `WebStartupValues`
-
-What the web rows read from WEB_STARTUP_SERVICE.
-
-Source: [`packages/bundle/web-app/src/startup.ts`](../../packages/bundle/web-app/src/startup.ts)
 
 <a id="connection-events"></a>
 
