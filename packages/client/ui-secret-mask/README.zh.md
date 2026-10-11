@@ -65,7 +65,7 @@ kind: "package-reference"
 
 - [ui-conversation 已发送用户文本](../ui-conversation/README.zh.md#sent-user-text)——匹配器注册表、调度器与节点 renderer Slot。
 - [用户文本候选调度](../../../.agents/notes/implemented/architecture/2026-10-10-user-text-json-nodes.zh.md)——本匹配器遵循的向前查询与缓存规则。
-- [凭据识别的性能](../../../.agents/notes/implemented/testing/2026-10-11-user-text-credential-matching.zh.md)——前缀剪枝、benchmark 负载与实测对比。
+- [凭据识别的性能](../../../.agents/notes/implemented/testing/2026-10-11-user-text-credential-matching.zh.md)——线性匹配器各部分的复杂度与取舍，以及耗时与内存分配门禁。
 
 -----
 

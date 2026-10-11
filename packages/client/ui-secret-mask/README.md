@@ -65,7 +65,7 @@ The node payload carries only the masked display text. The renderer draws each r
 
 - [ui-conversation sent user text](../ui-conversation/README.md#sent-user-text) — the matcher registry, the scheduler, and the node renderer Slot.
 - [User text candidate scheduling](../../../.agents/notes/implemented/architecture/2026-10-10-user-text-json-nodes.md) — the forward-query and cache rules this matcher follows.
-- [Credential matching performance](../../../.agents/notes/implemented/testing/2026-10-11-user-text-credential-matching.md) — prefix pruning, the benchmark workloads, and the measured comparison.
+- [Credential matching performance](../../../.agents/notes/implemented/testing/2026-10-11-user-text-credential-matching.md) — the linear matcher, its per-part complexity and trade-offs, and the time and allocation gates.
 
 -----
 
