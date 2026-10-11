@@ -56,8 +56,8 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-reference: dictionaries')
   const t = ctx.locale.bind(NS)
   const sessions = ctx.get('sessions') as ISessions
-  ctx.effect(() => ctx.uiConversation.userText.register(fileReferenceRule), 'ui-reference: file text rule')
-  ctx.effect(() => ctx.uiConversation.userText.register(folderReferenceRule), 'ui-reference: folder text rule')
+  ctx.uiConversation.userText.register(fileReferenceRule)
+  ctx.uiConversation.userText.register(folderReferenceRule)
   ctx.slots.inject('conversation.user.text.node', function* () {
     yield ctx.slots.register({
       name: 'conversation.user.text.node', key: 'file', priority: 100, locale: NS,

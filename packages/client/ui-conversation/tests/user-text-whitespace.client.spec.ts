@@ -166,6 +166,21 @@ describe('ordinary whitespace matchers', () => {
     assertSource(text, nodes)
   })
 
+  it('handles long interior and trailing whitespace without changing source ranges', () => {
+    const k = setup()
+    const middle = `a${' '.repeat(80_000)}b`
+    expect(visible(k.evaluate({ text: middle, facts: { trimWhitespace: true } }))).toBe(middle)
+    expect(k.trim.mock.calls.map(([, from]) => from)).toEqual([0])
+    k.trim.mockClear()
+    const trailing = `a${' \t\u00a0'.repeat(20_000)}`
+    const nodes = k.evaluate({ text: trailing, facts: { trimWhitespace: true } })
+    expect(visible(nodes)).toBe('a')
+    expect(nodes.at(-1)).toEqual({ id: 'text', start: 1, end: trailing.length,
+      data: { text: trailing.slice(1), display: '' } })
+    expect(k.trim.mock.calls.map(([, from]) => from)).toEqual([0, trailing.length])
+    assertSource(trailing, nodes)
+  })
+
   it('does not invent another original whitespace-run start inside a consumed run', () => {
     const facts: Partial<UserTextFacts> = { collapseWhitespace: true, trimWhitespace: true }
     const read = <K extends keyof UserTextFacts>(key: K) => facts[key]

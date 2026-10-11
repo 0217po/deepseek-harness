@@ -110,7 +110,9 @@ Renderer 还会根据声明的 store 创建 `useStore`，并根据声明的 loca
 
 一次渲染时 owner 已知的值走 owner props；单个 entry 的 callback 与私有 observable 走注册项 `inject`；由 slot owner 控制、所有 occupant 共享的能力走 slot 级 `inject`；需要跨 entry 共享或跨重新挂载保留的可变视图状态走声明的 store。React node 通过 child slot 组合，不通过注入值传递。
 
-## 当前层级
+<a id="current-hierarchy"></a>
+
+## Conversation 层级
 
 下面的 Conversation 路径区分声明所有者与可复用 Factory 根，省略无关的外壳位置。条目拥有其声明的子 Slot；Factory 在其定义注册期间拥有子 Slot 声明。方括号标出默认 React 组件，普通 React 后代组件可以渲染其所有者的 Slot。Factory 调用指向独立的可复用定义，不是新的 Slot 声明。
 
@@ -143,6 +145,8 @@ Factory: conversation.content [ConversationContent]
 │     │        │  └─ tool.call.toolview
 │     │        │     └─ key=read_image [ReadImageRow / ToolRow]
 │     │        │        └─ tool.call.images [MessageImages]
+│     │        ├─ key=command-input [GoalCommandInputView]
+│     │        │  └─ calls Factory: conversation.user.text
 │     │        ├─ key=command [CommandNodeView]
 │     │        │  └─ conversation.chat.commandview
 │     │        └─ key=turn-tail [TurnTailNodeView]
@@ -163,6 +167,8 @@ Factory: conversation.content [ConversationContent]
 │  ├─ conversation.input.left
 │  └─ conversation.input.right
 ├─ conversation.input.dock
+│  └─ id=queue [QueueDock]
+│     └─ calls Factory: conversation.user.text
 ├─ conversation.hero.brand.mark
 ├─ conversation.hero.workspace
 │  └─ conversation.hero.workspace.directoryFlow
@@ -181,7 +187,7 @@ Factory: conversation.chat.reasoning.content [ReasoningContent / MarkdownText]
 
 四个图片 Slot 默认均填入 `MessageImages`，由它携带调用者的图片引用和授权 loader 调用 `conversation.images.content`。用户与输出图片的替换互不影响。`conversation.user.text` Factory 由用户内容、Queue 和 Goal 共用；其 `inline: true` keyed Slot 使用 span 锚点及行内错误占位，而不是块级包装。
 
-生成的 Client inspect catalog 是每个 key 的完整参考，包含 cardinality、scope、owner props、标准 props、当前 occupant、声明 owner 与替换风险。运行中的动态包可以用 `cordis_inspect what:"client"` 查询实时树与某个精确 key；源码 catalog 由 `pnpm run gen-client-catalog` 根据 `SlotMap` 声明和 `slots.register()` 调用点生成。
+生成的 [Client inspect catalog](../../packages/extensions/cordis-client-runner/src/client/slot-catalog.ts) 是包含所有外壳分支及每个 key 的完整参考，包含 cardinality、scope、owner props、标准 props、当前 occupant、声明 owner 与替换风险。运行中的动态包可以用 `cordis_inspect what:"client"` 查询实时树与某个精确 key；源码 catalog 由 `pnpm run gen-client-catalog` 根据 `SlotMap` 声明和 `slots.register()` 调用点生成。
 
 <a id="extension-rules"></a>
 

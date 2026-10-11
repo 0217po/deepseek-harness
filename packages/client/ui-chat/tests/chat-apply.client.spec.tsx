@@ -165,7 +165,6 @@ describe('Chat apply wiring', () => {
     expect(flow?.children?.['conversation.chat.user.images']).toBeUndefined()
     expect(userContent.children?.['conversation.chat.message.images']).toBeUndefined()
     expect(assistant?.children?.['conversation.chat.user.images']).toBeUndefined()
-    expect(b.runtime.slots.snapshot('factory:conversation.message.images.view')).toHaveLength(0)
     expect(flow?.store).toBeDefined()
     expect(flow?.store).toBe(view?.store)
     await b.chat.dispose()
@@ -173,7 +172,6 @@ describe('Chat apply wiring', () => {
     expect(b.runtime.slots.spec('conversation.chat.node')).toBeUndefined()
     expect(b.runtime.slots.spec('conversation.chat.message.images')).toBeUndefined()
     expect(b.runtime.slots.spec('conversation.chat.user.images')).toBeUndefined()
-    expect(b.runtime.slots.snapshot('factory:conversation.message.images.view')).toHaveLength(0)
     expect(() => b.runtime.factoryOf('conversation.chat.user.content')).toThrow('no definition')
   })
 

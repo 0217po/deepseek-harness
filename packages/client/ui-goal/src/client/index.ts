@@ -69,7 +69,7 @@ export const inject = ['slots', 'sessions', 'remote', 'remote.goals', 'locale', 
  */
 export function apply(ctx: ClientContext): void {
   ctx.uiConversation.events.register(goalCommandInputDefinition)
-  ctx.effect(() => ctx.uiConversation.userText.register(goalCommandReferenceRule), 'ui-goal: user-text rule')
+  ctx.uiConversation.userText.register(goalCommandReferenceRule)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-goal: dictionaries')
 
   ctx.slots.inject('conversation.user.text.node', () => ctx.slots.register({

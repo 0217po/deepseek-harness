@@ -32,7 +32,9 @@ export const trimWhitespaceRule: UserTextRule<'text.trim-whitespace'> = {
       const leading = /^\s+/u.exec(text)
       if (leading !== null) return replacement(text, 0, leading[0].length, '')
     }
-    const trailing = /\s+$/u.exec(text)
-    return trailing === null || trailing.index < from ? undefined : replacement(text, trailing.index, text.length, '')
+    let start = text.length
+    const whitespace = /\s/u
+    while (start > 0 && whitespace.test(text.charAt(start - 1))) start--
+    return start === text.length || start < from ? undefined : replacement(text, start, text.length, '')
   },
 }

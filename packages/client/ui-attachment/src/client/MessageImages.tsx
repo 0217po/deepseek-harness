@@ -1,9 +1,11 @@
 /** Official image gallery Factory and default image Slot adapter. */
 import { useMemo } from 'react'
-import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
-import type { MessageImagesProps } from '@deepseek-ai/dsh-client-ui-chat/client'
+import type { FactoryComponentPropsOf, PropsRenderFactories } from '@deepseek-ai/dsh-client-ui-slots'
+import type { MessageImagesOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { ImageGallery } from '../MessageImage.tsx'
 import { messageImageLabels } from './labels.ts'
+
+type MessageImagesProps = MessageImagesOwnerProps & PropsRenderFactories
 
 /**
  * Render a gallery with an authorized loader and caller-owned or default labels.

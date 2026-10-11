@@ -82,7 +82,7 @@ export const inject = ['inputTriggers', 'sessions', 'slots', 'locale', 'remote',
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-skill: dictionaries')
-  ctx.effect(() => ctx.uiConversation.userText.register(skillReferenceRule), 'ui-skill: user-text rule')
+  ctx.uiConversation.userText.register(skillReferenceRule)
   ctx.slots.inject('tool.call.toolview', () => ctx.slots.register(
     { name: 'tool.call.toolview', key: 'skill', locale: NS },
     SkillRow,

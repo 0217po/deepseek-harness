@@ -108,7 +108,9 @@ The owner of a slot may put an `inject` face in the child declaration when every
 
 Use owner props for values already known at one render occurrence, registration `inject` for one entry's callbacks and private observables, slot-level `inject` for a capability controlled by the slot owner, and a declared store for mutable view state shared across entries or preserved across remounts. React nodes compose through child slots, not through injected values.
 
-## Current hierarchy
+<a id="current-hierarchy"></a>
+
+## Conversation hierarchy
 
 The following Conversation paths distinguish declaration owners from reusable Factory roots; unrelated shell positions are omitted. An entry owns its declared children, while a Factory owns its child declarations for the lifetime of its registered definition. Bracketed names identify the default React components; a plain React descendant can render its owner's Slot. Factory calls are references to independent reusable definitions, not new Slot declarations.
 
@@ -141,6 +143,8 @@ Factory: conversation.content [ConversationContent]
 │     │        │  └─ tool.call.toolview
 │     │        │     └─ key=read_image [ReadImageRow / ToolRow]
 │     │        │        └─ tool.call.images [MessageImages]
+│     │        ├─ key=command-input [GoalCommandInputView]
+│     │        │  └─ calls Factory: conversation.user.text
 │     │        ├─ key=command [CommandNodeView]
 │     │        │  └─ conversation.chat.commandview
 │     │        └─ key=turn-tail [TurnTailNodeView]
@@ -161,6 +165,8 @@ Factory: conversation.content [ConversationContent]
 │  ├─ conversation.input.left
 │  └─ conversation.input.right
 ├─ conversation.input.dock
+│  └─ id=queue [QueueDock]
+│     └─ calls Factory: conversation.user.text
 ├─ conversation.hero.brand.mark
 ├─ conversation.hero.workspace
 │  └─ conversation.hero.workspace.directoryFlow
@@ -179,7 +185,7 @@ Factory: conversation.chat.reasoning.content [ReasoningContent / MarkdownText]
 
 All four image Slots default to `MessageImages`, which calls `conversation.images.content` with the caller's image references and authorized loader. User and output image replacements are independent. The `conversation.user.text` Factory is shared by user content, Queue, and Goal; its `inline: true` keyed Slot renders span anchors and inline error placeholders rather than block wrappers.
 
-The generated Client inspect catalog is the exhaustive contract for each key: cardinality, scope, owner props, standard props, current occupants, declaration owner, and replacement risk. A running dynamic package can query the live tree and an exact key with `cordis_inspect what:"client"`; the source catalog is generated from `SlotMap` declarations and `slots.register()` call sites by `pnpm run gen-client-catalog`.
+The generated [Client inspect catalog](../../packages/extensions/cordis-client-runner/src/client/slot-catalog.ts) covers all shell branches and is the exhaustive contract for each key: cardinality, scope, owner props, standard props, current occupants, declaration owner, and replacement risk. A running dynamic package can query the live tree and an exact key with `cordis_inspect what:"client"`; the source catalog is generated from `SlotMap` declarations and `slots.register()` call sites by `pnpm run gen-client-catalog`.
 
 ## Extension rules
 
