@@ -88,6 +88,17 @@ pnpm run build:web
 
 `pnpm run build:test` runs only `tsc -p tsconfig.host.json` and `tsc -p tsconfig.client.json` concurrently. Project mode checks each aggregate's repository-wide test and script program against the package declarations already on disk and never compiles a reference, so `build:test` neither detects nor rebuilds missing or stale `build:src` output; missing output surfaces as compiler errors. `pnpm run build` runs both step sets as one [scheduled](../scripts/run-gates.ts) dependency graph: each aggregate check starts once its own face's package compilation finishes and overlaps the remaining artifact steps. In all three commands `DSH_GATE_CONCURRENCY` bounds concurrent steps (`1` runs them in dependency order) and `DSH_GATE_FAIL_FAST=1` stops the remaining steps at the first failure; otherwise a failure skips only its dependents, so independent errors are all reported. A failed step prints its own output, and any failure exits non-zero without writing the client build record.
 
+Choose the command by what the change needs:
+
+| Situation | Command |
+|---|---|
+| Iterating on package sources and needing runnable artifacts | `pnpm run build:src`; `dev:web` and `dev:desktop` run it before launching |
+| Type-checking tests, scripts, benchmarks, or website code | `pnpm run build:test` after the latest `build:src`; rerun `build:src` first when package sources changed |
+| Before declaring TypeScript work complete | `pnpm run build:test` after the latest `build:src`, or `pnpm run build` |
+| Complete verification, as the required CI build lanes run it | `pnpm run build` |
+| Type checks without the Web and Desktop artifacts | `pnpm run typecheck` |
+| Lint or documentation code-block checks | `pnpm run lint` or `pnpm run doc-typecheck`; each prepares `host-libraries` itself |
+
 PR artifact builders run `build:src`; required Linux and Windows normal builds and public `typecheck` also check the repository-wide test and script programs. CI benchmark preparation additionally uses `--noCheck` for its disposable library outputs, relying on those required builds for diagnostics; other artifact builders keep package checking ([rationale](../.agents/notes/implemented/process/2026-10-05-pr-artifact-typechecks.md)).
 
 Both tsdown passes match `vendor/*`, `packages/*/*`, and `apps/cli`; the Host pass also matches `apps/desktop-host`. They neither scan build artifacts to discover Client packages nor maintain a Host/Client package filter list. Package-local tsdown configs select entries for the current phase through `DSH_BUILD_FACE`: an ordinary Client plugin produces both its Node loader and browser bundle during the Client phase; `api-remotes` uses `hostPhase: true` to produce its Host entry early and only its browser bundle during the Client phase. Tsdown consumes only the JavaScript emitted to `lib/types` by the preceding tsc phase. Tsdown builds the matched workspace members concurrently, so `apps/desktop`, whose main bundle inlines workspace devDependencies from their `lib/` output, bundles in its own step after the Host pass ([Desktop README](../apps/desktop/README.md#bundled-workspace-dependencies)).

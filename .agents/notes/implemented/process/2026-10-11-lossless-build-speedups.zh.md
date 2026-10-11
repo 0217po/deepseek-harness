@@ -29,7 +29,7 @@ Status: implemented
 | 7 | Typert `transform` 钩子按模块 id 过滤 | Host tsdown | 噪声内；钩子调用 1,566 → 195 | 逐字节一致 | 无 |
 | 8 | Client tsdown 预设按包目录读取 manifest | Client tsdown | 12.78 → 8.73 s | 逐字节一致；external 判定一致 | 预设第一个参数是包目录 |
 
-第 5–7 项改变了发布的 `./tsdown` 导出 `typertPlugin()`（`transform` 为 `{ filter, handler }`、`writeBundle` 为异步、工作区根目录必须包含 `packages/`），但不需要升级指南：rolldown 与 tsdown 的使用方接受两种钩子形式，分析器本来就要求 `<root>/packages`，因此此前可用的外部工作区都不会失效。
+第 5–7 项改变了发布的 `./tsdown` 导出 `typertPlugin()`（`transform` 为 `{ filter, handler }`、`writeBundle` 为异步、工作区根目录必须包含 `packages/`）；rolldown 与 tsdown 的使用方接受两种钩子形式，分析器本来就要求 `<root>/packages`，因此此前可用的外部工作区都不会失效。
 
 ### 测量条件
 

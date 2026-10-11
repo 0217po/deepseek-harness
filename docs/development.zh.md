@@ -92,6 +92,17 @@ pnpm run build:web
 
 `pnpm run build:test` 只并发运行 `tsc -p tsconfig.host.json` 与 `tsc -p tsconfig.client.json`。project mode 依据磁盘上已有的包声明检查各 aggregate 的仓库级测试和脚本 program，从不编译 reference，因此 `build:test` 既不检测也不重建缺失或过期的 `build:src` 产物；产物缺失时表现为编译器错误。`pnpm run build` 把两组步骤作为一张[调度](../scripts/run-gates.ts)依赖图运行：每个 aggregate 检查在本 face 的包编译完成后立即开始，与其余产物步骤重叠执行。三个命令中，`DSH_GATE_CONCURRENCY` 限制并发步骤数（`1` 按依赖顺序执行），`DSH_GATE_FAIL_FAST=1` 在第一个失败时停止其余步骤；否则失败只跳过其依赖方，因此会报告所有相互独立的错误。失败步骤打印自身输出，任一失败都以非零状态退出且不写 client build record。
 
+按改动需要选择命令：
+
+| 场景 | 命令 |
+|---|---|
+| 迭代包源码并需要可运行的产物 | `pnpm run build:src`；`dev:web` 与 `dev:desktop` 启动前会先执行它 |
+| 检查测试、脚本、benchmarks 或 website 代码的类型 | 在最近一次 `build:src` 之后运行 `pnpm run build:test`；包源码有改动时先重新运行 `build:src` |
+| 声明 TypeScript 工作完成之前 | 在最近一次 `build:src` 之后运行 `pnpm run build:test`，或运行 `pnpm run build` |
+| 完整验证（与 CI 必需的构建 lane 相同） | `pnpm run build` |
+| 只做类型检查、不需要 Web 与 Desktop 产物 | `pnpm run typecheck` |
+| lint 或文档代码块检查 | `pnpm run lint` 或 `pnpm run doc-typecheck`；它们各自先准备 `host-libraries` |
+
 PR 产物 builder 运行 `build:src`；必需的 Linux 与 Windows 普通构建以及公开 `typecheck` 还检查仓库级测试和脚本 program。CI benchmark 准备阶段还对其临时 library 输出使用 `--noCheck`，由这些必需构建负责诊断；其他产物 builder 保留包检查（[理由](../.agents/notes/implemented/process/2026-10-05-pr-artifact-typechecks.zh.md)）。
 
 两次 tsdown 都匹配 `vendor/*`、`packages/*/*` 与 `apps/cli`，Host 阶段另外匹配 `apps/desktop-host`；两者都不扫描构建产物来发现 Client 包，也不维护 Host/Client 包过滤表。包内 tsdown 配置根据 `DSH_BUILD_FACE` 决定当前阶段的入口：普通 Client 插件在 Client 阶段同时生成 Node loader 与 browser bundle；`api-remotes` 通过 `hostPhase: true` 提前生成 Host 入口，再在 Client 阶段只生成 browser bundle。tsdown 只消费 `lib/types` 中由前置 tsc 发射的 JavaScript。tsdown 并发构建匹配到的 workspace 成员；`apps/desktop` 的主进程 bundle 需要从工作区 devDependencies 的 `lib/` 产物内联这些包，因此在 Host 阶段之后单独一步打 bundle（[Desktop README](../apps/desktop/README.zh.md#bundled-workspace-dependencies)）。

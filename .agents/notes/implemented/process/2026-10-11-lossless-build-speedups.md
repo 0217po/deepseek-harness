@@ -29,7 +29,7 @@ The following eight speed-ups change neither the bytes of `lib/` and `apps/web/d
 | 7 | The Typert `transform` hook filters by module id | Host tsdown | Within noise; hook calls 1,566 → 195 | Byte-identical | None |
 | 8 | Client tsdown presets read the manifest from the package directory | Client tsdown | 12.78 → 8.73 s | Byte-identical; external decisions identical | The presets' first argument is the package directory |
 
-The published `./tsdown` export `typertPlugin()` changes with items 5–7 (`transform` as `{ filter, handler }`, an asynchronous `writeBundle`, and a workspace root that must contain `packages/`) without needing an upgrade guide, because rolldown and tsdown consumers accept both hook forms and the analyzer already required `<root>/packages`, so no external workspace that worked before stops working.
+The published `./tsdown` export `typertPlugin()` changes with items 5–7 (`transform` as `{ filter, handler }`, an asynchronous `writeBundle`, and a workspace root that must contain `packages/`); rolldown and tsdown consumers accept both hook forms, and the analyzer already required `<root>/packages`, so no external workspace that worked before stops working.
 
 ### Measurement conditions
 
