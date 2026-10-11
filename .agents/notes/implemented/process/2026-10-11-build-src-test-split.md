@@ -6,7 +6,7 @@ English | [中文](2026-10-11-build-src-test-split.zh.md)
 
 ## Problem
 
-`pnpm run build` runs the native addon, the package-library build (Host `tsc -b tsconfig.host.json` → Host tsdown → Desktop bundle → Client `tsc -b tsconfig.client.json` → Client tsdown), and the Web build serially. Besides referencing package projects, the Host and Client aggregates each carry a `noEmit` root program covering tests, scripts, benchmarks, and website. These two root programs emit no files and feed no later artifact step, yet sit on the serial critical path: timed alone, the Host root program takes 68.5 s and the Client root program 36.0 s, while the serial package-library build takes 247.3–251.4 s.
+`pnpm run build` runs the native addon, the package-library build (Host `tsc -b tsconfig.host.json` → Host tsdown → Desktop bundle → Client `tsc -b tsconfig.client.json` → Client tsdown), and the Web build serially. Besides referencing package projects, the Host and Client aggregates each carry a `noEmit` root program covering tests, scripts, benchmarks, and website. These two root programs emit no files and feed no later artifact step, yet sit on the serial critical path: timed alone, the Host root program takes 68.5 s and the Client root program 36.0 s, while the serial package-library build takes about 249 s (median of 2).
 
 Development iterations need only artifacts; test and script type checks are needed before work is declared complete. The only way to skip the two root programs is the CI-oriented `pnpm run build --artifacts-only`, which has no local development command name and no counterpart that runs only those two checks. Meanwhile, `pnpm run build` must stay complete and detect every type error.
 
@@ -75,7 +75,7 @@ native → host-src ─┬─ host-test ─────────────�
 | PR rehearsal in `release-vendor.yml` | `compile-referenced-projects.ts host-libraries` | None |
 | Non-PR branch of `release-vendor.yml`, `release-vendor-publish.yml` | `build:lib:host` | Host aggregate root program only |
 
-`lint`, `lint:fix`, `doc-typecheck`, and the Typert contracts gate read only Typert outputs and package declarations: both aggregates are `noEmit`, oxlint builds its own programs, `doc-typecheck` references only package projects, and no consumer of `host-libraries` reads `apps/desktop/lib`. Their prerequisite step therefore saves about 68 s of Host aggregate checking and about 4.4 s of Desktop bundling on every run.
+`lint`, `lint:fix`, `doc-typecheck`, and the Typert contracts gate read only Typert outputs and package declarations: both aggregates are `noEmit`, oxlint builds its own programs, `doc-typecheck` references only package projects, and no consumer of `host-libraries` reads `apps/desktop/lib`. Their prerequisite step therefore skips the Host aggregate check and the Desktop bundle and falls from 159.8 s to 90.9 s (see the measurements below).
 
 The consumers lane's HMR Web test starts `dev:web` and therefore uses `build:src` inside that lane; the same lane's `build` gate still runs both aggregate checks. CI does not call `build:test` separately: the two required lanes already get the same checks through `build`. The [PR artifact build decision](2026-10-05-pr-artifact-typechecks.md) keeps its required complete builds, benchmark `--noCheck`, job and worker ceilings, serial node-compat Vitest, coverage weights, and pnpm packing checks; its PR artifact build is `build:src`.
 
@@ -83,27 +83,27 @@ The consumers lane's HMR Web test starts `dev:web` and therefore uses `build:src
 
 Prototype conditions: a shared 256 vCPU Linux host (load average 23–70), Node v24.18.0, TypeScript 6.0.3, React type packages hoisted to the root, without the Typert changes of [the lossless speed-ups note](2026-10-11-lossless-build-speedups.md); scope is the package-library build (excluding native and web). Every round starts from `pnpm run clean`, running once each in the order serial, concurrent, `build:lib`, `build:lib`, concurrent, serial; `/usr/bin/time -v` times each step, and summed process-tree RSS is sampled every 250 ms. The prototype runs the aggregate checks as `tsc -b tsconfig.{host,client}.json` once references are up to date, when build mode builds only the aggregate root program.
 
-| Mode | Wall (s) | CPU user+sys (s) | Process-tree RSS peak (GiB) |
+| Mode (medians of 2) | Wall (s) | CPU user+sys (s) | Process-tree RSS peak (GiB) |
 |---|---|---|---|
-| Serial `pnpm run build:lib` | 247.3 / 251.4 | 370.8 / 385.1 | 5.90 / 5.99 |
-| Each step run separately in sequence | 269.1 / 241.1 | 377.1 / 370.4 | 5.93 / 5.70 |
-| Concurrent by dependency graph | 178.0 / 166.2 | 397.4 / 386.8 | 7.99 / 8.01 |
+| Serial `pnpm run build:lib` | 249.4 | 378.0 | 5.95 |
+| Each step run separately in sequence | 255.1 | 373.8 | 5.82 |
+| Concurrent by dependency graph | 172.1 | 392.1 | 8.00 |
 
-Median wall falls from 249.4 s to 172.1 s (−77.3 s, −31%); CPU grows by about 14 s (+3.7%) because the Host aggregate check's user time rises from 98–100 s to 111–124 s under contention; the RSS peak grows by 2.1 GiB where the Host aggregate check (3.95 GiB) overlaps Host tsdown (5.65 GiB). The concurrent critical path is host-src → host-bundle → desktop-bundle → client-src → client-test; host-test finishes 32.5–33.1 s before the end and client-bundle about 21 s before. Per-step wall (two serial / two concurrent): host-src 73.8, 61.3 / 70.3, 62.6; host-test 68.5, 64.0 / 75.1, 70.5; host-bundle 23.1, 20.5 / 22.1, 21.0; desktop-bundle 4.5, 4.0 / 4.4, 4.4; client-src 50.4, 46.3 / 46.3, 44.1; client-test 36.0, 33.5 / 34.9, 34.1; client-bundle 12.9, 11.5 / 13.6, 12.6.
+Median wall falls from 249.4 s to 172.1 s (−77.3 s, −31%). The two runs of each step separately differ by 28 s, so the overhead of running the steps as separate processes is not resolvable. CPU grows by about 14 s (+3.7%), mostly Host aggregate check user time under contention; the RSS peak grows by about 2.1 GiB where the Host aggregate check (about 4 GiB) overlaps Host tsdown (about 5.7 GiB). The concurrent critical path is host-src → host-bundle → desktop-bundle → client-src → client-test; host-test finishes about 33 s before the end and client-bundle about 21 s before.
 
-Round 1 final measurements: one sample per scenario, each from clean, in a 64-core cgroup (load average 29–87); the baseline is master.
+Final measurements: master (the merge base) and this branch run interleaved, each from clean, in a 64-core cgroup; values are medians of 2 samples unless marked n=1.
 
 | Scenario | master | This branch | CPU user+sys (master → branch) | Process-tree RSS peak (master → branch) |
 |---|---|---|---|---|
-| Complete build `pnpm run build` | 318.2 s | 170.1 s (−46.5%) | 425.5 → 373.4 s | 6.13 → 7.55 GiB |
-| Artifact build: master `build --artifacts-only`, branch `build:src` | 178.9 s | 152.5 s (−14.8%) | Not measured | Not measured |
-| Development iteration: master `build`, branch `build:src` | 318.2 s | 152.5 s (−52%) | Not measured | Not measured |
-| `pnpm run build:test` (after `build:src`) | — | 67.9 s | Not measured | Not measured |
-| `pnpm run build:test` immediate rerun | — | 19.4 s | Not measured | Not measured |
-| `DSH_GATE_CONCURRENCY=1 pnpm run build` | — | Round 2 pending | Round 2 pending | Round 2 pending |
-| Prerequisite step of `lint` and the others: master `build:lib:host`, branch `host-libraries` | Round 2 pending | Round 2 pending | Round 2 pending | Round 2 pending |
+| Complete build `pnpm run build` | 317.1 s | 169.1 s (−46.7%) | 423.1 → 374.4 s (−11.5%) | 6.11 → 7.53 GiB (+1.42) |
+| Serial branch build `DSH_GATE_CONCURRENCY=1 pnpm run build` (n=1) | — | 266.7 s | 389.5 s | 6.27 GiB |
+| Artifact build: master `build --artifacts-only`, branch `build:src` | 185.8 s | 153.6 s (−17.3%) | 256.2 → 231.2 s | 6.58 → 6.18 GiB |
+| Development iteration: master `build`, branch `build:src` | 317.1 s | 153.6 s (−51.6%) | 423.1 → 231.2 s (−45.4%) | 6.11 → 6.18 GiB |
+| `pnpm run build:test` after `build:src` | — | 67.7 s | 144.6 s | 5.33 GiB |
+| `pnpm run build:test` no-op rerun | — | 19.4 s | 33.1 s | Not measured |
+| Prerequisite of `lint` and `doc-typecheck`: master `build:lib:host`, branch `host-libraries` | 159.8 s | 90.9 s (−43.2%) | 234.7 → 136.0 s | Not measured |
 
-Step walls of this branch's `build`: native 1.7, host-src 66.5, host-bundle 11.4, desktop-bundle 3.4, client-src 45.6, client-bundle 9.0, web 9.4, host-test 65.3, client-test 34.8 s. From these values the critical path is native → host-src → host-bundle → desktop-bundle → client-src → client-test, 163.4 s in total; host-test ends at 133.5 s and is off the critical path. master's serial segments: native 2.5, Host package compilation 66.7, Host aggregate check 66.1, Host tsdown 22.5, Desktop bundle 3.3, Client package compilation 55.6, Client aggregate check 68.2, Client tsdown 13.9, web 9.7 s, 308.5 s in total. The difference also includes the changes of [the lossless speed-ups note](2026-10-11-lossless-build-speedups.md): the shorter Host tsdown, Client package compilation, Client tsdown, and Client aggregate check come from that note, while moving the Host aggregate check off the critical path comes from this note's concurrent scheduling. Within `build:test`'s 67.9 s, the Host and Client aggregate checks run concurrently, taking 65.2 s and 33.9 s.
+The serial branch sample overlapped other work on the host (742 s of foreign CPU), so its wall likely overstates the serial cost. In the serial build segments (master → branch, one sample each), Host tsdown falls from 22.5 to 11.7 s, Client package compilation from 55.6 to 48.7 s, the Client aggregate check from 68.2 to 35.9 s, and Client tsdown from 13.9 to 10.5 s; the segments sum to 308.5 s and 254.9 s. Those reductions come from [the lossless speed-ups note](2026-10-11-lossless-build-speedups.md); the further reduction from 254.9 s of serial segments to the 169.1 s concurrent build comes from this note's scheduling, which takes the Host aggregate check (about 66 s) off the critical path. In the concurrent build, the critical path is native → host-src → host-bundle → desktop-bundle → client-src → client-test, and host-test ends about 30 s before the last step (one earlier sample). `build:test` runs the Host and Client aggregate checks concurrently, so its wall is the Host check's (about 65 s).
 
 ### Completeness and lossless evidence
 
@@ -119,14 +119,16 @@ Step walls of this branch's `build`: native 1.7, host-src 66.5, host-bundle 11.4
 
 Negative controls: after a type error (TS2322) is added to `scripts/pnpm-invocation.spec.ts`, which only the Host aggregate root program contains, `build:src` exits 0; `build:test` exits 1 with the Host aggregate check failing and the Client aggregate check passing; `build` exits 1 with 8 of 9 steps passing and 1 failing, and writes no client build record. In a scratch fixture whose referenced project's tsconfig has an invalid `target`, a JSON syntax error, or an unknown compiler option, `tsc -p` exits 0, while `tsc -b` reports TS6046, TS5092 with TS1012, and TS5023 respectively and exits 1; when the referenced project lacks `composite`, both report TS6306.
 
+CI evidence: on PR #6005 both required lanes that run the concurrent `pnpm run build` passed, `node 24 / snapshots and artifacts` (`check:ci:consumers` on `blacksmith-16vcpu-ubuntu-2404`) and `windows node 24 / build & observational` (`check:ci:windows-blocking` on `blacksmith-16vcpu-windows-2025`); the GitHub-hosted 4 vCPU benchmarks lane does not run `build`. The inner concurrency follows `DSH_GATE_CONCURRENCY`: master serial lanes set 1, the consumers lane sets 10 under self-hosted failover, and an unset value selects the available CPU count, capped at the 9 steps.
+
 ### Intentional trade-offs (not lossless)
 
 - **Some commands skip the aggregate checks:** `build:src`, the launch builds of `dev:web` and `dev:desktop`, and the prerequisite steps of `lint`, `lint:fix`, `doc-typecheck`, and the Typert contracts gate do not type-check the two aggregate root programs, and these prerequisite steps do not produce `apps/desktop/lib`. `build`, `build:test`, `typecheck` (pre-push hook), and the two required CI lanes own completeness; `dev:web` and `dev:desktop` do not refuse to launch because of test type errors.
 - **`build:test` does not check freshness:** When sources change after `build:src`, `build:test` checks against stale declarations, including Typert Remote declarations; rerun `build:src` first. The complete `build` is unaffected.
-- **Concurrent `build` raises the memory peak:** This branch's complete `build` peaks at 7.55 GiB of process-tree RSS against 6.13 GiB for the master serial build (+1.42 GiB, one sample each); CPU meanwhile falls from 425.5 s to 373.4 s because [the lossless speed-ups note](2026-10-11-lossless-build-speedups.md) removes more work than concurrent contention adds. In the prototype (without the Typert changes), concurrent scheduling alone raises the RSS peak by about 2.1 GiB (5.9 → 8.0 GiB) and CPU by about 3.7%. `DSH_GATE_CONCURRENCY` bounds it; under memory pressure use `DSH_GATE_CONCURRENCY=1 pnpm run build`, or run `build:src` and `build:test` separately. In the windows-build lane, `build` runs concurrently with `docs:build`.
+- **Concurrent `build` raises the memory peak:** This branch's complete `build` peaks at 7.53 GiB of process-tree RSS against 6.11 GiB for the master serial build (+1.42 GiB, medians of 2) and 6.27 GiB for the branch's serial build (n=1); CPU meanwhile falls from 423.1 s to 374.4 s because [the lossless speed-ups note](2026-10-11-lossless-build-speedups.md) removes more work than concurrent contention adds. In the prototype (without the Typert changes), concurrent scheduling alone raises the RSS peak by about 2.1 GiB (5.9 → 8.0 GiB) and CPU by about 3.7%. `DSH_GATE_CONCURRENCY` bounds it; under memory pressure use `DSH_GATE_CONCURRENCY=1 pnpm run build`, or run `build:src` and `build:test` separately. In the windows-build lane, `build` runs concurrently with `docs:build`.
 - **Passing steps' output is hidden by default:** Only failed steps print their complete output.
-- **`tsc -p` does not skip an up-to-date root program:** An immediate rerun of `build:test` without changes still takes 19.4 s because both programs are parsed again; `tsc -b` skips an up-to-date root.
-- **On many-core cold builds `build:src` is only 17.6 s faster than `build`:** This branch's cold `build` takes 170.1 s and `build:src` 152.5 s (one sample each), because host-test is off the critical path and client-test (34.8 s) is only about 16 s longer than client-bundle plus web (18.4 s). The rest of `build:src`'s saving is CPU and memory: in the prototype the two aggregate checks together use about 148 s of CPU, and the Host aggregate check overlapping Host tsdown raises the memory peak by about 2 GiB; on few-core machines and in incremental rebuilds this also turns into wall time.
+- **`tsc -p` does not skip an up-to-date root program:** An immediate rerun of `build:test` without changes still takes 19.4 s and 33.1 s of CPU because both programs are parsed again; `tsc -b` skips an up-to-date root.
+- **On many-core cold builds `build:src` is only 15.5 s faster than `build`:** This branch's cold `build` takes 169.1 s and `build:src` 153.6 s (medians of 2), because host-test is off the critical path and client-test is only about 16 s longer than client-bundle plus web. The rest of `build:src`'s saving is CPU and memory: 374.4 → 231.2 s of CPU and 7.53 → 6.18 GiB of peak RSS; on few-core machines and in incremental rebuilds this also turns into wall time.
 - **CI invokes public commands in the root manifest:** PR artifact builds invoke `build:src` rather than an internal helper flag; a PR that edits these root manifest scripts activates the separate Node Addon System platform matrix.
 
 ## Alternatives considered
@@ -144,7 +146,7 @@ Negative controls: after a type error (TS2322) is added to `scripts/pnpm-invocat
 
 ## Consequences
 
-Development iterations can skip the two aggregate root programs with `build:src` (52% faster cold than master's `build`) and complete the checks with `build:test` or `build` before declaring work complete. `build` stays complete: the Host aggregate check is off the critical path, the Client aggregate check runs alongside the Client bundle and web, and a cold build is 46.5% faster than master (including the lossless speed-ups note's changes; one sample each). The costs are a higher memory peak, a little extra CPU from concurrent contention, less passing output by default, and several development and prerequisite commands that do not check test types (see the trade-offs above).
+Development iterations can skip the two aggregate root programs with `build:src` (51.6% faster cold than master's `build`) and complete the checks with `build:test` or `build` before declaring work complete. `build` stays complete: the Host aggregate check is off the critical path, the Client aggregate check runs alongside the Client bundle and web, and a cold build is 46.7% faster than master (including the lossless speed-ups note's changes; medians of 2). The costs are a higher memory peak, a little extra CPU from concurrent contention, less passing output by default, and several development and prerequisite commands that do not check test types (see the trade-offs above).
 
 Removing or changing `build` in the two required lanes, consumers and windows-build, requires first transferring both aggregate checks to another blocking owner. If Typert later gains its own generation step, the step table adds it and client-src depends on it; command semantics and scheduling stay the same.
 

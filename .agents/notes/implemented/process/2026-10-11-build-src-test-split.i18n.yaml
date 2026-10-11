@@ -6,8 +6,8 @@
   en: db08cc8c6fbc40cc
   zh: 740e25dede205595
 /agent-note-split-build-src-and-build-test-with-build-running-both-concurrently/problem:
-  en: 3c0f9561851590cd
-  zh: 01510bc8e2dd4a44
+  en: bc382ad1f1e71352
+  zh: 44189bf0f69a0bf7
 /agent-note-split-build-src-and-build-test-with-build-running-both-concurrently/decision:
   en: a15c7c13f167e5ac
   zh: 63bcc2ef60c2f344
@@ -21,20 +21,20 @@
   en: 5872f92bf06cb776
   zh: 274fcfbd971d5c5b
 /agent-note-split-build-src-and-build-test-with-build-running-both-concurrently/decision/callers:
-  en: 79559fef50ac3f1f
-  zh: bf327d9b03d4bcf4
+  en: 932a69653dff2a17
+  zh: 7ceac59cb9abc6f9
 /agent-note-split-build-src-and-build-test-with-build-running-both-concurrently/decision/measurements:
-  en: 5481a604777b29d7
-  zh: 63e330b736f6c7a3
+  en: 53f9a558836c917c
+  zh: b372b301e5a9f23b
 /agent-note-split-build-src-and-build-test-with-build-running-both-concurrently/decision/completeness-and-lossless-evidence:
-  en: a65438822fc683b2
-  zh: 34d5595110955b8e
+  en: 2d03c309e077c0de
+  zh: a8ce74fbc67fff6c
 /agent-note-split-build-src-and-build-test-with-build-running-both-concurrently/decision/intentional-trade-offs-not-lossless:
-  en: 7e572606c676e46f
-  zh: f75615dd4a481391
+  en: 6a6229e5c7fbda91
+  zh: e38c0596e0fe184c
 /agent-note-split-build-src-and-build-test-with-build-running-both-concurrently/alternatives-considered:
   en: d9492c56ba2a210a
   zh: feafcad4f632a057
 /agent-note-split-build-src-and-build-test-with-build-running-both-concurrently/consequences:
-  en: 8c4e6eec5bb44b5a
-  zh: 3f86eb0e620b62ff
+  en: 4b16a5b02479f4ff
+  zh: d75672318343a743

@@ -6,7 +6,7 @@ Status: implemented
 
 ## 问题
 
-`pnpm run build` 串行执行 native addon、包库构建（Host `tsc -b tsconfig.host.json` → Host tsdown → Desktop bundle → Client `tsc -b tsconfig.client.json` → Client tsdown）和 Web 构建。Host 与 Client 聚合配置除了引用各包 project，还各自带有一个 `noEmit` 根程序，覆盖 tests、scripts、benchmarks 与 website。这两个根程序不产出任何文件，也不是后续产物步骤的输入，却位于串行关键路径上：单独计时时 Host 根程序为 68.5 s、Client 根程序为 36.0 s，串行包库构建为 247.3–251.4 s。
+`pnpm run build` 串行执行 native addon、包库构建（Host `tsc -b tsconfig.host.json` → Host tsdown → Desktop bundle → Client `tsc -b tsconfig.client.json` → Client tsdown）和 Web 构建。Host 与 Client 聚合配置除了引用各包 project，还各自带有一个 `noEmit` 根程序，覆盖 tests、scripts、benchmarks 与 website。这两个根程序不产出任何文件，也不是后续产物步骤的输入，却位于串行关键路径上：单独计时时 Host 根程序为 68.5 s、Client 根程序为 36.0 s，串行包库构建约为 249 s（2 个样本的中位数）。
 
 开发迭代只需要产物，测试与脚本的类型检查在声明完成前才需要。能跳过两个根程序的只有面向 CI 的 `pnpm run build --artifacts-only`；它没有本地开发命令名，也没有只做这两项检查的对应命令。同时，`pnpm run build` 必须保持完整，能检测出所有类型错误。
 
@@ -75,7 +75,7 @@ native → host-src ─┬─ host-test ─────────────�
 | `release-vendor.yml` 的 PR 演练 | `compile-referenced-projects.ts host-libraries` | 无 |
 | `release-vendor.yml` 的非 PR 分支、`release-vendor-publish.yml` | `build:lib:host` | 仅 Host 聚合根程序 |
 
-`lint`、`lint:fix`、`doc-typecheck` 与 Typert contracts gate 只读取 Typert 输出与包声明：两个聚合配置都是 `noEmit`，oxlint 自行构建程序，`doc-typecheck` 只引用包 project，`host-libraries` 的消费方都不读取 `apps/desktop/lib`。它们的前置步骤因此每次省去约 68 s 的 Host 聚合检查与约 4.4 s 的 Desktop bundle。
+`lint`、`lint:fix`、`doc-typecheck` 与 Typert contracts gate 只读取 Typert 输出与包声明：两个聚合配置都是 `noEmit`，oxlint 自行构建程序，`doc-typecheck` 只引用包 project，`host-libraries` 的消费方都不读取 `apps/desktop/lib`。它们的前置步骤因此跳过 Host 聚合检查与 Desktop bundle，耗时从 159.8 s 降到 90.9 s（见下文测量）。
 
 consumers lane 的 HMR Web 测试启动 `dev:web`，因此在该 lane 内使用 `build:src`；同一 lane 的 `build` gate 仍运行两个聚合检查。CI 不单独调用 `build:test`：两个必需 lane 已通过 `build` 获得同一组检查。[PR 产物构建决策](2026-10-05-pr-artifact-typechecks.zh.md)的必需完整构建、benchmark `--noCheck`、job 与 worker 上限、node-compat 串行 Vitest、覆盖率权重与 pnpm 打包检查仍然有效；其中的 PR 产物构建由 `build:src` 执行。
 
@@ -83,27 +83,27 @@ consumers lane 的 HMR Web 测试启动 `dev:web`，因此在该 lane 内使用 
 
 原型测量的条件：256 vCPU 共享 Linux 主机（load average 23–70），Node v24.18.0、TypeScript 6.0.3，React 类型包已提升到根，不含[无损提速 Note](2026-10-11-lossless-build-speedups.zh.md) 的 Typert 改动；范围是包库构建（不含 native 与 web）。每轮从 `pnpm run clean` 开始，按 串行、并发、`build:lib`、`build:lib`、并发、串行 的顺序各运行一次；每个步骤由 `/usr/bin/time -v` 计时，进程树 RSS 每 250 ms 采样求和。原型中的聚合检查以 `tsc -b tsconfig.{host,client}.json` 在 references 已是最新时运行，此时 build mode 只构建聚合根程序。
 
-| 方式 | wall（s） | CPU user+sys（s） | 进程树 RSS 峰值（GiB） |
+| 方式（2 个样本的中位数） | wall（s） | CPU user+sys（s） | 进程树 RSS 峰值（GiB） |
 |---|---|---|---|
-| 串行 `pnpm run build:lib` | 247.3 / 251.4 | 370.8 / 385.1 | 5.90 / 5.99 |
-| 各步骤依次单独运行 | 269.1 / 241.1 | 377.1 / 370.4 | 5.93 / 5.70 |
-| 按依赖图并发 | 178.0 / 166.2 | 397.4 / 386.8 | 7.99 / 8.01 |
+| 串行 `pnpm run build:lib` | 249.4 | 378.0 | 5.95 |
+| 各步骤依次单独运行 | 255.1 | 373.8 | 5.82 |
+| 按依赖图并发 | 172.1 | 392.1 | 8.00 |
 
-wall 中位数从 249.4 s 降到 172.1 s（−77.3 s，−31%）；CPU 增加约 14 s（+3.7%），来自争用下 Host 聚合检查的 user 时间从 98–100 s 增至 111–124 s；RSS 峰值增加 2.1 GiB，出现在 Host 聚合检查（3.95 GiB）与 Host tsdown（5.65 GiB）重叠时。并发时的关键路径是 host-src → host-bundle → desktop-bundle → client-src → client-test；host-test 在结束前 32.5–33.1 s 完成，client-bundle 在结束前约 21 s 完成。各步骤 wall（串行两次 / 并发两次）：host-src 73.8、61.3 / 70.3、62.6；host-test 68.5、64.0 / 75.1、70.5；host-bundle 23.1、20.5 / 22.1、21.0；desktop-bundle 4.5、4.0 / 4.4、4.4；client-src 50.4、46.3 / 46.3、44.1；client-test 36.0、33.5 / 34.9、34.1；client-bundle 12.9、11.5 / 13.6、12.6。
+wall 中位数从 249.4 s 降到 172.1 s（−77.3 s，−31%）。各步骤单独运行的两次样本相差 28 s，因此把步骤拆成独立进程的开销无法分辨。CPU 增加约 14 s（+3.7%），主要是争用下 Host 聚合检查增加的 user 时间；RSS 峰值增加约 2.1 GiB，出现在 Host 聚合检查（约 4 GiB）与 Host tsdown（约 5.7 GiB）重叠时。并发时的关键路径是 host-src → host-bundle → desktop-bundle → client-src → client-test；host-test 在结束前约 33 s 完成，client-bundle 在结束前约 21 s 完成。
 
-第 1 轮最终测量：每个场景一个样本，均从 clean 开始，在 64 核 cgroup 中运行（load average 29–87）；基线为 master。
+最终测量：master（合并基点）与本分支交替运行，每次均从 clean 开始，在 64 核 cgroup 中运行；除标注 n=1 者外，数值均为 2 个样本的中位数。
 
 | 场景 | master | 本分支 | CPU user+sys（master → 本分支） | 进程树 RSS 峰值（master → 本分支） |
 |---|---|---|---|---|
-| 完整构建 `pnpm run build` | 318.2 s | 170.1 s（−46.5%） | 425.5 → 373.4 s | 6.13 → 7.55 GiB |
-| 产物构建：master `build --artifacts-only`，本分支 `build:src` | 178.9 s | 152.5 s（−14.8%） | 未测量 | 未测量 |
-| 开发迭代：master `build`，本分支 `build:src` | 318.2 s | 152.5 s（−52%） | 未测量 | 未测量 |
-| `pnpm run build:test`（`build:src` 之后） | — | 67.9 s | 未测量 | 未测量 |
-| `pnpm run build:test` 立即重跑 | — | 19.4 s | 未测量 | 未测量 |
-| `DSH_GATE_CONCURRENCY=1 pnpm run build` | — | 第 2 轮待测 | 第 2 轮待测 | 第 2 轮待测 |
-| `lint` 等的前置步骤：master `build:lib:host`，本分支 `host-libraries` | 第 2 轮待测 | 第 2 轮待测 | 第 2 轮待测 | 第 2 轮待测 |
+| 完整构建 `pnpm run build` | 317.1 s | 169.1 s（−46.7%） | 423.1 → 374.4 s（−11.5%） | 6.11 → 7.53 GiB（+1.42） |
+| 本分支串行构建 `DSH_GATE_CONCURRENCY=1 pnpm run build`（n=1） | — | 266.7 s | 389.5 s | 6.27 GiB |
+| 产物构建：master `build --artifacts-only`，本分支 `build:src` | 185.8 s | 153.6 s（−17.3%） | 256.2 → 231.2 s | 6.58 → 6.18 GiB |
+| 开发迭代：master `build`，本分支 `build:src` | 317.1 s | 153.6 s（−51.6%） | 423.1 → 231.2 s（−45.4%） | 6.11 → 6.18 GiB |
+| `pnpm run build:test`（`build:src` 之后） | — | 67.7 s | 144.6 s | 5.33 GiB |
+| `pnpm run build:test` 无改动重跑 | — | 19.4 s | 33.1 s | 未测量 |
+| `lint` 与 `doc-typecheck` 的前置步骤：master `build:lib:host`，本分支 `host-libraries` | 159.8 s | 90.9 s（−43.2%） | 234.7 → 136.0 s | 未测量 |
 
-本分支 `build` 的步骤 wall：native 1.7、host-src 66.5、host-bundle 11.4、desktop-bundle 3.4、client-src 45.6、client-bundle 9.0、web 9.4、host-test 65.3、client-test 34.8 s。按这些值计算，关键路径是 native → host-src → host-bundle → desktop-bundle → client-src → client-test，共 163.4 s；host-test 在第 133.5 s 结束，不在关键路径上。master 串行各段：native 2.5、Host 包编译 66.7、Host 聚合检查 66.1、Host tsdown 22.5、Desktop bundle 3.3、Client 包编译 55.6、Client 聚合检查 68.2、Client tsdown 13.9、web 9.7 s，合计 308.5 s。两者的差异也包含[无损提速 Note](2026-10-11-lossless-build-speedups.zh.md) 的改动：Host tsdown、Client 包编译、Client tsdown 与 Client 聚合检查的缩短来自该 Note，Host 聚合检查移出关键路径来自本 Note 的并发调度。`build:test` 的 67.9 s 中，Host 与 Client 聚合检查并发运行，分别为 65.2 s 与 33.9 s。
+本分支串行样本运行时主机上有其他工作（外来 CPU 742 s），因此它的 wall 可能高估串行成本。串行构建的各段中（master → 本分支，各一个样本），Host tsdown 从 22.5 s 降到 11.7 s，Client 包编译从 55.6 s 降到 48.7 s，Client 聚合检查从 68.2 s 降到 35.9 s，Client tsdown 从 13.9 s 降到 10.5 s；各段合计分别为 308.5 s 与 254.9 s。这些缩短来自[无损提速 Note](2026-10-11-lossless-build-speedups.zh.md)；从 254.9 s 的串行各段合计到 169.1 s 的并发构建，其余缩短来自本 Note 的调度，它把 Host 聚合检查（约 66 s）移出关键路径。并发构建的关键路径是 native → host-src → host-bundle → desktop-bundle → client-src → client-test，host-test 在最后一步结束前约 30 s 完成（取自更早的一个样本）。`build:test` 并发运行 Host 与 Client 聚合检查，因此其 wall 等于 Host 聚合检查的 wall（约 65 s）。
 
 ### 完整性与无损依据
 
@@ -119,14 +119,16 @@ wall 中位数从 249.4 s 降到 172.1 s（−77.3 s，−31%）；CPU 增加约
 
 负对照：在只属于 Host 聚合根程序的 `scripts/pnpm-invocation.spec.ts` 中加入类型错误（TS2322）后，`build:src` 以 0 退出；`build:test` 以 1 退出，其中 Host 聚合检查失败、Client 聚合检查通过；`build` 以 1 退出，9 个步骤中 8 个通过、1 个失败，且不写 client build record。在临时 fixture 中，被引用 project 的 tsconfig 含无效 `target`、JSON 语法错误或未知编译选项时，`tsc -p` 以 0 退出，`tsc -b` 分别报告 TS6046、TS5092 与 TS1012、TS5023 并以 1 退出；被引用 project 缺少 `composite` 时，两者都报告 TS6306。
 
+CI 证据：PR #6005 上，两个运行并发 `pnpm run build` 的必需 lane 均通过：`node 24 / snapshots and artifacts`（`check:ci:consumers`，运行于 `blacksmith-16vcpu-ubuntu-2404`）与 `windows node 24 / build & observational`（`check:ci:windows-blocking`，运行于 `blacksmith-16vcpu-windows-2025`）；GitHub 托管的 4 vCPU benchmarks lane 不运行 `build`。内层并发取 `DSH_GATE_CONCURRENCY`：master 串行 lane 设为 1，consumers lane 在 self-hosted failover 时设为 10，未设置时取可用 CPU 数，且不超过 9 个步骤。
+
 ### 有意的取舍（非无损）
 
 - **部分命令跳过聚合检查：** `build:src`、`dev:web` 与 `dev:desktop` 的启动构建，以及 `lint`、`lint:fix`、`doc-typecheck` 与 Typert contracts gate 的前置步骤，都不类型检查两个聚合根程序，这些前置步骤也不产出 `apps/desktop/lib`。完整性由 `build`、`build:test`、`typecheck`（pre-push hook）与两个必需 CI lane 负责；`dev:web` 与 `dev:desktop` 不会因测试类型错误而拒绝启动。
 - **`build:test` 不检查新鲜度：** 在 `build:src` 之后修改源码时，`build:test` 基于旧声明（包括 Typert Remote 声明）检查；需要先重跑 `build:src`。完整 `build` 不受影响。
-- **并发 `build` 提高内存峰值：** 本分支完整 `build` 的进程树 RSS 峰值为 7.55 GiB，master 串行构建为 6.13 GiB（+1.42 GiB，各一个样本）；同时 CPU 从 425.5 s 降到 373.4 s，因为[无损提速 Note](2026-10-11-lossless-build-speedups.zh.md) 省去的工作多于并发争用增加的工作。原型（不含 Typert 改动）中，单独的并发调度使 RSS 峰值增加约 2.1 GiB（5.9 → 8.0 GiB）、CPU 增加约 3.7%。上限由 `DSH_GATE_CONCURRENCY` 控制；内存紧张时使用 `DSH_GATE_CONCURRENCY=1 pnpm run build`，或分别运行 `build:src` 与 `build:test`。windows-build lane 中 `build` 与 `docs:build` 同时运行。
+- **并发 `build` 提高内存峰值：** 本分支完整 `build` 的进程树 RSS 峰值为 7.53 GiB，master 串行构建为 6.11 GiB（+1.42 GiB，2 个样本的中位数），本分支串行构建为 6.27 GiB（n=1）；同时 CPU 从 423.1 s 降到 374.4 s，因为[无损提速 Note](2026-10-11-lossless-build-speedups.zh.md) 省去的工作多于并发争用增加的工作。原型（不含 Typert 改动）中，单独的并发调度使 RSS 峰值增加约 2.1 GiB（5.9 → 8.0 GiB）、CPU 增加约 3.7%。上限由 `DSH_GATE_CONCURRENCY` 控制；内存紧张时使用 `DSH_GATE_CONCURRENCY=1 pnpm run build`，或分别运行 `build:src` 与 `build:test`。windows-build lane 中 `build` 与 `docs:build` 同时运行。
 - **成功步骤的输出默认不显示：** 只有失败步骤打印完整输出。
-- **`tsc -p` 不跳过已是最新的根程序：** 无改动时立即重跑 `build:test` 仍需 19.4 s，因为两个程序都要重新解析；`tsc -b` 会跳过已是最新的根。
-- **多核冷启动时 `build:src` 只比 `build` 快 17.6 s：** 本分支冷启动 `build` 为 170.1 s，`build:src` 为 152.5 s（各一个样本），因为 host-test 不在关键路径上，client-test（34.8 s）只比 client-bundle 与 web 之和（18.4 s）长约 16 s。`build:src` 的其余收益是 CPU 与内存：原型中两个聚合检查合计约 148 s CPU，Host 聚合检查与 Host tsdown 重叠时使内存峰值增加约 2 GiB；在少核机器与增量重建中，这部分也转化为 wall。
+- **`tsc -p` 不跳过已是最新的根程序：** 无改动时立即重跑 `build:test` 仍需 19.4 s 与 33.1 s CPU，因为两个程序都要重新解析；`tsc -b` 会跳过已是最新的根。
+- **多核冷启动时 `build:src` 只比 `build` 快 15.5 s：** 本分支冷启动 `build` 为 169.1 s，`build:src` 为 153.6 s（2 个样本的中位数），因为 host-test 不在关键路径上，client-test 只比 client-bundle 与 web 之和长约 16 s。`build:src` 的其余收益是 CPU 与内存：CPU 从 374.4 s 降到 231.2 s，RSS 峰值从 7.53 GiB 降到 6.18 GiB；在少核机器与增量重建中，这部分也转化为 wall。
 - **CI 调用根 manifest 中的公开命令：** PR 产物构建调用 `build:src`，而不是内部 helper 参数；修改根 manifest 中这些 script 的 PR 会激活独立的 Node Addon System 平台矩阵。
 
 ## 考虑过的替代方案
@@ -144,7 +146,7 @@ wall 中位数从 249.4 s 降到 172.1 s（−77.3 s，−31%）；CPU 增加约
 
 ## 后果
 
-开发迭代可以用 `build:src` 跳过两个聚合根程序（冷启动比 master 的 `build` 快 52%），在声明完成前用 `build:test` 或 `build` 补齐检查。`build` 保持完整：Host 聚合检查不在关键路径上，Client 聚合检查与 Client bundle、web 并行，冷启动比 master 快 46.5%（含无损提速 Note 的改动，各一个样本）。代价是更高的内存峰值、并发争用带来的少量额外 CPU、默认更少的成功输出，以及多个开发与前置命令不检查测试类型（见上文取舍）。
+开发迭代可以用 `build:src` 跳过两个聚合根程序（冷启动比 master 的 `build` 快 51.6%），在声明完成前用 `build:test` 或 `build` 补齐检查。`build` 保持完整：Host 聚合检查不在关键路径上，Client 聚合检查与 Client bundle、web 并行，冷启动比 master 快 46.7%（含无损提速 Note 的改动，2 个样本的中位数）。代价是更高的内存峰值、并发争用带来的少量额外 CPU、默认更少的成功输出，以及多个开发与前置命令不检查测试类型（见上文取舍）。
 
 删除或改变 consumers 与 windows-build 两个必需 lane 的 `build`，必须先把两个聚合检查转交另一处阻塞型 owner。若 Typert 以后获得独立的生成步骤，步骤表新增该步骤，client-src 改为依赖它；命令语义与调度不变。
 

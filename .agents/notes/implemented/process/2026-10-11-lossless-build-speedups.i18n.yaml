@@ -6,41 +6,41 @@
   en: 48682b646b8f993a
   zh: 4c26cb4aab5cd08c
 /agent-note-build-speed-ups-that-keep-outputs-unchanged/problem:
-  en: 874d7d87e3d2a7c6
-  zh: 06bdfd1eb91c25e4
+  en: 46551eb7e33c40ca
+  zh: f8c1fc063fa77062
 /agent-note-build-speed-ups-that-keep-outputs-unchanged/decision:
-  en: 59f288bb758dde74
-  zh: d2360c02701cf96c
+  en: 97bc6376ec8ebd2e
+  zh: 25bf2941ddb5e26c
 /agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/measurement-conditions:
   en: 2ab844073ec7c336
   zh: b25e39f2f80b0d7e
 /agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/1-only-the-root-manifest-declares-react-type-packages:
-  en: 1cd139ef5c258dfe
-  zh: 9397dc3b8530b9ae
+  en: 1101c94d04f9c7e9
+  zh: 413b7b15f98a5f62
 /agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/2-typert-selects-packages-by-manifest-first:
-  en: 824472b4248bbb9d
-  zh: 411479c8bc830b06
+  en: 1ae4b65792db0975
+  zh: a11c0d90842a3b55
 /agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/3-typert-does-not-expand-aggregate-include:
-  en: 6c2348fd12771991
-  zh: a2b7ea95f471fe20
+  en: 0c8ab2d412113914
+  zh: 01ba4f5042422d77
 /agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/4-typert-parses-package-tsconfigs-lazily:
-  en: 1d6876419e852e68
-  zh: d526c7dc0f94118d
+  en: cd6e05c61a7cc495
+  zh: 480d2d85d78d2d7f
 /agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/5-the-typert-workspace-root-also-requires-packages:
-  en: 7bec99d36d8d3fd0
-  zh: ee4273df6178180a
+  en: 8b89436df201141c
+  zh: 2fab82419c8ba704
 /agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/6-typert-generates-in-a-worker-thread:
-  en: 0f2450529c1b1b80
-  zh: c6ed12cb882131e6
+  en: 0362483a79c07881
+  zh: d84a2390b49c4012
 /agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/7-the-typert-transform-hook-filters-by-module-id:
-  en: e738cc16329da590
-  zh: 7d04be9a9f5837d7
+  en: b5ad6b5506c150d5
+  zh: 25f09e4ab74696ad
 /agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/8-client-tsdown-presets-read-the-manifest-from-the-package-directory:
-  en: 388f070a74bcc18f
-  zh: 23b14fcb96007a6c
+  en: 80c2ddc5fdff0b5f
+  zh: f5ce309a2e88ff4f
 /agent-note-build-speed-ups-that-keep-outputs-unchanged/alternatives-considered:
   en: 186e42f2f5481c8d
   zh: 4a1c79a391a268b0
 /agent-note-build-speed-ups-that-keep-outputs-unchanged/consequences:
-  en: 5712ab878322479b
-  zh: f5acdcbffc819bf2
+  en: aea05af999315af1
+  zh: a8e6fca3be2306f9

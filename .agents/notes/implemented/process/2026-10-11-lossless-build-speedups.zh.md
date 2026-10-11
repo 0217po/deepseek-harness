@@ -8,7 +8,7 @@ Status: implemented
 
 冷启动构建中有三处与产物内容无关的固定开销：
 
-- **Client 测试聚合程序的 JSX 签名。** `tsc -p tsconfig.client.json` 的 Check 阶段为 59.1 s，其中一半以上用于为每个导入 React 的 JSX 文件计算 `@types/react` 的 module specifier。TypeScript 的 `computeModuleSpecifiers` 遍历该声明文件的每个符号链接位置，并在每个位置扫描全部 491 条 tsconfig `paths`。pnpm 为每个自行声明 `@types/react` 的 workspace 包创建一个 `node_modules/@types/react` 链接；66 个 manifest 声明了它，Client 测试聚合程序因此看到 65 个位置。计数器测得 88 个 JSX 文件 × 2 个模块（`index.d.ts`、`jsx-runtime.d.ts`）× 65 个位置，共 11,457 次 `tryGetModuleNameFromPaths` 调用、5,623,782 次条目扫描，合计 32.6 s。按可见位置数 N 截断的剂量实验（N = 1、16、32、48、65，Check 依次为 26.92、34.03、44.92、50.17、58.40 s）给出 Check ≈ 26.9 + 0.494·N s。
+- **Client 测试聚合程序的 JSX 签名。** `tsc -p tsconfig.client.json` 的 Check 阶段为 59.1 s，其中一半以上用于为每个导入 React 的 JSX 文件计算 `@types/react` 的 module specifier。TypeScript 的 `computeModuleSpecifiers` 遍历该声明文件的每个符号链接位置，并在每个位置扫描全部 491 条 tsconfig `paths`。pnpm 为每个自行声明 `@types/react` 的 workspace 包创建一个 `node_modules/@types/react` 链接；66 个 manifest 声明了它，Client 测试聚合程序因此看到 65 个位置。计数器测得 88 个 JSX 文件 × 2 个模块（`index.d.ts`、`jsx-runtime.d.ts`）× 65 个位置，共 11,457 次 `tryGetModuleNameFromPaths` 调用、5,623,782 次条目扫描，合计 32.6 s。按可见位置数 N 截断的剂量实验在五个截断级别（N 从 1 到 65，Check 从 26.92 s 到 58.40 s）上拟合出 Check ≈ 26.9 + 0.494·N s。
 - **Host tsdown 阶段中的 Typert。** Host tsdown 阶段约 21.6–22.6 s。Typert 在第一个 `writeBundle` 中同步发现并生成产物，CPU profile 显示它阻塞 tsdown 主线程约 12.4 s，期间所有包构建都在等待。发现阶段占 8.06 s：它解析两个 face 聚合配置所引用的 362 个包 tsconfig（约 3.8 s），每次解析 Host 聚合配置都展开 2,064 条字面 `include`（1.6 s，分析器从不读取这些文件名），并对 322 个注册项做公开导出表面遍历（2.7–3.2 s）；最终只有 28 个声明 Typert 导出的包产生 Host 产物。
 - **Client tsdown 阶段的 manifest 查找。** Client tsdown 阶段约 11.7 s，主线程饱和（空闲仅 7.1%），其中 34.5%（3.95 s）在 `workspaceManifest`：每个包配置按包名 `globSync('packages/*/*/package.json')` 并逐个解析 manifest，直到名字匹配。模块级缓存无效，因为 tsdown 的 native 配置加载器通过 `import-without-cache` 为每个包配置创建新的模块实例；每次 glob 耗时 40–125 ms，且发生在 `tsdown:deps` 的 `neverBundle`/`alwaysBundle` 回调中，阻塞全部构建。
 
@@ -29,6 +29,8 @@ Status: implemented
 | 7 | Typert `transform` 钩子按模块 id 过滤 | Host tsdown | 噪声内；钩子调用 1,566 → 195 | 逐字节一致 | 无 |
 | 8 | Client tsdown 预设按包目录读取 manifest | Client tsdown | 12.78 → 8.73 s | 逐字节一致；external 判定一致 | 预设第一个参数是包目录 |
 
+第 5–7 项改变了发布的 `./tsdown` 导出 `typertPlugin()`（`transform` 为 `{ filter, handler }`、`writeBundle` 为异步、工作区根目录必须包含 `packages/`），但不需要升级指南：rolldown 与 tsdown 的使用方接受两种钩子形式，分析器本来就要求 `<root>/packages`，因此此前可用的外部工作区都不会失效。
+
 ### 测量条件
 
 所有数字取自同一台共享 Linux 主机（256 vCPU、4 TB 内存，运行期间 load average 23–111），Node v24.18.0、TypeScript 6.0.3、tsdown 0.22.2（rolldown 1.1.1）。
@@ -46,11 +48,11 @@ Status: implemented
 
   | 测量项 | 各包自声明（N = 65） | 根 manifest 声明（N = 1） |
   |---|---|---|
-  | Client 测试聚合 Check | 59.08 s（58.76 / 59.08 / 59.39） | 26.28 s（5 个样本 26.04–26.60），−56% |
+  | Client 测试聚合 Check | 59.08 s（3 个样本的中位数） | 26.28 s（5 个样本的中位数），−56% |
   | Client 测试聚合 wall | 68–71 s | 33.6–34.9 s |
   | Client 测试聚合 user CPU | 79–83 s | 44.5–45.3 s |
-  | 76 个 client-only 包项目的 Check 总和 | 34.48 / 34.65 s | 26.47 / 26.61 s（−23%） |
-  | 76 个 client-only 包项目的 wall | 54.0 / 57.4 s | 44.8 / 44.2 s |
+  | 76 个 client-only 包项目的 Check 总和 | 34.6 s（2 个样本的中位数） | 26.5 s（2 个样本的中位数），−23% |
+  | 76 个 client-only 包项目的 wall | 55.7 s（2 个样本的中位数） | 44.5 s（2 个样本的中位数） |
 
 - **无损依据：** 66 个包级链接与根链接指向同一个 realpath（`.pnpm/@types+react@18.3.31`），因此程序读取的声明内容相同；程序文件数保持 2,613，`tsc -b --force tsconfig.client.json` 以 0 退出且无诊断。`devDependencies` 不随已发布的包安装，[发布依赖面](2026-08-26-published-dependency-faces.zh.md)中独立 TypeScript 消费者自行安装所引用类型包的结论不变；runtime 解析不读取 `@types/*`。
 - **取舍：** 包 manifest 不列出自己的 React 类型依赖，所有 workspace 包共用同一个 React 类型版本；某个包需要不同版本时，需要新的 Agent Note 推翻本项。检查只覆盖 `apps/*`、`packages/*/*` 与 `vendor/*`；`website`、`benchmarks`、`native/system` 与 `python/sdk-runtime` 等其他 pnpm 成员不在范围内，目前它们都不声明 React 类型包。
@@ -59,21 +61,21 @@ Status: implemented
 
 - **目的：** workspace 模式只为声明 Typert 导出的包生成产物，避免对其余候选包做表面遍历。
 - **改动：** `WorkspaceAnalyzer.discoverPackages(includeManifest?)` 与 `WorkspaceTypertGenerator.discover(faces?, includeManifest?)` 接受可选的 `package.json` 谓词，在表面遍历之前应用；被拒绝的包既不读取源码，也不解析项目配置。`WorkspaceTypertGenerator.generateContributors(faces?)` 以 `hasTypertExport`（`exports` 含 `./typert`、`./client/typert` 或 `./remote`）为谓词。不传谓词的调用方（Cordis 目录、不指定包的 `generate()`）行为不变。
-- **性能：** Host tsdown 22.62 s（21.81 / 22.62 / 23.40）→ 19.94 s（19.26 / 19.94 / 20.37）。
+- **性能：** Host tsdown 22.62 s → 19.94 s（各 3 个样本的中位数）。
 - **无损依据：** 谓词就是原先在发现之后应用的同一过滤条件，被它拒绝的包本来就不产生产物；743 个产物文件逐字节一致（Typert generator 自身的 `lib/index.js` 除外，其源码即本项改动）。
 
 ### 3. Typert 不展开聚合配置的 `include`
 
 - **目的：** 分析器只读取聚合配置的编译选项与 project references，展开 `include` 只为填充从不使用的 `fileNames`。
 - **改动：** `WorkspaceCaches.aggregate(path)` 返回并缓存 `AggregateConfig { path, options, projectReferences }`。解析自身声明 `references` 的聚合配置时，使用 `readDirectory` 返回空列表的 `ParseConfigHost`；不声明 `references` 的聚合配置照常展开。
-- **性能：** Host tsdown 19.94 s → 16.99 s（16.97 / 16.99 / 19.08）。
+- **性能：** Host tsdown 19.94 s → 16.99 s（各 3 个样本的中位数）。
 - **无损依据：** TypeScript 只对既无 `files` 也无 `references` 的配置报告 TS18003（无输入），因此声明 `references` 的聚合配置在不展开时得到相同的诊断、选项与 references。强制读取每个惰性配置后导出的注册清单（408 个注册项，含 `fileNames` 与选项，以及聚合配置的选项和 references）与基线逐字节一致；产物逐字节一致。测试 `reads aggregate options and references without expanding include patterns` 与 `reports an aggregate without references or inputs` 固定这两种配置的行为。
 
 ### 4. Typert 惰性解析包 tsconfig
 
 - **目的：** 只解析被选中分析的包的 tsconfig，而不是聚合配置引用的全部包。
 - **改动：** `PackageRegistration.config` 是 `caches.config(configPath)` 的 getter，首次读取时解析。注册清单的顺序、face、包名、根目录与导出子路径不变。
-- **性能：** Host tsdown 16.99 s → 16.25 s（16.25 / 14.72 / 16.38），在组内跨度以内。第 2–4 项合计在隔离基准中把 Typert 发现从 5.9–7.1 s 降到 0.36–0.40 s，tsconfig 解析从 362 次降到 28 次，表面遍历从 322 次降到 28 次，Typert 总耗时从 9.7–11.8 s 降到 4.4–4.5 s。
+- **性能：** Host tsdown 16.99 s → 16.25 s（各 3 个样本的中位数），在 2.5 s 的组内跨度以内。第 2–4 项合计在隔离基准中把 Typert 发现从 5.9–7.1 s 降到 0.36–0.40 s，tsconfig 解析从 362 次降到 28 次，表面遍历从 322 次降到 28 次，Typert 总耗时从 9.7–11.8 s 降到 4.4–4.5 s。
 - **无损依据：** 注册清单比较与第 3 项相同（逐字节一致），产物逐字节一致。测试 `reads only the project configs of manifests selected for discovery` 固定只解析所选包的配置。
 - **取舍（非无损）：** Typert 不解析它不分析的包的 tsconfig，因此这类 tsconfig 的语法或配置错误不会使 Typert 失败。同一构建中，先于 Host bundle 运行的 Host 包编译 `tsc -b` 与 Client 包编译 `tsc -b` 解析每个被引用的 tsconfig，并拒绝其中的错误；`PackageRegistration.config` 的 JSDoc 与 [Typert generator README](../../../../packages/typert/generator/README.zh.md) 写明这一归属。单独调用 Typert 而不运行 `tsc -b` 的使用方不会得到这些诊断。
 
@@ -81,7 +83,7 @@ Status: implemented
 
 - **目的：** 修正工作区根目录的判定。24 个双 face 包带有自己的 `tsconfig.host.json` 叶子配置；只按 `tsconfig.host.json` 向上查找时，每个这样的包都被当作根目录，workspace 模式每次构建为它们各做一次空发现，`package` 模式下双 face 包得不到产物且没有报错。
 - **改动：** 工作区根目录是打包输出最近的、同时包含 `tsconfig.host.json` 与 `packages/` 的祖先目录。
-- **性能：** Host tsdown 14.82 s → 15.39 s（15.39 / 15.47 / 14.16），在噪声内。
+- **性能：** Host tsdown 14.82 s → 15.39 s（各 3 个样本的中位数），在噪声内。
 - **无损依据：** 仓库根 [`tsdown.config.ts`](../../../../tsdown.config.ts) 只使用 workspace 模式，743 个产物文件逐字节一致。测试 `resolves the workspace root above a dual-face package leaf` 固定该判定。
 - **行为差异：** `package` 模式的使用方构建双 face 包时得到该包的 Typert 产物；仓库构建不使用 `package` 模式。
 
@@ -89,7 +91,7 @@ Status: implemented
 
 - **目的：** 让 Typert 分析与 tsdown 主线程上的打包重叠，而不是在第一个 `writeBundle` 中阻塞全部包构建。
 - **改动：** [`src/worker.ts`](../../../../packages/typert/generator/src/worker.ts) 是 Worker Thread 入口，运行 `generateContributors(faces)` 并回传一条 `artifacts` 或 `failure` 消息。workspace 模式下，本次构建的第一个 `buildStart` 以 `options.cwd` 定位工作区根目录并启动生成；`writeBundle` 是异步的，第一个完成的打包认领写入并等待结果，之后的打包立即返回。分析错误、worker 崩溃或提前退出、格式错误或无法反序列化的响应、worker 无法终止，都以指明工作区与原因的 `TypertWorkerError` 使认领写入的打包失败，从而使整个 tsdown 阶段失败；结果敲定前 worker 已终止，未被认领的结果不会成为未处理的 rejection。构建产物从 `./worker.js` 启动 worker；源码运行（测试）通过 `tsx/esm/api` 加载 `worker.ts`。`package` 模式仍在主线程中生成。
-- **性能：** Host tsdown 15.39 s → 10.25 s（11.31 / 10.07 / 10.25）。最终配置（第 2–7 项）的 profile：主线程 10.1 s，第一个 `buildStart` 出现在 4.18 s（tsdown 配置解析），主线程上的 `writeBundle` 只占 0.37 s；worker 5.0 s（模块加载约 0.4 s、发现 0.28 s、生成 3.88 s，其中 `createProgram` 2.21 s），约在 9.3 s 结束。Host tsdown 的 wall 约为 max(打包, 4.2 s + Typert)。
+- **性能：** Host tsdown 15.39 s → 10.25 s（各 3 个样本的中位数）。最终配置（第 2–7 项）的 profile：主线程 10.1 s，第一个 `buildStart` 出现在 4.18 s（tsdown 配置解析），主线程上的 `writeBundle` 只占 0.37 s；worker 5.0 s（模块加载约 0.4 s、发现 0.28 s、生成 3.88 s，其中 `createProgram` 2.21 s），约在 9.3 s 结束。Host tsdown 的 wall 约为 max(打包, 4.2 s + Typert)。
 - **无损依据：** 第二轮的 54 次运行全部以 0 退出，每次的 743 个产物文件均与基线一致（generator 自身的 `lib/index.js` 除外）。测试 `writes the artifacts in-process generation produces` 比较 worker 与进程内生成的产物；在临时工作区中把一个包的 `files` 改坏后，tsdown 在 2.4 s 内以 1 退出，报告 `TypertWorkerError` 及 worker 内的 `TypertAnalysisError`，不写入任何产物。各失败路径由 `typertPlugin workspace mode` 测试组覆盖。
 - **取舍：** worker 堆约 300–420 MiB；最终配置的 Host tsdown 最大 RSS 中位数为 6,296–6,408 MiB，基线为 5,676 MiB。共享主机高负载时 worker 可能落在关键路径上：一次样本为 21.91 s，拥有产物的包构建等待 worker 约 14 s，其后 10 个样本未复现；load average 约 100 时两次运行为 17.86 s 与 14.3 s。worker 在 1,024 MiB 堆上限下也能完成，因此不是 GC 压力；归因于主机争用尚未证实。
 
@@ -97,14 +99,14 @@ Status: implemented
 
 - **目的：** 避免每个模块都从 rolldown 进入 JavaScript `transform` 钩子，只为被扩展名检查拒绝。
 - **改动：** `transform` 声明 `filter: { id: /^[^?]*\.[cm]?tsx?(?:\?|$)/ }`，处理函数仍以同一正则检查 id。
-- **性能：** 每次 Host 构建的钩子调用从 1,566 次降到 195 次（195 个 TypeScript 模块，其中 4 个含装饰器）。wall 为 11.07 s（11.07 / 10.21 / 11.30）与 9.98 s（4 个样本），第 6 项为 10.25 s，相同代码的对照组为 11.07 s 与 9.87 s，差异在噪声内。
+- **性能：** 每次 Host 构建的钩子调用从 1,566 次降到 195 次（195 个 TypeScript 模块，其中 4 个含装饰器）。wall 中位数为 11.07 s（3 个样本）与 9.98 s（4 个样本），第 6 项为 10.25 s，相同代码的对照组为 11.07 s 与 9.87 s，差异在噪声内。
 - **无损依据：** 该正则只含 ASCII 构造，在 rolldown 的 Rust 正则与 JavaScript 中匹配相同的 id 集合；处理函数应用同一检查，因此不读取过滤器的宿主行为相同。产物逐字节一致；测试 `filters transform calls to TypeScript module ids` 固定过滤器。
 
 ### 8. Client tsdown 预设按包目录读取 manifest
 
 - **目的：** 每个包配置只读取自己的 `package.json`，消除按包名遍历全部 manifest 的 glob。
 - **改动：** [`packages/client/tsdown.client.ts`](../../../../packages/client/tsdown.client.ts) 的 `clientBundle`、`staticLinked` 与 `clientLibrary` 的第一个参数是包目录（通常为配置文件的 `import.meta.dirname`），预设读取一次 `<packageDir>/package.json`，以其中的 `name` 作为插件 id 与诊断名称；该 manifest 缺失、不可读或缺少 `name` 时，配置加载以指明路径与原因的错误失败。82 个包配置调用这些预设。预设不保留模块级 manifest 缓存；Node 半边的生产依赖 external 列表在首次 resolve 时由该 manifest 计算，并缓存在该配置的闭包中。
-- **性能：** Client tsdown 从 12.78 s（13.77 / 12.78 / 12.31）降到 8.73 s（8.19 / 8.80 / 8.73），−4.05 s（−31.7%），两组样本区间不重叠；user CPU 从 26.1 s 降到 25.2 s，sys 从 5.9 s 降到 4.9 s，因此收益主要来自解除主线程阻塞，而不是减少 CPU 总量。原型（一次 glob 建立按包名索引）为 11.72 s → 7.46 s（−36%）。Host tsdown 中只有 5 个 `hostPhase` 包经过该查找，一对样本为 11.92 s → 10.71 s，置信度低。
+- **性能：** Client tsdown 从 12.78 s 降到 8.73 s（各 3 个样本的中位数），−4.05 s（−31.7%），两组样本区间不重叠；user CPU 从 26.1 s 降到 25.2 s，sys 从 5.9 s 降到 4.9 s，因此收益主要来自解除主线程阻塞，而不是减少 CPU 总量。原型（一次 glob 建立按包名索引）为 11.72 s → 7.46 s（−36%）。Host tsdown 中只有 5 个 `hostPhase` 包经过该查找，一对样本为 11.92 s → 10.71 s，置信度低。
 - **无损依据：** 11 次运行的 11,566 个 lib 文件逐字节一致。82 个调用处改为传入包目录后，没有一个解析出的包名与原先手写的包名不同。进程内比较 82 个配置 × 3 个 face × 1,600 个 specifier 的 external 判定，结果与原实现完全一致；负对照（多加一个 external）使 75 个判定不同。`client-bundle-purity.spec.ts` 覆盖这些 manifest 错误。
 - **行为差异：** 预设的调用约定从包名改为包目录。
 
@@ -125,7 +127,7 @@ Status: implemented
 
 ## 后果
 
-Client 类型检查的 CPU 与 wall 时间、Host tsdown 与 Client tsdown 的 wall 时间都明显下降，且不改变 runtime 解析、发布安装语义或任何产物字节。一次完整 `build` 中，Host tsdown 为 11.4 s、Client tsdown 为 9.0 s、Client 聚合检查为 34.8 s，master 串行构建中依次为 22.5、13.9 与 68.2 s（各一个样本，见[构建拆分 Note](2026-10-11-build-src-test-split.zh.md)）。Host tsdown 位于 `build` 与 `build:src` 的关键路径上，Client tsdown 位于 `build:src` 的关键路径上，Client 聚合检查是 `build` 关键路径的最后一步。
+Client 类型检查的 CPU 与 wall 时间、Host tsdown 与 Client tsdown 的 wall 时间都明显下降，且不改变 runtime 解析、发布安装语义或任何产物字节。串行构建的各段中（master → 本分支，各一个样本），Host tsdown 从 22.5 s 降到 11.7 s，Client 包编译从 55.6 s 降到 48.7 s，Client 聚合检查从 68.2 s 降到 35.9 s，Client tsdown 从 13.9 s 降到 10.5 s；串行各段合计在 master 上为 308.5 s，在本分支上为 254.9 s（见[构建拆分 Note](2026-10-11-build-src-test-split.zh.md)）。Host tsdown 位于 `build` 与 `build:src` 的关键路径上，Client tsdown 位于 `build:src` 的关键路径上，Client 聚合检查是 `build` 关键路径的最后一步。
 
 代价：所有 workspace 包共用一个 React 类型版本；Typert 不校验它不分析的包 tsconfig，这些错误由 `tsc -b` 负责；Host tsdown 的最大 RSS 约增加 0.6 GiB，共享主机高负载时 worker 可能成为 Host tsdown 的关键路径。
 
