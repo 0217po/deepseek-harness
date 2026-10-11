@@ -213,7 +213,7 @@ describe('web e2e: fresh round trip through the real assembly', () => {
     }
   }, 200_000)
 
-  it('keeps source checkout and Web context in the system prompt and cwd in user context', async () => {
+  it('keeps value-free Web guidance in the system prompt and process values in runtime context', async () => {
     if (settledSessionId === undefined) throw new Error('the drive turn did not publish a session id')
     const agent = scaffold.ctx.agents.get(settledSessionId)
     if (agent === undefined) throw new Error(`the settled Web agent ${settledSessionId} is no longer live`)
@@ -230,6 +230,8 @@ describe('web e2e: fresh round trip through the real assembly', () => {
     const userText = agent.session.deriveMessages().filter(message => message.role === 'user')
       .flatMap(message => message.content.flatMap(block => block.type === 'text' ? [block.text] : []))
     expect(userText.some(text => text.includes(`Current working directory: ${JSON.stringify(cwd)}.`))).toBe(true)
+    expect(system).not.toContain(scaffold.baseUrl)
+    expect(userText.some(text => text.includes(`Current DeepSeek Harness Web GUI URL: ${JSON.stringify(scaffold.baseUrl)}.`))).toBe(true)
     const suffix = paragraphs.slice(-2).join('\n\n')
       .split(REPO_ROOT).join('{{sourceRoot}}')
       .split(join(scaffold.workspaceCwd, 'workspace')).join('{{cwd}}')
