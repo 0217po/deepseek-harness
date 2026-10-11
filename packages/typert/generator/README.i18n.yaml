@@ -24,8 +24,11 @@
   en: 8227097859169cdf
   zh: 249790ed62e8558a
 /deepseek-ai-dsh-typert-generator/use-this-package/running-generation-inside-a-tsdown-build:
-  en: 4b3571787d39b291
-  zh: 2c5be58de1dd9b9a
+  en: ebcb4850a5620d93
+  zh: 55f6f54265830f28
+/deepseek-ai-dsh-typert-generator/use-this-package/generating-without-a-bundler:
+  en: f8b70c1210fd8e40
+  zh: 8fb506eb32e46913
 /deepseek-ai-dsh-typert-generator/understand-the-implementation:
   en: b90762df7a978580
   zh: 123ab225a2b5df2a
@@ -33,8 +36,8 @@
   en: 0a515742229bf442
   zh: dfd2c5eddd943af9
 /deepseek-ai-dsh-typert-generator/understand-the-implementation/source-map:
-  en: a0e0c834865caebc
-  zh: 22a707f650a0c6c7
+  en: c205dc3f10099130
+  zh: 8525c389ebed4b2e
 /deepseek-ai-dsh-typert-generator/understand-the-implementation/analysis-and-faces:
   en: a844aafcafbc27b6
   zh: 8efe7d472361bbc2

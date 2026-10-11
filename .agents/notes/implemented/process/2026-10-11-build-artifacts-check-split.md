@@ -63,9 +63,9 @@ native → host-src ─┬─ host-check ─────────────
 |---|---|---|
 | `build`, `build:official`, `Makefile` `build`, `scripts/publish-npm-baseline.ts`, `apps/desktop/scripts/package-target.ts`, `scripts/dev-bundle-registry.ts`, `release-publish.yml`, `sandbox.yml`, and the non-PR branches of `e2e.yml` and `release.yml` | `build` / `build:official` | Yes |
 | `test:web`, `test:web:refresh`, `test:web:perf`, `test:web:stress`, `apps/desktop` `test:updates:local`, `test:bench` / `build:bench` | `build`; `build:bench` runs `build:native-system`, `build:lib`, and the benchmark tsdown | Yes |
-| `typecheck` (run by the pre-push hook) | `build:lib:host` (Host `tsc -b tsconfig.host.json`, Host bundle, Desktop bundle) and Client `tsc -b tsconfig.client.json` | Yes |
+| `typecheck` (run by the pre-push hook) | `build.ts --scope typecheck`: host-src beside host-typert (the bundle-free, source-only Typert pass `generate-typert.ts`) → client-src, with `tsc -b tsconfig.{host,client}.json` after each face's package compilation; no bundle | Yes |
 | `dev:web` ([`scripts/dev-web.ts`](../../../../scripts/dev-web.ts)), `dev:desktop` (`apps/desktop/scripts/dev.ts`) | `build:artifacts` | None before launch; after `dev:web` launches, its `tsc -b tsconfig.client.json --watch` keeps checking the Client aggregate root program |
-| Prerequisite step of `lint`, `lint:fix`, `doc-typecheck`, and the CI Typert contracts gate | Host package compilation and the Host bundle (`compile-referenced-projects.ts host-libraries`), without the Desktop bundle | None |
+| Prerequisite step of `lint`, `lint:fix`, `doc-typecheck`, and the CI Typert contracts gate | Host package compilation beside the bundle-free Typert pass (`compile-referenced-projects.ts host-contracts`), without any bundle | None |
 | CI node 24 / snapshots and artifacts (`check:ci:consumers`), windows node 24 / build & observational (`check:ci:windows-blocking`) | `build` | Yes, the two required lanes |
 | CI node-compat 22.19 | `build:artifacts` (through run-gates) | None |
 | CI python runtime | `build-exe-for-python-sdk.ts --build-artifacts` | None |
@@ -75,7 +75,7 @@ native → host-src ─┬─ host-check ─────────────
 | PR rehearsal in `release-vendor.yml` | `compile-referenced-projects.ts host-libraries` | None |
 | Non-PR branch of `release-vendor.yml`, `release-vendor-publish.yml` | `build:lib:host` | Host aggregate root program only |
 
-`lint`, `lint:fix`, `doc-typecheck`, and the Typert contracts gate read only Typert outputs and package declarations: both aggregates are `noEmit`, oxlint builds its own programs, `doc-typecheck` references only package projects, and no consumer of `host-libraries` reads `apps/desktop/lib`. Their prerequisite step therefore skips the Host aggregate check and the Desktop bundle and falls from 159.8 s to 90.9 s (see the measurements below).
+`lint`, `lint:fix`, `doc-typecheck`, and the Typert contracts gate read only Typert outputs and package declarations: both aggregates are `noEmit`, oxlint builds its own programs, `doc-typecheck` references only package projects, and none of them reads a bundle. Their prerequisite step therefore skips the Host aggregate check and every bundle; skipping the Host aggregate check and the Desktop bundle alone took it from 159.8 s to 90.9 s (see the measurements below).
 
 The consumers lane's HMR Web test starts `dev:web` and therefore uses `build:artifacts` inside that lane; the same lane's `build` gate still runs both aggregate checks. CI does not call `build:check` separately: the two required lanes already get the same checks through `build`. The [PR artifact build decision](2026-10-05-pr-artifact-typechecks.md) keeps its required complete builds, benchmark `--noCheck`, job and worker ceilings, serial node-compat Vitest, coverage weights, and pnpm packing checks; its PR artifact build is `build:artifacts`.
 

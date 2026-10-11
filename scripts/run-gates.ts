@@ -636,11 +636,12 @@ function ciWindowsObservationalGates(): Gate[] {
   ]
 }
 
-// Host package compilation and bundling produce the Typert outputs that
-// prepared typecheck, lint, and doc-typecheck read; none of them reads the
-// Host aggregate program's noEmit check, which `build` owns.
+// Host package compilation and the bundle-free Typert pass produce the
+// declarations that prepared typecheck, lint, and doc-typecheck read; none of
+// them reads a bundle or the Host aggregate program's noEmit check, which
+// `build` owns.
 function typertContractsGate(): Gate {
-  return pnpmExec('typert-contracts', ['tsx', 'scripts/compile-referenced-projects.ts', 'host-libraries'], {
+  return pnpmExec('typert-contracts', ['tsx', 'scripts/compile-referenced-projects.ts', 'host-contracts'], {
     label: 'Typert contracts',
   })
 }

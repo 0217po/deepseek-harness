@@ -785,8 +785,8 @@ describe('Typert contract preparation', () => {
       withPnpmEntrypoint(() => gatesForMode('ci-primary')))
 
     expect(subject.find(item => item.id === 'typert-contracts')).toMatchObject({
-      displayCommand: 'pnpm exec tsx scripts/compile-referenced-projects.ts host-libraries',
-      args: ['/private/pnpm.cjs', 'exec', 'tsx', 'scripts/compile-referenced-projects.ts', 'host-libraries'],
+      displayCommand: 'pnpm exec tsx scripts/compile-referenced-projects.ts host-contracts',
+      args: ['/private/pnpm.cjs', 'exec', 'tsx', 'scripts/compile-referenced-projects.ts', 'host-contracts'],
     })
     for (const [id, script] of [
       ['typecheck', 'typecheck:contracts-ready'],

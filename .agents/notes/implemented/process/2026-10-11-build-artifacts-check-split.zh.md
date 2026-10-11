@@ -63,9 +63,9 @@ native → host-src ─┬─ host-check ─────────────
 |---|---|---|
 | `build`、`build:official`、`Makefile` `build`、`scripts/publish-npm-baseline.ts`、`apps/desktop/scripts/package-target.ts`、`scripts/dev-bundle-registry.ts`、`release-publish.yml`、`sandbox.yml`、`e2e.yml` 与 `release.yml` 的非 PR 分支 | `build` / `build:official` | 有 |
 | `test:web`、`test:web:refresh`、`test:web:perf`、`test:web:stress`、`apps/desktop` `test:updates:local`、`test:bench` / `build:bench` | `build`；`build:bench` 运行 `build:native-system`、`build:lib` 与 benchmark tsdown | 有 |
-| `typecheck`（pre-push hook 运行它） | `build:lib:host`（Host `tsc -b tsconfig.host.json`、Host bundle、Desktop bundle）与 Client `tsc -b tsconfig.client.json` | 有 |
+| `typecheck`（pre-push hook 运行它） | `build.ts --scope typecheck`：host-src 与 host-typert（不打包、只读源码的 Typert 生成 `generate-typert.ts`）并行 → client-src，各 face 包编译后运行 `tsc -b tsconfig.{host,client}.json`；不含任何 bundle | 有 |
 | `dev:web`（[`scripts/dev-web.ts`](../../../../scripts/dev-web.ts)）、`dev:desktop`（`apps/desktop/scripts/dev.ts`） | `build:artifacts` | 启动前无；`dev:web` 启动后的 `tsc -b tsconfig.client.json --watch` 持续检查 Client 聚合根程序 |
-| `lint`、`lint:fix`、`doc-typecheck` 与 CI 的 Typert contracts gate 的前置步骤 | Host 包编译与 Host bundle（`compile-referenced-projects.ts host-libraries`），不含 Desktop bundle | 无 |
+| `lint`、`lint:fix`、`doc-typecheck` 与 CI 的 Typert contracts gate 的前置步骤 | Host 包编译与不打包的 Typert 生成并行（`compile-referenced-projects.ts host-contracts`），不含任何 bundle | 无 |
 | CI node 24 / snapshots and artifacts（`check:ci:consumers`）、windows node 24 / build & observational（`check:ci:windows-blocking`） | `build` | 有，两个必需 lane |
 | CI node-compat 22.19 | `build:artifacts`（经 run-gates） | 无 |
 | CI python runtime | `build-exe-for-python-sdk.ts --build-artifacts` | 无 |
@@ -75,7 +75,7 @@ native → host-src ─┬─ host-check ─────────────
 | `release-vendor.yml` 的 PR 演练 | `compile-referenced-projects.ts host-libraries` | 无 |
 | `release-vendor.yml` 的非 PR 分支、`release-vendor-publish.yml` | `build:lib:host` | 仅 Host 聚合根程序 |
 
-`lint`、`lint:fix`、`doc-typecheck` 与 Typert contracts gate 只读取 Typert 输出与包声明：两个聚合配置都是 `noEmit`，oxlint 自行构建程序，`doc-typecheck` 只引用包 project，`host-libraries` 的消费方都不读取 `apps/desktop/lib`。它们的前置步骤因此跳过 Host 聚合检查与 Desktop bundle，耗时从 159.8 s 降到 90.9 s（见下文测量）。
+`lint`、`lint:fix`、`doc-typecheck` 与 Typert contracts gate 只读取 Typert 输出与包声明：两个聚合配置都是 `noEmit`，oxlint 自行构建程序，`doc-typecheck` 只引用包 project，它们都不读取 bundle。它们的前置步骤因此跳过 Host 聚合检查与所有 bundle；仅跳过 Host 聚合检查与 Desktop bundle 就使耗时从 159.8 s 降到 90.9 s（见下文测量）。
 
 consumers lane 的 HMR Web 测试启动 `dev:web`，因此在该 lane 内使用 `build:artifacts`；同一 lane 的 `build` gate 仍运行两个聚合检查。CI 不单独调用 `build:check`：两个必需 lane 已通过 `build` 获得同一组检查。[PR 产物构建决策](2026-10-05-pr-artifact-typechecks.zh.md)的必需完整构建、benchmark `--noCheck`、job 与 worker 上限、node-compat 串行 Vitest、覆盖率权重与 pnpm 打包检查仍然有效；其中的 PR 产物构建由 `build:artifacts` 执行。
 

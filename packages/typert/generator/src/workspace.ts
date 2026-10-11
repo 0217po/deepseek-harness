@@ -3,8 +3,8 @@
  * @module @deepseek-ai/dsh-typert-generator/workspace
  */
 
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 import { TypertAnalysisError, WorkspaceAnalyzer, WorkspaceCaches } from './analyzer.ts'
 import type { DiscoveredTypertPackage } from './analyzer.ts'
 import { FaceModelEmitter } from './emitter.ts'
@@ -26,6 +26,12 @@ export interface WorkspaceTypertGeneratorOptions {
    * merges) run regardless.
    */
   readonly checkDiagnostics?: boolean
+  /**
+   * Fail when an analyzed face program loads a file from a workspace
+   * package's `lib/` directory (default false); see
+   * `WorkspaceAnalyzerOptions.rejectBuildOutputs`.
+   */
+  readonly rejectBuildOutputs?: boolean
 }
 
 /** Discover, analyze, and emit package reflection from independent faces. */
@@ -75,6 +81,7 @@ export class WorkspaceTypertGenerator {
       caches: this.caches,
       ...(faces === undefined ? {} : { faces }),
       ...(this.options.checkDiagnostics === undefined ? {} : { checkDiagnostics: this.options.checkDiagnostics }),
+      ...(this.options.rejectBuildOutputs === undefined ? {} : { rejectBuildOutputs: this.options.rejectBuildOutputs }),
     }).analyze()
     const artifacts: WorkspaceEmitResult[] = []
     for (const face of workspace.faces) {
@@ -162,6 +169,25 @@ export class WorkspaceTypertGenerator {
       }
     }
   }
+}
+
+/**
+ * Find the workspace root that Typert generation runs against: the nearest
+ * directory at or above `start` that holds both `tsconfig.host.json` and
+ * `packages/`. The analyzer registers projects under `<root>/packages`, so a
+ * package's own `tsconfig.host.json` face leaf does not qualify.
+ * @param start - directory to search from, such as a bundle output or a working directory.
+ * @returns the absolute workspace root.
+ * @throws If no ancestor of `start` qualifies.
+ */
+export function findWorkspaceRoot(start: string): string {
+  let current = resolve(start)
+  while (!existsSync(join(current, 'tsconfig.host.json')) || !existsSync(join(current, 'packages'))) {
+    const parent = dirname(current)
+    if (parent === current) throw new Error(`typert-generator: cannot find workspace root above ${start}`)
+    current = parent
+  }
+  return current
 }
 
 /**
