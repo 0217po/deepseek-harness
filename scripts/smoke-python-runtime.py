@@ -1670,6 +1670,19 @@ def smoke_sdk_snapshot_mode(
             )
 
         assert result.final_response == SNAPSHOT_FINAL_TEXT, (result.final_response, harness.client._runtime_diagnostics())
+        jobs = [event for event in result.events if event.get("type") in ("job/registered", "job/settled")]
+        assert [event["type"] for event in jobs] == ["job/registered", "job/settled"], jobs
+        registered, settled = (event["data"] for event in jobs)
+        assert registered["jobId"] == settled["jobId"]
+        assert registered["startedAt"] == settled["startedAt"] <= settled["finishedAt"]
+        assert settled["producerReported"] is True and settled["status"] == "completed"
+        root_call_id = "advanced-code" if mode == "ptc" else "advanced-native"
+        call_id = root_call_id + ":ptc:1" if mode == "ptc" else root_call_id
+        assert registered["toolCall"] == {"callId": call_id, "rootCallId": root_call_id}
+        subscribed_jobs = [notification.payload["event"] for notification in result.notifications
+                           if notification.method == "session.event"
+                           and notification.payload.get("event", {}).get("type") in ("job/registered", "job/settled")]
+        assert subscribed_jobs == jobs
         offloads = [event for event in result.events if event.get("type") == "image/offload"]
         if len(offloads) != 1 or "surfaceOp" in offloads[0]:
             raise AssertionError(f"advanced snapshot expected one standalone image offload: {offloads}")
@@ -1713,6 +1726,8 @@ def smoke_sdk_snapshot_mode(
                 raise AssertionError("first advanced child log has no direct-subagent result")
             if "WORKFLOW_CHILD_OK" not in render_jsonl(logs[child_ids[1]]):
                 raise AssertionError("second advanced child log has no workflow-subagent result")
+
+        assert [event for event in logs[SNAPSHOT_SESSION_ID] if event.get("type") in ("job/registered", "job/settled")] == jobs
 
         files = build_snapshot_files(result, logs, child_ids, root)
         compare_snapshot_files(
@@ -2700,6 +2715,14 @@ def normalize_snapshot_value(
     if not isinstance(value, dict):
         return value
 
+    if value.get("type") in ("job/registered", "job/settled"):
+        data = value.get("data")
+        job_id = data.get("jobId") if isinstance(data, dict) else None
+        if (isinstance(job_id, str) and not re.fullmatch(r"\{\{id:[1-9]\d*\}\}", job_id)
+                and not any(actual == job_id for actual, _ in replacements)):
+            index = 1 + sum(token.startswith("{{id:") for _, token in replacements)
+            replacements.append((job_id, "{{id:" + str(index) + "}}"))
+
     normalized = {
         key: normalize_snapshot_value(item, replacements)
         for key, item in value.items()
@@ -2710,6 +2733,12 @@ def normalize_snapshot_value(
         data = normalized.get("data")
         if isinstance(data, dict) and "childCreatedAt" in data:
             data["childCreatedAt"] = 0
+    if normalized.get("type") in ("job/registered", "job/settled"):
+        data = normalized.get("data")
+        if isinstance(data, dict):
+            for field in ("startedAt", "finishedAt"):
+                if field in data:
+                    data[field] = 0
     if "seq" in normalized and "time" in normalized:
         normalized["time"] = 0
     if normalized.get("type") in ("assistant/message", "assistant/attempt"):
