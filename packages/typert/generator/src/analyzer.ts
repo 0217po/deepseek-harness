@@ -96,6 +96,16 @@ export interface ParsedConfig {
   readonly parsed: ts.ParsedCommandLine
 }
 
+/** The settings Typert reads from one face aggregate tsconfig. */
+export interface AggregateConfig {
+  /** Absolute config path. */
+  readonly path: string
+  /** The aggregate's effective compiler options. */
+  readonly options: ts.CompilerOptions
+  /** The package projects the aggregate references. */
+  readonly projectReferences: readonly ts.ProjectReference[]
+}
+
 /** One package face registration discovered from an aggregate tsconfig. */
 export interface PackageRegistration {
   /** The face whose aggregate references this package project. */
@@ -104,7 +114,11 @@ export interface PackageRegistration {
   readonly name: string
   /** Real package root directory. */
   readonly root: string
-  /** The package's own parsed tsconfig. */
+  /**
+   * The package's own tsconfig, parsed on first read. Typert parses only the
+   * tsconfigs of packages it analyzes; validating every referenced tsconfig
+   * belongs to the preceding `tsc -b`.
+   */
   readonly config: ParsedConfig
   /** The parsed package.json content. */
   readonly manifest: Record<string, unknown>
@@ -211,6 +225,7 @@ export class WorkspaceCaches {
   readonly configs = new Map<string, ParsedConfig>()
   /** Registration inventories keyed by root and aggregate config paths. */
   readonly registrations = new Map<string, PackageRegistration[]>()
+  private readonly aggregates = new Map<string, AggregateConfig>()
   private readonly hosts = new Map<TypertFace, FaceProgramHost>()
 
   /**
@@ -225,6 +240,23 @@ export class WorkspaceCaches {
       this.configs.set(path, parsed)
     }
     return parsed
+  }
+
+  /**
+   * Read one face aggregate tsconfig once per workspace snapshot. An aggregate
+   * that declares `references` is parsed without expanding its `include`
+   * patterns, which affect neither its options nor its references.
+   * @param path - absolute aggregate config path.
+   * @returns the memoized compiler options and project references.
+   */
+  aggregate(path: string): AggregateConfig {
+    let aggregate = this.aggregates.get(path)
+    if (aggregate === undefined) {
+      const { parsed } = parseConfig(path, true)
+      aggregate = { path, options: parsed.options, projectReferences: parsed.projectReferences ?? [] }
+      this.aggregates.set(path, aggregate)
+    }
+    return aggregate
   }
 
   /**
@@ -328,10 +360,10 @@ export class WorkspaceAnalyzer {
           for (const registration of registrations) this.checkProject(registration)
         }
         const aggregatePath = resolve(this.options.root, face === 'host' ? this.options.hostConfig : this.options.clientConfig)
-        const aggregate = this.caches.config(aggregatePath)
+        const aggregate = this.caches.aggregate(aggregatePath)
         const rootNames = [...new Set(registrations.flatMap(registration => registration.config.parsed.fileNames))]
         const options: ts.CompilerOptions = {
-          ...aggregate.parsed.options,
+          ...aggregate.options,
           composite: false,
           incremental: false,
           noEmit: true,
@@ -397,11 +429,13 @@ export class WorkspaceAnalyzer {
   /**
    * Discover package faces from public-export-reachable Cordis augmentations
    * and explicit `@typert` roots without constructing a type-checker program.
+   * @param includeManifest - optional `package.json` predicate; a rejected package's sources and project config are not read.
    * @returns contributors grouped by package with deterministic face order.
    */
-  discoverPackages(): DiscoveredTypertPackage[] {
+  discoverPackages(includeManifest?: (manifest: Readonly<Record<string, unknown>>) => boolean): DiscoveredTypertPackage[] {
     const registrations = this.loadRegistrations()
-      .filter(registration => this.options.faces.includes(registration.face))
+      .filter(registration => this.options.faces.includes(registration.face)
+        && (includeManifest === undefined || includeManifest(registration.manifest)))
       .filter(registration => this.registrationHasSurface(registration))
     const packages = new Map<string, { root: string; faces: Set<TypertFace> }>()
     for (const registration of registrations) {
@@ -481,8 +515,8 @@ export class WorkspaceAnalyzer {
     for (const face of ['host', 'client'] as const) {
       const aggregatePath = resolve(this.options.root, face === 'host' ? this.options.hostConfig : this.options.clientConfig)
       if (!existsSync(aggregatePath)) continue
-      const aggregate = this.caches.config(aggregatePath)
-      for (const reference of aggregate.parsed.projectReferences ?? []) {
+      const aggregate = this.caches.aggregate(aggregatePath)
+      for (const reference of aggregate.projectReferences) {
         const configPath = projectConfigPath(reference.path)
         const packageRoot = dirname(configPath)
         if (!isWithin(realPath(packageRoot), join(this.options.root, 'packages'))
@@ -490,28 +524,31 @@ export class WorkspaceAnalyzer {
         const manifestPath = join(packageRoot, 'package.json')
         if (!existsSync(manifestPath)) continue
         const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>
-        if (typeof manifest.name !== 'string') continue
-        const registration: PackageRegistration = {
-          face,
-          name: manifest.name,
-          root: realPath(packageRoot),
-          config: this.caches.config(configPath),
+        const name = manifest.name
+        if (typeof name !== 'string') continue
+        const root = realPath(packageRoot)
+        const caches = this.caches
+        // The project config is parsed on first use, so discovery and analysis
+        // read only the projects they select.
+        const register = (registrationFace: TypertFace, exportSubpaths?: readonly string[]): PackageRegistration => ({
+          face: registrationFace,
+          name,
+          root,
+          get config() { return caches.config(configPath) },
           manifest,
-        }
+          ...(exportSubpaths === undefined ? {} : { exportSubpaths }),
+        })
         if (!isDualFacePackage(manifest)) {
-          registrations.push(registration)
+          registrations.push(register(face))
         } else if (configPath === join(packageRoot, 'tsconfig.json')) {
           registrations.push(
-            { ...registration, face: 'host', exportSubpaths: hostExportSubpaths(manifest) },
-            { ...registration, face: 'client', exportSubpaths: clientExportSubpaths(manifest) },
+            register('host', hostExportSubpaths(manifest)),
+            register('client', clientExportSubpaths(manifest)),
           )
         } else {
-          registrations.push({
-            ...registration,
-            exportSubpaths: face === 'host'
-              ? hostExportSubpaths(manifest)
-              : clientExportSubpaths(manifest),
-          })
+          registrations.push(register(face, face === 'host'
+            ? hostExportSubpaths(manifest)
+            : clientExportSubpaths(manifest)))
         }
       }
     }
@@ -632,6 +669,9 @@ class FaceAnalyzer {
   private readonly nodes = new Map<TypeNodeId, TypeNodeModel>()
   private readonly exportsByPackage = new Map<string, ExportRecord[]>()
   private readonly nodeOrdinals = new Map<string, number>()
+  /** Registration and package lookups per source path; the registration set is fixed per analyzer. */
+  private readonly registrationByFile = new Map<string, PackageRegistration | undefined>()
+  private readonly packageNameByFile = new Map<string, string>()
   private staticLookups: readonly StaticLookupDeclaration[] | undefined
   private staticContexts: ReadonlyMap<string, StaticContextDeclaration> | undefined
 
@@ -750,8 +790,8 @@ class FaceAnalyzer {
     for (const [subpath, target] of targets) {
       if (target.includes('*') || subpath === './package.json'
         || subpath === './typert' || subpath === './client/typert' || subpath === './remote'
-        // Data exports (bundle patch lists, JSON manifests) carry no TypeScript API.
-        || target.endsWith('.json') || target.endsWith('.yml') || target.endsWith('.yaml')) continue
+        // Data exports carry no TypeScript API; their owning readers validate the resources.
+        || /\.(?:json|ya?ml|svg|png|jpe?g|webp)$/iu.test(target)) continue
       const sourcePath = sourcePathForExport(registration.root, target)
       const sourceFile = this.sourceFiles.get(realPath(sourcePath))
       if (sourceFile === undefined) {
@@ -2659,14 +2699,22 @@ class FaceAnalyzer {
   }
 
   private registrationForFile(file: string): PackageRegistration | undefined {
+    if (this.registrationByFile.has(file)) return this.registrationByFile.get(file)
     const path = realPath(file)
-    return this.allRegistrations
+    const registration = this.allRegistrations
       .find(registration => registration.face === this.face && isWithin(path, registration.root))
+    this.registrationByFile.set(file, registration)
+    return registration
   }
 
   private packageNameForFile(file: string): string {
+    const cached = this.packageNameByFile.get(file)
+    if (cached !== undefined) return cached
     const path = realPath(file)
-    return this.allRegistrations.find(registration => isWithin(path, registration.root))?.name ?? '<external>'
+    const name = this.allRegistrations
+      .find(registration => isWithin(path, registration.root))?.name ?? '<external>'
+    this.packageNameByFile.set(file, name)
+    return name
   }
 
   private allocateNodeId(site: ts.Node): TypeNodeId {
@@ -2747,11 +2795,26 @@ function mergeWorkspaceModels(models: readonly WorkspaceModel[]): WorkspaceModel
   }
 }
 
-function parseConfig(path: string): ParsedConfig {
+/** {@link ts.sys} config reads without directory listing, so `include` patterns match no files. */
+const UNLISTED_CONFIG_HOST: ts.ParseConfigHost = {
+  useCaseSensitiveFileNames: ts.sys.useCaseSensitiveFileNames,
+  readDirectory: () => [],
+  fileExists: file => ts.sys.fileExists(file),
+  readFile: file => ts.sys.readFile(file),
+}
+
+function parseConfig(path: string, aggregate = false): ParsedConfig {
   const compilerPath = path.split(sep).join('/')
   const read = ts.readConfigFile(compilerPath, file => ts.sys.readFile(file))
   if (read.error !== undefined) throw new TypertAnalysisError(formatDiagnostic(read.error))
-  const parsed = ts.parseJsonConfigFileContent(read.config, ts.sys, dirname(compilerPath), undefined, compilerPath)
+  // Include expansion only fills `fileNames`, and TypeScript reports missing
+  // inputs only for a config without `files` or `references`; skipping it for
+  // an aggregate with `references` keeps diagnostics, options, and references.
+  const raw: unknown = read.config
+  const host = aggregate && typeof raw === 'object' && raw !== null && Object.hasOwn(raw, 'references')
+    ? UNLISTED_CONFIG_HOST
+    : ts.sys
+  const parsed = ts.parseJsonConfigFileContent(read.config, host, dirname(compilerPath), undefined, compilerPath)
   if (parsed.errors.length > 0) throw new TypertAnalysisError(parsed.errors.map(formatDiagnostic).join('\n'))
   return { path, parsed }
 }
@@ -2928,7 +2991,9 @@ function classShape(node: ts.ClassDeclaration): ts.ClassDeclaration {
     (ts.canHaveModifiers(member) ? ts.getModifiers(member) : undefined)?.some(modifier =>
       modifier.kind === ts.SyntaxKind.PrivateKeyword || modifier.kind === ts.SyntaxKind.ProtectedKeyword) ?? false
   const members = node.members.flatMap((member): ts.ClassElement[] => {
-    if (nonPublic(member) || (ts.isPropertyDeclaration(member) && ts.isPrivateIdentifier(member.name))) return []
+    const name = ts.getNameOfDeclaration(member)
+    if (ts.isClassStaticBlockDeclaration(member) || nonPublic(member)
+      || (name !== undefined && ts.isPrivateIdentifier(name))) return []
     if (ts.isMethodDeclaration(member)) {
       return [ts.factory.updateMethodDeclaration(
         member,
@@ -3245,9 +3310,15 @@ function formatProgramDiagnostic(root: string, face: TypertFace, diagnostic: ts.
 }
 
 const realPathCache = new Map<string, string>()
+/** Normalized form per requested path; `resolve` reads only the process working directory. */
+const absolutePathCache = new Map<string, string>()
 
 function realPath(path: string): string {
-  const absolute = resolve(path)
+  let absolute = absolutePathCache.get(path)
+  if (absolute === undefined) {
+    absolute = resolve(path)
+    absolutePathCache.set(path, absolute)
+  }
   const cached = realPathCache.get(absolute)
   if (cached !== undefined) return cached
   // Only existing paths are memoized: a path can come into existence later,

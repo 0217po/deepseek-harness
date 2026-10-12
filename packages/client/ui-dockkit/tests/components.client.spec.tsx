@@ -811,7 +811,7 @@ describe('DockSurface', () => {
     // Vitest stubs CSS Modules; bind the real stylesheet's menu selector to its generated class.
     const style = document.createElement('style')
     style.textContent = readFileSync(resolve(import.meta.dirname, '../src/components/dockkit.module.css'), 'utf8')
-      .replaceAll(/\.menu(?=[:\s{])/g, `.${menu.className}`)
+      .replaceAll(/\.menu(?=[:\s{])/g, `.${[...menu.classList].join('.')}`)
     document.head.append(style)
     onTestFinished(() => { style.remove() })
     expect(menu.querySelectorAll('[role^="menuitem"]')).toHaveLength(0)
@@ -1304,6 +1304,34 @@ describe('divider drags', () => {
 })
 
 describe('FloatLayer', () => {
+  it.each([
+    { fullscreen: false, savedY: 0, displayedY: 60 },
+    { fullscreen: true, savedY: 0, displayedY: 20 },
+    { fullscreen: false, savedY: 80, displayedY: 80 },
+    { fullscreen: true, savedY: 80, displayedY: 80 },
+  ])('starts move and resize at $displayedY for saved y=$savedY, fullscreen=$fullscreen without layout reads', ({ fullscreen, savedY, displayedY }) => {
+    const root = document.documentElement
+    const attributes = ['data-windows-titlebar', 'data-fullscreen', 'style'].map(name => [name, root.getAttribute(name)] as const)
+    onTestFinished(() => {
+      for (const [name, value] of attributes) {
+        if (value === null) root.removeAttribute(name)
+        else root.setAttribute(name, value)
+      }
+    })
+    root.setAttribute('data-windows-titlebar', '')
+    root.toggleAttribute('data-fullscreen', fullscreen)
+    root.style.setProperty('--dsh-windows-titlebar-height', '40px')
+    const { intents, paneId, panel } = floating(undefined, savedY)
+    const measure = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    const computedStyle = vi.spyOn(window, 'getComputedStyle')
+    drag(panel.querySelector('[data-dockkit-float-grip]')!, [150, displayedY + 10], [170, displayedY + 30])
+    expect(intents.moveFloat).toHaveBeenCalledWith(paneId, 120, displayedY + 20)
+    drag(panel.querySelector('[data-dockkit-float-resize]')!, [400, displayedY + 200], [420, displayedY + 220])
+    expect(intents.resizeFloat).toHaveBeenCalledWith(paneId, { x: 100, y: displayedY, width: 320, height: 220 })
+    expect(measure).not.toHaveBeenCalled()
+    expect(computedStyle).not.toHaveBeenCalled()
+  })
+
   /** Two floating panels, `lower` under `upper`, with `upper` active. */
   function twoFloats(): {
     intents: ReturnType<typeof spyIntents>
@@ -1333,7 +1361,7 @@ describe('FloatLayer', () => {
   }
 
   /** One floating panel over a spied intent set. */
-  function floating(canCloseTab?: FloatLayerProps['canCloseTab']): {
+  function floating(canCloseTab?: FloatLayerProps['canCloseTab'], y = 80): {
     intents: ReturnType<typeof spyIntents>
     paneId: PaneId
     tabId: TabId
@@ -1341,7 +1369,7 @@ describe('FloatLayer', () => {
   } {
     const controller = seededController()
     const tabId = controller.openContent({ contentId: 'dsh-resource://file/session/s/a.txt', title: 'a.txt', kind: 'file' })
-    const paneId = controller.floatTab(tabId, { x: 100, y: 80, width: 300, height: 200 })
+    const paneId = controller.floatTab(tabId, { x: 100, y, width: 300, height: 200 })
     const intents = spyIntents()
     render(
       <FloatLayer
@@ -1367,7 +1395,7 @@ describe('FloatLayer', () => {
 
   it('closes a floating panel through its own control', () => {
     const { intents, tabId } = floating()
-    fireEvent.click(screen.getByRole('button', { name: TEST_LABELS.closeFloat }))
+    fireEvent.click(screen.getByRole('button', { name: TEST_LABELS.closeTab }))
     expect(intents.closeTab).toHaveBeenCalledWith(tabId)
   })
 
@@ -1375,7 +1403,7 @@ describe('FloatLayer', () => {
     const canCloseTab = vi.fn(() => false)
     const { intents, tabId } = floating(canCloseTab)
     expect(canCloseTab).toHaveBeenCalledWith(tabId)
-    expect(screen.queryByRole('button', { name: TEST_LABELS.closeFloat })).toBeNull()
+    expect(screen.queryByRole('button', { name: TEST_LABELS.closeTab })).toBeNull()
     expect(screen.getByTestId('float-body').textContent).toBe('a.txt')
     fireEvent.click(screen.getByRole('button', { name: TEST_LABELS.dockFloat }))
     expect(intents.unfloatPane).toHaveBeenCalledTimes(1)
@@ -1438,7 +1466,7 @@ describe('FloatLayer', () => {
 
     drag(grip, [150, 90], [180, 110], false)
     expect(panel.style.left).toBe('130px')
-    expect(panel.style.top).toBe('100px')
+    expect(panel.style.top).toBe('max(var(--dsh-dockkit-float-top, 0px), 100px)')
     // Mid-gesture the panel draws on top, as the move it records will leave it.
     expect(panel.style.zIndex).toBe('3')
     fireEvent.pointerUp(window, { pointerId: 7, clientX: 180, clientY: 110 })

@@ -33,7 +33,7 @@ kind: "package-reference"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **面板只提供临时决定**——它支持仅本次允许和拒绝；持久权限策略仍由 Host 侧审批包拥有。
+- **面板只提供临时决定**——它支持仅本次允许和拒绝；持久权限策略仍由 Host 侧审批包拥有。请求方提供的本地化展示文案跟随界面语言，不改写审计原因，也不翻译模型生成的文本。
 
 
 <a id="dev-note"></a>
@@ -45,5 +45,3 @@ kind: "package-reference"
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。Remote listener 与临时 Slot entry 由各自注册表持有并观察。

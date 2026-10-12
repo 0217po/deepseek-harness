@@ -60,12 +60,12 @@ A tab's `kind` is an opaque string. Seeded tabs are factories (`DockControllerOp
 
 `DockLayout`, used by the Sidebar, keeps each tab in a stable DOM cell across selection, pane moves and floating. It accepts one docked pane or two horizontal panes; CSS Grid resolves their widths. `keepMounted(tab)` retains visited bodies and `active` controls Session visibility without reparenting content.
 
-`DockSurface` is the docked area for the separate recursive renderer. Chrome around it — a rail, a collapsed presentation, any history controls — belongs to the embedder, which reads `state.expanded` and decides; the kit ships no undo/redo control of its own. Surface-wide controls the embedder does want on the surface go through the `chrome` prop, which the kit places at the far end of the top-right pane's tab strip (the last child of every row split, the first of every column split), so a surface needs no header row of its own. `FloatLayer` owns its own gestures and positions panels in viewport coordinates, so it may be mounted anywhere, including a portal.
+`DockSurface` is the docked area for the separate recursive renderer. Chrome around it — a rail, a collapsed presentation, any history controls — belongs to the embedder, which reads `state.expanded` and decides; the kit ships no undo/redo control of its own. Surface-wide controls the embedder does want on the surface go through the `chrome` prop, which the kit places at the far end of the top-right pane's tab strip (the last child of every row split, the first of every column split), so a surface needs no header row of its own. `FloatLayer` owns its own gestures and positions panels in viewport coordinates, so it may be mounted anywhere, including a portal. Both float renderers keep the header at least 20px below the Windows caption (20px below the viewport top in native fullscreen), including newly opened and restored panels. Dragging and resizing start at the displayed position.
 
 <a id="interaction-rules-worth-keeping"></a>
 ## Interaction rules worth keeping
 
-The split control accepts effective shortcut tooltip and ARIA labels from its embedder. A disabled control has a keyboard-focusable wrapper that explains the pane-budget or width restriction. Docked and floating pane containers can receive programmatic focus without entering the normal tab sequence or drawing a focus outline; their controls retain their own keyboard focus indicators. Tab navigation and selection use unmodified keys and leave composition input to its owner.
+The split control accepts localized tooltip text, separate effective keys through `splitPaneKeys`, and an ARIA combination from its embedder. Close controls receive their keys through `closeTabKeys`. A disabled control has a keyboard-focusable wrapper that explains the pane-budget or width restriction. Docked and floating pane containers can receive programmatic focus without entering the normal tab sequence or drawing a focus outline; their controls retain their own keyboard focus indicators. Tab navigation and selection use unmodified keys and leave composition input to its owner.
 
 These are not stylistic; each one fixes a defect found in a real browser.
 
@@ -103,6 +103,8 @@ None; this package neither assembles nor sends a provider request.
 <a id="dev-note"></a>
 ### Dev Note
 
+Menus use the shared `MenuSurface` material, including the macOS backing for background blur; custom content follows the [menu rules](../../../docs/web-styling.md#component-rules).
+
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
@@ -111,5 +113,3 @@ None.
 The embedder supplies effective close keycaps and ARIA combinations for tab and floating close controls. Close controls expose the same tooltip on hover and keyboard focus. Tab close tooltips stay hidden while their pane's context menu is open.
 
 </details>
-
-**Runtime invariant:** No companion is published. The engine is pure functions over plain data and the components report intents only; the operation sequence's invertibility and the settle rule are asserted directly by this package's engine specs, and no cordis service is provided or observed.

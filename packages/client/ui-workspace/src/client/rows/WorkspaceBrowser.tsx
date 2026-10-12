@@ -21,7 +21,7 @@ import {
   IconChevronsUpDownOutlineRegular, IconClockOutlineRegular, IconCloseFillRegular,
   IconFlatListOutlineRegular, IconFolderCloseRegular, IconProjectAddOutlineRegular,
   IconQueueOutlineRegular, IconSearchOutlineRegular, IconSlidersTwoOutlineRegular,
-  IconWorkspaceTreeOutlineRegular, Menu, Modal, Toast, Tooltip,
+  IconWorkspaceTreeOutlineRegular, Menu, Modal, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   SessionListState, SessionSearchResultItem,
@@ -861,7 +861,6 @@ export function WorkspaceBrowser({
   requestAddWorkspace,
   closeAddWorkspace,
   setDirectoryBusy,
-  dismissForkError,
   renderSlot,
   t,
 }: WorkspaceBrowserProps) {
@@ -870,8 +869,6 @@ export function WorkspaceBrowser({
   const searchShortcut = shortcuts.find(row => row.id === 'session.search')
   const addShortcut = shortcuts.find(row => row.id === 'workspace.add')
   const shortcutState = useWorkspaceShortcuts(state => state)
-  const hint = (label: string, keys: readonly string[] | undefined) => keys?.length
-    ? t('shortcut.hint', { label, keys: keys.join(' ') }) : label
   // Ordering remains live while the rail or search replaces the list body.
   const list = useSessions(state => state)
   const storedWorkspaces = useWorkspaces(state => state.items)
@@ -1225,7 +1222,7 @@ export function WorkspaceBrowser({
                 searchInput.current?.focus()
               }}
             >
-              <Tooltip label={hint(t('search'), searchShortcut?.keys)} side="bottom" delayMs={500} disabled={searchExpanded}>
+              <Tooltip label={t('search')} shortcutKeys={searchShortcut?.keys} side="bottom" delayMs={500} disabled={searchExpanded}>
                 <button
                   type="button"
                   className={css.searchButton}
@@ -1287,7 +1284,7 @@ export function WorkspaceBrowser({
               picking affordance has nothing to offer here: the region hides the
               button rather than leaving a dead one in the header. */}
           {directoryFlowAvailable && (
-            <Tooltip label={hint(t('workspace.add'), addShortcut?.keys)} side="bottom" delayMs={500}>
+            <Tooltip label={t('workspace.add')} shortcutKeys={addShortcut?.keys} side="bottom" delayMs={500}>
               <button
                 ref={wsPlusRef}
                 type="button"
@@ -1317,7 +1314,7 @@ export function WorkspaceBrowser({
           side="right"
           onPick={(workspaceId) => {
             closeAddWorkspace()
-            startSession(workspaceId)
+            startSession(workspaceId, { clearPreviousDraft: false })
           }}
           onClose={() => { closeAddWorkspace() }}
         />
@@ -1325,7 +1322,7 @@ export function WorkspaceBrowser({
 
       {/* The collapsed rail keeps search as its own 36px control. */}
       {!wide && <div className={css.search}>
-        <Tooltip label={hint(t('search'), searchShortcut?.keys)}>
+        <Tooltip label={t('search')} shortcutKeys={searchShortcut?.keys}>
           <button
             type="button"
             className={css.searchButton}
@@ -1481,9 +1478,6 @@ export function WorkspaceBrowser({
         {deleting && <div className={css.deleteStatus} role="status">{t('delete.pending')}</div>}
         {deleteError !== null && <div className={css.renameError} role="alert">{deleteError}</div>}
       </Modal>
-      {shortcutState.forkError !== null && <Toast key={shortcutState.forkError.seq}
-        text={t(shortcutState.forkError.reason === 'unavailable' ? 'shortcut.noCompletedTurn' : 'shortcut.forkFailed')}
-        onDone={dismissForkError} />}
     </div>
   )
 }

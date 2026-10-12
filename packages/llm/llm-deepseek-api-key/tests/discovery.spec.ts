@@ -1,38 +1,46 @@
-/** The official catalog is offered only while its API key resolves. */
+/** Model discovery requires the API-key route's own credential. */
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
-import { afterEach, expect, it, vi } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import * as ApiKey from '../src/index.ts'
 
-const contexts: Context[] = []
-afterEach(async () => {
-  for (const ctx of contexts.splice(0)) await ctx.fiber.dispose()
-  vi.unstubAllEnvs()
-})
-
-/** Mount the official route with `key` as its launch-environment credential. */
-async function official(key: string): Promise<Context> {
+it.each([undefined, ''])('hides models without an API key: %j', async (key) => {
   vi.stubEnv('DEEPSEEK_API_KEY', key)
   const ctx = new Context()
-  contexts.push(ctx)
-  await ctx.plugin(LlmRuntime)
-  await ctx.plugin(ApiKey, {})
-  return ctx
-}
-
-it('offers no models while the API key is missing', async () => {
-  const ctx = await official('')
-  expect(await ctx.llm.listModels('deepseek-official')).toEqual([])
+  try {
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(ApiKey, {})
+    expect(await ctx.llm.listModels('deepseek-official')).toEqual([])
+  } finally {
+    await ctx.fiber.dispose()
+    vi.unstubAllEnvs()
+  }
 })
 
-it('advertises the configured models once the API key resolves', async () => {
-  const ctx = await official('sk-fixture')
-  expect(await ctx.llm.listModels('deepseek-official')).toEqual(expect.arrayContaining([
-    expect.objectContaining({ provider: 'deepseek-official', id: 'deepseek-flash' }),
-  ]))
+it('advertises configured models with an API key', async () => {
+  vi.stubEnv('DEEPSEEK_API_KEY', 'fixture-api-key')
+  const ctx = new Context()
+  try {
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(ApiKey, {})
+    expect(await ctx.llm.listModels('deepseek-official')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ provider: 'deepseek-official', id: 'deepseek-flash' }),
+    ]))
+  } finally {
+    await ctx.fiber.dispose()
+    vi.unstubAllEnvs()
+  }
 })
 
-it('reports a malformed API key instead of advertising an empty catalog', async () => {
-  const ctx = await official('invalid\nheader')
-  await expect(ctx.llm.listModels('deepseek-official')).rejects.toMatchObject({ code: 'INVALID_CREDENTIAL' })
+it('reports malformed credentials during discovery', async () => {
+  vi.stubEnv('DEEPSEEK_API_KEY', 'invalid\nheader')
+  const ctx = new Context()
+  try {
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(ApiKey, {})
+    await expect(ctx.llm.listModels('deepseek-official')).rejects.toMatchObject({ code: 'INVALID_CREDENTIAL' })
+  } finally {
+    await ctx.fiber.dispose()
+    vi.unstubAllEnvs()
+  }
 })

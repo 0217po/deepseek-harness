@@ -229,7 +229,7 @@ it('cancels an account child without stopping its API-key parent', async () => {
   await parent.whenIdle()
 })
 
-it('advertises account and API-key models only while their own credential is available', async () => {
+it('lists each DeepSeek route only when its own credential is present', async () => {
   vi.stubEnv('DEEPSEEK_API_KEY', '')
   vi.stubGlobal('fetch', vi.fn((input: string | URL | Request) => Promise.resolve(listingRequest(input) ?? new Response(null, { status: 500 }))))
   const ctx = await harness()

@@ -189,7 +189,7 @@
 }
 
 .searchField input:focus-visible {
-  outline: 0;
+  outline: none;
 }
 
 /* The custom right-side button owns clearing the search field. */
@@ -486,7 +486,7 @@
 }
 
 .editName:focus {
-  box-shadow: 0 1px var(--dsw-alias-state-business-primary);
+  box-shadow: 0 1px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
 }
 
 /* An ended task's stored name as plain text on the control's step, padded to
@@ -565,6 +565,12 @@
   padding-bottom: 1px;
   margin-bottom: -1px;
   overflow-x: auto;
+  /* A narrow strip still scrolls its tabs, without a visible bar (both engines). */
+  scrollbar-width: none;
+}
+
+.detailTabs::-webkit-scrollbar {
+  display: none;
 }
 
 .detailActions {
@@ -688,7 +694,7 @@
 }
 
 .retentionInfo:focus-visible {
-  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
 }
 
@@ -788,7 +794,7 @@
 }
 
 .ruleRows .ruleControl:focus-visible {
-  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -838,7 +844,7 @@
 }
 
 .ruleValue:focus-visible .ruleValueFace {
-  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -1183,7 +1189,6 @@
   padding: 2px 0;
 }
 
-/* The occurrence time and its message-id info anchor share one line. */
 .deliveryHead {
   display: flex;
   align-items: center;
@@ -1204,14 +1209,53 @@
   overflow-wrap: anywhere;
 }
 
-/* Instruction text sits in the row's text column at the mock's 13px/22px. */
+/* Instruction text sits in the row's text column at the mock's 13px/22px and
+   shows two lines until its toggle expands it. */
 .savedPrompt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
   margin: 6px 0 0;
   color: var(--dsw-alias-label-tertiary);
   font-size: 13px;
   line-height: 22px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.savedPrompt[data-expanded] {
+  display: block;
+  -webkit-line-clamp: none;
+  line-clamp: none;
+}
+
+/* The negative inline margin offsets the toggle's own padding, so its label
+   starts at the text column's left edge. */
+.savedPromptToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: 2px 0 0 -6px;
+  padding: 1px 6px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.savedPromptToggle:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.savedPromptToggle:focus-visible {
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
 }
 
 .detailActions,
@@ -1234,6 +1278,16 @@
   align-items: center;
   min-width: 0;
   max-width: 200px;
+}
+
+/* A disabled entry passes the pointer to this wrapper, whose tooltip names the
+   compact icon; the wrapper keeps the disabled cursor. */
+.detailContext:has(> button:disabled) {
+  cursor: not-allowed;
+}
+
+.detailContext > button:disabled {
+  pointer-events: none;
 }
 
 /* The staged-edit bar: it appears under the detail tab strip only while the
@@ -1294,7 +1348,7 @@
 }
 
 .linkedSession:focus-visible {
-  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -1362,7 +1416,7 @@
 }
 
 .page :focus-visible {
-  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
 }
 

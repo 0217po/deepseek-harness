@@ -29,7 +29,7 @@ kind: "package-library"
 
 ### 可复用 Component Factory
 
-当一个包定义装配、而互不相关的 parents 需要独立渲染它时，使用 Component Factory。在 `SlotFactoryMap` 中声明完整类型，通过 `ctx.slots.registerFactory()` 安装 definition，通过注入的 `renderFactorySlot()` 渲染 occurrences，并通过调用的 `slots` 选项选择每个已声明的局部 Component。definition 通过 `useFactorySlot(name, fallback)` 读取该选择。
+设计者认为组件或装配可复用时，即使当前只有一个调用方，也可以选择 Component Factory；互不相关的父级、不同的包、额外注入或局部 slot 都不是前提。一次性组件不必使用 Factory。在 `SlotFactoryMap` 中声明完整类型，通过 `ctx.slots.registerFactory()` 安装 definition，通过注入的 `renderFactorySlot()` 渲染 occurrences，并通过调用的 `slots` 选项选择每个已声明的局部 Component。definition 通过 `useFactorySlot(name, fallback)` 读取该选择。
 
 Factory `children` 仍是普通全局 Slots 且必须与 `SlotMap` 匹配，而局部 `slots` 为每个 occurrence 选择一个 Component。occurrence 继承其渲染位置的 scope；`renderFactorySlot()` 不接受 Session identity。共享 Store handle 使用普通 scope 解析。Store factory 保持 lazy，直到 occurrence 首次物化时才为该渲染位置创建一个 handle；若持久化 Store spec 会让 persistence key 在 occurrences 之间冲突，renderer 会拒绝它。
 
@@ -75,7 +75,7 @@ register 调用可以用 `store: defineStore(...)` 声明 store 席位：`init` 
 - [ui-renderer](../ui-renderer/README.zh.md)——实现本包安装约定的 React slot 渲染器。
 - [slot 系统标准](../../../.agents/notes/implemented/architecture/2026-07-22-slot-type-chain-implementation.zh.md)——权威组合模型。
 - [Component Factory](../../../.agents/notes/implemented/architecture/2026-09-10-component-factories-and-local-slots.zh.md)——可复用 definitions、局部 Component 选择与 occurrence 生命周期。
-- [Web 客户端架构](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.zh.md)——本注册表接入的加载链与对象层。
+- [Web 客户端架构](../../../docs/subsystems/web-client.zh.md)——本注册表接入的加载链与对象层。
 
 -----
 
@@ -107,5 +107,3 @@ register 调用可以用 `store: defineStore(...)` 声明 store 席位：`init` 
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。这是零依赖的纯注册表核心，本身不发出 Cordis 事件；`ui-renderer` SlotRegistry 负责事件桥及其不变式。本包的行为规范直接断言 define/register/dispose 的执行顺序。

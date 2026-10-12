@@ -8,22 +8,20 @@ Create reminders in a conversation, then inspect active and inactive tasks and e
 
 ## Table of Contents
 
-- [Enable and create reminders](#create-reminders)
+- [Create reminders](#create-reminders)
 - [Inspect and delete tasks](#manage-tasks)
 - [Edit an active task](#edit-timing)
 - [Timing and delivery reference](#timing-and-delivery)
 - [Further Exploration](#further-exploration)
 
 <a id="create-reminders"></a>
-## Enable and create reminders
+## Create reminders
 
-From a repository checkout, enable Schedule for one `dsh web` process with the explicit overlay. Configure a model provider before asking it to create reminders.
+The shipped Web profile includes the Host Schedule service and the Automation tasks page. Configure a model provider before asking it to create reminders.
 
-```sh
-dsh web --patch apps/cli/config/examples/schedule/cordis.yml
-```
+The `standard`, `cordis`, and `ptc` presets declare the four reminder tools and the clock context that gives the model the current time and the browser's zone, so those presets provide `schedule_create`, `schedule_list`, `schedule_update`, and `schedule_delete`; the `minimal` preset declares neither. A delegated subagent sees none of the four tools, because the presets' delegation rows deny them; a call that reaches one anyway is refused.
 
-Ask the model to create, list, edit, or delete reminders. It uses `schedule_create`, `schedule_list`, `schedule_update`, and `schedule_delete` (update changes one reminder in place and keeps its id and saved delivery records); the Automation tasks page's New action opens a New Session for a creation instead, with the request already written in its composer. Supported choices are a one-time delay in positive whole seconds, an absolute date and time, a fixed interval of at least five minutes, a daily local time with an IANA time zone, a weekly local time with an IANA time zone and ISO weekdays from Monday 1 through Sunday 7, or a five-field cron expression with an explicit IANA time zone, stored in canonical form.
+Ask the model to create, list, edit, or delete reminders. It uses `schedule_create`, `schedule_list`, `schedule_update`, and `schedule_delete` (update changes one reminder in place and keeps its id and saved delivery records); the Automation tasks page's New action opens a New Session for a creation instead, with the request already written in its composer. Supported choices are a one-time delay in positive whole seconds, an absolute date and time, a fixed interval of at least one minute, a daily local time with an IANA time zone, a weekly local time with an IANA time zone and ISO weekdays from Monday 1 through Sunday 7, or a five-field cron expression with an explicit IANA time zone, stored in canonical form.
 
 For example, ask: “Remind me every day at 23:00 in Asia/Shanghai to check the weather.” Open Automation tasks and select the created reminder. Check that its frequency shows a daily rule and the requested zone, not Once. A one-time reminder does not become recurring after delivery.
 
@@ -32,7 +30,7 @@ For example, ask: “Remind me every day at 23:00 in Asia/Shanghai to check the 
 
 Open Automation tasks from the sidebar to view reminders across Sessions without activating their conversations. Search by the stored task name, the instruction, or the task's internal Session id, and filter by the single All, Enabled, or Inactive status row. An idle, unarchived Session row whose Session has at least one active task shows a clock mark; an archived row keeps that cell blank, with its live status on the hover card only. A long hover on a Session row with active tasks lists up to two of those tasks with their frequency and their next run as a device-zone time with its relative duration. The open Session's header shows an icon-only reminder clock while active reminders exist: it opens the sole task's details directly, or a list of the Session's reminders otherwise.
 
-Select a task to open Rules, then choose Delivery records to load the newest 20 saved records. Each saved record reads as one compact row: a clock glyph, the occurrence time in the task's saved zone (the browser's zone for a one-shot or interval task), and the saved instruction when one was stored. Records without a saved instruction never show the current instruction in its place. Load older records adds the next page. Records follow newest-first saved order even if the clock moves backward; they do not describe model execution results. The original Session entry sits in the detail tab strip, so it stays visible while the Rules view scrolls. Unmodified Left/Right arrows and Home/End switch the focused tabs; Alt, Ctrl, Meta, and Shift combinations are not intercepted. Refreshing the task preserves the selected tab.
+Select a task to open Rules, then choose Records to load the newest 20 saved records. Each saved record reads as one compact row: a clock glyph, the occurrence time in the task's saved zone (the browser's zone for a one-shot or interval task), and the saved instruction when one was stored. Records without a saved instruction never show the current instruction in its place. Load older records adds the next page. Records follow newest-first saved order even if the clock moves backward; they do not describe model execution results. The original Session entry sits in the detail tab strip, so it stays visible while the Rules view scrolls. Unmodified Left/Right arrows and Home/End switch the focused tabs; Alt, Ctrl, Meta, and Shift combinations are not intercepted. Refreshing the task preserves the selected tab.
 
 An empty record view means a successful query returned no saved records. Loading, request failure, a missing task, and an invalid older-record cursor have separate messages. Use Retry delivery records after a failed request or missing-task response; use Refresh delivery records after an invalid cursor to reload the newest page. Previously loaded records may remain visible with a warning while a request fails. A new latest delivery refreshes the newest page. Late responses for a task or view you have left do not replace the current view.
 
@@ -50,7 +48,7 @@ Choose Delete task and confirm to stop future delivery and remove the task from 
 In Automation tasks, select an active task and open Rules to edit its name, instruction, and run time. Inactive tasks are read-only, and edits stay in a local draft until you choose Save changes. Editing keeps the task id, original conversation, latest delivery receipt, and all saved delivery records.
 
 - Daily and Weekly: edit Time and Time zone; a weekly rule also toggles Weekday. A clock row shows whole seconds, an untouched row keeps a stored millisecond value for its submit, and the stored IANA zone is kept. A changed rule selects its first future occurrence using the DST rules below.
-- Every: choose Every N hours, Every N minutes, or Every N seconds and enter the quantity in the unit the row states; the smallest accepted interval is 1 hour, 5 minutes, or 300 seconds for that unit, and the submitted interval is whole seconds. A changed interval starts from the Host's accepted-save time, with the first target one new interval later. Time zones do not affect this elapsed interval.
+- Every: choose Every N hours, Every N minutes, or Every N seconds and enter the quantity in the unit the row states; the smallest accepted interval is 1 hour, 1 minute, or 60 seconds for that unit, and the submitted interval is whole seconds. A changed interval starts from the Host's accepted-save time, with the first target one new interval later. Time zones do not affect this elapsed interval.
 - One-shot After/At: edit separate Date and Time rows and Time zone. The initial zone is the record's stored zone, or this device's zone when the record stores none, and the seeded clock names the same stored instant; a one-shot rule that stored no zone shows one hint stating that the selected zone interprets the entered date and time. Changing the zone keeps those clock values and changes the instant. A changed target saves as At with the same task id. The zone is not retained as recurrence metadata.
 
 The rows change only a local draft. Save changes submits the name, instruction, and the complete rule in one update, and a save bar appears while the draft differs from the stored task; Cancel restores the stored values. The Repeat menu offers Weekly, Monday to Friday, Every day, Every N hours, Every N minutes, Every N seconds, Once, and Custom (cron), and the Host accepts any of them, so a one-shot After may save as At. An equivalent normalized rule performs no write or target reset: the same Every interval does not restart its timing, and an unchanged one-shot target preserves After or At. The rows are disabled while a save is in flight. Leaving the card does not roll back a Host write already begun.

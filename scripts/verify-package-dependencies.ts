@@ -1,4 +1,7 @@
-/** Verify and repair npm dependency sections from published Client and Host faces. */
+/**
+ * Verify and repair npm dependency sections from published Client and Host faces, and keep root-provided type
+ * packages out of workspace manifests.
+ */
 
 import { spawnSync } from 'node:child_process'
 import { existsSync, globSync, readFileSync, writeFileSync } from 'node:fs'
@@ -20,6 +23,11 @@ import {
 
 const GATE = 'verify-package-dependencies'
 const CORDIS = '@deepseek-ai/cordis'
+/**
+ * Type packages declared only in the root devDependencies. Each package-local pnpm link is one more
+ * location that TypeScript scans when it computes module specifiers for every JSX file.
+ */
+const ROOT_TYPE_PACKAGES: ReadonlySet<string> = new Set(['@types/react', '@types/react-dom'])
 function workspaceRange(name: string): 'workspace:*' | 'workspace:~' {
   return name === '@deepseek-ai/dsh' || name.startsWith('@deepseek-ai/dsh-') ? 'workspace:*' : 'workspace:~'
 }
@@ -434,7 +442,9 @@ function readAllSourceUses(root: string, pkg: WorkspacePackageManifest): Map<str
       const name = packageNameOf(specifier)
       if (name === undefined) continue
       const typesName = `@types/${name.replace(/^@/, '').replace('/', '__')}`
-      if (declaredSections(pkg.manifest, name).length === 0 && declaredSections(pkg.manifest, typesName).length > 0) {
+      if (!ROOT_TYPE_PACKAGES.has(typesName)
+        && declaredSections(pkg.manifest, name).length === 0
+        && declaredSections(pkg.manifest, typesName).length > 0) {
         runtimeUses ??= collectRuntimeSourcePackageUses(sourcePath, source)
         if (!runtimeUses.has(name)) {
           addUse(uses, typesName, displayPath)
@@ -453,7 +463,7 @@ function readAllSourceUses(root: string, pkg: WorkspacePackageManifest): Map<str
  * @param pkg - Package manifest and directory.
  * @param role - Selected dependency policy role.
  * @param workspaceNames - Workspace package identities.
- * @param policy - Reviewed Host export and configuration-only classifications.
+ * @param policy - Reviewed Host exports, required services, and development-only relationships.
  * @param generatedHostSource - Host module already emitted in memory by a batched Typert pass.
  * @returns Source-derived dependency facts without writing build artifacts.
  */
@@ -469,17 +479,27 @@ export function readPackageDependencyFacts(
   const hostRuntime = role === 'client-only'
     ? { packageUses: new Map<string, string[]>(), exportUses: [] }
     : readHostRuntimeUses(root, pkg, generatedHostSource)
+  const servicePeers = policy.requiredServicePeers?.[pkg.name] ?? []
+  const allSourceUses = readAllSourceUses(root, pkg)
+  for (const name of servicePeers) {
+    if (!workspaceNames.has(name) || !allSourceUses.has(name)) {
+      throw new Error(`${pkg.manifestPath}: requiredServicePeers must name a referenced workspace package: ${name}`)
+    }
+  }
   return {
     manifestPath: pkg.manifestPath,
     role,
     manifest: pkg.manifest,
     workspaceNames,
-    allSourceUses: readAllSourceUses(root, pkg),
+    allSourceUses,
     hostRuntimeSourceUses: hostRuntime.packageUses,
     hostRuntimeExportUses: hostRuntime.exportUses,
-    peerRequiredHostDependencies: new Set(hostRuntime.exportUses
-      .filter(use => policy.peerRequiredHostExports[use.specifier]?.includes(use.exportName) === true)
-      .map(use => use.packageName)),
+    peerRequiredHostDependencies: new Set([
+      ...hostRuntime.exportUses
+        .filter(use => policy.peerRequiredHostExports[use.specifier]?.includes(use.exportName) === true)
+        .map(use => use.packageName),
+      ...servicePeers,
+    ]),
     configurationOnlyDevDependencies: new Set(
       policy.configurationOnlyDevDependencies[pkg.manifest.name ?? ''] ?? [],
     ),
@@ -572,9 +592,10 @@ export function readPackageDependencyState(
     policyViolations: [
       ...discovered.violations,
       ...collectHostDependencyExportPolicyViolations(facts, workspaceNames, policy),
-      ...Object.keys(policy.configurationOnlyDevDependencies)
-        .filter(name => !selectedNames.has(name))
-        .map(name => `configurationOnlyDevDependencies names unmanaged package ${name}`),
+      ...(['configurationOnlyDevDependencies', 'requiredServicePeers'] as const).flatMap(field =>
+        Object.keys(policy[field] ?? {})
+          .filter(name => !selectedNames.has(name))
+          .map(name => `${field} names unmanaged package ${name}`)),
     ].sort(),
     workspaceNames,
   }
@@ -622,6 +643,9 @@ export function expectedPackageDependencies(
       : 'dependencies'
     for (const path of paths) add(name, expectedSection, path)
   }
+  for (const name of facts.peerRequiredHostDependencies) {
+    if (!facts.hostRuntimeSourceUses.has(name)) add(name, 'peer-dev', 'required Cordis service')
+  }
   return new Map([...expected].map(([name, rule]) => [name, {
     section: rule.section,
     origins: [...rule.origins].sort(),
@@ -661,13 +685,13 @@ export function formatManagedRuntimeDependencies(state: PackageDependencyState):
   ]
 }
 
-/** Format Host runtime edges retained as peers by their imported export classification. */
+/** Format Host runtime edges retained as peers for shared exports or required services. */
 export function formatPeerRequiredRuntimeDependencies(state: PackageDependencyState): string[] {
   const rows = managedRuntimeEdges(state, 'peer-dev')
   const packages = new Set(rows.map(row => row.consumer)).size
   return [
-    `${GATE}: ${String(rows.length)} Host runtime edge(s) remain in peerDependencies because their exports require shared identity across ${String(packages)} package(s):`,
-    ...rows.map(row => `  ${row.consumer} -> ${row.dependency}: ${row.exports.join(', ')}`),
+    `${GATE}: ${String(rows.length)} Host runtime edge(s) remain in peerDependencies for shared exports or required services across ${String(packages)} package(s):`,
+    ...rows.map(row => `  ${row.consumer} -> ${row.dependency}: ${row.exports.join(', ') || 'required Cordis service'}`),
   ]
 }
 
@@ -734,6 +758,34 @@ export function collectPackageDependencyViolations(state: PackageDependencyState
     }
   }
   return [...new Set(violations)].sort()
+}
+
+/**
+ * Require each root-provided type package in the root devDependencies and in no workspace manifest.
+ * `--fix` does not remove these declarations.
+ * @param rootManifest - Repository root `package.json`.
+ * @param packages - Every workspace manifest from {@link readWorkspacePackageManifests}.
+ * @returns Violations in stable order.
+ */
+export function collectRootTypePackageViolations(
+  rootManifest: PackageDependencyManifest,
+  packages: readonly WorkspacePackageManifest[],
+): string[] {
+  const violations: string[] = []
+  for (const name of ROOT_TYPE_PACKAGES) {
+    if (rootManifest.devDependencies?.[name] === undefined) {
+      violations.push(`package.json: devDependencies must declare ${name} for every workspace package`)
+    }
+    for (const pkg of packages) {
+      for (const sectionName of declaredSections(pkg.manifest, name)) {
+        violations.push(
+          `${pkg.manifestPath}: remove ${sectionName}.${name}; the root package.json provides it because each `
+          + 'package-local link slows TypeScript JSX checking (packages/client/AGENTS.md#dependency-declaration)',
+        )
+      }
+    }
+  }
+  return violations.sort()
 }
 
 function deleteDependency(
@@ -867,7 +919,13 @@ function main(): void {
       state = readPackageDependencyState(root)
     }
   }
-  const violations = collectPackageDependencyViolations(state)
+  const violations = [
+    ...collectPackageDependencyViolations(state),
+    ...collectRootTypePackageViolations(
+      JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as PackageDependencyManifest,
+      readWorkspacePackageManifests(root).all,
+    ),
+  ].sort()
   if (violations.length > 0) {
     console.error(`${GATE}: ${String(violations.length)} violation(s):`)
     for (const violation of violations) console.error(`  ${violation}`)

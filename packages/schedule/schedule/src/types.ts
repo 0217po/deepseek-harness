@@ -53,7 +53,7 @@ export interface EveryScheduleRecord {
   readonly title: string
   /** Trimmed reminder content supplied at creation. */
   readonly prompt: string
-  /** Fixed safe-integer interval, never below five minutes. */
+  /** Fixed safe-integer interval, never below one minute. */
   readonly everySeconds: number
   /** Next anchor-aligned occurrence while active, or final occurrence when inactive. */
   readonly scheduledAt: string
@@ -311,6 +311,12 @@ export interface FrequencyTooHighError {
   readonly message: string
 }
 
+/** Stable error returned when the target Session belongs to subagent routing, which never receives reminder delivery. */
+export interface SubagentSessionError {
+  readonly code: 'subagent_session'
+  readonly message: string
+}
+
 /** Stable fallback that does not disclose an internal exception. */
 export interface InternalScheduleError {
   readonly code: 'internal_error'
@@ -326,6 +332,7 @@ export type ScheduleToolError =
   | NotFutureError
   | TimeOutOfRangeError
   | FrequencyTooHighError
+  | SubagentSessionError
   | InternalScheduleError
 
 /** Canonical `schedule_create` value. */

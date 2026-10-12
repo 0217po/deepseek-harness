@@ -1,4 +1,4 @@
-/** API-key authentication and discovery for the official DeepSeek route. */
+/** API-key authentication and credential-gated discovery for the official DeepSeek route. */
 import type { Context } from '@deepseek-ai/cordis'
 import { assertUsableApiKey, LlmError } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
@@ -43,7 +43,6 @@ export function apply(ctx: Context, config: Config): void {
       const connection = options()
       try { await resolveApiKey(connection) }
       catch (error) {
-        // A route without its key cannot serve a request, so it offers no models until the key is stored.
         if (error instanceof LlmError && error.code === 'MISSING_CREDENTIAL') return []
         throw error
       }
