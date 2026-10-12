@@ -442,13 +442,14 @@ describe('hand-declared providers', () => {
 describe('catalog routes with per-model configuration', () => {
   it('keeps both Azure protocols under the azure catalog route', () => {
     const provider = resolveProfiles({ azure: {} }).get('azure')?.piProvider
-    const models = provider?.getModels()
+    if (provider === undefined) throw new Error('the installed catalog ships no azure provider')
+    const models = provider.getModels()
+    const protocols = new Set(models.map(model => model.api))
 
-    expect(provider?.id).toBe('azure')
-    expect(models).toEqual(expect.arrayContaining([
-      expect.objectContaining({ provider: 'azure', api: 'azure-openai-responses', id: 'gpt-6.1-sol' }),
-      expect.objectContaining({ provider: 'azure', api: 'openai-completions', id: 'deepseek-v4-pro' }),
-    ]))
+    expect(provider.id).toBe('azure')
+    expect(protocols).toContain('azure-openai-responses')
+    expect(protocols).toContain('openai-completions')
+    expect(models.every(model => model.provider === 'azure')).toBe(true)
     expect(catalogProvider('azure-openai-responses')).toBeUndefined()
   })
 
