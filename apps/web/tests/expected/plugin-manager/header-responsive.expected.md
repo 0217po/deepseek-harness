@@ -1,7 +1,7 @@
 # Plugin header responsive layout
 
 en 1680px: actions beside the heading, single-line; contained; information follows subtitle; focus retained
-en 768px: actions below the heading, single-line; contained; information follows subtitle; focus retained
+en 768px: actions beside the heading, single-line; contained; information follows subtitle; focus retained
 en 520px: actions below the heading, single-line; contained; information follows subtitle; focus retained
 en 440px: actions below the heading, single-line; contained; information follows subtitle; focus retained
 en 390px: actions below the heading, single-line; contained; information follows subtitle; focus retained

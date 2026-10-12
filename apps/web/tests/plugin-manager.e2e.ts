@@ -125,8 +125,11 @@ describe('web e2e: plugin manager', () => {
           const add = header.getByRole('button', { name: language === 'en' ? 'Add plugin' : '添加插件', exact: true })
           await expect.poll(() => add.isEnabled()).toBe(true)
           await add.focus()
+          const frame = probe.locator('[data-shell-bottom]').locator('..')
           for (const width of [1680, 768, 520, 440, 390, 430, 1024]) {
             await probe.setViewportSize({ width, height: 1000 })
+            // The responsive sidebar changes the header's available width after ResizeObserver delivery.
+            await expect.poll(() => frame.getAttribute('data-sidebar-collapsed')).toBe(width < 1024 ? 'true' : null)
             const measure = () => header.evaluate((element) => {
               const heading = element.firstElementChild!
               const actions = element.lastElementChild!
