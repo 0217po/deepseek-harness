@@ -653,7 +653,8 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
       await page.keyboard.press('Enter')
       await drained.promise
       expect(received).toBe(`${input}\r`)
-      await expect.poll(() => page.locator('.xterm-rows:visible').innerText()).toContain('BUFFER_OK')
+      // PTY write completion does not imply that the shell's output has reached xterm.
+      await page.locator('.xterm-rows:visible').getByText('BUFFER_OK', { exact: true }).waitFor()
       expect(handles).toHaveLength(1)
       expect(tripwire.pageErrors).toEqual([])
     } finally {
