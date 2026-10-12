@@ -21,7 +21,7 @@ import SubprocessLocal from '@deepseek-ai/dsh-subprocess-local'
 import { z } from 'zod'
 import * as NativeProvider from '../src/index.ts'
 import { createCuaApi } from '@deepseek-ai/dsh-cua/api'
-import { installNativeFixture } from './native-fixture.ts'
+import { installNativeFixture, startFixtureHost } from './native-fixture.ts'
 
 const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
 const calls = [
@@ -65,8 +65,14 @@ const AuditEvent = z.object({
 it.skipIf(process.platform === 'win32')('shares one application between retained Agent objects while isolating native handles and releasing each connection', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-native-composition-'))
   const context = new Context()
-  onTestFinished(async () => { await context.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
+  const fixture: { close?: () => Promise<void> } = {}
+  onTestFinished(async () => {
+    try { await context.fiber.dispose() } finally {
+      try { await fixture.close?.() } finally { await rm(root, { recursive: true, force: true }) }
+    }
+  })
   const helperPath = await installNativeFixture(root)
+  fixture.close = await startFixtureHost(helperPath)
   await writeFile(join(root, 'observe-helper'), '')
   const readEvents = async () => (await readFile(join(root, 'helper-events.jsonl'), 'utf8')).trim().split('\n').map(line => AuditEvent.parse(JSON.parse(line)))
   const modules = {

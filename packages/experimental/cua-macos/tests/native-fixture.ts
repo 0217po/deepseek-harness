@@ -1,6 +1,7 @@
 /** Per-test executable identity for the shared native protocol fixture. */
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+export { startFixtureHost } from '../../../../snapshots/session/cua-native/fixture-host.mjs'
 
 /**
  * Copy the native fixture with an identity unique to the caller's temporary directory.

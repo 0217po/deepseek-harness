@@ -1,12 +1,10 @@
 #!/usr/bin/env node
 /** Deterministic shared native substitute; this fixture never reads or controls the desktop. */
-import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, unlinkSync } from 'node:fs'
-import { createServer } from 'node:net'
+import { createConnection, createServer } from 'node:net'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
-import { fileURLToPath } from 'node:url'
 
 const args = process.argv.slice(2)
 const argument = name => args[args.indexOf(name) + 1]
@@ -16,19 +14,18 @@ if (!runtimeKey || !runtimeDirectory) throw new Error('Shared fixture needs its 
 const socketPath = join(runtimeDirectory, `${runtimeKey}.sock`)
 
 if (args.includes('--ensure-shared')) {
-  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), '--serve', ...args.filter(arg => arg !== '--ensure-shared')], {
-    detached: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
-  })
-  let timedOut = false
-  const timer = setTimeout(() => { timedOut = true; child.kill() }, Number(argument('--startup-timeout-ms')))
-  child.once('error', () => process.exit(1))
-  child.once('exit', code => process.exit(!timedOut && code === 0 ? 0 : 1))
-  child.once('message', () => {
+  const socket = createConnection(join(runtimeDirectory, `${runtimeKey}.fixture.sock`))
+  const timer = setTimeout(() => socket.destroy(new Error('Fixture host startup timed out')), Number(argument('--startup-timeout-ms')))
+  socket.once('error', error => { process.stderr.write(error.message); process.exitCode = 1 })
+  socket.once('connect', () => socket.write(argument('--startup-timeout-ms') + '\n'))
+  const input = createInterface({ input: socket })
+  input.once('line', line => {
     clearTimeout(timer)
-    if (child.connected) child.disconnect()
-    child.unref()
-    process.stdout.write(JSON.stringify({ type: 'ready', runtimeKey }) + '\n')
+    if (line !== 'ready') { process.stderr.write(line); process.exitCode = 1 }
+    else process.stdout.write(JSON.stringify({ type: 'ready', runtimeKey }) + '\n')
+    socket.end()
   })
+  socket.once('close', () => { clearTimeout(timer) })
 } else {
   serve()
 }
@@ -96,7 +93,7 @@ function serve() {
     if (error.code !== 'EADDRINUSE') process.exit(1)
     process.send({ ready: true }, () => process.exit(0))
   })
-  server.listen(socketPath, () => {
+  server.listen({ path: socketPath }, () => {
     started = true
     record('start')
     process.send?.({ ready: true })

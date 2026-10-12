@@ -31,6 +31,7 @@ const native = vi.hoisted(() => ({
   prepare: vi.fn<(spec: NativeBuildSpec) => Promise<string>>(),
   architecture: vi.fn(() => 'arm64' as const),
   request: vi.fn<NativeClient['request']>(), dispose: vi.fn(), instances: [] as Array<{ disposed: boolean }>,
+  reportDiagnostic: undefined as ((message: string) => void) | undefined,
 }))
 vi.mock('../src/native-build.ts', async importOriginal => ({
   ...await importOriginal<typeof import('../src/native-build.ts')>(),
@@ -41,7 +42,10 @@ vi.mock('@deepseek-ai/dsh-cua/native-client', async importOriginal => ({
   ...await importOriginal<typeof import('@deepseek-ai/dsh-cua/native-client')>(),
   NativeClient: class {
     disposed = false
-    constructor() { native.instances.push(this) }
+    constructor(...args: ConstructorParameters<typeof NativeClient>) {
+      native.reportDiagnostic = args[3]
+      native.instances.push(this)
+    }
     request = native.request
     invalidate() { this.disposed = true }
     async dispose() { this.disposed = true; await native.dispose() }
@@ -69,6 +73,7 @@ async function setup(model?: { provider: string; model: string }) {
   native.request.mockReset().mockResolvedValue([])
   native.dispose.mockReset()
   native.instances.length = 0
+  native.reportDiagnostic = undefined
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await mountAgentLoopTestDependencies(ctx)
@@ -142,6 +147,17 @@ it('correlates a native request with its logged tool invocation', async () => {
   const f = await setup()
   expect((await f.execute()).isError).toBe(false)
   expect(native.request).toHaveBeenCalledExactlyOnceWith('listApps', {}, expect.any(AbortSignal), ToolCallId('lifecycle-1'))
+})
+
+it('sends native diagnostics to the Host logger without changing the tool result', async () => {
+  const f = await setup()
+  const messages: string[] = []
+  const debug = vi.spyOn(f.provider.ctx.logger, 'debug').mockImplementation((message: unknown) => { messages.push(String(message)) })
+  onTestFinished(() => { debug.mockRestore() })
+  const result = await f.execute()
+  native.reportDiagnostic?.('fixture screenshot phase')
+  expect(messages).toEqual(['fixture screenshot phase'])
+  expect(JSON.stringify(result)).not.toContain('fixture screenshot phase')
 })
 
 it('rejects helper acquisition when Agent disposal begins during replacement cleanup', async () => {

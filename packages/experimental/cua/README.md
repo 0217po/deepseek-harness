@@ -55,7 +55,6 @@ The provider calls [installCua](src/index.ts) with its prepared helper, connecti
 ## Further Exploration
 
 - [macOS provider](../cua-macos/README.md)
-- [Windows implementation scope](../cua-windows/README.md)
 - [Object interfaces](src/types.ts)
 
 -----
@@ -81,7 +80,7 @@ Results append to history. Retaining objects does not rewrite previous messages;
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Native execution currently uses the macOS provider. Windows support is in development in a separate directory.
+- Native execution currently uses the macOS provider. Windows support is planned as a separate provider package with a C# helper, retaining the shared app/window API, authorization, snapshot validity, and action-result semantics. Its implementation must document system-specific limitations and distinguish cross-compilation evidence from Windows desktop validation.
 - Persistent variables do not reserve an application across a sequence of operations. Other Agents and the user can change its state.
 - The package stays in `experimental` until Windows support and platform validation permit promotion to the `computer-use` group.
 

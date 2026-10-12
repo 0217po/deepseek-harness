@@ -18,7 +18,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import Subprocess from '@deepseek-ai/dsh-subprocess-local'
 import { expect, it } from 'vitest'
 import * as Cua from '../src/index.ts'
-import { installNativeFixture } from './native-fixture.ts'
+import { installNativeFixture, startFixtureHost } from './native-fixture.ts'
 import { Request } from '@deepseek-ai/dsh-cua/protocol'
 
 const bridge = fileURLToPath(new URL('../../cua/lib/bridge.js', import.meta.url))
@@ -36,8 +36,10 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
   'imports the installation-owned bridge outside the repository and retains objects with current bindings', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'dsh-cua-external-project-'))
     const ctx = new Context()
+    let closeFixture: (() => Promise<void>) | undefined
     try {
       const helperPath = await installNativeFixture(cwd)
+      closeFixture = await startFixtureHost(helperPath)
       await mountAgentLoopTestDependencies(ctx)
       await ctx.plugin(FileSystem)
       await ctx.plugin(Subprocess)
@@ -80,7 +82,9 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
       expect(second.value).toContain('Count: 2')
       expect(calls.filter(call => call.phase === 'second').map(call => call.method)).toEqual(['getState', 'click', 'getState'])
     } finally {
-      try { await ctx.fiber.dispose() } finally { await rm(cwd, { recursive: true, force: true }) }
+      try { await ctx.fiber.dispose() } finally {
+        try { await closeFixture?.() } finally { await rm(cwd, { recursive: true, force: true }) }
+      }
     }
   },
 )

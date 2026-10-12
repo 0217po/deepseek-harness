@@ -29,7 +29,7 @@ import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 import sharp from 'sharp'
 import { expect, it, onTestFinished } from 'vitest'
 import * as NativeProvider from '../src/index.ts'
-import { installNativeFixture } from './native-fixture.ts'
+import { installNativeFixture, startFixtureHost } from './native-fixture.ts'
 
 const WIDTH = 2048
 const HEIGHT = 1024
@@ -39,8 +39,11 @@ const MODEL = 'large-image-vision-fixture'
 it.skipIf(process.platform === 'win32')('delivers a valid PNG larger than 4 MiB through disk storage and Node PTC into the next model image request', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-cua-large-image-'))
   const context = new Context()
+  const fixture: { close?: () => Promise<void> } = {}
   onTestFinished(async () => {
-    try { await context.fiber.dispose() } finally { await rm(root, { recursive: true, force: true }) }
+    try { await context.fiber.dispose() } finally {
+      try { await fixture.close?.() } finally { await rm(root, { recursive: true, force: true }) }
+    }
   })
   // Uncompressed encoding makes the size deterministic without private screenshots
   // or random pixels. The attachment store still uses its ordinary normalization policy.
@@ -55,6 +58,7 @@ it.skipIf(process.platform === 'win32')('delivers a valid PNG larger than 4 MiB 
   const encodedLength = source.toString('base64').length
 
   const helperPath = await installNativeFixture(root)
+  fixture.close = await startFixtureHost(helperPath)
   await writeFile(join(root, 'fixture-screenshot.json'), JSON.stringify({
     file: './generated-screenshot.png', pixelWidth: WIDTH, pixelHeight: HEIGHT,
     bounds: { x: 0, y: 0, width: 1024, height: 512 },
