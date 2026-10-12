@@ -1,6 +1,6 @@
 import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
@@ -50,7 +50,7 @@ it('loads Desktop Office CLI paths and removes them on disposal', async () => {
     await ctx.loader.await()
     for (const entry of ctx.loader.entries()) await entry.fiber?.await()
     expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(['office', 'office-docx', 'office-export-pdf', 'office-pptx', 'office-recalculate', 'office-render', 'office-xlsx'])
-    expect((await ctx.skills.get('office-pptx'))?.resourceBase).toEqual({ kind: 'directory', path: join(assets, 'office-pptx') })
+    expect((await ctx.skills.get('office-pptx'))?.resourceBase).toEqual({ kind: 'directory', path: join(assets, 'office-pptx').split(sep).join('/') })
     expect((await ctx.skills.get('office-pptx'))?.content).toContain('office-render')
     expect((await ctx.skills.get('office-pptx'))?.content).not.toContain(nodeDirectory)
     expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['load_workspace_dependencies'])
