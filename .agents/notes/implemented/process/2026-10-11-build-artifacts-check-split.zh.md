@@ -101,7 +101,7 @@ wall 中位数从 249.4 s 降到 172.1 s（−77.3 s，−31%）。各步骤单�
 | 开发迭代：master `build`，本分支 `build:artifacts` | 317.1 s | 153.6 s（−51.6%） | 423.1 → 231.2 s（−45.4%） | 6.11 → 6.18 GiB |
 | `pnpm run build:check`（`build:artifacts` 之后） | — | 67.7 s | 144.6 s | 5.33 GiB |
 | `pnpm run build:check` 无改动重跑 | — | 19.4 s | 33.1 s | 未测量 |
-| `lint` 与 `doc-typecheck` 的前置步骤：master `build:lib:host`，本分支 `host-libraries` | 159.8 s | 90.9 s（−43.2%） | 234.7 → 136.0 s | 未测量 |
+| `lint` 与 `doc-typecheck` 的前置步骤：master `build:lib:host`，本分支 `host-libraries`（后由 `host-contracts` 取代，见[本地门禁提速](2026-10-12-local-gate-speedups.zh.md)） | 159.8 s | 90.9 s（−43.2%） | 234.7 → 136.0 s | 未测量 |
 
 本分支串行样本运行时主机上有其他工作（外来 CPU 742 s），因此它的 wall 可能高估串行成本。串行构建的各段中（master → 本分支，各一个样本），Host tsdown 从 22.5 s 降到 11.7 s，Client 包编译从 55.6 s 降到 48.7 s，Client 聚合检查从 68.2 s 降到 35.9 s，Client tsdown 从 13.9 s 降到 10.5 s；各段合计分别为 308.5 s 与 254.9 s。这些缩短来自[无损提速 Note](2026-10-11-lossless-build-speedups.zh.md)；从 254.9 s 的串行各段合计到 169.1 s 的并发构建，其余缩短来自本 Note 的调度，它把 Host 聚合检查（约 66 s）移出关键路径。并发构建的关键路径是 native → host-src → host-bundle → desktop-bundle → client-src → client-check，host-check 在最后一步结束前约 30 s 完成（取自更早的一个样本）。`build:check` 并发运行 Host 与 Client 聚合检查，因此其 wall 等于 Host 聚合检查的 wall（约 65 s）。
 

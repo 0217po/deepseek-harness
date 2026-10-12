@@ -156,7 +156,7 @@ pnpm run dev:web
 pnpm run build:lib
 ```
 
-运行中的 Client watcher 会在重新打包时消费这些生成文件。若已单独运行 `pnpm run build:lib:host` 刷新 Host 约定，也可再运行 `pnpm run build:lib:client` 完成 Client 侧；干净工作树不能跳过 Host 阶段。仅重新编译前端源码不能从 Host decorator 推导新类型。`pnpm run typecheck` 先以不打包的 Typert 生成刷新 Host 约定，再运行 Client tsc；CI 与发布构建则在 Client tsc 之前的 Host bundle 阶段生成它。
+运行中的 Client watcher 会在重新打包时消费这些生成文件。若已单独运行 `pnpm run build:lib:host` 刷新 Host 约定，也可再运行 `pnpm run build:lib:client` 完成 Client 侧；干净工作树不能跳过 Host 阶段。仅重新编译前端源码不能从 Host decorator 推导新类型。`pnpm run typecheck` 先以不打包的 Typert 生成刷新 Host 约定，再运行 Client tsc；CI 的构建 lane 与发布构建则在 Client tsc 之前的 Host bundle 阶段生成它。
 
 <a id="boundaries"></a>
 

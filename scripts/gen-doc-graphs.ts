@@ -1783,7 +1783,8 @@ function memoize<A extends readonly unknown[], R>(
  * Typert programs and the event-relation Program, shares one view of the filesystem.
  * The workspace must not change while `run` executes. A probe that throws records
  * nothing, and array results are copied for each caller. The original methods are
- * restored when `run` returns or throws.
+ * restored when `run` returns or throws. The memo patches `system` itself, so `run`
+ * must be synchronous and must not call this function again.
  * @param run - read-only analysis that runs under the memo.
  * @param system - TypeScript system whose probes are memoized.
  * @returns the value returned by `run`.
