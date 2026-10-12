@@ -214,15 +214,30 @@ describe.skipIf(process.platform === 'win32')('shared native Unix connection', (
 
   it('removes the ready frame while preserving response bytes from its final chunk', async () => {
     const result = Buffer.from('{"diagnostic":{"stage":"hello"}}\n{"id":"one","result":true}\n')
+    const fragment = Promise.withResolvers<{ socket: Socket; ready: Buffer }>()
+    const consumed: PromiseWithResolvers<void> = Promise.withResolvers()
     const f = await fixture({ ready: (socket, ready) => {
-      socket.write(ready.subarray(0, 7), () => {
-        setImmediate(() => socket.write(Buffer.concat([ready.subarray(7), result])))
-      })
+      socket.write(ready.subarray(0, 7))
+      fragment.resolve({ socket, ready })
     } })
-    const channel = f.open()
-    expect(await nextBytes(channel, 2)).toEqual(result)
-    channel.close()
-    await channel.waitForClose()
+    // Kernel buffering can coalesce separate writes; the client must consume the prefix before the suffix is sent.
+    // oxlint-disable-next-line typescript/unbound-method -- Reflect.apply supplies the original Socket receiver.
+    const originalConnect = Socket.prototype.connect
+    const connect = vi.spyOn(Socket.prototype, 'connect').mockImplementation(function (this: Socket, ...args: unknown[]) {
+      if (args[0] === f.socketPath) this.once('data', () => { consumed.resolve() })
+      Reflect.apply(originalConnect, this, args)
+      return this
+    })
+    try {
+      const channel = f.open()
+      const response = nextBytes(channel, 2)
+      await consumed.promise
+      const { socket, ready } = await fragment.promise
+      socket.write(Buffer.concat([ready.subarray(7), result]))
+      expect(await response).toEqual(result)
+      channel.close()
+      await channel.waitForClose()
+    } finally { connect.mockRestore() }
   })
 
   it.each(['protocol', 'identity', 'json', 'utf8', 'oversized', 'refusal', 'refusal-retry-code'] as const)('rejects %s handshakes before writing operations', async (kind) => {

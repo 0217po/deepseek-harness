@@ -634,18 +634,25 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
     const write = handle.write.bind(handle)
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
+    const drained = Promise.withResolvers<undefined>()
+    const input = `printf 'BUFFER_%s\\n' OK # ${'a'.repeat(3000)}`
+    let received = ''
     const paused = vi.spyOn(handle, 'write').mockImplementation(async (data) => {
       entered.resolve(undefined)
       await release.promise
       await write(data)
+      received += data
+      if (received.length >= input.length + 1) drained.resolve(undefined)
     })
     try {
       await page.locator('.xterm-helper-textarea:visible').click()
-      await page.keyboard.type(`printf 'BUFFER_%s\\n' OK # ${'a'.repeat(3000)}`)
+      await page.keyboard.type(input)
       await entered.promise
       expect(paused).toHaveBeenCalledTimes(1)
       release.resolve(undefined)
       await page.keyboard.press('Enter')
+      await drained.promise
+      expect(received).toBe(`${input}\r`)
       await expect.poll(() => page.locator('.xterm-rows:visible').innerText()).toContain('BUFFER_OK')
       expect(handles).toHaveLength(1)
       expect(tripwire.pageErrors).toEqual([])
