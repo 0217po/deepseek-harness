@@ -122,7 +122,7 @@ function requireReadableFile(environment, name) {
  * Validate the packaging mode before preparation without invoking a token or Apple's services.
  * @param {NodeJS.ProcessEnv} environment Selected local defaults or file-owned release settings.
  * @param {{ platform: 'win32' | 'darwin', arch: string }} target Selected release target.
- * @param {{ unsigned?: boolean, prepareOnly?: boolean }} options Explicit packaging mode.
+ * @param {{ unsigned?: boolean, prepareOnly?: boolean, skipNotarization?: boolean }} options Explicit packaging mode.
  * @returns {void}
  */
 export function validateDesktopPackageEnvironment(environment, target, options = {}) {
@@ -144,17 +144,19 @@ export function validateDesktopPackageEnvironment(environment, target, options =
   } else {
     if (environment.DSH_DESKTOP_MACOS_SIGNATURE_CACHE_DIR !== undefined) validateMacOSSignatureCacheDirectory(environment.DSH_DESKTOP_MACOS_SIGNATURE_CACHE_DIR)
     resolveMacOSSigningEnvironment(environment)
-    const strategies = [
-      ['APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID'],
-      ['APPLE_API_KEY', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER'],
-      ['APPLE_KEYCHAIN_PROFILE', 'APPLE_KEYCHAIN'],
-    ]
-    if (strategies.filter(names => names.some(name => environment[name] !== undefined)).length > 1) {
-      throw new Error('desktop package: configure exactly one macOS notarization strategy; comment out the other strategies')
+    if (!options.skipNotarization) {
+      const strategies = [
+        ['APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID'],
+        ['APPLE_API_KEY', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER'],
+        ['APPLE_KEYCHAIN_PROFILE', 'APPLE_KEYCHAIN'],
+      ]
+      if (strategies.filter(names => names.some(name => environment[name] !== undefined)).length > 1) {
+        throw new Error('desktop package: configure exactly one macOS notarization strategy; comment out the other strategies')
+      }
+      const credentials = resolveMacOSNotarizationEnvironment(environment)
+      if ('appleApiKey' in credentials) requireReadableFile(environment, 'APPLE_API_KEY')
+      if ('keychain' in credentials) requireReadableFile(environment, 'APPLE_KEYCHAIN')
     }
-    const credentials = resolveMacOSNotarizationEnvironment(environment)
-    if ('appleApiKey' in credentials) requireReadableFile(environment, 'APPLE_API_KEY')
-    if ('keychain' in credentials) requireReadableFile(environment, 'APPLE_KEYCHAIN')
     requireReadableFile(environment, 'CSC_LINK')
     if (environment.CSC_KEY_PASSWORD === undefined) {
       throw new Error('desktop package: CSC_KEY_PASSWORD must be set to the p12 export password (use an explicit empty value for an unencrypted p12)')
