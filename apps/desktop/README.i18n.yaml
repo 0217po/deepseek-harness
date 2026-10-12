@@ -42,8 +42,8 @@
   en: 4cd8a8da6977928d
   zh: 9f624855a2edac37
 /deepseek-harness-desktop/package/release-versions:
-  en: d938302f92fc3a1a
-  zh: 29df50bc8791baa7
+  en: fdc1fadc506d1087
+  zh: 46d5cb8a60ddf7cf
 /deepseek-harness-desktop/package/local-macos-dmg-without-release-signing:
   en: 57869a5e3885f843
   zh: 7cfc01b2dcbebd78
@@ -57,14 +57,14 @@
   en: f48baa680e841b0d
   zh: 25ded1aeaac6dad1
 /deepseek-harness-desktop/package/unsigned-windows-test-installer:
-  en: fb6de542360dbae7
-  zh: 0e17d7765fb10c48
+  en: 2e30de3155c32344
+  zh: be88a9d7f8682e75
 /deepseek-harness-desktop/package/windows-installer-interface:
   en: 1fc1db8f54475c8f
   zh: dd834ed206070396
 /deepseek-harness-desktop/package/windows-ev-signing:
-  en: 64836513eb7eda6e
-  zh: 6ebb9184a7aa51de
+  en: 5c12ccf2f4482606
+  zh: efea2cb823bda62f
 /deepseek-harness-desktop/package/desktop-runtime-preparation:
   en: 9a71990bee9867a7
   zh: 76c5c1fdff6e6908
