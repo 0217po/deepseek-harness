@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包让模型创建具名 teammate、向它们发送消息、查看可用状态、等待进展、中断卡住的工作，并通过共享任务板协调。默认情况下，每个团队成员都会获得相同的九个工具，以及在共享工作区协调的指引。当模型只应在你明确要求后运行团队时，选择本包。它会取代同名的旧版 subagent 控件，因此同时需要两者的组合必须禁用旧定义。本包以实验性名称公开发布，但不提供稳定性保证。
+本包让模型创建具名 teammate、向它们发送消息、查看可用状态、等待进展、中断卡住的工作，并通过共享任务板协调。每个团队成员都会获得相同的九个工具，以及在共享工作区协调的指引。当模型只应在你明确要求后运行团队时，选择本包。它会取代同名的旧版 subagent 控件，因此同时需要两者的组合必须禁用旧定义。本包以实验性名称公开发布，但不提供稳定性保证。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当模型应该通过工具运行一支团队时，在 `@deepseek-ai/dsh-experimental-agent-team` 之上挂载本包。挂载后，每个团队成员——Lead 与每个 teammate——都会获得相同的已启用工具，以及相同的协作策略。`spawn_teammate` 在初始任务前加上 teammate 的角色和名字。
+当模型应该通过工具运行一支团队时，在 `@deepseek-ai/dsh-experimental-agent-team` 之上挂载本包。挂载后，每个团队成员——Lead 与每个 teammate——都会获得相同的九个工具，以及相同的协作策略。`spawn_teammate` 在初始任务前加上 teammate 的角色和名字。
 
 ### 何时选择
 
@@ -33,7 +33,7 @@ kind: "package-reference"
 
 ### 最小工作示例
 
-对现有组合的最小增量是 [agent-team README](../agent-team/README.zh.md#smallest-working-setup) 中的两包片段：持久会话存储、团队领域包与本包。插件接受以下可选设置：
+对现有组合的最小增量是 [agent-team README](../agent-team/README.zh.md#smallest-working-setup) 中的两包片段：持久会话存储、团队领域包与本包。插件本身只有两个可选设置：
 
 ```yaml
 - id: tool-agent-team
@@ -41,24 +41,20 @@ kind: "package-reference"
   config:
     freshProvider: spawn
     forkProvider: fork
-    interrupt: false
 ```
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `freshProvider` | `spawn` | 启动 fresh teammate 的提供方 |
 | `forkProvider` | `fork` | 启动 fork teammate 的提供方 |
-| `interrupt` | `true` | 向 Team 成员暴露 `interrupt_agent` |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-tool-agent-team)是每个受支持字段及其 JSDoc 的穷尽式真源。
-
-设置 `interrupt: false` 后，Lead 与所有 teammate（包括恢复的成员）都不会获得 `interrupt_agent` 及其策略指引。其他八个工具和领域中断 API 仍然可用。此设置仅控制本插件：请继续禁用旧版 `tool-subagent-control` 插件，避免其同名工具变为可见。
 
 试试这样要求 Lead 模型：「创建一个名为 reviewer 的 teammate 检查 diff，再把变更摘要发给 reviewer」。模型会调用创建工具，然后调用消息工具。
 
 ### 模型能做什么
 
-启用中断时，九个工具分为四类能力：
+九个工具分为四类能力：
 
 - **创建 teammate**——`spawn_teammate` 接收名字、描述与初始任务；只有 Lead 可以调用它。
 - **发送消息**——`send_message` 在最近的步骤边界对运行中的成员进行 steering（中途引导）、启动或恢复非活动成员。
@@ -95,11 +91,11 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口：配置、按配置生成的策略文本与 scoped 工具注册 |
+| [`src/index.ts`](src/index.ts) | 插件入口：配置、固定策略文本与九个 scoped 工具注册 |
 
 ### 策略与工具
 
-member scope 上的一个 `team:policy` 段落说明共享的协作规则；策略文本与工具注册都声明在 [`src/index.ts`](src/index.ts)。已启用的工具 schema 注册在发布时被识别为 Team member 的 scope 中。与旧全局 continuable-subagent 控件同名的 scoped 注册只会为团队成员覆盖这些全局控件。
+member scope 上的一个 `team:policy` 段落说明共享的协作规则；固定文本与九个工具注册都声明在 [`src/index.ts`](src/index.ts)。九个工具 schema 注册在发布时被识别为 Team member 的 scope 中。与旧全局 continuable-subagent 控件同名的 scoped 注册只会为团队成员覆盖这些全局控件。
 
 ### 按作用域注册与拆除
 
@@ -128,11 +124,11 @@ member scope 上的一个 `team:policy` 段落说明共享的协作规则；策�
 
 #### 模型看到什么
 
-共享系统 policy 覆盖显式委派、共享 cwd 安全、任务协调、Steer 投递、inbox 接收和 Lead 等待责任。Lead 与 teammate 使用相同的已启用 schema；执行时落实 Lead-only 操作。`spawn_teammate` 在初始任务前加入用户角色提醒，说明 teammate 名称、Lead 名称与消息工具。提醒随普通历史经历恢复与压缩。
+共享系统 policy 覆盖显式委派、共享 cwd 安全、任务协调、Steer 投递、inbox 接收和 Lead 等待责任。Lead 与 teammate 使用相同的九个 schema；执行时落实 Lead-only 操作。`spawn_teammate` 在初始任务前加入用户角色提醒，说明 teammate 名称、Lead 名称与消息工具。提醒随普通历史经历恢复与压缩。
 
 #### Token 影响
 
-每次 Team member 请求都有策略与 schema 成本；禁用中断会移除其 schema 与指引。初始身份文本随普通历史经历后续步骤、冷恢复和压缩；插件不扫描或重新插入它。工具调用会增加紧凑 JSON roster、task、wait 或 receipt 结果。Peer 内容由 Team 领域保留在 target 历史中。
+每次 Team member 请求都有固定策略与 schema 成本。初始身份文本随普通历史经历后续步骤、冷恢复和压缩；插件不扫描或重新插入它。工具调用会增加紧凑 JSON roster、task、wait 或 receipt 结果。Peer 内容由 Team 领域保留在 target 历史中。
 
 #### KV Cache 影响
 

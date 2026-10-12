@@ -13,7 +13,7 @@ export const name = 'tool-agent-team'
 /** Services required by the Team tool plugin. */
 export const inject = ['agents', 'agentTeams', 'tools', 'systemPrompt']
 
-/** Tool registration and routing configuration. */
+/** Tool routing configuration. */
 export interface Config {
   /** Register `interrupt_agent` and its policy guidance. Defaults to true; false leaves the domain API available. */
   readonly interrupt?: boolean
