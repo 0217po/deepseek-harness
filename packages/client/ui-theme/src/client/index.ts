@@ -10,6 +10,7 @@
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
 // Type-only: the ctx.configForms Context merge. Cross-plugin collaboration
 // goes through the service, never a value import (client bundle purity gate).
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -480,7 +481,8 @@ export const inject = ['slots', 'locale', 'remote', 'configForms']
 /**
  * Client plugin body: provide the theme service and register the
  * feature-owned Appearance and font settings rows into the General section's item
- * slot (a feature owns its settings surface).
+ * slot (a feature owns its settings surface). Desktop font-size shortcuts share
+ * the text settings when the keyboard service is available.
  * @param ctx - client cordis context.
  */
 export function apply(ctx: ClientContext): void {
@@ -490,6 +492,32 @@ export function apply(ctx: ClientContext): void {
   ctx.provide('theme', theme)
 
   ctx.effect(() => ctx.locale.register(SETTINGS_NS, { zh, en }), 'ui-theme: settings row dictionaries')
+
+  ctx.inject(['shortcuts'], (scope) => {
+    if (scope.shortcuts.runtime !== 'desktop') return
+    const t = scope.locale.bind(SETTINGS_NS)
+    for (const [direction, code] of [['increase', 'Equal'], ['decrease', 'Minus']] as const) {
+      const binding = { code, modifiers: ['primary'] as const }
+      const bindings = direction === 'increase'
+        ? [binding, { code, modifiers: ['primary', 'shift'] as const }] as const : [binding] as const
+      scope.effect(() => scope.shortcuts.registerFixed({
+        id: `fontSize.${direction}` as ShortcutCommandId, label: () => t(`fontSize.text.${direction}`),
+        keys: scope.shortcuts.describeBinding(binding).keys.map(key => key === '=' ? '+' : key),
+        bindings, group: 'application',
+      }), `ui-theme: ${direction} font size reference`)
+    }
+    scope.effect(() => scope.shortcuts.observeFixedInput((input) => {
+      if (input.type === 'reset') return
+      const { gesture, context } = input
+      if (gesture.composing || gesture.defaultPrevented || gesture.repeat || context.region === 'terminal'
+        || gesture.alt || (scope.shortcuts.platform === 'macos' ? !gesture.meta || gesture.control : !gesture.control || gesture.meta)
+        || (gesture.code !== 'Equal' && gesture.code !== 'Minus') || (gesture.code === 'Minus' && gesture.shift)) return
+      input.consume()
+      const { min, max } = FONT_SIZE_SPECS.text
+      const delta = gesture.code === 'Equal' ? 1 : -1
+      theme.setFontSize('text', Math.max(min, Math.min(max, theme.getTheme().fontSizes.text + delta)))
+    }), 'ui-theme: font size input')
+  })
 
   const store = createAppearanceRowStore()
   let bound: BoundActions<typeof store> | undefined
