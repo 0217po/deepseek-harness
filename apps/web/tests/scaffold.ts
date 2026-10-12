@@ -887,10 +887,10 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       baseUrl = `http://${publicHost}:${String(publicProxy.port)}${publicPrefix}`
     }
     authenticatedUrl = ctx.connection.authenticatedUrl(baseUrl)
-    // Chromium resolves *.localhost itself; Node may not, so a mounted scaffold
-    // posts the exchange to loopback, the authority the Host fence always trusts.
+    // Chromium resolves *.localhost itself; Node may not. Both scaffold
+    // listeners bind loopback, including the optional prefix proxy.
     const loginUrl = new URL(authenticatedUrl)
-    if (publicPrefix !== undefined) loginUrl.hostname = '127.0.0.1'
+    loginUrl.hostname = '127.0.0.1'
     const login = await fetch(loginUrl, { redirect: 'manual' })
     const setCookie = login.headers.get('set-cookie')
     if (login.status !== 303 || login.headers.get('location') !== './' || setCookie === null) {
@@ -1126,6 +1126,9 @@ export function normalizeWebSessionVolatiles(log: string, workspaceCwd?: string)
     let record = normalizeClientTimeZones(mapJsonStringValues(JSON.parse(line), (value) => {
       let normalized = value
         .replace(/Anonymous user: [0-9a-f-]{36}(?=\.$)/gi, 'Anonymous user: {{anonymousUserId}}')
+        // The checkout path and listener port differ per machine and run.
+        .replace(/Current DeepSeek Harness implementation checkout: "(?:[^"\\]|\\.)*"\./g, 'Current DeepSeek Harness implementation checkout: "{{sourceRoot}}".')
+        .replace(/Current DeepSeek Harness Web GUI URL: "(?:[^"\\]|\\.)*"\./g, 'Current DeepSeek Harness Web GUI URL: "{{webUrl}}".')
       for (const cwd of cwdSpellings) normalized = replaceWebCwd(normalized, cwd)
       return normalized
     })) as { type?: unknown; data?: { endpoint?: unknown } }

@@ -104,6 +104,8 @@ RESTART_SECOND_PROMPT = "Complete the second isolated Python SDK process turn."
 RESTART_SECOND_TEXT = "PROCESS_TWO_OK"
 RESTART_FIRST_SESSION_ID = "process-one"
 RESTART_SECOND_SESSION_ID = "process-two"
+RESUME_PROMPT = "Continue the first Python SDK session after restarting the runtime."
+RESUME_TEXT = "RESUMED_PROCESS_OK"
 RECOVERY_PROMPT = "Run three todo updates; the scheduler will reject the second call."
 RECOVERY_CONTINUE_PROMPT = "Continue after the scheduler failure without repeating any tools."
 RECOVERY_TEXT = "SCHEDULER_RECOVERY_OK"
@@ -429,6 +431,7 @@ def completion_chunks(body: dict[str, object]) -> list[dict[str, object]]:
         MCP_PROMPT,
         RESTART_FIRST_PROMPT,
         RESTART_SECOND_PROMPT,
+        RESUME_PROMPT,
         PROFILE_PLUGIN_PROMPT,
         AUTHORING_PROMPT,
         DYNAMIC_TOOLS_PROMPT,
@@ -457,6 +460,8 @@ def completion_chunks(body: dict[str, object]) -> list[dict[str, object]]:
         return tool_call_chunks("advanced-native", "snapshot_double", {"value": 21})
     if prompt == RESTART_FIRST_PROMPT:
         return text_chunks(RESTART_FIRST_TEXT)
+    if prompt == RESUME_PROMPT:
+        return text_chunks(RESUME_TEXT)
     if prompt == DYNAMIC_TOOLS_PROMPT:
         assert_advertised_tool(body, "read")
         if "snapshot_ping" in advertised_tool_names(body):
@@ -884,10 +889,18 @@ def main() -> None:
 
 def smoke_sdk_authoring(base_url: str, executable: Path, update_snapshots: bool) -> None:
     """Query the bundled Python and switch skills without replacing that environment."""
+
+    with tempfile.TemporaryDirectory(prefix="dsh-sdk-authoring-cache-") as cache_directory:
+        _smoke_sdk_authoring_cached(base_url, executable, update_snapshots, Path(cache_directory))
+
+
+def _smoke_sdk_authoring_cached(base_url: str, executable: Path, update_snapshots: bool, cache: Path) -> None:
     from deepseek_harness import DeepSeekHarness
 
-    resources = executable.with_name(executable.name.removeprefix("deepseek-harness-sdk-runtime-").removesuffix(".exe"))
-    manifest = json.loads((resources / "primary-runtime/runtime.json").read_text())
+    cache_environment = {**os.environ, "DSH_RESOURCE_CACHE": str(cache), "DSH_RUNTIME_DOWNLOAD": "primary"}
+    primary = Path(json.loads(subprocess.check_output([str(executable)], encoding="utf-8", env=cache_environment)))
+    resources = primary.parent
+    manifest = json.loads((primary / "runtime.json").read_text())
     for mode in ("default", "replacement", "disabled"):
         with tempfile.TemporaryDirectory(prefix="dsh-sdk-authoring-") as temporary:
             root = Path(temporary).resolve()
@@ -903,7 +916,7 @@ def smoke_sdk_authoring(base_url: str, executable: Path, update_snapshots: bool)
                 provider="deepseek-official", model="smoke-model", cwd=str(root),
                 dsh_bin=str(executable), dsh_home=str(home), patches=(str(patch),),
                 api_key="sk-keyless-smoke", base_url=base_url,
-                env={"DSH_PERMISSION_MODE": "danger-full-access", "DSH_TELEMETRY_DISABLED": "1"},
+                env={"DSH_PERMISSION_MODE": "danger-full-access", "DSH_TELEMETRY_DISABLED": "1", "DSH_RESOURCE_CACHE": str(cache)},
                 request_timeout_seconds=60,
             ) as harness:
                 result = harness.run(AUTHORING_PROMPT, session_id="authoring")
@@ -958,7 +971,9 @@ def smoke_sdk_office(executable: Path) -> None:
                 shutil.copytree(source, destination)
             else:
                 shutil.copy2(source, destination)
-        office = root / f"{stem}-office"
+        cache_environment = {**os.environ, "DSH_RESOURCE_CACHE": str(root / "cache")}
+        office = Path(json.loads(subprocess.check_output([str(relocated)], encoding="utf-8", env={**cache_environment, "DSH_RUNTIME_DOWNLOAD": "office"})))
+        assert not (office.parent / "primary").exists(), "Office download unexpectedly prepared the authoring environment"
         adapter = office / "node_modules/@deepseek-ai/libreoffice-kit/package.json"
         native = stem.removeprefix("deepseek-harness-sdk-runtime-").replace("win-", "win32-").replace("macos-", "darwin-")
         declared = json.loads(adapter.read_text(encoding="utf-8")).get("optionalDependencies", {})
@@ -997,7 +1012,7 @@ def smoke_sdk_office(executable: Path) -> None:
             patches=(str(patch),),
             api_key="sk-keyless-smoke",
             base_url="http://127.0.0.1:9",
-            env={"DSH_PERMISSION_MODE": "danger-full-access", "DSH_TELEMETRY_DISABLED": "1"},
+            env={"DSH_PERMISSION_MODE": "danger-full-access", "DSH_TELEMETRY_DISABLED": "1", "DSH_RESOURCE_CACHE": str(root / "cache")},
             # The startup plugin awaits a converter with a 120-second deadline before JSON-RPC is ready.
             initialize_timeout_seconds=180,
             request_timeout_seconds=180,
@@ -1007,10 +1022,32 @@ def smoke_sdk_office(executable: Path) -> None:
         if result["backend"] != expected_backend:
             raise AssertionError(f"Office conversion did not use {expected_backend}: {result}")
         if not result["moduleUrl"].startswith(office.as_uri() + "/"):
-            raise AssertionError(f"Office module was not loaded from the relocated wheel: {result}")
+            raise AssertionError(f"Office module was not loaded from the downloaded sidecar: {result}")
         pdf = output.read_bytes()
         if len(pdf) < 100 or not pdf.startswith(b"%PDF-"):
             raise AssertionError(f"Office conversion produced an invalid PDF at {output}")
+        workbook = root / "input.xlsx"
+        with zipfile.ZipFile(workbook, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("[Content_Types].xml", '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>')
+            archive.writestr("_rels/.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>')
+            archive.writestr("xl/workbook.xml", '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>')
+            archive.writestr("xl/_rels/workbook.xml.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>')
+            archive.writestr("xl/worksheets/sheet1.xml", '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><f>1+2</f><v>0</v></c></row></sheetData></worksheet>')
+        subprocess.run([sys.executable, "-c", """
+import sys, zipfile
+from pathlib import Path
+from xml.etree import ElementTree
+from deepseek_harness.office import convert, render_images, recalculate
+root = Path(sys.argv[1])
+assert convert(root / 'document.docx', root / 'python.pdf').backend == sys.argv[2]
+rendered = render_images(root / 'python.pdf', root / 'images', pages=[1])
+assert rendered.images and rendered.images[0].path.read_bytes().startswith(b'\\x89PNG')
+recalculate(root / 'input.xlsx', root / 'calculated.xlsx')
+with zipfile.ZipFile(root / 'calculated.xlsx') as archive:
+    sheet = ElementTree.fromstring(archive.read('xl/worksheets/sheet1.xml'))
+    assert sheet.find('.//{*}c[@r="A1"]/{*}v').text == '3'
+""", str(root), expected_backend], env={name: value for name, value in cache_environment.items() if name != "DSH_OFFICE_SIDECAR"}, check=True, timeout=180)
+        assert not (office.parent / "primary").exists(), "Python Office API unexpectedly downloaded authoring resources"
         print(f"smoke-python-runtime: relocated Office {result['backend']} DOCX produced {len(pdf)} PDF bytes")
 
 
@@ -1336,6 +1373,8 @@ def smoke_sdk_dynamic_tools(base_url: str, executable: Path, update_snapshots: b
                 "DSH_PERMISSION_MODE": "danger-full-access", "DSH_TELEMETRY_DISABLED": "1",
                 "HOME": str(user_home), "USERPROFILE": str(user_home),
                 "DSH_AGENTS_HOME": str(user_home / ".agents"),
+                # Pin the tool baseline independently of optional resources in the host cache.
+                "DSH_PRIMARY_RUNTIME": "",
             },
             api_key="sk-keyless-smoke", base_url=base_url, request_timeout_seconds=60,
         ) as harness:
@@ -1660,7 +1699,7 @@ def smoke_sdk_snapshot_mode(
 
 
 def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots: bool) -> None:
-    """Snapshot two isolated sessions across complete SDK runtime restarts."""
+    """Check isolated sessions and explicit history restoration across runtime restarts."""
     from deepseek_harness import DeepSeekHarness
 
     with tempfile.TemporaryDirectory(prefix="dsh-sdk-restart-") as temporary:
@@ -1670,8 +1709,8 @@ def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots
         patch = write_advanced_profile_patch(root, "restart.patch.yml", sessions)
         first_request = len(MockModelHandler.requests)
 
-        def run(prompt: str, session_id: str) -> "RunResult":
-            with DeepSeekHarness(
+        def connect() -> DeepSeekHarness:
+            return DeepSeekHarness(
                 provider="deepseek-official",
                 model="smoke-model",
                 cwd=str(root),
@@ -1685,11 +1724,12 @@ def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots
                 api_key="sk-keyless-smoke",
                 base_url=base_url,
                 request_timeout_seconds=60,
-            ) as harness:
-                return harness.run(prompt, session_id=session_id)
+            )
 
-        first = run(RESTART_FIRST_PROMPT, RESTART_FIRST_SESSION_ID)
-        second = run(RESTART_SECOND_PROMPT, RESTART_SECOND_SESSION_ID)
+        with connect() as harness:
+            first = harness.run(RESTART_FIRST_PROMPT, session_id=RESTART_FIRST_SESSION_ID)
+        with connect() as harness:
+            second = harness.run(RESTART_SECOND_PROMPT, session_id=RESTART_SECOND_SESSION_ID)
         requests = MockModelHandler.requests[first_request:]
         if len(requests) != 2:
             raise AssertionError(f"restart snapshot expected two model requests: {requests}")
@@ -1724,6 +1764,45 @@ def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots
             files, update_snapshots, RESTART_SNAPSHOT_DIRECTORY, RESTART_SNAPSHOT_FILENAMES,
             native_writer_output=True,
         )
+
+        before_resume = logs[RESTART_FIRST_SESSION_ID]
+        with connect() as harness:
+            session = harness.resume_session(RESTART_FIRST_SESSION_ID)
+            if session.id != RESTART_FIRST_SESSION_ID:
+                raise AssertionError(f"resume changed the saved identity: {session.id}")
+            if len(MockModelHandler.requests) != first_request + 2:
+                raise AssertionError("resume sent a model request before receiving new input")
+            resumed = session.run(RESUME_PROMPT)
+
+        requests = MockModelHandler.requests[first_request + 2:]
+        if len(requests) != 1 or resumed.final_response != RESUME_TEXT:
+            raise AssertionError(f"resumed turn failed: {resumed.final_response!r}, {requests}")
+        messages = requests[0].get("messages")
+        if not isinstance(messages, list):
+            raise AssertionError(f"resumed model request has no messages: {requests[0]}")
+        for role, expected in (
+            ("user", RESTART_FIRST_PROMPT),
+            ("assistant", RESTART_FIRST_TEXT),
+            ("user", RESUME_PROMPT),
+        ):
+            if not any(
+                isinstance(message, dict)
+                and message.get("role") == role
+                and expected in message_text(message.get("content"))
+                for message in messages
+            ):
+                raise AssertionError(f"resumed model history has no {role} message: {expected}")
+        logs = read_session_logs(sessions)
+        if set(logs) != expected_ids:
+            raise AssertionError(f"resume created an unexpected durable session: {sorted(logs)}")
+        restored = logs[RESTART_FIRST_SESSION_ID]
+        if restored[:len(before_resume)] != before_resume:
+            raise AssertionError("resume replaced the saved session log instead of appending")
+        turns = [record for record in restored if record.get("type") == "turn/end"]
+        if [record["data"]["turn"] for record in turns] != [1, 2]:
+            raise AssertionError(f"resume did not continue the saved turn sequence: {turns}")
+        if RESUME_TEXT not in render_jsonl(restored):
+            raise AssertionError("resumed response was not appended to the saved session")
 
 
 def smoke_sdk_scheduler_recovery(base_url: str, executable: Path, update_snapshots: bool) -> None:
@@ -2307,11 +2386,17 @@ def build_dynamic_tools_snapshot_files(
     assert changes == [[], [{"type": "tool_addition", "tool": {"type": "tool_reference", "name": "snapshot_ping"}}], []], changes
     assert requests[1]["messages"][:len(requests[0]["messages"])] == requests[0]["messages"], "tool addition changed earlier messages"
     replacements = [(str(cwd), "{{cwd}}"), (result.session_id, "{{session}}")]
+    header_references = {header["seq"]: f"{{{{header:{index + 1}}}}}" for index, header in enumerate(headers)}
+    snapshot_events = [
+        {**event, "data": {**event["data"], "headerSeq": header_references[event["data"]["headerSeq"]]}}
+        if event["type"] == "developer/message" and "headerSeq" in event["data"] else event
+        for event in events if event["type"] in {"request/header", "request/context", "developer/message"}
+    ]
     evidence = {
         "finalResponse": result.final_response,
         "declarations": declarations,
         "requestToolChanges": changes,
-        "events": [event for event in events if event["type"] in {"request/header", "request/context", "developer/message"}],
+        "events": snapshot_events,
         "toolCalls": calls,
         "pingResult": ping,
     }

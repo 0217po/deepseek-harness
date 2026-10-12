@@ -82,7 +82,8 @@ interface RunningGate {
   promise: Promise<GateResult>
 }
 
-interface ConcurrencyDefault {
+/** The worker count an aggregate uses when `DSH_GATE_CONCURRENCY` is unset, with its diagnostic source. */
+export interface ConcurrencyDefault {
   workers: number
   source: string
 }
@@ -101,7 +102,20 @@ async function main(args: string[]): Promise<number> {
   Object.assign(process.env, workerEnv)
   if (Object.keys(workerEnv).length > 0) console.log(`run-gates: worker settings ${JSON.stringify(workerEnv)}`)
   const gates = gatesForMode(mode)
-  const concurrencyDefault = defaultConcurrency(mode, gates.length)
+  return runAggregate(mode, gates, defaultConcurrency(mode, gates.length))
+}
+
+/**
+ * Run one aggregate through the real child-process executor with the CLI's
+ * environment-selected scheduling and reporting: `DSH_GATE_CONCURRENCY`
+ * overrides the worker default, `DSH_GATE_FAIL_FAST=1` stops at the first
+ * blocking failure, and every settled gate plus a final summary is printed.
+ * @param name - aggregate name printed in the start line.
+ * @param gates - complete aggregate to execute.
+ * @param concurrencyDefault - worker count used when `DSH_GATE_CONCURRENCY` is unset.
+ * @returns 1 when a blocking gate failed or was skipped, otherwise 0.
+ */
+export async function runAggregate(name: string, gates: Gate[], concurrencyDefault: ConcurrencyDefault): Promise<number> {
   const concurrencyOverride = process.env.DSH_GATE_CONCURRENCY
   const maxConcurrency = concurrencyFromEnv('DSH_GATE_CONCURRENCY', concurrencyDefault.workers)
   const concurrencySource = concurrencyOverride === undefined || concurrencyOverride === ''
@@ -109,7 +123,7 @@ async function main(args: string[]): Promise<number> {
     : '$DSH_GATE_CONCURRENCY'
   const failFast = flagEnabled('DSH_GATE_FAIL_FAST')
   const startedAt = performance.now()
-  console.log(`run-gates: ${mode} running ${gates.length} gate(s) with ${maxConcurrency} worker(s) from ${concurrencySource}${failFast ? ', fail-fast after first blocking failure' : ''}.`)
+  console.log(`run-gates: ${name} running ${gates.length} gate(s) with ${maxConcurrency} worker(s) from ${concurrencySource}${failFast ? ', fail-fast after first blocking failure' : ''}.`)
 
   const results = await runGates(gates, maxConcurrency, runGate, printResult, cliGateOptions(failFast))
   printSummary(results, performance.now() - startedAt)
@@ -410,9 +424,7 @@ function nodeCompatGates(): Gate[] {
   }
   return [
     ...typecheck,
-    pnpmScript('build', 'build', {
-      ...pnpmInvocation(['run', 'build', '--artifacts-only']),
-      displayCommand: 'pnpm run build --artifacts-only',
+    pnpmScript('build', 'build:artifacts', {
       ...typecheck.length === 0 ? {} : { needs: ['typecheck'] },
     }),
     ...nodeCompatSmokeGates({ cliSmoke: true }),
@@ -624,8 +636,13 @@ function ciWindowsObservationalGates(): Gate[] {
   ]
 }
 
+// Host package compilation and bundling produce the Typert outputs that
+// prepared typecheck, lint, and doc-typecheck read; none of them reads the
+// Host aggregate program's noEmit check, which `build` owns.
 function typertContractsGate(): Gate {
-  return pnpmScript('typert-contracts', 'build:lib:host', { label: 'Typert contracts' })
+  return pnpmExec('typert-contracts', ['tsx', 'scripts/compile-referenced-projects.ts', 'host-libraries'], {
+    label: 'Typert contracts',
+  })
 }
 
 function lintGate(options: { needs?: string[] } = {}): Gate {

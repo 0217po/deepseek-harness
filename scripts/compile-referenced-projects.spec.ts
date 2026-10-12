@@ -1,10 +1,10 @@
 import { spawnSync } from 'node:child_process'
-import { globSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, globSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { buildLibraryArtifacts, compileReferencedProjects } from './compile-referenced-projects.ts'
+import { aggregateCheckArgs, buildLibraryArtifacts, compileReferencedProjects } from './compile-referenced-projects.ts'
 import { runCiBench } from './run-ci-bench.ts'
 import { removeFixtureSafely } from './test-fixture-cleanup.ts'
 
@@ -101,8 +101,10 @@ describe('internal artifact build order', () => {
 
     const expected = [
       ['exec', 'tsdown', '--config-loader', 'native', '--env.DSH_BUILD_FACE', 'host'],
-      ['--filter', '@deepseek-ai/dsh-desktop', 'run', 'bundle'],
-      ...hostOnly ? [] : [['exec', 'tsdown', '--config-loader', 'native', '--env.DSH_BUILD_FACE', 'client']],
+      ...hostOnly ? [] : [
+        ['--filter', '@deepseek-ai/dsh-desktop', 'run', 'bundle'],
+        ['exec', 'tsdown', '--config-loader', 'native', '--env.DSH_BUILD_FACE', 'client'],
+      ],
     ]
     expect(commands()).toEqual(expected.map(args => ({ args, title: 'Inherited Build Title' })))
   })
@@ -240,6 +242,34 @@ describe('package project compilation', () => {
     expect(complete.stdout).toContain('aggregate.ts(1,14): error TS2322')
   })
 
+  it('checks only the aggregate program in project mode', () => {
+    const { root, leaf } = fixture()
+    compileReferencedProjects(root, 'host')
+    const check = () => spawnSync(process.execPath, aggregateCheckArgs('host'), { cwd: root, encoding: 'utf8' })
+
+    const clean = check()
+    expect(clean.status, clean.stdout + clean.stderr).toBe(0)
+    const dry = spawnSync(process.execPath, [compiler, '-b', '--dry', 'tsconfig.host.json'], { cwd: root, encoding: 'utf8' })
+    expect(dry.status, dry.stdout + dry.stderr).toBe(0)
+    expect(dry.stdout).not.toContain('A non-dry build would')
+
+    writeFileSync(join(root, 'aggregate.ts'), 'export const aggregate: number = "invalid"\n')
+    const invalid = check()
+    expect(invalid.status).not.toBe(0)
+    expect(invalid.stdout).toContain('aggregate.ts(1,14): error TS2322')
+    expect(artifacts(leaf)).not.toEqual({})
+  })
+
+  it('reports missing package declarations without compiling references', () => {
+    const { root, leaf } = fixture()
+
+    const result = spawnSync(process.execPath, aggregateCheckArgs('client'), { cwd: root, encoding: 'utf8' })
+
+    expect(result.status).not.toBe(0)
+    expect(result.stdout).toContain('error TS6305')
+    expect(existsSync(join(leaf, 'lib'))).toBe(false)
+  })
+
   it('rejects package source errors', () => {
     const { root, leaf } = fixture()
     writeFileSync(join(leaf, 'src/index.ts'), 'export const value: number = "invalid"\n')
@@ -305,6 +335,6 @@ describe('package project compilation', () => {
     ], { cwd: repository, encoding: 'utf8' })
 
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('expected exactly one mode: host, client, host-libraries, or libraries')
+    expect(result.stderr).toContain('expected exactly one mode: host, client, or host-libraries')
   })
 })
