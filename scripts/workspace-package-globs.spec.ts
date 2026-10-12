@@ -18,5 +18,6 @@ it('selects workspace packages from Windows and POSIX manifest paths', async () 
   const options = { cwd, config: false as const, entry: ['src/index.ts'], write: false, dts: false, logLevel: 'silent' as const }
   const selected = await build({ ...options, workspace: workspacePackageGlobs(manifests) })
   expect(selected).toHaveLength(2)
-  await expect(build({ ...options, workspace: manifests.map(path => win32.dirname(path)) })).rejects.toThrow('No workspace packages found')
+  const unnormalized = await build({ ...options, workspace: manifests.map(path => win32.dirname(path)) })
+  expect(unnormalized.map(bundle => bundle.config.name)).toEqual(['fixture-1'])
 })
