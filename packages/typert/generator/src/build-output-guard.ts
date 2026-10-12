@@ -49,7 +49,7 @@ export function findBuildOutputLoads(
   const classifier = new BuildOutputClassifier(root)
   const outputs = new Map<string, BuildOutputImporter[]>()
   for (const sourceFile of program.getSourceFiles()) {
-    if (classifier.isBuildOutput(sourceFile.fileName)) outputs.set(resolve(sourceFile.fileName), [])
+    if (classifier.isBuildOutput(sourceFile.fileName)) outputs.set(classifier.canonical(sourceFile.fileName), [])
   }
   if (outputs.size === 0) return []
   const options = program.getCompilerOptions()
@@ -57,13 +57,13 @@ export function findBuildOutputLoads(
     if (!classifier.isWorkspaceFile(sourceFile.fileName) || classifier.isBuildOutput(sourceFile.fileName)) continue
     for (const { fileName: specifier } of ts.preProcessFile(sourceFile.text, true, true).importedFiles) {
       const resolved = ts.resolveModuleName(specifier, sourceFile.fileName, options, host).resolvedModule
-      const importers = resolved === undefined ? undefined : outputs.get(resolve(resolved.resolvedFileName))
-      importers?.push({ file: resolve(sourceFile.fileName), specifier })
+      const importers = resolved === undefined ? undefined : outputs.get(classifier.canonical(resolved.resolvedFileName))
+      importers?.push({ file: classifier.display(sourceFile.fileName), specifier })
     }
   }
   return [...outputs]
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([file, importers]) => ({ file, importers, source: classifier.sourceFor(file) }))
+    .map(([file, importers]) => ({ file: classifier.display(file), importers, source: classifier.sourceFor(file) }))
 }
 
 /** One import of a workspace package from a program source file that module resolution cannot resolve. */
@@ -104,7 +104,12 @@ export function findUnresolvedWorkspaceImports(
       if (ts.resolveModuleName(specifier, sourceFile.fileName, options, host, cache).resolvedModule !== undefined) continue
       const packageRoot = classifier.linkedWorkspacePackage(sourceFile.fileName, packageNameOf(specifier))
       if (packageRoot === undefined) continue
-      found.push({ file: resolve(sourceFile.fileName), specifier, source: exportSource(packageRoot, specifier) })
+      const source = exportSource(packageRoot, specifier)
+      found.push({
+        file: classifier.display(sourceFile.fileName),
+        specifier,
+        source: source === undefined ? undefined : classifier.display(source),
+      })
     }
   }
   return found.sort((left, right) => left.file.localeCompare(right.file) || left.specifier.localeCompare(right.specifier))
@@ -136,30 +141,62 @@ function property(value: unknown, key: string): unknown {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>)[key] : undefined
 }
 
+/**
+ * Classifies program files by their real paths, because module resolution
+ * reports symbolic-link targets and Windows long names while the workspace
+ * root may be spelled through a link or an 8.3 short name; reported paths are
+ * spelled under the caller's root.
+ */
 class BuildOutputClassifier {
   private readonly packageRoots = new Map<string, string | undefined>()
+  private readonly realPaths = new Map<string, string>()
+  private readonly realRoot: string
 
-  constructor(private readonly root: string) {}
+  constructor(private readonly root: string) {
+    this.realRoot = this.canonical(root)
+  }
+
+  canonical(file: string): string {
+    const absolute = resolve(file)
+    const cached = this.realPaths.get(absolute)
+    if (cached !== undefined) return cached
+    let real = absolute
+    try {
+      real = realpathSync.native(absolute)
+    } catch (_missingPath) {
+      // A path that does not exist, such as an unresolved candidate, keeps its resolved spelling.
+    }
+    this.realPaths.set(absolute, real)
+    return real
+  }
+
+  display(file: string): string {
+    const path = relative(this.realRoot, this.canonical(file))
+    return path.startsWith('..') || isAbsolute(path) ? resolve(file) : join(this.root, path)
+  }
 
   isWorkspaceFile(file: string): boolean {
-    const path = relative(this.root, resolve(file))
+    const path = relative(this.realRoot, this.canonical(file))
     return path !== '' && !path.startsWith('..') && !isAbsolute(path) && !path.split(sep).includes('node_modules')
   }
 
   isBuildOutput(file: string): boolean {
     if (!this.isWorkspaceFile(file)) return false
-    const packageRoot = this.packageRoot(dirname(resolve(file)))
-    return packageRoot !== undefined && relative(packageRoot, resolve(file)).split(sep)[0] === 'lib'
+    const real = this.canonical(file)
+    const packageRoot = this.packageRoot(dirname(real))
+    return packageRoot !== undefined && relative(packageRoot, real).split(sep)[0] === 'lib'
   }
 
   sourceFor(file: string): string | undefined {
-    const packageRoot = this.packageRoot(dirname(file))
+    const real = this.canonical(file)
+    const packageRoot = this.packageRoot(dirname(real))
     if (packageRoot === undefined) return undefined
-    const [lib, types, ...rest] = relative(packageRoot, file).split(sep)
+    const [lib, types, ...rest] = relative(packageRoot, real).split(sep)
     const last = rest.at(-1)
     if (lib !== 'lib' || types !== 'types' || last === undefined) return undefined
     const stem = join(packageRoot, 'src', ...rest.slice(0, -1), last.replace(/\.d\.([cm]?)ts$/u, '.$1ts'))
-    return [stem, `${stem}x`].find(candidate => existsSync(candidate))
+    const source = [stem, `${stem}x`].find(candidate => existsSync(candidate))
+    return source === undefined ? undefined : this.display(source)
   }
 
   linkedWorkspacePackage(importer: string, packageName: string): string | undefined {
@@ -167,10 +204,10 @@ class BuildOutputClassifier {
     for (;;) {
       const link = join(directory, 'node_modules', packageName)
       if (existsSync(link)) {
-        const target = realpathSync(link)
+        const target = this.canonical(link)
         return this.isWorkspaceFile(join(target, 'package.json')) ? target : undefined
       }
-      if (directory === this.root || dirname(directory) === directory) return undefined
+      if (this.canonical(directory) === this.realRoot || dirname(directory) === directory) return undefined
       directory = dirname(directory)
     }
   }
@@ -179,7 +216,7 @@ class BuildOutputClassifier {
     if (this.packageRoots.has(directory)) return this.packageRoots.get(directory)
     const found = existsSync(join(directory, 'package.json'))
       ? directory
-      : directory === this.root || dirname(directory) === directory
+      : directory === this.realRoot || dirname(directory) === directory
         ? undefined
         : this.packageRoot(dirname(directory))
     this.packageRoots.set(directory, found)

@@ -1,4 +1,4 @@
-import { existsSync, globSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, globSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -15,6 +15,18 @@ function workspace(source?: string): { root: string; pkg: string } {
   const root = mkdtempSync(join(tmpdir(), 'dsh-generate-typert-'))
   onTestFinished(() => { removeFixtureSafely(root) })
   return { root, pkg: writeTypertWorkspace(root, source) }
+}
+
+/**
+ * Spell `root` through a directory link, as a symbolic-link or Windows 8.3 short-name path does: module
+ * resolution reports real paths, so the guard must classify files independently of the root's spelling.
+ */
+function linkedRoot(root: string): string {
+  const parent = mkdtempSync(join(tmpdir(), 'dsh-generate-typert-link-'))
+  onTestFinished(() => { rmSync(parent, { recursive: true, force: true }) })
+  const link = join(parent, 'workspace')
+  symlinkSync(root, link, 'junction')
+  return link
 }
 
 function captureConsole(): { log: () => string; error: () => string } {
@@ -82,9 +94,10 @@ describe('bundle-free Typert pass', { timeout: 60_000 }, () => {
     expect(output.log()).toBe('')
   })
 
-  it('rejects a Host program that loads a compiled workspace declaration and names the missing alias', () => {
-    const { root, pkg } = workspace(DEPENDENT_TYPERT_SOURCE)
-    writeCompiledDependency(root)
+  it.each(['real', 'linked'] as const)('rejects a Host program that loads a compiled workspace declaration and names the missing alias (%s root)', (spelling) => {
+    const { root: realRoot, pkg } = workspace(DEPENDENT_TYPERT_SOURCE)
+    writeCompiledDependency(realRoot)
+    const root = spelling === 'real' ? realRoot : linkedRoot(realRoot)
     const output = captureConsole()
 
     expect(main([], root)).toBe(1)
@@ -107,9 +120,10 @@ describe('bundle-free Typert pass', { timeout: 60_000 }, () => {
     expect(Object.keys(typertOutputs(pkg))).toEqual(['typert.host.d.ts', 'typert.host.js'])
   })
 
-  it('rejects an unresolved workspace import before the package compiles and names the missing alias', () => {
-    const { root, pkg } = workspace(DEPENDENT_TYPERT_SOURCE)
-    writeCompiledDependency(root, false)
+  it.each(['real', 'linked'] as const)('rejects an unresolved workspace import before the package compiles and names the missing alias (%s root)', (spelling) => {
+    const { root: realRoot, pkg } = workspace(DEPENDENT_TYPERT_SOURCE)
+    writeCompiledDependency(realRoot, false)
+    const root = spelling === 'real' ? realRoot : linkedRoot(realRoot)
     const output = captureConsole()
 
     expect(main([], root)).toBe(1)
