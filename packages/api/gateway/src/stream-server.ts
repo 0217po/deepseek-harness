@@ -72,12 +72,12 @@ export class RemoteStreamMuxServer {
     this.server.handleUpgrade(req, socket, head, (websocket) => {
       const release = bindPeer(websocket, peer)
       if (release === undefined) return
-      this.missedHeartbeats.set(websocket, 0)
-      websocket.on('pong', () => { this.missedHeartbeats.set(websocket, 0) })
+      const alive = (): void => { this.missedHeartbeats.set(websocket, 0) }
+      alive()
       this.startHeartbeat()
       const bound: BoundStreamOpener = (endpoint, payload, uplink, control) =>
         this.open(endpoint, payload, uplink, peer, control)
-      const connection = new RemoteStreamMuxConnection(websocket, bound, this.failure, this.streamInboxBytes)
+      const connection = new RemoteStreamMuxConnection(websocket, bound, this.failure, this.streamInboxBytes, alive)
       const done = connection.run()
       this.connections.add(done)
       void done.then(() => {
@@ -141,13 +141,23 @@ class RemoteStreamMuxConnection {
     private readonly open: BoundStreamOpener,
     private readonly failure: RemoteStreamFailureMapper,
     private readonly streamInboxBytes: number,
+    private readonly alive: () => void,
   ) {}
 
+  /**
+   * Serve frames until the socket closes. A Pong, any received frame, and a
+   * downlink write that waited in the local send buffer and then completed
+   * count as peer activity, so a congested link that delays the Pong behind
+   * data keeps its socket. A write that completes at once proves nothing
+   * about the peer and does not count.
+   */
   async run(): Promise<void> {
     const closed = new Promise<void>((resolve) => {
       this.socket.once('close', resolve)
       this.socket.once('error', () => { this.socket.terminate() })
+      this.socket.on('pong', this.alive)
       this.socket.on('message', (data, isBinary) => {
+        this.alive()
         if (isBinary) {
           this.socket.close(1003, 'text messages required')
           return
@@ -283,10 +293,18 @@ class RemoteStreamMuxConnection {
         reject(new Error('api gateway: Remote stream socket is closed'))
         return
       }
+      let queued = false
       this.socket.send(text, (error) => {
-        if (error) reject(error)
-        else resolve()
+        if (error) {
+          reject(error)
+          return
+        }
+        if (queued) this.alive()
+        resolve()
       })
+      // Read after send(): bytes still buffered mean the local send buffer was
+      // full, so their completion requires the peer to acknowledge data.
+      queued = this.socket.bufferedAmount > 0
     }))
     this.writes = delivery.catch(() => undefined)
     return delivery

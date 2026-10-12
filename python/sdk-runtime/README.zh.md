@@ -34,7 +34,7 @@ primary_runtime = download_primary_runtime()
   disabled: true
 ```
 
-要成套替换三个 Office 工作流与共用检查脚本，可将 `skill-office.config.assetRoot` 配置为另一个绝对资源目录。任意 skill 集合通过文件系统 skill 提供方加载。配置 patch 在进程启动时生效；切换 skills 无需重建 runtime wheel 或 Python 环境。
+Office 技能通过 profile 的 shell 命令调用 `dsoffice` 与 `office-check`。命令选择及替换技能集合、共用检查脚本的方式见 [Office 提供方](../../packages/skill/skill-office/README.zh.md#use-this-package)。配置 patch 在进程启动时生效；切换技能无需重建 runtime wheel 或 Python 环境。
 
 仓库构建还会物化仅限开发的 `runtime/node/` 载体。它在系统 Node 22.19 或更高版本上运行 `node runtime/node/runtime-bootstrap.mjs`。系统不会自动选择它，而且 wheel 包与 sdist 均不包含它。
 

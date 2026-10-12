@@ -67,7 +67,6 @@
     "@deepseek-ai/dsh-client-test-runtime": "workspace:*",
     "@testing-library/react": "^16.3.3",
     "@deepseek-ai/dsh-client-ui-renderer": "workspace:*",
-    "@types/react": "~18.3.1",
     "@deepseek-ai/dsh-client-ui-layout": "workspace:*",
     "@deepseek-ai/dsh-client-shortcuts": "workspace:*",
     "@deepseek-ai/dsh-client-store": "workspace:*",
