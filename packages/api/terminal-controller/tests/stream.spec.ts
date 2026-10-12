@@ -78,3 +78,10 @@ describe('TerminalFollower', () => {
     expect(await follower.read(signal())[Symbol.asyncIterator]().next()).toEqual({ done: true, value: undefined })
   })
 })
+
+it('does not replace an ended attachment with a late input failure', async () => {
+  const follower = new TerminalFollower(1000)
+  follower.close()
+  follower.fail(new Error('late write failed'))
+  expect(await follower.read(signal())[Symbol.asyncIterator]().next()).toEqual({ done: true, value: undefined })
+})

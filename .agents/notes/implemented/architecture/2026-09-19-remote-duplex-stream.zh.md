@@ -574,10 +574,11 @@ for await (const reply of stream) replies.push(reply)   // ['> a', '> b']
 
 - **买到的**：一条流两个方向，终端按键、审批回答、后台任务 stdin 这类交互式场景不再各造一套"一条流加一个 unary"；Host 方法知道调用者；上行类型与下行类型在返回类型里一处声明，上行项来自浏览器，在 Host 逐项严格校验，下行项是 Host 自产的类型值，直接透传；既有 `AsyncIterable<Out>` 方法与 unary 方法的生成物与线路帧完全不变。
 - **`this.ctx.invocation` 在非 Remote 调用下是 `undefined`**，方法读它要处理可选；一个只被进程内直接调用的服务方法读到 `undefined` 是正确行为。
+- **Web 终端使用 `attach`** 传输屏幕输出和输入命令，并提供提供者确认和附件专属可写状态；Client 保留当前代次的句柄，绝不重放输入。
 - **inbox 上限对所有流生效**：一个不读上行的方法收到大量上行帧会整流失败。这是刻意的显式失败，README 记明。
 - **Peer 只有操作者一个**，`admit` 是唯一的接纳点；第一个需要第二个 Peer 的消费者要在 `dsh-client-connection` 加上打开、关联与事件。
 - **上行与下行之间没有跨方向顺序保证**；需要请求应答配对的协议自带序号。
-- **上层协议尚未透出 `send`**：`$stream`、snapshot、journal 的消费者今天只用下行；它们拿到的对象已经是句柄。
+- **上层监督器仅暴露下行**：`$stream`、snapshot 和 journal 不暴露 `send`；需要写入上行的领域保留该代次的生成物理句柄。
 - **worker 隧道与 WebSocket 载体行为不同**：没有 inbox 上限，`end` 之后的项丢弃，因为页面到 worker 是同源可信边界。
 
 ## 测试
@@ -595,7 +596,6 @@ for await (const reply of stream) replies.push(reply)   // ['> a', '> b']
 ## 后续
 
 - `$stream` / snapshot / journal 把句柄的 `send` 透出给上层协议。
-- Web 终端：一条 `attach` 流取代 `follow` 加 `write` 加 `resize`，`attachmentId` 退场。
 - 双工 `$events`：waterfall 的回答成为同一 `streamId` 上的上行项，`$events/result` 与 `clientId` 退场。
 - credit 帧：等需要持续大流量上行的消费者出现；inbox 上限就是初始授信。
 - `streamInboxBytes` 默认值 262144 对键盘与 stdin 远超需要；若第一个消费者是终端粘贴，可能与 `terminal-controller` 的 `maxInputBytes` 对齐。
@@ -606,4 +606,4 @@ for await (const reply of stream) replies.push(reply)   // ['> a', '> b']
 
 - [Remote 事件投递](../../../../packages/api/remotes/README.zh.md)：`$events/result` 的 unary 回答路径；「后续」里的双工 `$events` 落地后部分取代它。
 - [会话历史与事件传输](2026-08-18-session-history-and-event-transport.zh.md)：`$stream()` 监督器与其上的 journal / snapshot 协议，本 Note 不改它们。
-- [Web 侧边栏终端](../feature/2026-09-09-web-sidebar-terminal.zh.md)：终端按键的 unary `write` 与 `attachmentId`；「后续」里的 `attach` 流落地后取代它。
+- [Web 侧边栏终端](../feature/2026-09-09-web-sidebar-terminal.zh.md)：`attach` 流承载输入命令、提供者确认和附件专属可写状态；重连绝不重放输入。

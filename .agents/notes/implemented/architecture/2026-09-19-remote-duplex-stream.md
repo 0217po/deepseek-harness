@@ -574,10 +574,11 @@ for await (const reply of stream) replies.push(reply)   // ['> a', '> b']
 
 - **Bought**: one stream with two directions, so interactive scenarios such as terminal keystrokes, approval answers, and background-job stdin no longer each build their own "one stream plus one unary"; a Host method knows its caller; the uplink and downlink types are declared in one place, the return type; uplink items come from the browser and are validated strictly per item at the Host, while downlink items are Host-produced typed values that pass straight through; the generated output and wire frames of existing `AsyncIterable<Out>` methods and unary methods are completely unchanged.
 - **`this.ctx.invocation` is `undefined` outside a Remote call**, so a method that reads it must handle the optional; a service method invoked only directly in process correctly reads `undefined`.
+- **Web terminals use `attach`** for screen output and input commands, with provider acknowledgements and per-attachment writable state; their Client retains the current generation's handle and never replays input.
 - **The inbox limit applies to every stream**: a method that does not read its uplink fails as a whole when it receives many uplink frames. This is a deliberate explicit failure, recorded in the README.
 - **The operator is the only Peer**, and `admit` is the only admission point; the first consumer that needs a second Peer must add opening, association, and events in `dsh-client-connection`.
 - **No cross-direction ordering guarantee between uplink and downlink**; a protocol that needs request-response pairing carries its own sequence numbers.
-- **Upper-layer protocols do not yet expose `send`**: consumers of `$stream`, snapshot, and journal use only the downlink today; the object they receive is already the handle.
+- **Upper-layer supervisors expose only the downlink**: `$stream`, snapshot and journal do not expose `send`; a domain that writes uplink retains its generated physical handle for that generation.
 - **The worker tunnel behaves differently from the WebSocket carrier**: no inbox limit, and items after `end` are dropped, because page to worker is a same-origin trusted boundary.
 
 ## Testing
@@ -595,7 +596,6 @@ Retention cases in `gateway-stream.host.spec.ts` and `gateway.client.spec.ts` co
 ## Deferred
 
 - `$stream` / snapshot / journal expose the handle's `send` to upper-layer protocols.
-- Web terminal: one `attach` stream replaces `follow` plus `write` plus `resize`, and `attachmentId` retires.
 - Duplex `$events`: waterfall answers become uplink items on the same `streamId`, and `$events/result` and `clientId` retire.
 - Credit frames: wait for a consumer that needs sustained high-volume uplink; the inbox limit is the initial credit.
 - The `streamInboxBytes` default of 262144 is far more than keyboard and stdin need; if the first consumer is terminal paste, it may be aligned with the `maxInputBytes` of `terminal-controller`.
@@ -606,4 +606,4 @@ Retention cases in `gateway-stream.host.spec.ts` and `gateway.client.spec.ts` co
 
 - [Remote event delivery](../../../../packages/api/remotes/README.md): the unary `$events/result` answer path; the duplex `$events` item under Deferred partially supersedes it once it lands.
 - [Session history and event transport](2026-08-18-session-history-and-event-transport.md): the `$stream()` supervisor and the journal / snapshot protocols above it, which this note leaves unchanged.
-- [Web sidebar terminal](../feature/2026-09-09-web-sidebar-terminal.md): the unary terminal `write` and `attachmentId`; the `attach` stream under Deferred replaces it once it lands.
+- [Web sidebar terminal](../feature/2026-09-09-web-sidebar-terminal.md): the `attach` stream carries input commands, provider acknowledgements and per-attachment writable state; reconnect never replays input.

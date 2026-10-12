@@ -15,8 +15,6 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
 
 /** A terminal identity scoped to one Session and one Host lifetime. */
 export type WebTerminalId = Branded<'WebTerminalId'>
-/** An attachment allowed to write and resize one terminal. */
-export type TerminalAttachmentId = Branded<'TerminalAttachmentId'>
 
 /** Acknowledges one physical window hold without taking screen or input control. */
 export interface TerminalRetentionFrame {
@@ -52,7 +50,6 @@ export interface WebTerminalInfo {
   readonly state: 'running' | 'exited' | 'failed'
   readonly exitCode: number | null
   readonly error?: string
-  readonly controllerId?: TerminalAttachmentId
 }
 
 /** Create is idempotent for an open identity; closed identities cannot be recreated. */
@@ -64,8 +61,14 @@ export interface TerminalCreateRequest {
   readonly rows: number
 }
 
+/** Commands are numbered consecutively from one within each attachment; acknowledgements never authorize replay. */
+export type TerminalInput =
+  | { readonly type: 'write'; readonly sequence: number; readonly data: string }
+  | { readonly type: 'resize'; readonly sequence: number; readonly cols: number; readonly rows: number }
+
 /** Every attachment begins with a complete bounded screen, then ordered output. */
 export type TerminalFrame =
-  | { readonly type: 'snapshot'; readonly sequence: number; readonly screen: string; readonly info: WebTerminalInfo }
+  | { readonly type: 'snapshot'; readonly sequence: number; readonly screen: string; readonly info: WebTerminalInfo; readonly writable: boolean }
   | { readonly type: 'output'; readonly sequence: number; readonly data: string }
-  | { readonly type: 'state'; readonly info: WebTerminalInfo }
+  | { readonly type: 'state'; readonly info: WebTerminalInfo; readonly writable: boolean }
+  | { readonly type: 'ack'; readonly sequence: number; readonly refusal?: 'read-only' | 'not-running' }

@@ -140,7 +140,7 @@ it('shows only the terminal screen while connected and detaches on unmount', () 
 })
 
 it('keeps one emulator across rename and locale updates, applies snapshots and output once, and releases listeners', () => {
-  const snapshot: TerminalViewState = { ...idle, info, phase: 'connected', writable: true, render: { revision: 1, frame: { type: 'snapshot', sequence: 0, info, screen: 'restored' } } }
+  const snapshot: TerminalViewState = { ...idle, info, phase: 'connected', writable: true, render: { revision: 1, frame: { type: 'snapshot', writable: true, sequence: 0, info, screen: 'restored' } } }
   const h = mount(snapshot)
   const terminal = fake.terminals[0]!
   expect(terminal.reset).toHaveBeenCalledOnce()
