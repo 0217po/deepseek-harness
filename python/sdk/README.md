@@ -8,6 +8,24 @@ Python subprocess SDK for driving DeepSeek Harness over newline-delimited JSON-R
 python -m pip install deepseek-harness-sdk
 ```
 
+## Optional Office operations
+
+Download the Office runtime explicitly, then call the local API without an agent, Session, model request, API key, or Harness home:
+
+```py
+from deepseek_harness_runtime import download_office
+from deepseek_harness.office import convert, recalculate, render_images
+
+download_office()
+pdf = convert("report.docx", "report.pdf")
+workbook = recalculate("forecast.xlsx", "calculated.xlsx")
+preview = render_images("report.docx", "report-preview", pages=[1])
+```
+
+The output file or image directory must not exist. Successful outputs belong to the caller; Kit removes failed outputs. `OfficeOptions` supplies operation limits and font preferences. Results expose typed paths, missing fonts, and image metadata. `OfficeError` retains CLI failure codes; malformed results raise `SdkProtocolError`. Recalculation does not verify business logic or Excel fidelity. Ctrl+C waits for CLI cleanup; a second interrupt forces termination and may leave partial output. Windows requires an absolute `SystemRoot` and a shared console for Ctrl+C delivery.
+
+The authoring environment is independently optional through `deepseek_harness_runtime.download_primary_runtime()`. See the [runtime reference](../sdk-runtime/README.md) for cache selection, resource activation, and download behavior. SDK startup and Office operations never acquire missing resources automatically.
+
 ## Start a runtime
 
 The Python SDK has no separate application entrypoint. It launches the bundled `dsh` CLI with `--profile sdk`; the selected profile owns the JSON-RPC server, agent composition, credentials, persistence, tools, and shutdown behavior.
@@ -31,6 +49,14 @@ print(result.final_response)
 ```
 
 `DeepSeekHarness` starts lazily and reuses its runtime until `close()` or context-manager exit. The initial profile handshake has an independent 30-second default bound through `initialize_timeout_seconds`; ordinary turns remain unbounded unless `request_timeout_seconds` is set. A timeout names the selected profile and includes retained runtime diagnostics. `cwd` is the agent workspace; `runtime_cwd` independently selects the subprocess working directory. Both become absolute before launch. `provider`, `model`, optional `reasoning_effort`, and optional positive `max_tokens` are sent during JSON-RPC initialization. `base_url` and `api_key` explicitly override `DEEPSEEK_BASE_URL` and `DEEPSEEK_API_KEY` in the child environment.
+
+`harness.resume_session(saved_session_id)` restores persisted history and returns a `Session` ready for `run()`. Save the original session id and reuse its `dsh_home` and workspace. Restoration preserves the stored directory, repairs an interrupted final turn, and sends no new input. Missing, unreadable, incompatible, or occupied sessions raise without creating a replacement. `start_session(id)` only opens a lazy handle; it does not request persisted restoration. This API does not restore shell, browser, or other external processes.
+
+```py
+with DeepSeekHarness(dsh_home="/absolute/path/to/saved-home") as harness:
+    session = harness.resume_session(saved_session_id)
+    result = session.run("Continue the task.")
+```
 
 ## Customize plugins
 

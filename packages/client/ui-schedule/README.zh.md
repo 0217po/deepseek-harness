@@ -67,6 +67,8 @@ kind: "package-reference"
 
 仅在框架观察数据源期间订阅。最后一个订阅取消时释放事件监听，并使尚未完成的响应失效。组件接收框架绑定的 `useCatalog` hook 和明确的操作回调。已挂载的任务运行记录视图使用所选任务的原会话绑定读取 `schedule.history`；目录和列表响应不包含完整历史。组件拥有可丢弃的搜索、筛选、选择、确认和历史分页状态。提醒记录由 Host 拥有，不来自历史会话投影或浏览器本地演示数据。
 
+任务菜单使用[标准菜单几何](../../../docs/ui-radius.zh.md#nested-hover)，包含键盘高亮行。已创建任务卡片的圆角和图标底框材质遵循[文件卡片家族](../../../docs/ui-radius.zh.md#radius-scale)。
+
 </details>
 
 <a id="further-exploration"></a>

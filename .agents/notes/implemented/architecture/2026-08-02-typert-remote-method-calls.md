@@ -215,7 +215,7 @@ Host lib build
 → Vite 构建 Web
 ```
 
-The existing top-level `build` still runs `build:lib` before `build:web`, but `build:lib` must complete the Host and Remote artifacts before starting Client TypeScript compilation. A clean build must not depend on stale `.d.ts` files from an earlier build.
+The top-level `build` runs the step graph in `scripts/build.ts`, which completes the Host bundle and the Remote artifacts before starting Client TypeScript compilation. `build:lib` remains the complete serial lib build for `build:bench`, and its Host half `build:lib:host` serves the vendor release workflows. `typecheck` writes the Remote artifacts through `scripts/generate-typert.ts`, beside Host compilation, before Client TypeScript compilation. A clean build must not depend on stale `.d.ts` files from an earlier build.
 
 Compiler-backed repository gates that resolve the consumer surface have the same prerequisite even when their primary inputs are source files. The public `typecheck`, `lint`, and `doc-typecheck` commands run the Host contract pass first. The gate scheduler may use their `*:contracts-ready` variants only after an explicit Typert-contract or complete-build dependency, so parallel lanes neither read missing declarations nor run concurrent generators against the same outputs.
 

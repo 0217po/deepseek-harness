@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
+import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
@@ -278,20 +279,37 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
     // trigger — on the page; the scaffold boots without one.
     await connectFreshWorkspaceZh(page, scaffold.workspaceCwd, 'model-fallback-e2e', false)
 
-    const modelTrigger = page.getByRole('button', { name: /^选择模型.*deepseek-official\// })
+    const modelTrigger = page.getByRole('button', { name: '请选择模型', exact: true })
     await modelTrigger.waitFor({ timeout: 10_000 })
     await modelTrigger.click()
-    await page.getByRole('menuitem', { name: /模型/ }).click()
     expect(await page.getByText('Configured Flash', { exact: true }).count()).toBe(0)
     await page.getByRole('menuitemradio', { name: 'Private Preview' }).waitFor({ timeout: 10_000 })
     expect(tripwire.warnings).toEqual([])
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
+  it('shows an empty model list after removing the API key without replacing the saved default', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-model-catalog-empty'))
+    await page.keyboard.press('Escape')
+    const selection = scaffold.ctx.agentDefaultModel.currentSelection()
+    await scaffold.ctx.credentials.unset(credentialRef('DEEPSEEK_API_KEY'))
+    const seat = page.getByRole('button', { name: '请选择模型', exact: true })
+    await seat.waitFor()
+    await seat.click()
+    const picker = page.getByRole('group', { name: '模型与推理等级' })
+    await picker.getByText('暂无可用模型', { exact: true }).waitFor()
+    expect(await picker.getByRole('menuitemradio').count()).toBe(0)
+    expect(scaffold.ctx.agentDefaultModel.currentSelection()).toEqual(selection)
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'empty.expected.md'), await picker.ariaSnapshot(), MODE)
+    await seat.press('Escape')
+    await picker.waitFor({ state: 'hidden' })
+    expect(tripwire.pageErrors).toEqual([])
+  })
+
   it('keeps the fixture inventory closed', async () => {
     await assertFixtureInventory(
       SNAPSHOT_DIR,
-      ['welcome.expected.md', 'missing.expected.md', 'models.expected.md', 'default-models.expected.md'],
+      ['welcome.expected.md', 'missing.expected.md', 'models.expected.md', 'default-models.expected.md', 'empty.expected.md'],
     )
   })
 })

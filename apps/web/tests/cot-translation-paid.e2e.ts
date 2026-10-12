@@ -168,6 +168,7 @@ it.skipIf(MODE === 'record')('reuses saved native Account Flash translations acr
   await settings.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
   await settings.getByRole('button', { name: '插件', exact: true }).click()
   const panel = settings.locator('[data-plugin-panel]'), card = panel.locator(`[data-plugin-package="${BUNDLE_NAME}"]`)
+  await panel.getByRole('button', { name: '更多', exact: true }).click()
   const toggle = card.getByRole('switch'); await toggle.waitFor()
   expect(await toggle.getAttribute('aria-checked')).toBe('false')
   await toggle.click()
