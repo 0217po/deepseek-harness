@@ -9,7 +9,7 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import { ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
 import { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
-import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionQueryEngine from '@deepseek-ai/dsh-session-query'
 import SubagentService from '@deepseek-ai/dsh-subagent'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
@@ -177,6 +177,31 @@ describe('dsh-tool-team', () => {
     const result = await execute(ctx, lead, 'interrupt_agent', { target: 'reviewer' })
     expect(JSON.parse(text(result))).toEqual({ previousStatus })
     expect(interrupt).toHaveBeenCalledWith(lead, 'reviewer')
+  })
+
+  it('omits interrupt tools and guidance for Leads and new teammates when disabled', async () => {
+    const { ctx, lead, fiber } = await setup(['hang'])
+    await fiber.dispose()
+    await ctx.plugin(toolTeam, { interrupt: false })
+    const spawned = await execute(ctx, lead, 'spawn_teammate', {
+      name: 'worker', description: 'stay active', prompt: 'wait',
+    })
+    expect(spawned.isError, text(spawned)).toBe(false)
+    const childId = spawnedChildId(ctx, lead, spawned)
+    const child = await waitRunning(ctx, childId)
+    for (const agent of [lead, child]) {
+      const assembled = await assembly(ctx, agent)
+      expect(assembled.tools.map(schema => schema.name).filter(name => TOOL_NAMES.includes(name)).sort())
+        .toEqual(TOOL_NAMES.filter(name => name !== 'interrupt_agent'))
+      expect(renderPrompt(assembled)).not.toContain('interrupt_agent')
+      const result = await execute(ctx, agent, 'interrupt_agent', { target: 'worker' })
+      expect(result.isError).toBe(true)
+      expect(text(result)).toContain('unknown tool "interrupt_agent"')
+    }
+    expect(child.status).toBe('running')
+    expect((await execute(ctx, lead, 'list_agents', {})).isError).toBe(false)
+    expect(ctx.agentTeams.interrupt(lead, 'worker')).toEqual({ previousStatus: 'running' })
+    await waitNoAgent(ctx, childId)
   })
 
   it('uses returned targets for messages, interruption, and task assignment', async () => {
@@ -622,6 +647,16 @@ describe('dsh-tool-team', () => {
     expect((await assembly(ctx, child)).tools.map(schema => schema.name).some(name => TOOL_NAMES.includes(name))).toBe(false)
     expect(ctx.agents.get(childId)).toBe(child)
 
+    const disabled = await ctx.plugin(toolTeam, { interrupt: false })
+    for (const agent of [lead, child]) {
+      const assembled = await assembly(ctx, agent)
+      expect(assembled.tools.map(schema => schema.name).filter(name => TOOL_NAMES.includes(name)).sort())
+        .toEqual(TOOL_NAMES.filter(name => name !== 'interrupt_agent'))
+      expect(renderPrompt(assembled)).not.toContain('interrupt_agent')
+    }
+    expect(child.status).toBe('running')
+    await disabled.dispose()
+
     const replacement = await ctx.plugin(toolTeam)
     expect((await assembly(ctx, lead)).tools.map(schema => schema.name).filter(name => TOOL_NAMES.includes(name)).sort())
       .toEqual(TOOL_NAMES)
@@ -676,8 +711,10 @@ describe('dsh-tool-team', () => {
     await vi.waitFor(() => { expect(ctx.agents.get(ordinary.childId)).toBeUndefined() }, { timeout: 5_000 })
   })
 
-  it('reinstalls Team scope before a cold-resumed teammate request', async () => {
-    const { ctx, lead, adapter } = await setup([textResponse('first'), textResponse('lead received settlement'), 'hang'])
+  it.each([true, false])('reinstalls Team scope with interrupt=%s before a cold-resumed request', async (interrupt) => {
+    const { ctx, lead, adapter, fiber } = await setup([textResponse('first'), textResponse('lead received settlement'), 'hang'])
+    await fiber.dispose()
+    await ctx.plugin(toolTeam, { interrupt })
     const spawned = await execute(ctx, lead, 'spawn_teammate', {
       name: 'cold-worker', description: 'cold worker', prompt: 'finish once',
     })
@@ -700,7 +737,8 @@ describe('dsh-tool-team', () => {
     expect(receipt.messageId).toEqual(expect.any(String))
     const resumed = await waitRunning(ctx, childId)
     expect((await assembly(ctx, resumed)).tools.map(schema => schema.name)
-      .filter(name => TOOL_NAMES.includes(name)).sort()).toEqual(TOOL_NAMES)
+      .filter(name => TOOL_NAMES.includes(name)).sort()).toEqual(TOOL_NAMES.filter(name => interrupt || name !== 'interrupt_agent'))
+    expect(renderPrompt(await assembly(ctx, resumed)).includes('interrupt_agent')).toBe(interrupt)
     expect(renderContextSnapshot(await assembly(ctx, resumed))).not.toContain('You are teammate')
     const childRequests = () => adapter.requests.filter(request => request.messages.some(message => message.role === 'user'
       && message.content.some(block => block.type === 'text' && block.text.includes('You are teammate "cold-worker".'))))
@@ -709,7 +747,7 @@ describe('dsh-tool-team', () => {
     expect(childRequests()[1]!.messages.slice(0, firstMessages.length)).toEqual(firstMessages)
     expect(resumed.session.snapshotEvents().filter(event => event.type === 'user/message'
       && event.data.source.kind === 'user')).toHaveLength(1)
-    await execute(ctx, lead, 'interrupt_agent', { target: 'cold-worker' })
+    ctx.agentTeams.interrupt(lead, 'cold-worker')
     await vi.waitFor(() => { expect(ctx.agents.get(childId)).toBeUndefined() }, { timeout: 5_000 })
   })
 

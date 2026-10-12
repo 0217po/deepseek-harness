@@ -389,6 +389,14 @@ export interface PeerScope {
   dispose(): Promise<void>
 }
 
+/** Carrier capacity for buffered uplink frames of one logical stream. */
+export interface RemoteUplinkWindow {
+  /** Maximum complete encoded frame bytes waiting for the Host consumer. */
+  readonly maxBytes: number
+  /** UTF-8 envelope bytes added to a compact JSON item with a present value field. */
+  readonly frameOverheadBytes: number
+}
+
 /**
  * The context of one Remote call, reachable inside the receiving method as
  * `this.ctx.invocation`. The Gateway derives the receiver from a Context that
@@ -406,6 +414,8 @@ export interface RemoteInvocation {
   readonly peer: PeerScope
   /** Carrier cancellation: Client cancel, socket close, or an uplink failure. */
   readonly signal: AbortSignal
+  /** Carrier frame capacity; absent when the carrier imposes no encoded-frame inbox limit. */
+  readonly uplinkWindow?: RemoteUplinkWindow | undefined
   /**
    * The Client's uplink items for this call. Available once; a second call
    * throws. With an uplink codec on the descriptor every item is decoded to

@@ -113,6 +113,16 @@
   background: var(--dsw-alias-state-error-primary);
 }
 
+.accountStatus {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-state-success-primary);
+}
+
 .rowActions {
   display: inline-flex;
   align-items: center;

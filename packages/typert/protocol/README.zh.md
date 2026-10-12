@@ -95,6 +95,8 @@ Host 装配以转发给消费方的 Cordis 事件扩展 `TypertRemoteEventSelect
 
 可合并扩展的协议映射在类型系统中保留静态关联，运行时提供方则向 `ctx.typert` 注册解析；映射的名称与形状见 [`src/types.ts`](src/types.ts)。`InvocationDescriptor` 是注册表、Gateway 与 Client Remote 共同消费的共享运行时形式，涵盖直接与 Context 接收者、JSON 与查找参数、作用域投影、上行编解码器、取消与结果编解码器。
 
+`RemoteInvocation.uplinkWindow` 可选地描述载体完整帧 inbox 的容量，以及紧凑 JSON 项之外的 UTF-8 封装开销。字段缺省表示载体没有编码帧 inbox 限额；消费者仍负责本地缓存与确认策略。
+
 ### Wire 标识文法
 
 每个命名空间、方法、查找与 Context 段都必须满足 `isTypertRemoteSegment()`，生成的名字才能原样跨共享 RPC 载体传输。严格编解码器携带生成的 schema factory；`src-json` 编解码器标识约束更弱的源码启动路径。

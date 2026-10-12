@@ -23,6 +23,7 @@
   // cannot see both sides of the cordis Context merges).
   "exclude": [
     "tests/collapse-timing.e2e.ts",
+    "tests/notice-wake-tail.e2e.ts",
     "tests/chat-flow-layout.e2e.ts",
     "tests/layout-bottom.e2e.ts",
     "tests/shortcuts-desktop.e2e.ts",
@@ -147,6 +148,7 @@
     "tests/message-feedback.e2e.ts",
     "tests/markdown-images.e2e.ts",
     "tests/markdown-file-links.e2e.ts",
+    "tests/user-text-secret-mask.e2e.ts",
     "tests/reference-composer.e2e.ts",
     "tests/markdown-wide-table.e2e.ts",
     "tests/thinking-markdown.e2e.ts",
@@ -158,6 +160,7 @@
     "tests/idle-submission-handoff.e2e.ts",
     "tests/cold-blank-session.e2e.ts",
     "tests/blank-writer-reuse.e2e.ts",
+    "tests/blank-preset-reuse.e2e.ts",
     "tests/queue-image.e2e.ts",
     "tests/skill-invocation-policy.e2e.ts",
     "tests/skill-user-invoke.e2e.ts",

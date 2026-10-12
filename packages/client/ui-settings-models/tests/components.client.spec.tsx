@@ -13,7 +13,7 @@ import {
   ModelsSection, needsSetup, providerCopy, providerTargetLabel, removeProviderProfile,
 } from '../src/client/ModelsSection.tsx'
 import type { ModelsSectionInjected, ModelsSectionProps } from '../src/client/ModelsSection.tsx'
-import { ProviderEditor, pathOps } from '../src/client/ProviderEditor.tsx'
+import { pathOps } from '../src/client/ProviderEditor.tsx'
 import {
   DeepSeekModelsEditor, formatCapacity, modelDrafts, parseCapacity, validateDeepSeekModels,
 } from '../src/client/DeepSeekModelsEditor.tsx'
@@ -23,7 +23,7 @@ import { deriveKeyRef, ModelsSettingsStore } from '../src/client/store.ts'
 import { createModelsOperations } from '../src/client/operations.ts'
 import type { ModelsOperations } from '../src/client/operations.ts'
 import type { ProviderRow } from '../src/client/store.ts'
-import { en, zh } from '../src/client/locales.ts'
+import { en } from '../src/client/locales.ts'
 import { settingsSchema } from './settings-schema.client.ts'
 
 afterEach(cleanup)
@@ -153,11 +153,6 @@ function wireNamespaces(): SettingsNamespaceView[] {
       revision: 0,
     },
   ]
-}
-
-/** The account provider's settings namespace, under a composition's entry id. */
-function accountNamespace(ns = 'llm-deepseek-account'): SettingsNamespaceView {
-  return { ...wireNamespaces().find(view => view.ns === 'llm-deepseek-account')!, ns }
 }
 
 /** Credentials answers over the Remote carrier, which has no envelope. */
@@ -2131,118 +2126,14 @@ describe('apiKeyFailure', () => {
   })
 })
 
-it.each([en, zh])('edits the account model catalog without credential or endpoint fields', async (copy) => {
-  const mutate = vi.fn(() => Promise.resolve(remoteOk(accountNamespace())))
-  const scripted = scriptedFace({ mutate })
-  const ops = operationsWith(scripted.face)
-  const describe = vi.spyOn(ops, 'describeCredential')
-  const namespace = accountNamespace()
-  const onClose = vi.fn()
-  render(<ProviderEditor provider="deepseek-account" displayName={copy.deepSeekAccount}
-    namespace={namespace} settingsPath={[]} schema={settingsSchema}
-    operations={ops} t={key => copy[key]} readOnly={false} onClose={onClose} />)
-  expect(screen.queryByLabelText(copy.keyInput)).toBeNull()
-  expect(screen.queryByLabelText(copy.baseUrl)).toBeNull()
-  expect(describe).not.toHaveBeenCalled()
-  expect(screen.getByDisplayValue('deepseek-v4-flash')).toBeTruthy()
-  expect(screen.queryByText(content => content.includes(copy.advancedHint))).toBeNull()
-  await expect(`${document.body.textContent}\n`)
-    .toMatchFileSnapshot(`./expected/deepseek-account-${copy === en ? 'en' : 'zh'}.txt`)
-  const set = vi.spyOn(ops, 'storeCredential')
-  fireEvent.change(screen.getAllByLabelText(new RegExp(copy.modelId))[0]!, { target: { value: 'deepseek-v4-mini' } })
-  fireEvent.click(screen.getByText(copy.apply))
-  await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
-  expect(mutate.mock.calls[0]).toEqual([
-    'llm-deepseek-account',
-    [{
-      op: 'set',
-      path: ['models'],
-      value: [
-        {
-          id: 'deepseek-v4-mini',
-          name: 'DeepSeek-V4-Flash',
-          description: 'Preserved hidden detail',
-          contextWindow: 1_000_000,
-        },
-        { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro', contextWindow: 1_000_000 },
-      ],
-    }],
-    0,
-  ])
-  expect(set).not.toHaveBeenCalled()
-})
-
-it('keeps the DeepSeek editor for an account route under a renamed settings entry', async () => {
-  const namespace = accountNamespace('team-account-entry')
-  const mutate = vi.fn(() => Promise.resolve(remoteOk(namespace)))
-  const ops = operationsWith(scriptedFace({ mutate }).face)
-  const set = vi.spyOn(ops, 'storeCredential')
-  const onClose = vi.fn()
-  render(<ProviderEditor provider="deepseek-account" displayName={en.deepSeekAccount}
-    namespace={namespace} settingsPath={[]} schema={settingsSchema}
-    operations={ops} t={t} readOnly={false} onClose={onClose} />)
-  expect(screen.queryByText(content => content.includes(en.advancedHint))).toBeNull()
-  expect(screen.getByDisplayValue('deepseek-v4-flash')).toBeTruthy()
-  fireEvent.change(screen.getAllByLabelText(new RegExp(en.modelId))[0]!, { target: { value: 'deepseek-v4-mini' } })
-  fireEvent.click(screen.getByText(en.apply))
-  await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
-  expect(mutate).toHaveBeenCalledWith('team-account-entry', expect.any(Array), 0)
-  expect(set).not.toHaveBeenCalled()
-})
-
-it('opens the account row from the section and saves to its own namespace', async () => {
-  const namespace = accountNamespace()
-  const mutate = vi.fn(() => Promise.resolve(remoteOk(namespace)))
-  const { controller, set } = await mountSection({ mutate })
-  const row = controller.store.getSnapshot().rows[0]!
-  await act(async () => { controller.store.update((state) => {
-    state.rows = [{
-      ...row,
-      accountAvailable: true,
-      entry: {
-        provider: 'deepseek-account', displayName: en.deepSeekAccount, settingsNs: namespace.ns, settingsPath: [], active: true,
-      },
-    }, ...state.rows]
-  }) })
-  fireEvent.click(screen.getByRole('button', {
-    name: providerCopy(en.editProvider, { provider: 'deepseek-account', displayName: en.deepSeekAccount }),
-  }))
-  expect(screen.getByDisplayValue('deepseek-v4-flash')).toBeTruthy()
-  fireEvent.change(screen.getAllByLabelText(new RegExp(en.modelId))[0]!, { target: { value: 'deepseek-v4-mini' } })
-  fireEvent.click(screen.getByText(en.apply))
-  await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
-  expect(mutate.mock.calls[0]).toEqual([
-    'llm-deepseek-account',
-    [{
-      op: 'set',
-      path: ['models'],
-      value: [
-        {
-          id: 'deepseek-v4-mini',
-          name: 'DeepSeek-V4-Flash',
-          description: 'Preserved hidden detail',
-          contextWindow: 1_000_000,
-        },
-        { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro', contextWindow: 1_000_000 },
-      ],
-    }],
-    0,
-  ])
-  expect(set).not.toHaveBeenCalled()
-})
-
-it('renders the localized account row and supports catalogs without capacity defaults', async () => {
+it('renders the localized account row as signed in without an edit action', async () => {
   const scripted = scriptedFace({})
-  const { controller, view } = await mountFace(scripted)
+  const { controller } = await mountFace(scripted)
   const row = controller.store.getSnapshot().rows[0]!
   await act(async () => { controller.store.update((state) => {
     state.rows = [{ ...row, accountAvailable: true, entry: { ...row.entry, provider: 'deepseek-account' } }]
   }) })
-  expect(screen.getByText(en.deepSeekAccount)).toBeTruthy()
-  view.unmount()
-  const namespace = accountNamespace()
-  render(<ProviderEditor provider="deepseek-account" displayName={en.deepSeekAccount}
-    namespace={{ ...namespace, value: { models: [] }, base: { models: [] } }} settingsPath={[]} schema={settingsSchema}
-    operations={operationsWith(scripted.face)} t={t} readOnly={false} onClose={() => {}} />)
-  expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+  const item = screen.getByText(en.deepSeekAccount).closest('li')!
+  expect(within(item).getByText(en.accountSignedIn)).toBeTruthy()
+  expect(within(item).queryByText(en.edit)).toBeNull()
 })

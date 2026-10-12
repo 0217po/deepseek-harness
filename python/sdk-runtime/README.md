@@ -34,7 +34,7 @@ Skill selection is independent of delivery: project, custom-directory, and user 
   disabled: true
 ```
 
-To replace the three Office workflows and shared checker as a set, patch `skill-office.config.assetRoot` to another absolute resource directory. Use the filesystem skill provider for arbitrary skill collections. Configuration patches apply at process startup; changing skills does not require rebuilding the runtime wheel or Python environment.
+Office skills call `dsoffice` and `office-check` through the profile's shell commands. See the [Office provider](../../packages/skill/skill-office/README.md#use-this-package) for command selection and replacing the skill collection and shared checker. Configuration patches apply at process startup; changing skills does not require rebuilding the runtime wheel or Python environment.
 
 Repository builds also materialize a dev-only `runtime/node/` carrier. It runs `node runtime/node/runtime-bootstrap.mjs` on system Node 22.19 or newer. It is never selected automatically and is excluded from wheels and sdists.
 
