@@ -13,7 +13,7 @@ import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 import { pluginEntryId, readPluginInventory } from '@deepseek-ai/dsh-host-plugin-inventory'
 import {
   readPluginMeta, readProfileManifest, resolveBundleDir, loadOverlayPatches, composeEntries,
-  reconcileProfilePatches, readProfilePatches, loadProfileDirectory, OPTIONAL_BUNDLES, bundlePatchPaths,
+  reconcileProfilePatches, readProfilePatches, readBundlePatches, OPTIONAL_BUNDLES, bundlePatchPaths,
   evaluatePluginCompatibility, readProfileCompatibility, readProfileVersionExemptions,
   setProfileVersionExemption, PROFILE_COMPATIBILITY_FILENAME,
   OFFICIAL_ON_DEMAND_CATALOG, getDshRuntimeVersion,
@@ -455,8 +455,7 @@ export class PluginManager extends TypertRemoteService {
       const row = (await this.listPlugins()).find(item => item.entryId === id)
       if (row === undefined) throw new ManagementFailure('unknown-plugin')
       if (row.readOnlyReason !== undefined) throw new ManagementFailure(row.readOnlyReason)
-      const { layers } = loadProfileDirectory('dsh', this.profile.dir, this.profile.installAnchor, { userLayer: false })
-      await writePluginEnabled(this.profile.patchPath, row.patchId, row.moduleName, enabled, layers.flatMap(layer => layer.patches))
+      await writePluginEnabled(this.profile.patchPath, row.patchId, row.moduleName, enabled, readBundlePatches('dsh', this.profile))
       result.warnings = await this.reload(enabled ? [row.patchId] : [])
       const current = (await this.listPlugins()).find(item => item.entryId === id)
       return current?.enabled !== enabled && this.ownerContext.get('hmr') !== undefined ? 'overridden' : undefined

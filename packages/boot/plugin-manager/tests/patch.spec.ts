@@ -114,18 +114,40 @@ it('keeps the comment above a removed switch and prunes a switch the composition
   const only = await fixture('# header\n- id: tool\n  disabled: true\n')
   expect(await writePluginEnabled(only, 'tool', 'package', true, layers)).toBe(true)
   expect(loadOptionalPatches('test', only)).toEqual([])
-  expect(await readFile(only, 'utf8')).toContain('# header')
+  expect(await readFile(only, 'utf8')).toBe('# header\n[]\n')
+  const last = await fixture('- id: other\n  disabled: true\n# about tool\n- id: tool\n  disabled: true\n')
+  expect(await writePluginEnabled(last, 'tool', 'package', true, layers)).toBe(true)
+  expect(await readFile(last, 'utf8')).toBe('- id: other\n  disabled: true\n\n# about tool\n')
+  const lastWithTail = await fixture('- id: other\n  disabled: true\n# about tool\n- id: tool\n  disabled: true\n# tail\n')
+  expect(await writePluginEnabled(lastWithTail, 'tool', 'package', true, layers)).toBe(true)
+  expect(await readFile(lastWithTail, 'utf8')).toBe('- id: other\n  disabled: true\n\n# about tool\n# tail\n')
   const trailing = await fixture('- id: tool\n  disabled: true # removed\n# tail\n')
   expect(await writePluginEnabled(trailing, 'tool', 'package', true, layers)).toBe(true)
   expect(loadOptionalPatches('test', trailing)).toEqual([])
   expect(await readFile(trailing, 'utf8')).toContain('# tail')
   const both = await fixture('# header\n- id: tool\n  disabled: true\n# tail\n')
   expect(await writePluginEnabled(both, 'tool', 'package', true, layers)).toBe(true)
-  expect(await readFile(both, 'utf8')).toMatch(/# header[\s\S]*# tail/)
+  expect(await readFile(both, 'utf8')).toBe('# header\n[]\n\n# tail\n')
 })
 
 it('treats insertions in the profile patch as part of the inherited composition', async () => {
   const file = await fixture('- insert:\n    - id: tool\n      name: package\n')
   expect(await writePluginEnabled(file, 'tool', 'package', true, [])).toBe(false)
   expect(loadOptionalPatches('test', file)).toEqual([{ insert: [{ id: 'tool', name: 'package' }] }])
+})
+
+it.each([
+  ['a value', '- id: &plugin tool\n  disabled: true\n- id: other\n  config: { target: *plugin }\n', { target: 'tool' }],
+  ['the entry', '- &plugin { id: tool, disabled: true }\n- id: other\n  config: { target: *plugin }\n', { target: { id: 'tool', disabled: false } }],
+  ['a key', '- id: tool\n  &key disabled: true\n- id: other\n  config: { *key : 1 }\n', { disabled: 1 }],
+])('keeps a switch whose anchor on %s other entries reference', async (_, text, config) => {
+  const file = await fixture(text)
+  expect(await writePluginEnabled(file, 'tool', 'package', true, [{ insert: [{ id: 'tool', name: 'package' }] }])).toBe(true)
+  expect(loadOptionalPatches('test', file)).toEqual([{ id: 'tool', disabled: false }, { id: 'other', config }])
+})
+
+it('keeps a switch whose value is an alias', async () => {
+  const file = await fixture('- id: other\n  config: { flag: &flag true }\n- id: tool\n  disabled: *flag\n')
+  expect(await writePluginEnabled(file, 'tool', 'package', true, [{ insert: [{ id: 'tool', name: 'package' }] }])).toBe(true)
+  expect(loadOptionalPatches('test', file)).toEqual([{ id: 'other', config: { flag: true } }, { id: 'tool', disabled: false }])
 })
