@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package lets the model create named teammates, send them messages, inspect availability, wait for progress, interrupt stuck work, and coordinate through a shared task board. Every team member receives the same nine tools and guidance for coordinating in a shared workspace. Choose it when the model should operate a team only after you explicitly request one. It replaces legacy subagent controls with the same tool names, so compositions that need both must disable the legacy definitions. The package is published under its experimental name and provides no stability guarantee.
+This package lets the model create named teammates, send them messages, inspect availability, wait for progress, interrupt stuck work, and coordinate through a shared task board. By default, every team member receives the same nine tools and guidance for coordinating in a shared workspace. Choose it when the model should operate a team only after you explicitly request one. It replaces legacy subagent controls with the same tool names, so compositions that need both must disable the legacy definitions. The package is published under its experimental name and provides no stability guarantee.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ This package lets the model create named teammates, send them messages, inspect 
 <a id="use-this-package"></a>
 ## Use this package
 
-Add this package on top of `@deepseek-ai/dsh-experimental-agent-team` when the model should run a team through tools. Once mounted, every team member — the Lead and each teammate — gets the same nine tools plus the same coordination policy. `spawn_teammate` prefixes the initial task with the teammate’s role and name.
+Add this package on top of `@deepseek-ai/dsh-experimental-agent-team` when the model should run a team through tools. Once mounted, every team member — the Lead and each teammate — gets the same enabled tools plus the same coordination policy. `spawn_teammate` prefixes the initial task with the teammate’s role and name.
 
 ### When to choose it
 
@@ -33,7 +33,7 @@ Choose it when the model should create and coordinate teammates by itself rather
 
 ### Smallest working example
 
-The smallest addition to an existing composition is the two-package fragment from the [agent-team README](../agent-team/README.md#smallest-working-setup): durable session storage, the team domain package, and this package. The plugin itself takes two optional settings:
+The smallest addition to an existing composition is the two-package fragment from the [agent-team README](../agent-team/README.md#smallest-working-setup): durable session storage, the team domain package, and this package. The plugin itself accepts these optional settings:
 
 ```yaml
 - id: tool-agent-team
@@ -41,20 +41,24 @@ The smallest addition to an existing composition is the two-package fragment fro
   config:
     freshProvider: spawn
     forkProvider: fork
+    interrupt: false
 ```
 
 | Field | Default | Meaning |
 |---|---|---|
 | `freshProvider` | `spawn` | Provider that starts fresh teammates |
 | `forkProvider` | `fork` | Provider that starts fork teammates |
+| `interrupt` | `true` | Expose `interrupt_agent` to Team members |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-tool-agent-team) is the exhaustive source for every accepted field and its JSDoc.
+
+Set `interrupt: false` to omit `interrupt_agent` and its policy guidance for the Lead and all teammates, including resumed members. The other eight tools and the domain interruption API remain available. This setting controls only this plugin: keep the legacy `tool-subagent-control` plugin disabled so its same-named tool cannot become visible.
 
 Try it by asking the Lead model: "create a teammate named reviewer to check the diff, then send reviewer the change summary". The model calls the creation tool and then the messaging tool.
 
 ### What the model can do
 
-The nine tools group into four capabilities:
+With interruption enabled, the nine tools group into four capabilities:
 
 - **Create a teammate** — `spawn_teammate` takes a name, a description, and the initial task; only the Lead can call it.
 - **Send messages** — `send_message` steers a running member at its nearest step boundary, starts or resumes an inactive member.
@@ -91,11 +95,11 @@ The [Agent Teams Agent Note](../../../.agents/notes/implemented/feature/2026-08-
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: config, the fixed policy text, and the nine scoped tool registrations |
+| [`src/index.ts`](src/index.ts) | Plugin entry: config, the configured policy text, and the scoped tool registrations |
 
 ### Policy and tools
 
-One `team:policy` section on the member scope states the shared coordination rules; the fixed text and the nine tool registrations are declared in [`src/index.ts`](src/index.ts). The nine tool schemas are registered in scopes recognized as Team members at publication. Scoped registrations with the same names as the legacy global continuable-subagent controls shadow those globals for team members only.
+One `team:policy` section on the member scope states the shared coordination rules; the policy text and tool registrations are declared in [`src/index.ts`](src/index.ts). Enabled tool schemas are registered in scopes recognized as Team members at publication. Scoped registrations with the same names as the legacy global continuable-subagent controls shadow those globals for team members only.
 
 ### Scoped registration and teardown
 
@@ -124,11 +128,11 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-One shared system policy covers explicit delegation, shared-cwd safety, task coordination, Steer delivery, inbox acceptance, and the Lead’s duty to wait. All nine schemas are identical for Leads and teammates; execution enforces Lead-only operations. `spawn_teammate` prefixes the initial task with a user-role reminder of the teammate name, Lead name, and messaging tools. The reminder follows ordinary history through recovery and compaction.
+One shared system policy covers explicit delegation, shared-cwd safety, task coordination, Steer delivery, inbox acceptance, and the Lead’s duty to wait. Enabled schemas are identical for Leads and teammates; execution enforces Lead-only operations. `spawn_teammate` prefixes the initial task with a user-role reminder of the teammate name, Lead name, and messaging tools. The reminder follows ordinary history through recovery and compaction.
 
 #### Token effect
 
-Fixed policy and schema cost on every Team member request. The initial identity text follows ordinary history through later steps, cold recovery, and compaction; the plugin neither scans for it nor reinserts it. Tool calls add compact JSON roster, task, wait, or receipt results. Peer content is retained by the Team domain in the target's history.
+Policy and schema cost on every Team member request; disabling interruption removes its schema and guidance. The initial identity text follows ordinary history through later steps, cold recovery, and compaction; the plugin neither scans for it nor reinserts it. Tool calls add compact JSON roster, task, wait, or receipt results. Peer content is retained by the Team domain in the target's history.
 
 #### KV Cache effect
 

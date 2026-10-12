@@ -9,23 +9,23 @@
   en: 0b01a243291821bc
   zh: 0dadd38d709ae9bd
 /deepseek-ai-dsh-experimental-tool-agent-team/summary:
-  en: 0cce9e5ec6d1946a
-  zh: 6bc76243f494815c
+  en: 270c8659c592d3b2
+  zh: ef3cb446a92cc1b5
 /deepseek-ai-dsh-experimental-tool-agent-team/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-experimental-tool-agent-team/use-this-package:
-  en: 1e928b05f250c945
-  zh: 0281800e08a58fce
+  en: 2307aecc7530c7ff
+  zh: 0ce5f1f32f4794e6
 /deepseek-ai-dsh-experimental-tool-agent-team/use-this-package/when-to-choose-it:
   en: 5261677934ea6e71
   zh: a8bafd94d2b293ec
 /deepseek-ai-dsh-experimental-tool-agent-team/use-this-package/smallest-working-example:
-  en: 9af650a79711b3b3
-  zh: 2930360011b544e0
+  en: c43c6901225a1445
+  zh: 2c2cc26c2849b43b
 /deepseek-ai-dsh-experimental-tool-agent-team/use-this-package/what-the-model-can-do:
-  en: be42811bbcc3b438
-  zh: 014bd055ca694315
+  en: 42ac385ae754fa35
+  zh: 32070bf823749d98
 /deepseek-ai-dsh-experimental-tool-agent-team/use-this-package/what-success-and-failure-look-like:
   en: e49a980372c55892
   zh: d4bcdd36278d040d
@@ -36,11 +36,11 @@
   en: 445806c13f887a09
   zh: 8b2b67044abfd65a
 /deepseek-ai-dsh-experimental-tool-agent-team/understand-the-implementation/source-map:
-  en: 29c1bff5023123be
-  zh: 079c4819ec9ef277
+  en: b073d8293ebc5c71
+  zh: 4bc5e698950df255
 /deepseek-ai-dsh-experimental-tool-agent-team/understand-the-implementation/policy-and-tools:
-  en: 3e730667f904c7bd
-  zh: 7f48e6c07c615d77
+  en: 892f4a49bd00592c
+  zh: 6225bac7b65418d4
 /deepseek-ai-dsh-experimental-tool-agent-team/understand-the-implementation/scoped-registration-and-teardown:
   en: c2b29f27a74c02c0
   zh: 026f2ef93dd604d8
@@ -54,11 +54,11 @@
   en: 8e1e365ff3b0dfb2
   zh: c6c91fbf1e1df934
 /deepseek-ai-dsh-experimental-tool-agent-team/model-experience/team-policy-and-tools/what-the-model-sees:
-  en: 601ef7bfff117b60
-  zh: 50435d70524c12e2
+  en: fed112bb75f48bfb
+  zh: e704d02ab4925ec0
 /deepseek-ai-dsh-experimental-tool-agent-team/model-experience/team-policy-and-tools/token-effect:
-  en: fe314af98a2130b8
-  zh: ea89cb40dd11d57c
+  en: ba4e41f8915822f1
+  zh: a16a8439323d957e
 /deepseek-ai-dsh-experimental-tool-agent-team/model-experience/team-policy-and-tools/kv-cache-effect:
   en: cba54e491b29b664
   zh: 288015d4794998f9

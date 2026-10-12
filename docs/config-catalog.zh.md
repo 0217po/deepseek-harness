@@ -1253,8 +1253,10 @@ export interface Config {
 - `source`: [`packages/experimental/tool-agent-team/src/index.ts:17`](../packages/experimental/tool-agent-team/src/index.ts)
 
 ```ts config-catalog
-/** Tool routing configuration. */
+/** Tool registration and routing configuration. */
 export interface Config {
+  /** Register `interrupt_agent` and its policy guidance. Defaults to true; false leaves the domain API available. */
+  readonly interrupt?: boolean
   /** Continuable-subagent provider used for fresh teammates. */
   readonly freshProvider?: string
   /** Continuable-subagent provider used for completed-prefix fork teammates. */
