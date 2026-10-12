@@ -9,7 +9,7 @@ import type {
   UserTextAllocationReport, UserTextTimeReport, UserTextWorkloadAllocation, UserTextWorkloadTiming,
 } from './user-text.worker.client.ts'
 
-/** Fresh registries and documents per sample in one compiled worker; the fastest sample removes scheduler delay. */
+/** Fresh registries and documents after warm-up; independent minima of adjacent pairs limit scheduler delay. */
 const ATTEMPTS = 5
 /** A stuck worker is reaped before the outer benchmark deadline. */
 const WORKER_TIMEOUT_MS = 180_000

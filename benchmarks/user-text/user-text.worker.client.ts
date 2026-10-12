@@ -17,12 +17,22 @@ import { assertBuiltBenchmarkRuntime } from '../support/built-worker.ts'
 /** What a workload contains: no credential, real credentials, or input shaped against one format. */
 export type UserTextWorkloadGroup = 'unmatched' | 'matched' | 'adversarial'
 
+/** Adjacent baseline and credential measurements; even-indexed pairs measure the baseline first. */
+export interface UserTextTimingPair {
+  readonly baseMs: number
+  readonly baseCpuMs: number
+  readonly withSecretMs: number
+  readonly withSecretCpuMs: number
+}
+
 /** Timing of one workload evaluated by the shipped rule set with and without the credential matcher. */
 export interface UserTextWorkloadTiming {
   readonly id: string
   readonly group: UserTextWorkloadGroup
   readonly documents: number
   readonly characters: number
+  /** Fresh evaluations averaged into each timed sample; counts and characters describe one evaluation. */
+  readonly evaluationsPerSample: number
   readonly secrets: number
   /** Characters inside credential ranges, whose masks the matcher builds. */
   readonly maskedCharacters: number
@@ -31,6 +41,8 @@ export interface UserTextWorkloadTiming {
   /** Process CPU time over the fastest with-credential sample. */
   readonly withSecretCpuMs: number
   readonly ratio: number
+  /** All measured pairs in execution order, excluding warm-up. */
+  readonly samples: readonly UserTextTimingPair[]
 }
 
 /** Heap allocation of the credential matcher over one workload, with the size of what it returns. */
@@ -45,8 +57,9 @@ export interface UserTextWorkloadAllocation {
   readonly maskedLineBreaks: number
 }
 
-/** Result of `time <attempts>`: the fastest of `attempts` fresh samples per workload. */
+/** Result of `time <attempts>`: warmed code, fresh instances, and independent minima from adjacent sample pairs. */
 export interface UserTextTimeReport {
+  readonly warmupPairs: number
   readonly attempts: number
   readonly workloads: readonly UserTextWorkloadTiming[]
 }
@@ -65,6 +78,10 @@ const BASE_RULES: readonly UserTextRule[] = [
 const FACTS: Readonly<Partial<UserTextFacts>> = { sessionLabels: ['会话一'], skillNames: ['plan', 'review'] }
 
 const KIB = 1024
+/** Exercise each workload's code paths before measuring sub-millisecond baseline evaluations. */
+const WARMUP_PAIRS = 10
+/** Single-document baselines take less than a millisecond; a fixed batch limits clock and scheduling noise. */
+const SINGLE_DOCUMENT_EVALUATIONS = 20
 const PROSE = '帮我看看这个函数为什么慢，顺便把 README 也更新一下。The quick brown fox jumps over the lazy dog, 1234 times. '
 const CODE = 'const value = await fetch(`https://api.example.com/v1/items?id=${id}`); if (!value.ok) throw new Error("bad: " + value.status);\n'
 const BASE64 = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ejAxMjM0NTY3ODkrLw'
@@ -203,13 +220,45 @@ function evaluateAll(rules: RuleSet, texts: readonly string[]): Sample {
   return { ms, cpuMs: (cpu.user + cpu.system) / 1_000, secrets, maskedCharacters }
 }
 
-function fastest(rules: RuleSet, texts: readonly string[], attempts: number): Sample {
-  let best = evaluateAll(rules, texts)
-  for (let attempt = 1; attempt < attempts; attempt++) {
-    const sample = evaluateAll(rules, texts)
-    if (sample.ms < best.ms) best = sample
+function sample(rules: RuleSet, texts: readonly string[], evaluations: number): Sample {
+  const first = evaluateAll(rules, texts)
+  let ms = first.ms
+  let cpuMs = first.cpuMs
+  for (let index = 1; index < evaluations; index++) {
+    const next = evaluateAll(rules, texts)
+    ms += next.ms
+    cpuMs += next.cpuMs
   }
-  return best
+  return { ...first, ms: ms / evaluations, cpuMs: cpuMs / evaluations }
+}
+
+function evaluatePair(texts: readonly string[], index: number, evaluations: number): { readonly base: Sample; readonly secret: Sample } {
+  if (index % 2 === 0) {
+    const base = sample(withoutSecret, texts, evaluations)
+    return { base, secret: sample(withSecret, texts, evaluations) }
+  }
+  const secret = sample(withSecret, texts, evaluations)
+  return { base: sample(withoutSecret, texts, evaluations), secret }
+}
+
+function measure(texts: readonly string[], attempts: number, evaluations: number): {
+  readonly base: Sample; readonly secret: Sample; readonly samples: readonly UserTextTimingPair[]
+} {
+  for (let warm = 0; warm < WARMUP_PAIRS; warm++) evaluatePair(texts, warm, evaluations)
+  let best = evaluatePair(texts, 0, evaluations)
+  const samples: UserTextTimingPair[] = []
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const pair = attempt === 0 ? best : evaluatePair(texts, attempt, evaluations)
+    samples.push({
+      baseMs: pair.base.ms, baseCpuMs: pair.base.cpuMs,
+      withSecretMs: pair.secret.ms, withSecretCpuMs: pair.secret.cpuMs,
+    })
+    best = {
+      base: pair.base.ms < best.base.ms ? pair.base : best.base,
+      secret: pair.secret.ms < best.secret.ms ? pair.secret : best.secret,
+    }
+  }
+  return { ...best, samples }
 }
 
 declare const gc: (() => void) | undefined
@@ -309,21 +358,24 @@ async function allocations(): Promise<UserTextAllocationReport> {
 
 function timings(attempts: number): UserTextTimeReport {
   return {
+    warmupPairs: WARMUP_PAIRS,
     attempts,
     workloads: workloads().map(({ id, group, texts }) => {
-      const base = fastest(withoutSecret, texts, attempts)
-      const secret = fastest(withSecret, texts, attempts)
+      const evaluationsPerSample = texts.length === 1 ? SINGLE_DOCUMENT_EVALUATIONS : 1
+      const { base, secret, samples } = measure(texts, attempts, evaluationsPerSample)
       return {
         id,
         group,
         documents: texts.length,
         characters: texts.reduce((sum, text) => sum + text.length, 0),
+        evaluationsPerSample,
         secrets: secret.secrets,
         maskedCharacters: secret.maskedCharacters,
         baseMs: base.ms,
         withSecretMs: secret.ms,
         withSecretCpuMs: secret.cpuMs,
         ratio: secret.ms / base.ms,
+        samples,
       }
     }),
   }
