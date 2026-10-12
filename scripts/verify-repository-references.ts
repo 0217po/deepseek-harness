@@ -90,7 +90,7 @@ function gitLines(repoRoot: string, args: readonly string[], maxBuffer: number, 
  * @param prefix - Lowercase hexadecimal prefix.
  * @returns The matching object name, or `undefined` when none or several match.
  */
-function uniquePrefixMatch(objects: readonly string[], prefix: string): string | undefined {
+export function uniquePrefixMatch(objects: readonly string[], prefix: string): string | undefined {
   let low = 0
   let high = objects.length
   while (low < high) {
