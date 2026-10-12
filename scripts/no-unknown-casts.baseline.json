@@ -2054,9 +2054,6 @@
     "2f2c5a76501f35183d9708040f1f79cc30c8c9da5278823aa19ece7af67f5812": 1,
     "ec229b2914993fe3b9cabeffe88aaca92dac0aed964d27a4704cd64202044127": 1
   },
-  "packages/typert/protocol/src/index.ts": {
-    "35e98b658709d2dead42b6fc80150e0cac9075c55ea512cae80951983bd1f69c": 1
-  },
   "packages/typert/protocol/tests/protocol.spec.ts": {
     "418fc1acbd1aac8b6b9ba1ac25f30a4fc33d632e372085c73f396e76b9da883a": 1,
     "539af7158f6057075289d3b1543bd5b692887755287d81f91d9b9c7cc14cf9cb": 1,

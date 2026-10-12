@@ -14337,6 +14337,9 @@ importers:
       '@deepseek-ai/dsh-tool-cordis':
         specifier: workspace:*
         version: link:../../extensions/tool-cordis
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:*
+        version: link:../../core/tools
       '@deepseek-ai/dsh-typert-registry':
         specifier: workspace:*
         version: link:../registry
@@ -14359,9 +14362,15 @@ importers:
       '@deepseek-ai/dsh-app-boot':
         specifier: workspace:*
         version: link:../../boot/app-boot
+      '@deepseek-ai/dsh-typert-protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@deepseek-ai/dsh-typert-registry':
         specifier: workspace:*
         version: link:../registry
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -14371,6 +14380,9 @@ importers:
       '@deepseek-ai/dsh-brand':
         specifier: workspace:*
         version: link:../../util/brand
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:~
