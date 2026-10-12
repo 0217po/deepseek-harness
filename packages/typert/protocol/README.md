@@ -95,6 +95,8 @@ The package keeps strict reflection in the compiler: decorator initializers reta
 
 The merge-extensible protocol maps keep static associations in the type system, while runtime providers register resolution with `ctx.typert`; the map names and shapes live in [`src/types.ts`](src/types.ts). `InvocationDescriptor` is the shared runtime form consumed by the registry, the Gateway, and the Client Remote, covering direct and Context receivers, JSON and lookup parameters, scope projections, the uplink codec, cancellation, and result codecs.
 
+`RemoteInvocation.uplinkWindow` optionally describes the carrier's complete-frame inbox capacity and the UTF-8 envelope cost added to compact JSON items. Its absence means the carrier has no encoded-frame inbox limit; consumers still own their local buffering and acknowledgement policy.
+
 ### Wire identity grammar
 
 Every namespace, method, lookup, and Context segment must satisfy `isTypertRemoteSegment()`, so generated names cross the shared RPC carrier unchanged. Strict codecs carry generated schema factories; `src-json` codecs identify the weaker source-launch path.

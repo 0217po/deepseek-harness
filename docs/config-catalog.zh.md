@@ -184,7 +184,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-api-gateway`
 
 - `inject`: `typert`
-- `source`: [`packages/api/gateway/src/index.ts:146`](../packages/api/gateway/src/index.ts)
+- `source`: [`packages/api/gateway/src/index.ts:147`](../packages/api/gateway/src/index.ts)
 
 ```ts config-catalog
 /** Gateway transport configuration. */
@@ -281,9 +281,9 @@ export interface Config {
   readonly maxRows: number
   /** Screen history rows retained for reconnecting clients. */
   readonly scrollback: number
-  /** Maximum queued UTF-8 frame bytes per output follower before disconnection. */
+  /** Maximum queued UTF-8 frame bytes per output follower and in the Client input buffer. */
   readonly maxBufferedBytes: number
-  /** Maximum UTF-8 bytes in one input request. */
+  /** Maximum raw UTF-8 bytes per input command and across unacknowledged Client input. */
   readonly maxInputBytes: number
   /** Provider process-termination grace period in milliseconds. */
   readonly disposeGraceMs: number
