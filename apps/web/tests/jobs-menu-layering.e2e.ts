@@ -124,7 +124,7 @@ describe.skipIf(MODE === 'record')('web e2e: jobs menu layering', () => {
       agent,
     })
     const reported = started.content.map(block => block.type === 'text' ? block.text : '').join('')
-    const matched = /\bbash-\d+\b/.exec(reported)
+    const matched = /\bbash-[0-9a-f]{16}\b/.exec(reported)
     if (matched === null) throw new Error(`background bash reported no job id: ${reported}`)
     const startedJobId = JobId(matched[0])
     jobId = startedJobId
@@ -149,9 +149,13 @@ describe.skipIf(MODE === 'record')('web e2e: jobs menu layering', () => {
 
     const trigger = page.getByRole('button', { name: '1 background job running', exact: true })
     await trigger.waitFor({ timeout: 15_000 })
-    await trigger.click()
+    await trigger.focus()
+    await page.keyboard.press('Enter')
     const list = page.getByRole('list', { name: 'Background jobs' })
     await list.waitFor()
+    await page.keyboard.press('Tab')
+    expect(await list.getByRole('button', { name: /Show live output/ })
+      .evaluate(element => element === document.activeElement)).toBe(true)
     const expectedPlacement = {
       dockMode: 'push', bodyMounted: true, fixed: true, anchored: true,
       viewportBounded: true, overlapsBrowser: true, aboveBrowser: true,
