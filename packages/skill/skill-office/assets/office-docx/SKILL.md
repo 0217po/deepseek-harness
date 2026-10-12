@@ -33,14 +33,16 @@ python-docx does not paginate or render documents. Do not represent ordinary rep
 
 Run the shared structural checker when `office-check` is available:
 
+In PowerShell, prefix the quoted Python executable with `&`. Resolve the checker path relative to this skill directory.
+
 ```text
-office-check <document.docx> --out <checks.json>
+"<python>" "<skill-directory>/../scripts/check_office.py" <document.docx> --out <checks.json>
 ```
 
 It checks ZIP/XML integrity and internal relationships, and reports paragraphs, logical table dimensions, and sections. Optional `--contains TEXT` arguments assert required text. A successful structural check does not verify pagination, clipping, fonts, or visual appearance. Compare the summary and reopened document with the user's request, including unchanged content that matters to an edit.
 
-If `office-check` is unavailable, use an already configured environment to check the ZIP/XML package and internal relationships. Report the missing environment if those checks cannot run; do not claim structural validation.
+If the Python checker cannot run, use an already configured environment to check the ZIP/XML package and internal relationships. Report the missing environment if those checks cannot run; do not claim structural validation.
 
-Deliver after the requested content and structural checks pass. Creating a file or changing content with incidental basic formatting does not require additional operations. Load `office-render` for requested images or visual inspection and for appearance-focused styling, spacing, sizing, or alignment changes unless the user explicitly skips rendering. For PDF output load `office-export-pdf`.
+Deliver after the requested content and structural checks pass. Creating a file or changing content with incidental basic formatting does not require additional operations. Load `office-render` for requested images or visual inspection. When styling, font color, spacing, sizing, or text alignment is the requested edit, load `office-render` and inspect the changed page even without a separate visual-check request, unless the user explicitly skips rendering. For PDF output load `office-export-pdf`.
 
 Call `present({"files":[{"path":"report.docx"}]})` with the actual final DOCX path. It exposes the current source file without copying or preserving its bytes, so keep that file in place and do not present temporary QA reports unless requested. If `present` is unavailable, provide the final workspace path using the session's supported file delivery method.

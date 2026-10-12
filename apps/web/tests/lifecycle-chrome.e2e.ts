@@ -107,8 +107,6 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     await writeComposerDraft(page, input, '/cpt')
     await expect.poll(() => menu.getByRole('option').allTextContents()).toEqual([
       'CompactCompact older conversation history',
-      'office-pptxCreate, read, edit, and validate PowerPoint presentations (.pptx).',
-      'office-export-pdfConvert an Office document to a requested PDF with LibreOffice Kit.',
     ])
     const fuzzySnapshot = await captureStableAria(page, '[role="listbox"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(FUZZY_COMMAND_MENU_EXPECTED, fuzzySnapshot, MODE)

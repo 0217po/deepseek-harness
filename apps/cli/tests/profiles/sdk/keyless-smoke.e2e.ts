@@ -462,7 +462,7 @@ it.each(['unset', 'empty', 'bundled', 'full', 'python-only', 'python-only-no-cli
   if (address === null || typeof address === 'string') throw new Error('model fixture did not bind')
   const home = join(root, 'home')
   const cliPatch = join(root, 'cli.patch.yml')
-  await writeFile(cliPatch, JSON.stringify(mode === 'python-only-no-cli' ? [{ id: 'skill-office', config: { assetRoot: join(root, 'resources', 'office-skills') } }, { id: 'office-commands', config: { command: false } }] : []))
+  await writeFile(cliPatch, JSON.stringify(mode === 'python-only-no-cli' ? [{ id: 'skill-office', config: { assetRoot: join(root, 'resources', 'office-skills'), cli: false } }] : []))
   const officeLaunch = resolveExampleLaunch({
     srcBin: fileURLToPath(new URL('../../../src/bin.ts', import.meta.url)), mode: 'lib',
     configArgs: ['--profile', 'sdk', '--patch', cliPatch],
@@ -498,7 +498,7 @@ it.each(['unset', 'empty', 'bundled', 'full', 'python-only', 'python-only-no-cli
   expect(names).not.toContain('office_tools')
   expect(names).not.toContain('render_document')
   for (const name of ['office-docx', 'office-pptx', 'office-xlsx']) {
-    expect(JSON.stringify(requests[0]!.messages).includes(name)).toBe(false)
+    expect(JSON.stringify(requests[0]!.messages).includes(name)).toBe(enabled && mode !== 'missing-assets')
   }
   if (mode === 'wrong-type') {
     expect(requests).toHaveLength(2)

@@ -4,6 +4,7 @@
       disabled: false
       config:
         assetRoot: !!js process.cwd() + '/office-skills'
+        cli: false
 
 - id: tool-bash
   disabled: true

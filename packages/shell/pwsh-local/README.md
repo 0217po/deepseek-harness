@@ -59,8 +59,6 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 Run a command by awaiting the execution's `result()` projection; a nonzero exit, a timeout, or a cancellation resolves descriptively, and only infrastructure failures reject. The command string rides as one argument to `-Command`: PowerShell parses the text itself and no intermediate shell exists, so there is no shell-quoting layer to escape and native Win32 paths pass through unchanged. Every command pins UTF-8 output first, so non-ASCII output is not garbled even on the Windows PowerShell 5.1 fallback. The environment is model-friendly: `NO_COLOR=1 PAGER=cat GIT_PAGER=cat` (no `TERM=dumb` — a POSIX concept), with explicit caller-provided entries still winning.
 
-Each child process selects `ExecutionPolicy Bypass` so host-generated scripts can run without changing the user's persistent policy. Machine and user Group Policy still take precedence.
-
 ```text
 const execution = await ctx.shell.execute(ctx.shell.resolve({ command: 'Get-ChildItem' }))
 const result = await execution.result()
@@ -88,7 +86,7 @@ This section explains the design of the executor and points at the code that rea
 
 ### Design concept
 
-The executor is the PowerShell Service Provider for the `ctx.shell` seam built on the subprocess capability: it owns everything pwsh-shaped — executable resolution, command defaulting and caps, deadline fusion and cause classification, UTF-8 output pinning, the model-friendly terminal environment, and the background read merge — while managed-range mechanics (bounded spill-backed output, credential scrub, termination escalation, quiescence, and disposal) belong to the subprocess service. Every call spawns a fresh non-interactive `pwsh -Command` with `-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass`, so commands are deterministic and profile state never leaks between calls.
+The executor is the PowerShell Service Provider for the `ctx.shell` seam built on the subprocess capability: it owns everything pwsh-shaped — executable resolution, command defaulting and caps, deadline fusion and cause classification, UTF-8 output pinning, the model-friendly terminal environment, and the background read merge — while managed-range mechanics (bounded spill-backed output, credential scrub, termination escalation, quiescence, and disposal) belong to the subprocess service. Every call spawns a fresh non-interactive `pwsh -Command` with `-NoLogo -NoProfile -NonInteractive`, so commands are deterministic and profile state never leaks between calls.
 
 ### Source map
 
@@ -100,7 +98,7 @@ The executor is the PowerShell Service Provider for the `ctx.shell` seam built o
 
 ### Main flow
 
-A call runs through three steps: `resolve()` fills `workdir`/`timeoutMs`/`stdoutMaxBytes` from config (capping the per-call `timeoutMs` override); the executor builds the pwsh argv — `pwsh -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command <encoding preamble + command>` — fuses the config-clamped timeout with the caller's abort signal into one deadline, and spawns through `ctx.subprocess` with explicit byte caps and the `graceMs`; the settled outcome is classified and projected into a `ShellRunResult`. Windows reports forced termination as exit 1 without a signal, so signal-stamped facts are POSIX-only there; the timeout/abort classification is platform-independent.
+A call runs through three steps: `resolve()` fills `workdir`/`timeoutMs`/`stdoutMaxBytes` from config (capping the per-call `timeoutMs` override); the executor builds the pwsh argv — `pwsh -NoLogo -NoProfile -NonInteractive -Command <encoding preamble + command>` — fuses the config-clamped timeout with the caller's abort signal into one deadline, and spawns through `ctx.subprocess` with explicit byte caps and the `graceMs`; the settled outcome is classified and projected into a `ShellRunResult`. Windows reports forced termination as exit 1 without a signal, so signal-stamped facts are POSIX-only there; the timeout/abort classification is platform-independent.
 
 The foreground deadline starts before argv preparation and retains the same signal and remaining budget through execution. Preparation timeout returns empty output, `timedOut: true`, and null `exitCode` and `signal`; caller cancellation before process publication still rejects. Late preparation success or failure cannot trigger a spawn.
 

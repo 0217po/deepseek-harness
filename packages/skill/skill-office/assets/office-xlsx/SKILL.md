@@ -43,13 +43,15 @@ Do not rename `.xls`, `.xlsb`, encrypted files, or macro-enabled files to `.xlsx
 
 Run the shared structural checker when `office-check` is available:
 
+In PowerShell, prefix the quoted Python executable with `&`. Resolve the checker path relative to this skill directory.
+
 ```text
-office-check <workbook.xlsx> --out <checks.json>
+"<python>" "<skill-directory>/../scripts/check_office.py" <workbook.xlsx> --out <checks.json>
 ```
 
 It checks ZIP/XML integrity and internal relationships, and reports sheet names, populated-cell counts, and formula counts. Repeated `--contains TEXT` arguments check string cells and sheet names, and `--count N` checks sheet count. `--contains` excludes numeric cells and does not validate formula results; verify those separately with openpyxl. The checker does not calculate formulas or judge workbook appearance. Compare relevant values, types, formulas, styles, and totals with the task's source data.
 
-If `office-check` is unavailable, use an already configured environment to check the ZIP/XML package and internal relationships. Report the missing environment if those checks cannot run; do not claim structural validation.
+If the Python checker cannot run, use an already configured environment to check the ZIP/XML package and internal relationships. Report the missing environment if those checks cannot run; do not claim structural validation.
 
 Load `office-render` for requested images or visual inspection and whenever the user's primary task targets appearance, including cell fill colors, text alignment, spacing, or sizing. These appearance changes require rendering even without a separate visual-check request, unless the user explicitly skips it. New workbooks and data or formula edits do not require rendering solely because they include incidental basic formatting. In particular, bold headers and number formats accompanying data edits do not require loading `office-render` or running its commands.
 

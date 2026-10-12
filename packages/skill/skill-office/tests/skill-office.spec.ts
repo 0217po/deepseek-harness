@@ -7,7 +7,11 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as SkillOffice from '@deepseek-ai/dsh-skill-office'
+import { isSea } from 'node:sea'
+import { execa } from 'execa'
 import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('node:sea', () => ({ isSea: vi.fn(() => false) }))
 
 const assets = fileURLToPath(new URL('../assets/', import.meta.url))
 const names = ['office', 'office-docx', 'office-export-pdf', 'office-pptx', 'office-recalculate', 'office-render', 'office-xlsx']
@@ -47,7 +51,8 @@ describe('bundled Office skills', () => {
         expect(loaded?.resourceBase).toEqual({ kind: 'directory', path: join(assets, skill.name).split(sep).join('/') })
         const raw = await readFile(join(assets, skill.name, 'SKILL.md'), 'utf8')
         const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/u, '').trim()
-        expect(loaded?.content).toBe(body)
+        expect(loaded?.content.startsWith(body)).toBe(true)
+        if (!['office-render', 'office-recalculate', 'office-export-pdf'].includes(skill.name)) expect(loaded?.content).toBe(body)
       }
       await fiber.dispose()
       expect(await ctx.skills.list()).toEqual([])
@@ -103,27 +108,6 @@ describe('bundled Office skills', () => {
     }
   })
 
-  it.each([false, true])('loads carrier resources without its interpreters or renderer (explicit resources: %s)', async (explicit) => {
-    const root = await mkdtemp(join(tmpdir(), 'dsh-office-carrier-'))
-    const ctx = new Context()
-    try {
-      const relocated = join(root, 'office-skills')
-      await cp(assets, relocated, { recursive: true })
-      vi.stubEnv('DSH_PRIMARY_RUNTIME', undefined)
-      vi.stubEnv('DSH_BUNDLED_PRIMARY_RUNTIME', explicit ? undefined : join(root, 'primary-runtime'))
-      vi.stubEnv('DSH_BUNDLED_OFFICE_SKILLS', explicit ? relocated : undefined)
-      await ctx.plugin(SkillRegistry)
-      await ctx.plugin(SkillOffice)
-      for (const name of names) {
-        expect((await ctx.skills.get(name))?.resourceBase).toEqual({ kind: 'directory', path: join(relocated, name).split(sep).join('/') })
-      }
-    } finally {
-      vi.unstubAllEnvs()
-      await ctx.fiber.dispose()
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
   it.each([
     ['description: "Quoted: description"', '\r\n', 'Quoted: description'],
     ['description: >-\n  Folded\n  description', '\n', 'Folded description'],
@@ -169,4 +153,59 @@ describe('bundled Office skills', () => {
       await rm(root, { recursive: true, force: true })
     }
   })
+})
+
+it('executes capabilities using only paths returned by the loaded skill from a separate workspace', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'office CLI 工作目录 '))
+  const ctx = new Context()
+  try {
+    await ctx.plugin(SkillRegistry)
+    await ctx.plugin(SkillOffice)
+    const skill = await ctx.skills.get('office-render')
+    const json = skill?.content.match(/\n(\{\n[\s\S]+)$/u)?.[1]
+    expect(json).toBeDefined()
+    const { libreofficeKit } = JSON.parse(json!) as { libreofficeKit: { node: string; cli: string } }
+    const result = await execa(libreofficeKit.node, [libreofficeKit.cli, 'capabilities'], {
+      cwd: root, env: { PATH: '' }, timeout: 20_000, killSignal: 'SIGKILL', reject: false,
+    })
+    expect(result.timedOut, result.stderr).toBe(false)
+    expect(result.signal, result.stderr).toBeUndefined()
+    expect(result.exitCode, result.stderr).toBe(0)
+    expect(JSON.parse(result.stdout)).toMatchObject({ runtime: { version: '0.1.5', cliPath: libreofficeKit.cli } })
+  } finally {
+    await ctx.fiber.dispose()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+
+it('validates operation paths on loading while authoring remains available', async () => {
+  const ctx = new Context()
+  const original = Object.getOwnPropertyDescriptor(process.versions, 'electron')
+  try {
+    await ctx.plugin(SkillRegistry)
+    for (const config of [{ node: 'node' }, { cli: 'cli.js' }, { node: assets }, { cli: assets }, { cli: join(assets, 'missing.js') }]) {
+      const fiber = await ctx.plugin(SkillOffice, config)
+      expect((await ctx.skills.get('office-docx'))?.content).toContain('python-docx')
+      await expect(ctx.skills.get('office-render')).rejects.toThrow()
+      await fiber.dispose()
+    }
+    const carrier = await ctx.plugin(SkillOffice)
+    vi.mocked(isSea).mockReturnValue(true)
+    await expect(ctx.skills.get('office-render')).rejects.toThrow('standalone Node')
+    vi.mocked(isSea).mockReturnValue(false)
+    Object.defineProperty(process.versions, 'electron', { value: '44.0.0', configurable: true })
+    await expect(ctx.skills.get('office-render')).rejects.toThrow('standalone Node')
+    await carrier.dispose()
+    const disabled = await ctx.plugin(SkillOffice, { cli: false })
+    expect((await ctx.skills.get('office-render'))?.content).toContain('disabled in this deployment')
+    await disabled.dispose()
+    await ctx.plugin(SkillOffice, { node: process.execPath })
+    expect((await ctx.skills.get('office-render'))?.content).toContain(JSON.stringify(process.execPath))
+  } finally {
+    vi.mocked(isSea).mockReturnValue(false)
+    if (original === undefined) Reflect.deleteProperty(process.versions, 'electron')
+    else Object.defineProperty(process.versions, 'electron', original)
+    await ctx.fiber.dispose()
+  }
 })

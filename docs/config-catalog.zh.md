@@ -2985,7 +2985,7 @@ export interface Config extends SessionTitleLlmConfig {
 
 ## `@deepseek-ai/dsh-shell-env`
 
-- `source`: [`packages/shell/shell-env/src/index.ts:31`](../packages/shell/shell-env/src/index.ts)
+- `source`: [`packages/shell/shell-env/src/index.ts:30`](../packages/shell/shell-env/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config (all optional — the built-in facts resolve without defaults). */
@@ -3057,13 +3057,17 @@ export interface Config {
 ## `@deepseek-ai/dsh-skill-office`
 
 - `inject`: `skills`
-- `source`: [`packages/skill/skill-office/src/index.ts:15`](../packages/skill/skill-office/src/index.ts)
+- `source`: [`packages/skill/skill-office/src/index.ts:16`](../packages/skill/skill-office/src/index.ts)
 
 ```ts config-catalog
 /** Office skill resource location. */
 export interface Config {
-  /** Absolute assets directory containing skill folders and shared scripts; defaults to carrier resources or packaged assets. */
+  /** Absolute assets directory containing skill folders and shared scripts; defaults to packaged assets. */
   assetRoot?: string
+  /** Standalone Node executable; defaults to the current executable outside Electron and SEA. */
+  node?: string
+  /** Absolute LibreOffice Kit CLI entry; false explicitly disables CLI access. */
+  cli?: string | false
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-skill-office -->

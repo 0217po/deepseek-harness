@@ -79,8 +79,6 @@ const output = handle.collected.stdout?.readFrom(0)
 
 子进程永远不会隐式继承 harness 的环境秘密：形似凭据的名称与环境中的 `DSH_*` 事实都会被清除，调用方显式的 `env` 在该清除之后合并。有意转发的凭据或当前的 `DSH_*` 部署事实仍会到达子进程；显式的 `undefined` 墓碑值则移除一个普通的环境项。
 
-受信的 `DshEnvironment` 还允许 [shell-env](../../shell/shell-env/README.zh.md) 为部署提供的命令选择 `PATH`；shell 消费方在普通调用方环境项之后合并该快照。
-
 ### 可能出错的地方
 
 无法解析可执行文件时，服务会明确报出稳定的错误。从未启动成功的 spawn 会让 `done` reject；从未运行过的进程没有任何缓冲输出。提供方无法证明所选范围为空时，`waitForExit()` 也会 reject；提供方 fallback 可能无法拥有逃离其进程组或已观察会话的后代。当传输拥有自己的 spawn（SDK 客户端、MCP）时，请绕开本服务并直接导入 `scrubbedParentEnv`，让环境策略保持单一来源。

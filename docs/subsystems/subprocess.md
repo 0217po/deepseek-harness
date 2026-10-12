@@ -20,8 +20,8 @@ type DshEnvironmentKey = `${typeof DSH_ENV_PREFIX}${string}`
 ```
 
 ```ts type-equiv
-/** Trusted Harness variables and optional local command PATH for one child-process execution. */
-type DshEnvironment = Readonly<Record<DshEnvironmentKey, string> & { PATH?: string }>
+/** Trusted DeepSeek Harness variables for one child-process execution. */
+type DshEnvironment = Readonly<Record<DshEnvironmentKey, string>>
 ```
 
 ```ts type-equiv

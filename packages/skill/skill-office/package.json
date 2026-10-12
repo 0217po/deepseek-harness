@@ -18,34 +18,23 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./package.json": "./package.json",
-    "./commands": {
-      "types": "./lib/types/commands.d.ts",
-      "default": "./lib/commands.js"
-    }
+    "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
-    "lib/commands.js",
     "assets",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/dsh-skill": "workspace:*",
-    "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-shell-env": "workspace:*",
-    "@deepseek-ai/dsh-home-paths": "workspace:*"
+    "@deepseek-ai/cordis": "workspace:~"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-pwsh-local": "workspace:*",
-    "@deepseek-ai/dsh-subprocess-local": "workspace:*",
     "@deepseek-ai/dsh-skill": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
-    "@deepseek-ai/cordis-plugin-include": "workspace:~",
-    "@deepseek-ai/dsh-shell-env": "workspace:*",
-    "@deepseek-ai/dsh-home-paths": "workspace:*"
+    "@deepseek-ai/cordis-plugin-include": "workspace:~"
   },
   "dependencies": {
     "@deepseek-ai/libreoffice-kit": "^0.1.5",

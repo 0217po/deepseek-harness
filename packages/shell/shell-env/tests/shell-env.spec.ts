@@ -5,7 +5,7 @@
  */
 
 import { homedir } from 'node:os'
-import { delimiter, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -164,39 +164,6 @@ describe('ShellEnvRegistry', () => {
       variables: { DSH_BLANK_DESCRIPTION: { description: ' ' } },
       resolve: () => ({}),
     })).toThrow(/must describe/)
-    expect(() => registry.register({
-      name: 'relative-command-directory', commandDirectories: ['relative/bin'], variables: {}, resolve: () => ({}),
-    })).toThrow(/absolute command directories/)
-  })
-
-  it('prepends unique command directories in contributor order without changing the process PATH', async () => {
-    const ambient = resolve('ambient-bin'), first = resolve('first-bin'), second = resolve('second-bin')
-    vi.stubEnv('PATH', ambient)
-    const ctx = new Context()
-    try {
-      const registry = new ShellEnvRegistry(ctx, { dshHome: './test-dsh-home' })
-      registry.register({ name: 'b', commandDirectories: [second, first], variables: {}, resolve: () => ({}) })
-      const dispose = registry.register({ name: 'a', commandDirectories: [first], variables: {}, resolve: () => ({}) })
-      expect(registry.collect(execution()).PATH).toBe([first, second, ambient].join(delimiter))
-      expect(process.env.PATH).toBe(ambient)
-      dispose()
-      expect(registry.collect(execution()).PATH).toBe([second, first, ambient].join(delimiter))
-    } finally {
-      await ctx.fiber.dispose()
-    }
-  })
-
-  it('exposes only contributed directories when the inherited PATH is empty', async () => {
-    vi.stubEnv('PATH', '')
-    const ctx = new Context()
-    try {
-      const registry = new ShellEnvRegistry(ctx, { dshHome: './test-dsh-home' }), bin = resolve('command-bin')
-      registry.register({ name: 'local-command', commandDirectories: [bin], variables: {}, resolve: () => ({}) })
-      expect(registry.collect(execution()).PATH).toBe(bin)
-      expect(process.env.PATH).toBe('')
-    } finally {
-      await ctx.fiber.dispose()
-    }
   })
 
   it('rejects undeclared variables returned by a contributor', () => {

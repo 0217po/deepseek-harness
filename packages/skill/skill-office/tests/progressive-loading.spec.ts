@@ -94,7 +94,7 @@ it.each(['office-render', 'office-recalculate', 'office-export-pdf'])('loads %s 
   const { agent, adapter } = await setup('native', [name])
   await send(agent)
   const loaded = JSON.stringify(adapter.requests.at(-1))
-  expect(loaded).toContain('dsoffice')
+  expect(loaded).toContain('libreofficeKit')
   expect(loaded).not.toContain('Office task routing')
   expect(loaded).not.toContain('# Word documents')
   if (name !== 'office-render') expect(loaded).not.toMatch(/render --input|uniformly blank|fragment rectangles|DPI/)

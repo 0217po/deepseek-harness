@@ -11,9 +11,9 @@ Combined authoring and rendering instructions spend context on operations unrela
 ## Decision
 
 
-The [Office provider](../../../../packages/skill/skill-office/README.md) lists a compact router and six format-specific authoring or operation skills. The model loads full instructions by name and selects rendering for appearance-focused changes unless the user explicitly skips it. Rendering uses a private, randomly named temporary directory inside the task workspace and removes it after inspection. Skills invoke `office-check` and `dsoffice` through ordinary Bash or PowerShell. SDK and Desktop own their Office composition separately; ordinary Web and the shared base do not mount these plugins.
+The [Office provider](../../../../packages/skill/skill-office/README.md) lists a compact router and six format-specific authoring or operation skills. The model loads full instructions by name and selects rendering for appearance-focused changes unless the user explicitly skips it. Rendering uses a private, randomly named temporary directory inside the task workspace and removes it after inspection. Skills invoke the shared Python checker and configured LibreOffice Kit CLI through ordinary Bash or PowerShell. SDK and Desktop own their Office composition separately; ordinary Web and the shared base do not mount these plugins.
 
-The command plugin contributes local launchers through [shell-env](../../../../packages/shell/shell-env/README.md) to each shell call's `PATH`. Carriers own interpreter and resource locations; those paths stay outside skill instructions. Loading skills and registering commands do not prepare engines or authoring payloads. Standalone rendering, PDF export, and recalculation require only their operation skill. This keeps instruction loading independent of installed runtime layout while shell execution retains its existing permissions and process management.
+Carriers own interpreter and resource locations. Operation skills append the configured Node and CLI paths only when their bodies are loaded; authoring skills use the selected Python and shared checker resource. Loading instructions does not prepare engines or authoring payloads. Ordinary shell execution retains its existing permissions and process management.
 
 Office dependency ranges allow patch updates; the root lock records the resolved adapter and engine versions.
 

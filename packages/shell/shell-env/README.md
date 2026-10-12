@@ -1,5 +1,5 @@
 ---
-description: "Configure per-call Harness shell variables and directories for deployment-supplied commands."
+description: "The managed DSH_* shell environment for users and maintainers choosing, configuring, or extending the environment every model shell call runs with."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-shell-env` gives Bash and PowerShell tool calls current Harness home, session, and profile variables. Plugins can contribute declared `DSH_*` values and directories for deployment-supplied commands. Each call receives the current registrations without changing `process.env` or the user's shell configuration. Duplicate variable ownership and undeclared values fail loudly. Registrations follow plugin lifetimes; the shell tools retain their schemas and prompts.
+`dsh-shell-env` provides the trusted `DSH_*` environment that every model shell call — bash or pwsh — runs with: built-in facts such as `DSH_HOME`, `DSH_SHELL=1`, the agent's `DSH_SESSION_ID`, and the launched profile's `DSH_PROFILE` and `DSH_PROFILE_DIR`. Plugin authors can register their own facts with declared keys, collected per execution and disposed with their plugin; duplicate ownership or undeclared runtime keys fail loudly instead of silently overwriting. The registry changes nothing else the model sees — the shell tools own their own schemas and prompts. Choose it in any composition that mounts a model shell tool; configuration only picks the Harness home directory.
 
 ## Table of Contents
 
@@ -52,8 +52,6 @@ export function apply(ctx: Context): void {
 
 Contributors must declare every key they return; returning an undeclared or non-string value fails the call. Registration is disposed with the registering plugin, so hot-reloading a plugin removes its facts.
 
-Contributors may also declare absolute `commandDirectories`. The registry prepends these directories to the local shell's `PATH` in contributor-name order, preserving each contributor's directory order and removing repeated directories. The inherited `PATH` follows them. With no command directories, it leaves `PATH` unchanged. Directory registration does not install commands or verify their contents; the contributing plugin owns those files and their lifetime. The [Office commands plugin](../../skill/skill-office/README.md) supplies `dsoffice` and `office-check` this way.
-
 ### Choosing the Harness home
 
 The single config field picks the home directory exposed as `DSH_HOME`; the default resolution order is the `dshHome` config, then ambient `$DSH_HOME`, then `~/.dsh`.
@@ -66,7 +64,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### What can go wrong
 
-Two contributors declaring the same key, or a contributor claiming a reserved built-in (`DSH_HOME`, `DSH_SHELL`, `DSH_SESSION_ID`, `DSH_PROFILE`, `DSH_PROFILE_DIR`), fails plugin load loudly. A `DSH_*` key must be all-caps with underscores (for example `DSH_REGION`), and a missing description fails registration. Relative command directories also fail registration.
+Two contributors declaring the same key, or a contributor claiming a reserved built-in (`DSH_HOME`, `DSH_SHELL`, `DSH_SESSION_ID`, `DSH_PROFILE`, `DSH_PROFILE_DIR`), fails plugin load loudly. A `DSH_*` key must be all-caps with underscores (for example `DSH_REGION`), and a missing description fails registration.
 
 -----
 
@@ -92,7 +90,7 @@ This section explains the design decisions behind the registry and points at the
 
 ### Collection
 
-`collect(execution)` combines built-in facts, contributor values, and any command-directory `PATH` into a frozen snapshot passed through `ShellExecRequest.dshEnv`. This trusted snapshot takes precedence over ordinary caller environment entries. `list()` enumerates variable declarations without running resolvers; it does not include command directories or execution-dependent values.
+`collect(execution)` starts from the built-ins, adds the session id when the execution carries an agent, then merges each registered contributor's resolved values sorted by contributor name. The result is a frozen, key-sorted snapshot passed through `ShellExecRequest.dshEnv`. `list()` enumerates declarations without running resolvers, so it cannot reflect execution-dependent values.
 
 </details>
 
@@ -115,7 +113,7 @@ Read these pages when the package-level contract is not enough. They move from t
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the shell tools (`dsh-tool-bash`, `dsh-tool-pwsh`), which expose this registry's managed `DSH_*` facts and command lookup paths in every shell-tool call.
+Indirectly, through the shell tools (`dsh-tool-bash`, `dsh-tool-pwsh`), which expose this registry's managed `DSH_*` facts in every shell-tool call.
 
 #### KV Cache effect
 
@@ -129,7 +127,6 @@ The managed environment never enters the request prefix, so it does not invalida
 These limits define when the registry is a poor fit or needs care. They are current package constraints, not a task backlog.
 
 - **`list()` enumerates plugin-contributed variables only** — registry-owned built-ins (`DSH_HOME`, `DSH_SHELL`, `DSH_SESSION_ID`, `DSH_PROFILE`, `DSH_PROFILE_DIR`) are not included, so diagnostics, prompt, or UI code must not treat `list()` as an exhaustive environment catalog.
-- **Command directories belong to the local host.** A remote execution provider needs commands installed and configured in its own execution environment; local directory contributions do not provision the remote host.
 
 <a id="dev-note"></a>
 ### Dev Note

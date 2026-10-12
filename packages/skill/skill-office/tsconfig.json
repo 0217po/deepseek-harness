@@ -19,12 +19,6 @@
     },
     {
       "path": "../skill"
-    },
-    {
-      "path": "../../shell/shell-env"
-    },
-    {
-      "path": "../../util/home-paths"
     }
   ]
 }

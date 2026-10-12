@@ -52,6 +52,8 @@
       disabled: false
       config:
         assetRoot: !!js process.cwd() + '/office-skills'
+        node: !!js process.cwd() + '/office-node'
+        cli: !!js process.cwd() + '/render-cli.cjs'
 
 - id: tool-bash
   disabled: true
@@ -68,10 +70,3 @@
     launch:
       kind: node-script
       executable: !!js process.cwd() + '/office-ptc-node'
-
-- insert:
-    - id: office-commands
-      name: '@deepseek-ai/dsh-skill-office/commands'
-      disabled: false
-      config:
-        command: !!js "[process.cwd() + '/office-node', process.cwd() + '/render-cli.cjs']"

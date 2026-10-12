@@ -9,7 +9,6 @@
  */
 
 import { Service, type Context } from '@deepseek-ai/cordis'
-import { delimiter, isAbsolute } from 'node:path'
 import z from '@deepseek-ai/schemastery'
 import { DSH_ENV_PREFIX } from '@deepseek-ai/dsh-shell'
 import type { DshEnvironment, DshEnvironmentKey } from '@deepseek-ai/dsh-shell'
@@ -52,8 +51,6 @@ export interface BashEnvVariable {
 export interface BashEnvContributor {
   /** Stable contributor name used in diagnostics and duplicate detection. */
   name: string
-  /** Absolute command directories prepended to the local shell PATH; no process-global environment is changed. */
-  commandDirectories?: readonly string[]
   /** Complete set of `DSH_*` keys this contributor may return. */
   variables: Readonly<Record<DshEnvironmentKey, BashEnvVariable>>
   /**
@@ -122,9 +119,6 @@ export class ShellEnvRegistry extends Service {
       if (this.contributors.has(contributor.name)) {
         throw new Error(`bash env contributor "${contributor.name}" is already registered`)
       }
-      if (contributor.commandDirectories?.some(directory => !isAbsolute(directory))) {
-        throw new Error(`bash env contributor "${contributor.name}" requires absolute command directories`)
-      }
 
       const variables = Object.entries(contributor.variables) as [DshEnvironmentKey, BashEnvVariable][]
       for (const [key, variable] of variables) {
@@ -187,14 +181,7 @@ export class ShellEnvRegistry extends Service {
       }
     }
 
-    const directories = [...this.contributors.values()].sort((left, right) => left.name.localeCompare(right.name))
-      .flatMap(contributor => contributor.commandDirectories ?? [])
-    return Object.freeze({
-      ...Object.fromEntries(Object.entries(values).sort(([left], [right]) => left.localeCompare(right))),
-      ...(directories.length === 0 ? {} : {
-        PATH: [...new Set(directories), ...(process.env.PATH ? [process.env.PATH] : [])].join(delimiter),
-      }),
-    })
+    return Object.freeze(Object.fromEntries(Object.entries(values).sort(([left], [right]) => left.localeCompare(right))))
   }
 
   // TODO(bash-env-list-builtins): Include registry-owned built-ins before diagnostics,

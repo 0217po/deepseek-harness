@@ -1,5 +1,5 @@
 ---
-description: "配置每次 Harness shell 调用的变量，以及部署提供的命令目录。"
+description: "受管 DSH_* shell 环境，供选择、配置或扩展每次模型 shell 调用所运行环境的使用者与维护者阅读。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-shell-env` 为 Bash 和 PowerShell 工具调用提供当前的 Harness 主目录、会话与 profile 变量。插件可以贡献已声明的 `DSH_*` 值，以及部署提供的命令目录。每次调用都会收到当前注册内容，不修改 `process.env` 或用户 shell 配置。变量所有权重复或返回未声明的值会明确报错。注册项随插件生命周期释放；shell 工具保留各自的 schema 与提示词。
+`dsh-shell-env` 提供每次模型 shell 调用——bash 或 pwsh——所运行的受信 `DSH_*` 环境：内置事实如 `DSH_HOME`、`DSH_SHELL=1`、agent（智能体）的 `DSH_SESSION_ID`，以及所启动 profile 的 `DSH_PROFILE` 与 `DSH_PROFILE_DIR`。插件作者可以注册自己的事实，带声明键、按每次执行收集，并随插件释放；重复所有权或未声明的运行时键会明确报错，而不是静默覆盖。注册表不会改变模型看到的其他任何内容——shell 工具拥有各自的 schema 与提示词。任何挂载了模型 shell 工具的组合都适合选择它；配置只决定 Harness 主目录。
 
 ## 目录
 
@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 每次 shell 调用都会收到什么
 
-每次调用都会收到 `DSH_HOME`（Harness 主目录的绝对路径）、`DSH_SHELL=1`，agent（智能体）调用还会收到 `DSH_SESSION_ID`（调用方会话的 id）。启动器提供了 profile 上下文时，每次调用还会收到 `DSH_PROFILE`（profile 名）与 `DSH_PROFILE_DIR`（其绝对目录；其 `node_modules` 只存放 profile 自行安装的包，harness 自带的组合包从 dsh 安装目录解析）；不带 profile 启动的组合则两者都没有。
+每次调用都会收到 `DSH_HOME`（Harness 主目录的绝对路径）、`DSH_SHELL=1`，agent 调用还会收到 `DSH_SESSION_ID`（调用方会话的 id）。启动器提供了 profile 上下文时，每次调用还会收到 `DSH_PROFILE`（profile 名）与 `DSH_PROFILE_DIR`（其绝对目录；其 `node_modules` 只存放 profile 自行安装的包，harness 自带的组合包从 dsh 安装目录解析）；不带 profile 启动的组合则两者都没有。
 
 ### 添加你自己的环境事实
 
@@ -52,8 +52,6 @@ export function apply(ctx: Context): void {
 
 contributor 必须声明它返回的每个键；返回未声明或非字符串的值会让该次调用失败。注册随注册插件的释放而释放，因此热重载插件会移除它的事实。
 
-contributor 还可以声明绝对路径的 `commandDirectories`。注册表按 contributor 名称顺序将这些目录前置到本地 shell 的 `PATH`，保留各 contributor 内的目录顺序并去除重复目录，随后接上继承的 `PATH`。没有命令目录时，`PATH` 保持不变。目录注册不安装命令或验证其内容；贡献插件负责这些文件及其生命周期。[Office 命令插件](../../skill/skill-office/README.zh.md) 通过这种方式提供 `dsoffice` 和 `office-check`。
-
 ### 选择 Harness 主目录
 
 唯一配置字段决定暴露为 `DSH_HOME` 的主目录；默认解析顺序为 `dshHome` 配置、环境变量 `$DSH_HOME`，然后是 `~/.dsh`。
@@ -66,7 +64,7 @@ contributor 还可以声明绝对路径的 `commandDirectories`。注册表按 c
 
 ### 可能出什么问题
 
-两个 contributor 声明同一个键，或 contributor 声称拥有保留内置键（`DSH_HOME`、`DSH_SHELL`、`DSH_SESSION_ID`、`DSH_PROFILE`、`DSH_PROFILE_DIR`），都会导致插件加载时明确报错。`DSH_*` 键必须全大写并带下划线（例如 `DSH_REGION`），缺少描述也会让注册失败。相对命令目录也会导致注册失败。
+两个 contributor 声明同一个键，或 contributor 声称拥有保留内置键（`DSH_HOME`、`DSH_SHELL`、`DSH_SESSION_ID`、`DSH_PROFILE`、`DSH_PROFILE_DIR`），都会导致插件加载时明确报错。`DSH_*` 键必须全大写并带下划线（例如 `DSH_REGION`），缺少描述也会让注册失败。
 
 -----
 
@@ -92,7 +90,7 @@ contributor 还可以声明绝对路径的 `commandDirectories`。注册表按 c
 
 ### 收集
 
-`collect(execution)` 将内置事实、contributor 值和命令目录的 `PATH` 合并为冻结快照，通过 `ShellExecRequest.dshEnv` 传递。该受信快照优先于普通调用方环境项。`list()` 枚举变量声明而不运行 resolver；不包含命令目录或依赖执行的值。
+`collect(execution)` 从内置键出发，当执行携带 agent 时加入会话 id，再按 contributor 名称排序合并每个已注册 contributor 解析出的值。结果是一个冻结、按键排序的快照，通过 `ShellExecRequest.dshEnv` 传递。`list()` 枚举声明而不运行 resolver，因此无法反映依赖执行的值。
 
 </details>
 
@@ -115,7 +113,7 @@ contributor 还可以声明绝对路径的 `commandDirectories`。注册表按 c
 <a id="model-experience"></a>
 ## 模型体验
 
-通过 shell 工具（`dsh-tool-bash`、`dsh-tool-pwsh`）间接产生影响；这些工具在每次调用中提供本注册表的受管 `DSH_*` 事实和命令查找路径。
+通过 shell 工具（`dsh-tool-bash`、`dsh-tool-pwsh`）间接产生影响；这些工具把本注册表的受管 `DSH_*` 事实暴露在每次 shell 工具调用中。
 
 #### KV Cache 影响
 
@@ -129,7 +127,6 @@ contributor 还可以声明绝对路径的 `commandDirectories`。注册表按 c
 这些限制说明注册表何时不合适或需要小心使用。它们是当前包约束，不是任务积压。
 
 - **`list()` 只枚举插件贡献的变量**——注册表自有的内置键（`DSH_HOME`、`DSH_SHELL`、`DSH_SESSION_ID`、`DSH_PROFILE`、`DSH_PROFILE_DIR`）不包含在内，因此诊断、提示词或 UI 代码不得把 `list()` 当作完整的环境目录。
-- **命令目录属于本地主机。** 远程执行提供方需要在自己的执行环境中安装和配置命令；本地目录贡献不会为远程主机准备资源。
 
 <a id="dev-note"></a>
 ### 开发备注

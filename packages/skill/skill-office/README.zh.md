@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-目录列出 Office 路由及六个创作或操作技能，完整说明按需加载。技能通过现有 shell 工具使用 `office-check` 和 `dsoffice`，不暴露解释器或包路径。SDK 和 Desktop 分别挂载技能提供者、命令插件及依赖查询；普通 Web 默认不挂载它们。
+目录列出 Office 路由及六个创作或操作技能，完整说明按需加载。创作技能使用选定的 Python 和共享检查脚本；操作技能提供配置的 Node 与 LibreOffice Kit CLI 路径。SDK 和 Desktop 分别挂载技能提供者和依赖查询。
 
 ## 目录
 
@@ -26,30 +26,20 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在技能注册表和 `dsh-tool-skill` 旁挂载技能提供者，在 `dsh-shell-env` 旁挂载命令插件。提供者负责说明和检查器资源；命令插件让本地 Bash 和 PowerShell 工具调用可以使用 `dsoffice` 与 `office-check`。
+在技能注册表和 `dsh-tool-skill` 旁挂载技能提供者。提供者负责说明和检查器资源；操作技能在加载时附加解释器和 CLI 的绝对路径。
 
 ```yaml
 - name: '@deepseek-ai/dsh-skill-office'
-- name: '@deepseek-ai/dsh-skill-office/commands'
+
 ```
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `assetRoot` | 载体资源或包内 `assets/` | 包含七个技能目录及共享 `scripts/` 的绝对路径。 |
+| `node` | 宿主 Node.js | 操作技能使用的独立 Node 可执行程序；打包载体显式提供。 |
+| `cli` | 已安装 Kit CLI | CLI 入口的绝对路径；`false` 禁用操作执行。 |
 
-无效技能资源会阻止注册。加载说明不解析解释器或准备引擎。Bash 或 PowerShell 负责审批、沙箱、取消和输出管理。资源与执行工具必须位于同一主机。
-
-命令插件接受独立配置：
-
-| 字段 | 默认值 | 含义 |
-|---|---|---|
-| `command` | 载体或已安装 Kit | `dsoffice` 的可执行程序及固定参数；`false` 不提供该命令。 |
-| `checkCommand` | 配置的 Python 检查器 | `office-check` 的可执行程序及固定参数；`false` 不提供该命令。 |
-| `assetRoot` | 载体资源或包内 `assets/` | 包含共享检查器和技能的目录。 |
-
-命令覆盖的首个参数必须是可执行程序的绝对路径。启动器原样接收调用方的其余参数，仅在命令插件挂载期间存在。Windows 启动器在 Windows PowerShell 5.1 和 PowerShell 7 下保留空参数、内嵌引号、末尾反斜杠和 Unicode 路径；作为单个参数传入的 PowerShell 数组会转为逗号分隔文本。启动器通过文件路径接收输入，不转发管道输入。可执行程序不存在时，命令返回非零退出码。shell 环境将启动器的私有目录前置到每次工具调用的 `PATH`；不修改进程或用户 shell 配置。禁用命令不阻止技能加载。`office-check` 使用所选载体解释器或显式 `checkCommand` 直接运行 Python 检查器；两者均未提供时不注册该命令。检查器只使用 Python 标准库。命令注册和执行均不准备或复制运行时。通用 `load_workspace_dependencies` 工具独立提供创作解释器和库。
-
-`DSH_PRIMARY_RUNTIME` 选择创作和检查器资源。Kit 命令使用载体提供的 Node.js，否则使用宿主 Node.js，因此支持仅含 Python 的创作载荷。
+无效技能资源会阻止注册。创作说明不解析渲染器路径；操作说明加载时校验现有解释器和 CLI 文件，不准备引擎。Bash 或 PowerShell 负责审批、沙箱、取消和输出管理。资源与执行工具必须位于同一主机。
 
 <a id="progressive-loading"></a>
 ### 渐进加载
@@ -89,7 +79,7 @@ flowchart TD
 
 ### 结构检查
 
-`office-check <file> --out <report.json>` 读取 DOCX、PPTX 和 XLSX，不修改源文件。共享 Python 检查器验证 ZIP/XML 和内部关系、汇总文档结构，并可检查必需文本或幻灯片／工作表数量。它仅依赖 Python 标准库。无效文件和报告写入失败会返回 JSON 失败报告。结构检查成功不代表外观、功能保留或公式计算值通过验证。
+`"<python>" "<skill-directory>/../scripts/check_office.py" <file> --out <report.json>` 读取 DOCX、PPTX 和 XLSX，不修改源文件。共享 Python 检查器验证 ZIP/XML 和内部关系、汇总文档结构，并可检查必需文本或幻灯片／工作表数量。它仅依赖 Python 标准库。无效文件和报告写入失败会返回 JSON 失败报告。结构检查成功不代表外观、功能保留或公式计算值通过验证。
 
 -----
 
@@ -101,12 +91,12 @@ flowchart TD
 
 提供者在注册时读取摘要，按需读取正文。注册表优先级、作用域和调用权限适用于全部技能。加载结果包含用于解析相对引用的资源目录。卸载提供者会移除全部候选技能。
 
-提供者不注册工具或激活投影。通用技能加载器记录已加载技能的结果。恢复和 fork 使用现有会话历史及工具声明更新机制。命令插件用本地启动器封装载体专属可执行路径，并将其目录注册到 shell 环境；释放时移除该贡献与目录。Windows 启动器目录支持较长的 `DSH_HOME` 路径；`PATH` 条目使用普通绝对路径。可执行程序路径超过 Windows 进程启动长度限制时，插件在系统临时目录下建立通往其父目录的短路径链接，并在释放时移除该链接。
+提供者不注册工具或激活投影。通用技能加载器记录已加载技能的结果。恢复和 fork 使用现有会话历史及工具声明更新机制。解释器和 CLI 路径仅在加载操作技能时解析。
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 注册资源并返回原始技能正文。 |
-| [`src/commands.ts`](src/commands.ts) | 本地启动器、载体选择和 shell 环境贡献。 |
+
 | [`assets/`](assets/) | 路由、六个子技能与只读 OOXML 检查器。 |
 
 </details>
@@ -118,7 +108,6 @@ flowchart TD
 
 - [技能注册表](../skill/README.zh.md) — 发现和优先级。
 - [技能工具](../tool-skill/README.zh.md) — 模型目录和加载正文。
-- [Shell 环境](../../shell/shell-env/README.zh.md) — 命令目录和受管变量。
 - [文件交付](../../deliverables/tool-present/README.zh.md) — 当前源文件路径交付。
 
 -----

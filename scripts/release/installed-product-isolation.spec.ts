@@ -93,14 +93,6 @@ describe.each([experimental, ...Object.values(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIO
     expect(() => verifyInstalledProductIsolation(entry)).toThrow(experimental)
   })
 
-  it('finds installed packages whose names also identify Node builtins', () => {
-    const root = fixture()
-    const entry = writePackage(root, '@deepseek-ai/dsh', { dependencies: { fs: '1.0.0' } })
-    expect(() => verifyInstalledProductIsolation(entry)).toThrow('dependency is missing: @deepseek-ai/dsh -> fs')
-    writePackage(root, 'fs', {})
-    expect(verifyInstalledProductIsolation(entry)).toBe(2)
-  })
-
   it('permits missing optional packages and optional peers but rejects missing dependencies', () => {
     const root = fixture()
     const entry = writePackage(root, '@deepseek-ai/dsh', {

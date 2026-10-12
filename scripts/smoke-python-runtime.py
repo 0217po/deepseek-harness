@@ -1016,7 +1016,7 @@ def smoke_sdk_office(executable: Path) -> None:
         patch = root / f"{mode}.patch.yml"
         patch.write_text(json.dumps([{"insert": [{
             "id": "python-sdk-office-smoke",
-            "inject": ["skills", "shell", "shellEnv"],
+            "inject": ["skills"],
             "name": plugin.as_uri(),
             "config": {"input": str(document), "output": str(output), "result": str(result_path),
                        "imageInput": str(documents["pptx"]), "imageOutput": str(root / "node-pptx")},

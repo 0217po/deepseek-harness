@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The catalog lists the Office router and six authoring or operation skills. Full instructions load on demand. Skills use `office-check` and `dsoffice` through existing shell tools without exposing interpreter or package paths. SDK and Desktop each mount the skill provider, command plugin, and dependency query; ordinary Web does not mount them by default.
+The catalog lists the Office router and six authoring or operation skills. Full instructions load on demand. Authoring skills use the selected Python and shared checker script; operation skills supply the configured Node and LibreOffice Kit CLI paths. SDK and Desktop mount the skill provider and dependency query separately.
 
 ## Table of Contents
 
@@ -26,30 +26,20 @@ The catalog lists the Office router and six authoring or operation skills. Full 
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the skill provider beside the skill registry and `dsh-tool-skill`, and the command plugin beside `dsh-shell-env`. The provider supplies instructions and checker resources; the command plugin makes `dsoffice` and `office-check` available to local Bash and PowerShell tool calls.
+Mount the skill provider beside the skill registry and `dsh-tool-skill`. The provider supplies instructions and checker resources; operation skills append absolute interpreter and CLI paths when loaded.
 
 ```yaml
 - name: '@deepseek-ai/dsh-skill-office'
-- name: '@deepseek-ai/dsh-skill-office/commands'
+
 ```
 
 | Field | Default | Meaning |
 |---|---|---|
 | `assetRoot` | Carrier resources or packaged `assets/` | Absolute directory containing the seven skill folders and shared `scripts/`. |
+| `node` | Host Node.js | Standalone Node executable for operation skills; packaged carriers supply it explicitly. |
+| `cli` | Installed Kit CLI | Absolute CLI entry; `false` disables operation execution. |
 
-Invalid skill assets reject registration. Loading instructions does not resolve interpreters or prepare engines. Bash or PowerShell owns approvals, sandboxing, cancellation, and output management. Resources and execution tools must refer to the same host.
-
-The command plugin accepts separate configuration:
-
-| Field | Default | Meaning |
-|---|---|---|
-| `command` | Carrier or installed Kit | Executable and fixed arguments for `dsoffice`; `false` omits that command. |
-| `checkCommand` | Configured Python checker | Executable and fixed arguments for `office-check`; `false` omits that command. |
-| `assetRoot` | Carrier resources or packaged `assets/` | Directory containing the shared checker and skills. |
-
-Command overrides require an absolute executable as their first argument. Launchers receive the caller's remaining arguments unchanged and live only while the command plugin is mounted. Windows launchers preserve empty arguments, embedded quotes, trailing backslashes, and Unicode paths on Windows PowerShell 5.1 and PowerShell 7; PowerShell arrays supplied as one argument become comma-separated text. Launchers accept input file paths and do not forward pipeline input. A missing executable returns a nonzero exit code. The shell environment prepends their private directory to each tool call's `PATH`; it does not change the process or user's shell configuration. Disabling a command does not prevent skill loading. `office-check` directly runs the Python checker with the selected carrier interpreter or explicit `checkCommand`; it is omitted when neither is supplied. The checker uses only Python standard-library modules. Command registration and execution neither prepare nor copy a runtime. The general `load_workspace_dependencies` tool supplies authoring interpreters and libraries independently.
-
-`DSH_PRIMARY_RUNTIME` selects authoring and checker resources. Kit commands use the carrier's Node.js when supplied, otherwise the host Node.js, so Python-only authoring payloads are supported.
+Invalid skill assets reject registration. Authoring instructions do not resolve renderer paths; loading operation instructions validates existing interpreter and CLI files without preparing engines. Bash or PowerShell owns approvals, sandboxing, cancellation, and output management. Resources and execution tools must refer to the same host.
 
 <a id="progressive-loading"></a>
 ### Progressive loading
@@ -89,7 +79,7 @@ New files and content, data, or formula edits do not require rendering solely be
 
 ### Structural checks
 
-`office-check <file> --out <report.json>` reads DOCX, PPTX, and XLSX without changing the source. The shared Python checker validates ZIP/XML and internal relationships, summarizes document structure, and optionally checks required text or slide/sheet counts. It requires only the Python standard library. Invalid files and report-write failures return a JSON failure report. Structural success does not establish appearance, feature preservation, or calculated formula values.
+`"<python>" "<skill-directory>/../scripts/check_office.py" <file> --out <report.json>` reads DOCX, PPTX, and XLSX without changing the source. The shared Python checker validates ZIP/XML and internal relationships, summarizes document structure, and optionally checks required text or slide/sheet counts. It requires only the Python standard library. Invalid files and report-write failures return a JSON failure report. Structural success does not establish appearance, feature preservation, or calculated formula values.
 
 -----
 
@@ -101,12 +91,12 @@ New files and content, data, or formula edits do not require rendering solely be
 
 The provider reads descriptions at registration and bodies on demand. Registry precedence, scope, and invocation permissions apply to every skill. Each loaded skill includes its resource directory for relative references. Disposal unregisters all candidates.
 
-The provider registers no tools or activation projection. Loaded skill results remain logged through the generic skill loader. Resume and fork use existing session history and tool declaration reconciliation. The command plugin hides carrier-specific executable paths behind local launchers and registers their directory with the shell environment; disposal removes both the contribution and the directory. Windows launcher directories support long `DSH_HOME` paths; `PATH` entries use ordinary absolute paths. When an executable path exceeds the Windows process launch limit, the plugin temporarily links its parent directory through a short path under the system temporary directory and removes that link on disposal.
+The provider registers no tools or activation projection. Loaded skill results remain logged through the generic skill loader. Resume and fork use existing session history and tool declaration reconciliation. Interpreter and CLI paths are resolved only when an operation skill is loaded.
 
 | File | Responsibility |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Resource registration and unchanged skill bodies. |
-| [`src/commands.ts`](src/commands.ts) | Local launchers, carrier selection, and shell environment contribution. |
+
 | [`assets/`](assets/) | Router, six subskills, and read-only OOXML checker. |
 
 </details>
@@ -118,7 +108,6 @@ The provider registers no tools or activation projection. Loaded skill results r
 
 - [Skill registry](../skill/README.md) — discovery and precedence.
 - [Skill tool](../tool-skill/README.md) — model catalogs and loaded bodies.
-- [Shell environment](../../shell/shell-env/README.md) — command directories and managed variables.
 - [File delivery](../../deliverables/tool-present/README.md) — current source-path delivery.
 
 -----

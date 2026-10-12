@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/shell/shell-env/README.md
 /:
-  en: 03aa15ebe8f97a43
-  zh: b606e28eb19c933e
+  en: c54342d0151b089c
+  zh: 9ad6284f24c5e3f6
 /deepseek-ai-dsh-shell-env:
   en: d26b77029fa722ab
   zh: 8e6bed763372b561
 /deepseek-ai-dsh-shell-env/summary:
-  en: f27f8c4cdea7bcd4
-  zh: 33cf3b28330bdf0f
+  en: 021be213f32988e1
+  zh: f3ce1ef82377b4f4
 /deepseek-ai-dsh-shell-env/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -19,16 +19,16 @@
   zh: 7753b97c91743901
 /deepseek-ai-dsh-shell-env/use-this-package/what-every-shell-call-receives:
   en: eae86664fefc6690
-  zh: b8829aae034599c1
+  zh: 05a4e5946c8d2b87
 /deepseek-ai-dsh-shell-env/use-this-package/adding-your-own-environment-facts:
-  en: 8e3813746d322857
-  zh: 91f10c71a21d8e80
+  en: 21ef223626e35905
+  zh: 5c468055099b0135
 /deepseek-ai-dsh-shell-env/use-this-package/choosing-the-harness-home:
   en: 0041438f2b7f7e4f
   zh: 93fa165b07adcdf4
 /deepseek-ai-dsh-shell-env/use-this-package/what-can-go-wrong:
-  en: bf8db851cc8d373d
-  zh: 27e046770564c60c
+  en: 42c75945b581b7e6
+  zh: 6b5c487cfa28b206
 /deepseek-ai-dsh-shell-env/understand-the-implementation:
   en: f782557ca8da3138
   zh: e8f0082b9692cacc
@@ -39,20 +39,20 @@
   en: 72eba3bfadcfa581
   zh: dcd83e02a1910f27
 /deepseek-ai-dsh-shell-env/understand-the-implementation/collection:
-  en: 24b540add25646f3
-  zh: ba759ae3164cb1a3
+  en: 0c2d7d5b2131630f
+  zh: b44d4f0ddf89421b
 /deepseek-ai-dsh-shell-env/further-exploration:
   en: 6a4175df7b7341c7
   zh: 7885831274008502
 /deepseek-ai-dsh-shell-env/model-experience:
-  en: 6e1e1b75c1fc4e94
-  zh: a8cb0c273e040975
+  en: 8acf3cd9aeef5f55
+  zh: 69725e78f73c2f16
 /deepseek-ai-dsh-shell-env/model-experience/kv-cache-effect:
   en: e95e649f0410fa75
   zh: b3d64877420b4c0d
 /deepseek-ai-dsh-shell-env/known-limitations-and-deferred-work:
-  en: 2a4da893f45fa8c4
-  zh: a06bd59769c78e53
+  en: be9888161315f026
+  zh: 97d1d05c1c322596
 /deepseek-ai-dsh-shell-env/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

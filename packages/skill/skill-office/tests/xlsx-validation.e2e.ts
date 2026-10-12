@@ -99,8 +99,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each(['native', 'ptc'
         const fixture = kind === 'blank' || kind === 'formula'
           ? await renderCliFixture(controlRoot, python!, kind === 'blank') : undefined
         await writeFile(configPath, JSON.stringify([
-          { insert: [{ id: 'skill-office', name: '@deepseek-ai/dsh-skill-office', config: { assetRoot } }] },
-          { insert: [{ id: 'office-commands', name: '@deepseek-ai/dsh-skill-office/commands', config: { assetRoot, ...fixture ? { command: [process.execPath, fixture.cli] } : {} } }] },
+          { insert: [{ id: 'skill-office', name: '@deepseek-ai/dsh-skill-office', config: { assetRoot, node: process.execPath, ...fixture ? { cli: fixture.cli } : {} } }] },
           { insert: [{ id: 'workspace-dependencies', name: '@deepseek-ai/dsh-tool-workspace-dependencies', config: { source: runtime! } }] },
           ...officeModelPatches(),
           { id: 'attachment-local', config: { dshHome: imageRoot } },
@@ -187,16 +186,16 @@ else:
         ? answer.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n').slice(0, 800) : undefined })
     expect(loaded, diagnostic).toContain('office-xlsx')
     expect(calls.some(call => call.name === 'load_workspace_dependencies'), diagnostic).toBe(true)
-    expect(commands, diagnostic).toContain('office-check')
+    expect(commands, diagnostic).toContain('check_office.py')
     if (kind === 'formula') {
       expect(loaded, diagnostic).toContain('office-recalculate')
     }
     if (kind === 'layout' || kind === 'blank') {
       expect(calls.some(call => call.name === 'skill' && call.arguments.includes('office-render'))).toBe(true)
-      expect(commands).toMatch(/\bdsoffice["']?\s+render\b/u)
+      expect(commands).toMatch(/\srender\b/u)
       expect(commands).toContain('--sheet')
       expect(commands).toContain('--range')
-      expect(commands).not.toMatch(/\bdsoffice["']?\s+convert\b/u)
+      expect(commands).not.toMatch(/\sconvert\b/u)
       const reads = calls.filter(call => call.name === 'read_image')
       const results = events.flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
       if (previewHasContent) {

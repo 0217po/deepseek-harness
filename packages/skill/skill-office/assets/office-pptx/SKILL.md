@@ -57,13 +57,15 @@ Check that text and images fit the slide dimensions, titles form a useful sequen
 
 Run the shared structural checker when `office-check` is available:
 
+In PowerShell, prefix the quoted Python executable with `&`. Resolve the checker path relative to this skill directory.
+
 ```text
-office-check <presentation.pptx> --out <checks.json>
+"<python>" "<skill-directory>/../scripts/check_office.py" <presentation.pptx> --out <checks.json>
 ```
 
 It checks ZIP/XML integrity and internal relationships and reports slide count and extracted text. Use repeated `--contains TEXT` arguments for required slide text and `--count N` for a requested slide count; `--contains` excludes chart text and speaker notes. Reopen the file to check the requested edits, chart data, and notes. Structural success does not establish text fit, alignment, readable contrast, or rendering fidelity.
 
-If `office-check` is unavailable, use an already configured environment to check the ZIP/XML package and internal relationships. Report the missing environment if those checks cannot run; do not claim structural validation.
+If the Python checker cannot run, use an already configured environment to check the ZIP/XML package and internal relationships. Report the missing environment if those checks cannot run; do not claim structural validation.
 
 Deliver after the requested content and structural checks pass. Creating a file or changing content with incidental basic formatting does not require additional operations. Load `office-render` for requested images or visual inspection and for appearance-focused styling, spacing, sizing, or alignment changes unless the user explicitly skips rendering. For PDF output load `office-export-pdf`.
 

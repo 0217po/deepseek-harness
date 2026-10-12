@@ -23,7 +23,6 @@ async function prepareOffice(cwd: string) {
   await writeFile(join(cwd, 'office.patch.json'), JSON.stringify([
     ...officeModelPatches(),
     { insert: [{ id: 'skill-office', name: '@deepseek-ai/dsh-skill-office', config: { assetRoot: join(repo, 'packages/skill/skill-office/assets') } }] },
-    { insert: [{ id: 'office-commands', name: '@deepseek-ai/dsh-skill-office/commands', config: { assetRoot: join(repo, 'packages/skill/skill-office/assets') } }] },
     { insert: [{ id: 'workspace-dependencies', name: '@deepseek-ai/dsh-tool-workspace-dependencies', config: { source: runtime! } }] },
     { id: 'session-persistence-jsonl', config: { root: join(cwd, '.sessions'), compression: 'none' } },
   ]))
@@ -58,7 +57,7 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mod
       const skills = calls.filter(call => call.name === 'skill').map(call => JSON.parse(call.arguments) as { name: string })
       expect(skills.some(skill => skill.name === 'office-render'), JSON.stringify(skills)).toBe(true)
       const commands = calls.filter(call => call.name === 'bash' || call.name === 'pwsh').map(call => (JSON.parse(call.arguments) as { command: string }).command).join('\n')
-      expect(commands).toMatch(/\bdsoffice["']?\s+render\b/u)
+      expect(commands).toMatch(/\srender\b/u)
       expect(commands).toContain('--pages')
       expect(commands).toContain('--output-dir')
       const pixels = await execa(python!, ['-c', "from pathlib import Path\nfrom PIL import Image\nfiles=list(Path('preview').glob('*.png'))\nassert files\nfor f in files:\n im=Image.open(f).convert('RGBA')\n visible=Image.alpha_composite(Image.new('RGBA',im.size,'white'),im).convert('RGB')\n print('content' if any(a!=b for a,b in visible.getextrema()) else 'blank')"], { cwd })
@@ -67,7 +66,7 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mod
       const authoring = calls.findIndex(call => call.name === 'skill' && /office-(docx|pptx|xlsx)/u.test(call.arguments))
       if (pixels.stdout.includes('blank')) {
         if (authoring !== -1) {
-          const rendered = calls.findIndex(call => (call.name === 'bash' || call.name === 'pwsh') && /\bdsoffice["']?\s+render\b/u.test(call.arguments))
+          const rendered = calls.findIndex(call => (call.name === 'bash' || call.name === 'pwsh') && /\srender\b/u.test(call.arguments))
           expect(authoring, 'content checks after a blank preview may need the format skill').toBeGreaterThan(rendered)
         }
         const final = events.filter(e => e.type === 'assistant/message').at(-1)?.data.message.content
@@ -122,8 +121,8 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime)('exports PDF through the op
       expect(skills.some(name => ['office-docx', 'office-pptx', 'office-xlsx'].includes(name))).toBe(false)
       const commands = calls.filter(call => call.name === 'bash' || call.name === 'pwsh')
         .map(call => (JSON.parse(call.arguments) as { command: string }).command).join('\n')
-      expect(commands).toMatch(/\bdsoffice["']?\s+convert\b/u)
-      expect(commands).not.toMatch(/\bdsoffice["']?\s+render\b/u)
+      expect(commands).toMatch(/\sconvert\b/u)
+      expect(commands).not.toMatch(/\srender\b/u)
       expect((await readFile(join(cwd, 'result.pdf'))).subarray(0, 5).toString()).toBe('%PDF-')
       expect(await readFile(join(cwd, 'input.docx'))).toEqual(original)
     },

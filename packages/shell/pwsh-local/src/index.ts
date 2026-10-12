@@ -1,6 +1,6 @@
 /**
  * Local PowerShell Service Provider for the bash capability seam. Each command runs
- * as `pwsh -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command <command>` in a managed
+ * as `pwsh -NoLogo -NoProfile -NonInteractive -Command <command>` in a managed
  * process spawned through `ctx.subprocess`; the executor owns command
  * defaulting, deadlines and cause classification, the model-friendly terminal
  * environment, and the model-facing stdout/stderr merge for background reads.
@@ -191,8 +191,7 @@ export class PwshLocalExecutor extends ShellExecutor {
    * `@deepseek-ai/dsh-pwsh-sandbox`).
    */
   protected argv(spec: ShellExecSpec): string[] {
-    return [this.pwshPath, '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command',
-      `${ENCODING_PREAMBLE}${spec.command}`]
+    return [this.pwshPath, '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', `${ENCODING_PREAMBLE}${spec.command}`]
   }
 
   /** Map one resolved spec plus its argv onto a fully-specified subprocess spawn. */

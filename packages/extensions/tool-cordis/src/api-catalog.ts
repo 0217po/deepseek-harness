@@ -4827,7 +4827,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'BashEnvContributor',
-    declaration: 'export interface BashEnvContributor {\n    name: string;\n    commandDirectories?: readonly string[];\n    variables: Readonly<Record<DshEnvironmentKey, BashEnvVariable>>;\n    resolve(execution: ToolExecution): Readonly<Partial<Record<DshEnvironmentKey, string>>>;\n}',
+    declaration: 'export interface BashEnvContributor {\n    name: string;\n    variables: Readonly<Record<DshEnvironmentKey, BashEnvVariable>>;\n    resolve(execution: ToolExecution): Readonly<Partial<Record<DshEnvironmentKey, string>>>;\n}',
   },
   {
     name: 'BashEnvVariable',
@@ -5291,7 +5291,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'DshEnvironment',
-    declaration: 'export type DshEnvironment = Readonly<Record<DshEnvironmentKey, string> & {\n    PATH?: string;\n}>;',
+    declaration: 'export type DshEnvironment = Readonly<Record<DshEnvironmentKey, string>>;',
   },
   {
     name: 'DshEnvironmentKey',
