@@ -81,6 +81,8 @@ New files and content, data, or formula edits do not require rendering solely be
 
 `"<python>" "<skill-directory>/../scripts/check_office.py" <file> --out <report.json>` reads DOCX, PPTX, and XLSX without changing the source. The shared Python checker validates ZIP/XML and internal relationships, summarizes document structure, and optionally checks required text or slide/sheet counts. It requires only the Python standard library. Invalid files and report-write failures return a JSON failure report. Structural success does not establish appearance, feature preservation, or calculated formula values.
 
+Word content edits inspect the requested content and formatting, and finish after targeted verification and the shared structural check pass. Package-level investigation requires a concrete failure, ambiguity, unsupported feature, or explicit user requirement.
+
 -----
 
 <a id="understand-the-implementation"></a>

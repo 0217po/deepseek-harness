@@ -81,6 +81,8 @@ flowchart TD
 
 `"<python>" "<skill-directory>/../scripts/check_office.py" <file> --out <report.json>` 读取 DOCX、PPTX 和 XLSX，不修改源文件。共享 Python 检查器验证 ZIP/XML 和内部关系、汇总文档结构，并可检查必需文本或幻灯片／工作表数量。它仅依赖 Python 标准库。无效文件和报告写入失败会返回 JSON 失败报告。结构检查成功不代表外观、功能保留或公式计算值通过验证。
 
+Word 内容修改只检查请求的内容和格式，目标验证与共享结构检查通过后即可结束。包级调查仅用于具体失败、歧义、不支持的特性或明确的用户要求。
+
 -----
 
 <a id="understand-the-implementation"></a>
