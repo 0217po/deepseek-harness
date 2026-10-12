@@ -46,7 +46,7 @@ export interface Config {
   readonly scrollback: number
   /** Maximum queued UTF-8 frame bytes per output follower before disconnection. */
   readonly maxBufferedBytes: number
-  /** Maximum UTF-8 bytes in one input request. */
+  /** Maximum raw UTF-8 bytes per input command and across unacknowledged Client input. */
   readonly maxInputBytes: number
   /** Provider process-termination grace period in milliseconds. */
   readonly disposeGraceMs: number

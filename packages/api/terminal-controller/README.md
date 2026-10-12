@@ -37,7 +37,7 @@ Shell discovery lists the execution environment's declared default shell first. 
 | `maxCols`, `maxRows` | `500`, `200` | Maximum PTY dimensions |
 | `scrollback` | `1000` | Retained screen history rows |
 | `maxBufferedBytes` | `2097152` | Output queued for one follower |
-| `maxInputBytes` | `65536` | Maximum bytes per input command and unacknowledged Client input |
+| `maxInputBytes` | `65536` | Maximum raw UTF-8 bytes per input command and across unacknowledged Client input |
 | `disposeGraceMs` | `1000` | Provider termination grace in milliseconds |
 | `unattendedTimeoutMs` | `7200000` | Continuous confirmed idle time without window holds before cleanup; `0` disables automatic reclamation |
 | `activityPollIntervalMs` | `30000` | Interval between unattended activity observations |

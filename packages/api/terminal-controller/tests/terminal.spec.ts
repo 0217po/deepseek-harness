@@ -57,8 +57,6 @@ describe('BrowserTerminal', () => {
     expect(handle.terminate).not.toHaveBeenCalled()
   })
 
-
-
   it('keeps exit facts and screen until explicit cleanup and never starts a replacement process', async () => {
     const { terminal, output, outcome, handle } = fixture()
     const first = await attach(terminal)
@@ -85,14 +83,6 @@ describe('BrowserTerminal', () => {
     expect(await readFrame(first.iterator)).toMatchObject({ type: 'state', info: { state: 'exited' } })
     expect((await first.iterator.next()).done).toBe(true)
   })
-
-
-
-
-
-
-
-
 
   it.each([new Error('process wait failed'), 'remote process wait failed'])('publishes a failed process outcome and retains its recovery screen: %s', async (failure) => {
     const { terminal, output, outcome } = fixture()

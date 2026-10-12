@@ -716,7 +716,6 @@ it('classifies missing and closing terminal identities for localized recovery ac
   await expect(h.controller.create(h.agent, request, signal())).rejects.toMatchObject({ code: 'terminal/unavailable' })
 })
 
-
 function attachController(
   agent: Agent, terminalId: WebTerminalId, signal: AbortSignal,
   input: AsyncIterable<unknown> = inputChannel<TerminalInput>().source,

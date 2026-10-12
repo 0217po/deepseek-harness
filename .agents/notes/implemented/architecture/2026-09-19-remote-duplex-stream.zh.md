@@ -8,41 +8,41 @@ Status: implemented
 
 ### 现状
 
-`dsh-api-gateway` 在一条 WebSocket 上复用全部 Typert Remote 流，路径固定为 `/api/remote.mux`（`packages/api/gateway/src/stream-protocol.ts`）。一个 Host 方法用 `@Remote({ mode: 'stream' })` 修饰并返回 `Iterable` 或 `AsyncIterable`，就成为一条 Host 到 Client 的逻辑流；可选的末位 `signal: AbortSignal` 是唯一的保留参数，不进线路参数，由网关在解码后的业务参数之后追加（`packages/api/gateway/src/index.ts`）。客户端拿到的生成方法返回一个裸 `AsyncIterable`。
+`dsh-api-gateway` 在 `/api/remote.mux` 的一条 WebSocket 上复用 Typert Remote 流。Host 方法通过 `@Remote({ mode: 'stream' })` 和 `RemoteStream<Out, In>` 声明两个方向；生成的 Client 方法返回 `RemoteStreamHandle<Out, In>`。既有的 `Iterable` 和 `AsyncIterable` 返回类型声明仅下行的方法。可选的末位 `signal: AbortSignal` 由 Gateway 提供，不进入线路参数。
 
-线路帧只有五种：
+两个方向共用一个 `streamId`：
 
 | 方向 | 帧 | 定义 |
 | --- | --- | --- |
 | Client 到 Host | `{ type: 'open', streamId, endpoint, payload }` | `stream-protocol.ts` |
+| Client 到 Host | `{ type: 'item', streamId, value? }` | `stream-protocol.ts` |
+| Client 到 Host | `{ type: 'end', streamId }` | `stream-protocol.ts` |
 | Client 到 Host | `{ type: 'cancel', streamId }` | `stream-protocol.ts` |
 | Host 到 Client | `{ type: 'item', streamId, value? }` | `stream-protocol.ts` |
 | Host 到 Client | `{ type: 'error', streamId, error: { code, message, details } }` | `stream-protocol.ts` |
 | Host 到 Client | `{ type: 'end', streamId }` | `stream-protocol.ts` |
 
-客户端能发的只有打开与取消。解析器 `parseRemoteStreamClientMessage`（`stream-protocol.ts`）对其他任何帧抛错，Host 连接收到后以 1008 关闭整个 socket（`stream-server.ts`）。结论：网关今天只支持"后端 iterable 发到前端"。需要前端向后端持续发数据的功能，各自绕路。
+Client 句柄的 `send()` 提供上行项，`end()` 半关闭上行，`dispose()` 取消逻辑流。Host 通过 `this.ctx.invocation.uplink<In>()` 读取解码后的项；调用上下文同时携带获准接入的 Peer 和取消信号。
 
-Host 方法也没有"这次调用是谁发起的"这个概念：`InvokeRemoteRequest = { namespace, method, args, signal }`（`packages/api/gateway/src/types.ts`）没有调用者槽位，`RemoteStreamOpener` 的签名是 `(endpoint, payload, signal)`（`stream-server.ts`），WebSocket 只在握手时校一次 cookie。
+传输层负责校验、取消和有界 inbox。消费者协议负责输入权限、确认以及断线后的恢复。
 
-### 三套各自为政的上行机制
+### 上行消费者
 
 | 功能 | 上行方式 | 位置 | 代价 |
 | --- | --- | --- | --- |
-| Web 终端按键 | 每次 xterm `onData` 一个 unary RPC `terminal.write(agent, id, attachmentId, data)`，客户端用 promise 链串行化并自限字节预算 | `packages/api/terminal-controller/src/client/model.ts`；Host `src/index.ts` | 一次按键一次 HTTP 往返与鉴权；两条载体靠 `attachmentId` 手工关联；满了报 `inputFull` |
+| Web 终端输入与尺寸调整 | `terminal.attach` 承载上行 `TerminalInput` 和下行 `TerminalFrame`；Client 连续发送命令，并在收到 `ack` 后释放原始输入字节预算 | `packages/api/terminal-controller/src/client/model.ts`；Host `src/terminal.ts` | 当前附件拥有输入权；Client 预算耗尽时报 `inputFull`；重连后绝不重放输入 |
 | 文件上传 | `Blob` 或 `ReadableStream` 走 Remote 层之外的原生 `POST /api/session/uploadFileBinary`，`duplex: 'half'` | `packages/client/file-upload/src/client/runtime.ts`；路由 `src/index.ts` | 不经 Typert 描述符，没有类型投影 |
 | 审批与提问的回答 | Host 在 `$events` 流上下发 waterfall 帧，Client 用一个独立的 unary RPC `$events/result` 回答，靠 `clientId` 加 `eventId` 关联 | `packages/api/gateway/src/client/remote-events.ts`；Host `index.ts` | 第二套关联键；`index.ts` 记录了由此产生的竞态 |
 
-这三套机制解决的是同一个问题：一条已经打开的逻辑流，客户端想往里写。
+这些消费者都需要在相关操作仍进行时从 Client 向 Host 传送数据。Web 终端使用双工流；文件上传和事件回答保留各自的传输方式。
 
-### 具体代价
+### 消费者职责
 
-- **两条载体对齐**。终端要用 `attachmentId` 把 `follow` 流与 `write` RPC 关联起来，并用它决定谁拥有输入权。审批要用 `clientId` 把 `$events` 流与 `$events/result` RPC 关联起来。
-- **没有顺序保证**。unary RPC 走 HTTP，与 WebSocket 下行互不排序；终端只能在客户端串行化写入来自保顺序。
-- **每次上行单独鉴权与查找**。`write(agent, id, attachmentId, data)` 每次解析 `agent`、查终端、校验 attachment。
-- **没有 EOF**。客户端无法表达"我这边写完了"，半关闭要再加一个 RPC。
-- **取消不覆盖两半**。取消下行流不会取消排队中的上行写；反之亦然。
-- **背压各写一套**。下行按 socket 写回调节拍拉迭代器（`stream-server.ts`）；终端用有界 follower 让慢消费者显式失败（`terminal-controller/src/stream.ts`）；上行靠客户端自限 `maxInputBytes`。
-- **文档已经过时**。`docs/api-gateway.md:160` 仍写着 Remote 只处理一请求一结果，这一句已经落后于 README 记录的 stream 模式。
+- **输入权限**。终端通过 Host 本地的 follower 持有控制附件。快照和状态帧报告各附件的 `writable` 状态；控制权转移后，旧附件继续接收输出。
+- **顺序与确认**。终端输入和尺寸调整共用连续命令序列及终端操作队列。`ack` 报告提供者已接受操作或输入权限拒绝，绝不授权断线后重放。
+- **独立生命周期**。取消 `attach` 会停止其输入和输出传递、丢弃尚未开始的命令，并等待在途输入操作收尾。PTY 的生命周期由保留机制和显式关闭独立管理。
+- **不同的字节限额**。Gateway 用 `streamInboxBytes` 限制完整编码后的上行帧。终端 Client 用 `maxInputBytes` 限制未确认的原始 UTF-8 输入；输出 follower 另行限制编码后的下行帧。原始输入计量不包含命令和传输元数据。
+- **仍独立的载体**。审批回答仍通过 `clientId` 和 `eventId` 将 `$events` 与 `$events/result` RPC 关联。将该协议迁入双工流仍属后续工作。
 
 ### 与后台 job 的关系
 
@@ -598,7 +598,7 @@ for await (const reply of stream) replies.push(reply)   // ['> a', '> b']
 - `$stream` / snapshot / journal 把句柄的 `send` 透出给上层协议。
 - 双工 `$events`：waterfall 的回答成为同一 `streamId` 上的上行项，`$events/result` 与 `clientId` 退场。
 - credit 帧：等需要持续大流量上行的消费者出现；inbox 上限就是初始授信。
-- `streamInboxBytes` 默认值 262144 对键盘与 stdin 远超需要；若第一个消费者是终端粘贴，可能与 `terminal-controller` 的 `maxInputBytes` 对齐。
+- 协调终端的原始输入预算与 Gateway 的完整帧 inbox 限额，包括短命令突发和尺寸调整命令。
 - Host 发起的半关闭帧（Host 不再读上行但继续写下行）：没有消费者，不加。
 - unary 方法的 `uplink()`：能读到方法运行期间到达的项，语义成立但用处存疑；允许，README 注明。
 
