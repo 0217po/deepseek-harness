@@ -125,7 +125,7 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
       waking ? 'turn-trigger' : context.state.kind,
       context.state.seq,
       context.state,
-      { groupTree: opensExchange ? 'exchange' : undefined },
+      { location, groupTree: opensExchange ? 'exchange' : undefined },
     )
   },
 }

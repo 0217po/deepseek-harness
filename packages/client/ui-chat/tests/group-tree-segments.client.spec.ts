@@ -78,6 +78,21 @@ describe('Chat group tree', () => {
     expect(members(segments, order)).toEqual(order)
   })
 
+  it('falls back to the latest remaining opening Turn whatever order the openings arrived in', () => {
+    const segments = new GroupTreeSegments('exchange')
+    const order = [1, 2, 3, 4, 5]
+    const latest = node('latest', 5, 'exchange')
+    for (const value of [node('middle', 3, 'exchange'), node('earliest', 1, 'exchange'), latest]) {
+      segments.track(undefined, value)
+    }
+    segments.settle(order)
+    expect(members(segments, order)).toEqual([5])
+
+    segments.track(latest, undefined)
+    expect(segments.settle(order)).toEqual([3, 4])
+    expect(members(segments, order)).toEqual([3, 4, 5])
+  })
+
   it('opens segments at Nodes of the configured position or an outer one', () => {
     const segments = new GroupTreeSegments('turn')
     const order = [1, 2, 3]

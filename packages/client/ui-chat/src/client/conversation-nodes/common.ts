@@ -30,6 +30,17 @@ export function contextLocation(context: ConversationNodeContext): ConversationL
 }
 
 /**
+ * Read the Turn and Step a Location resolves to.
+ * @param location - engine-owned Location.
+ * @returns resolved coordinates; Session-level and unresolved Locations have none.
+ */
+export function locationCoordinates(location: ConversationLocation): { turn?: number; step?: number } {
+  if (location.kind === 'step') return { turn: location.turn.turn, step: location.step.step }
+  if (location.kind === 'turn') return { turn: location.turn.turn }
+  return {}
+}
+
+/**
  * Build one final Chat target Node with the engine-owned stable key.
  * @param context - assembled business Context.
  * @param kind - Chat renderer dispatch key.

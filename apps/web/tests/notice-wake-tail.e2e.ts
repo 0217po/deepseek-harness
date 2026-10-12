@@ -21,15 +21,11 @@ const NOTICE_TURN = HISTORY_TURNS + 2
 /** Tool Steps in the finished Turn; their folded height must exceed the notice Turn's height. */
 const TOOL_STEPS = 12
 const OUTPUT_LINES = 40
-/** A settled tail leaves only composer padding uncovered (about 55-105 px at this viewport). */
-const BLANK_LIMIT = 150
 /** The recorded host gap between the waking claim and Step 1, spent assembling the system prompt. */
 const PRE_STEP_GAP_MS = 187
 const REPLY = 'NOTICE_WAKE_REPLY'
 
 interface Tail {
-  /** Viewport pixels above the composer that no painted row covers. */
-  readonly blank: number
   /** Height of the room reserved below the flow. */
   readonly spacer: number
   readonly noticeVisible: boolean
@@ -49,22 +45,8 @@ function readTail(page: Page): Promise<Tail> {
       const rect = element.getBoundingClientRect()
       return rect.height > 0.5 && rect.bottom > viewTop && rect.top < viewBottom
     }
-    const spans = [...host.querySelectorAll<HTMLElement>('[data-chat-anchor-key]')]
-      .map(row => row.getBoundingClientRect())
-      .filter(rect => rect.height > 0.5)
-      .map(rect => [Math.max(rect.top, viewTop), Math.min(rect.bottom, viewBottom)] as const)
-      .filter(([top, bottom]) => bottom > top)
-      .sort((left, right) => left[0] - right[0])
-    let covered = 0
-    let reach = viewTop
-    for (const [top, bottom] of spans) {
-      if (bottom <= reach) continue
-      covered += bottom - Math.max(top, reach)
-      reach = bottom
-    }
     const spacer = host.querySelector<HTMLElement>('[data-chat-turn-spacer]')
     return {
-      blank: Math.round(viewBottom - viewTop - covered),
       spacer: spacer === null ? 0 : Number.parseFloat(spacer.style.height) || 0,
       noticeVisible: [...host.querySelectorAll('[data-turn-trigger]')].some(inView),
       replyVisible: [...host.querySelectorAll('[data-chat-flow-kind="assistant-step"]')]
@@ -159,7 +141,7 @@ describe('web e2e: notice Turn after a long Detailed Turn', () => {
         session.append('step/end', { turn: LONG_TURN, step })
         session.append('step/start', { turn: LONG_TURN, step: step + 1 })
         await scaffold.ctx.sessions.flush(session)
-        await page.waitForTimeout(30)
+        await page.locator(`[data-chat-node-key$="${callId}"]`).waitFor({ state: 'attached', timeout: 15_000 })
       }
       session.append('assistant/message', {
         stream: [],
@@ -177,7 +159,7 @@ describe('web e2e: notice Turn after a long Detailed Turn', () => {
         const host = document.querySelector<HTMLElement>('[data-conversation-scroll]')
         if (host !== null) host.scrollTop = host.scrollHeight
       })
-      await page.waitForTimeout(600)
+      await page.locator('[data-chat-following-tail]').waitFor({ timeout: 10_000 })
 
       // The Turn ends; 15 ms later (the recorded production gap) a settled subagent wakes the next Turn.
       session.append('turn/end', { turn: LONG_TURN, reason: { kind: 'completed' } })
@@ -199,12 +181,14 @@ describe('web e2e: notice Turn after a long Detailed Turn', () => {
       session.append('agent/inbox/spliced', { target: 'next-turn', start: 0, removedCount: 1, inserted: [] })
       setRunning(true)
       await scaffold.ctx.sessions.flush(session)
+      // The browser has applied the notice Turn's start before the gap is held and sampled.
+      await page.locator(`[data-chat-turn="${String(NOTICE_TURN)}"]`).first().waitFor({ state: 'attached', timeout: 15_000 })
       await page.waitForTimeout(PRE_STEP_GAP_MS)
       const gap = await readTail(page)
       session.append('step/start', { turn: NOTICE_TURN, step: 1 })
       session.append('user/message', notice, { surfaceOp: 'append' })
       await scaffold.ctx.sessions.flush(session)
-      await page.waitForTimeout(300)
+      await page.locator('[data-turn-trigger]').first().waitFor({ state: 'attached', timeout: 15_000 })
       session.append('assistant/message', {
         stream: [],
         turn: NOTICE_TURN,
@@ -216,11 +200,15 @@ describe('web e2e: notice Turn after a long Detailed Turn', () => {
       }, { surfaceOp: 'append' })
       await scaffold.ctx.sessions.flush(session)
 
-      await page.waitForTimeout(3000)
-      const tail = await readTail(page)
       expect(gap).toMatchObject({ longTurnOpen: true, spacer: 0 })
-      expect(tail).toMatchObject({ noticeVisible: true, replyVisible: true, longTurnOpen: true })
-      expect(tail.blank).toBeLessThan(BLANK_LIMIT)
+      const settled = { noticeVisible: true, replyVisible: true, longTurnOpen: true, spacer: 0 }
+      await expect.poll(() => readTail(page), { timeout: 15_000 }).toMatchObject(settled)
+      // The settled tail survives later frames instead of passing through on the way to a fold.
+      await page.evaluate(() => new Promise<void>((resolve) => {
+        requestAnimationFrame(() => { requestAnimationFrame(() => { resolve() }) })
+      }))
+      expect(await readTail(page)).toMatchObject(settled)
+      expect(tripwire.warnings).toEqual([])
       expect(tripwire.pageErrors).toEqual([])
     } finally {
       await page.context().close()

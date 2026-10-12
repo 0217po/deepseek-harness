@@ -12,6 +12,7 @@ import type {
   ChatTurnNavigationIndex, ChatTurnProcessPresentation, LegacyConversationSlice, TurnNavigationItem,
 } from '../contract/snapshot.ts'
 import { TURN_PROCESS_INDEPENDENT_KINDS } from '../contract/turn-process.ts'
+import { locationCoordinates } from './common.ts'
 import { sessionRecallLabels, skillInvocationName } from './event-projection.ts'
 import { GroupTreeSegments } from './group-tree-segments.ts'
 import { sameTurnNavigationItem, turnNavigationItem } from './turn-navigation.ts'
@@ -413,12 +414,6 @@ class MutableTurnNavigationIndex implements ChatTurnNavigationIndex {
 
 function stepKey(turn: number, step: number): string {
   return `${turn}:${step}`
-}
-
-function locationCoordinates(location: ConversationLocation): { turn?: number; step?: number } {
-  if (location.kind === 'step') return { turn: location.turn.turn, step: location.step.step }
-  if (location.kind === 'turn') return { turn: location.turn.turn }
-  return {}
 }
 
 function locationTurnStatus(location: ConversationLocation): string | undefined {

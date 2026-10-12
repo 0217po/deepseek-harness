@@ -1,5 +1,6 @@
 import type { ChatConversationViewNode } from '../contract/chat-nodes.ts'
 import { isAtOrOutside, type ChatGroupTree } from '../contract/group-tree.ts'
+import { locationCoordinates } from './common.ts'
 
 const NO_TURNS: readonly number[] = []
 
@@ -7,7 +8,9 @@ const NO_TURNS: readonly number[] = []
  * Loaded Turns split into consecutive segments at the Turns holding a Node at
  * one group-tree position, visible or hidden. The latest segment starts at the
  * last such Turn, or at the first loaded Turn when none is loaded. Node changes
- * update per-Turn counts, so no operation scans the loaded Nodes.
+ * update per-Turn counts without scanning the loaded Nodes; `settle` returns at
+ * once while the start holds and otherwise reads loaded Turns only from the
+ * earlier of the previous and new starts.
  */
 export class GroupTreeSegments {
   /** Opening Node count by owning Turn. */
@@ -28,7 +31,7 @@ export class GroupTreeSegments {
     const after = this.openingTurn(next)
     if (before === after) return
     if (before !== undefined && this.adjust(before, -1) === 0 && before === this.latestOpening) {
-      this.latestOpening = this.openings.size === 0 ? undefined : Math.max(...this.openings.keys())
+      this.latestOpening = this.lastOpeningTurn()
     }
     if (after !== undefined) {
       this.adjust(after, 1)
@@ -67,9 +70,15 @@ export class GroupTreeSegments {
   }
 
   private openingTurn(node: ChatConversationViewNode | undefined): number | undefined {
-    if (node === undefined || !isAtOrOutside(node, this.position)) return undefined
-    const location = node.location
-    return location.kind === 'turn' || location.kind === 'step' ? location.turn.turn : undefined
+    return node !== undefined && isAtOrOutside(node, this.position) ? locationCoordinates(node.location).turn : undefined
+  }
+
+  private lastOpeningTurn(): number | undefined {
+    let last: number | undefined
+    for (const turn of this.openings.keys()) {
+      if (last === undefined || turn > last) last = turn
+    }
+    return last
   }
 
   /** @returns the Turn's opening count after the change; zero removes the Turn. */
