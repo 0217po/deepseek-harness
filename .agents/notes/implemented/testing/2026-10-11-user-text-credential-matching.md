@@ -50,6 +50,8 @@ English | [中文](2026-10-11-user-text-credential-matching.zh.md)
 
 Expectations come from an x64 development machine. CI time budgets are converted with the shared scale and headroom; time ratios, doubling ratios, and allocation budgets do not scale with machine speed. Negative controls: the same benchmark fails when pointed at the regular-expression implementation or at an implementation that rebuilds its memo per query. Equivalence tests compare this implementation with the regular-expression one ([regex-oracle.client.ts](../../../../packages/client/ui-secret-mask/tests/regex-oracle.client.ts)) node by node through the production scheduler and from every query offset.
 
+The prose and JSON ratio caps, including shared headroom, are 2.5 and 6. AMD CI measurements in PR #6027 reach 5.67 for JSON; an Intel rerun reaches 2.41 for prose and 4.61 for JSON while both absolute time budgets pass. These allowances temporarily accommodate the observed variation; they do not establish its cause or measurement stability. The wider ratio caps admit smaller relative-cost regressions, while absolute time, doubling ratios, and allocation limits remain independent checks.
+
 ## Alternatives considered
 
 - **One quantified pattern per format, run from every query**: patterns without a hit scan to the end of the text each time, so cost grows quadratically with credentials, and length quantifiers backtrack on failure.
