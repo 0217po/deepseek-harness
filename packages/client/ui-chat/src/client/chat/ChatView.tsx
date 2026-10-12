@@ -10,6 +10,7 @@ import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/
 import {
   Button, IconChevronDownOutlineRegular, MarkdownDelegateProvider, Modal,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { isAtOrOutside } from '../contract/group-tree.ts'
 import type { ChatFlowHookContext, ChatViewSlotProps, OpenFileOptions } from '../contract/slots.ts'
 import type { ChatSnapshot } from '../contract/snapshot.ts'
 import { TurnNavigator } from './TurnNavigator.tsx'
@@ -37,9 +38,8 @@ function observedInputs(
   let lastInputTurn: number | undefined
   for (const key of order) {
     const node = nodes.get(key)
-    if (node === undefined || (node.kind !== 'user' && node.kind !== 'steering' && node.kind !== 'turn-trigger')) continue
+    if (node === undefined || !isAtOrOutside(node, 'input')) continue
     if (node.location.kind === 'turn' || node.location.kind === 'step') lastInputTurn = node.location.turn.turn
-    if (node.kind === 'turn-trigger') continue
     const source = (node.data as { readonly source?: unknown }).source as
       | { readonly kind?: unknown; readonly rpcId?: unknown }
       | undefined
