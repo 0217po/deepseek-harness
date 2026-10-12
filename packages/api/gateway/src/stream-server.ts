@@ -3,7 +3,7 @@
 import type { IncomingMessage } from 'node:http'
 import type { Duplex } from 'node:stream'
 import { Deque } from '@deepseek-ai/dsh-deque'
-import { RemoteError, remoteErrorOf, type PeerScope } from '@deepseek-ai/dsh-typert-protocol'
+import { RemoteError, remoteErrorOf, type PeerScope, type RemoteUplinkWindow } from '@deepseek-ai/dsh-typert-protocol'
 import WebSocket, { WebSocketServer, type RawData } from 'ws'
 import {
   parseRemoteStreamClientMessage,
@@ -16,7 +16,7 @@ import {
  * Open one validated Remote stream for a decoded wire request on behalf of one
  * Peer. `uplink` carries the Client's items; `control` cancels the logical
  * stream, and aborting it with a Remote failure as the reason delivers that
- * failure to the Client.
+ * failure to the Client. `window` describes this stream's complete-frame inbox budget.
  */
 export type RemoteStreamOpener = (
   endpoint: string,
@@ -24,6 +24,7 @@ export type RemoteStreamOpener = (
   uplink: AsyncIterable<unknown>,
   peer: PeerScope,
   control: AbortController,
+  window: RemoteUplinkWindow,
 ) => Promise<AsyncIterable<unknown>>
 
 /** The opener one socket uses: its Peer is fixed at upgrade time. */
@@ -32,6 +33,7 @@ type BoundStreamOpener = (
   payload: unknown,
   uplink: AsyncIterable<unknown>,
   control: AbortController,
+  window: RemoteUplinkWindow,
 ) => Promise<AsyncIterable<unknown>>
 
 /** Convert an invocation or carrier failure to a stable wire value. */
@@ -75,8 +77,8 @@ export class RemoteStreamMuxServer {
       const alive = (): void => { this.missedHeartbeats.set(websocket, 0) }
       alive()
       this.startHeartbeat()
-      const bound: BoundStreamOpener = (endpoint, payload, uplink, control) =>
-        this.open(endpoint, payload, uplink, peer, control)
+      const bound: BoundStreamOpener = (endpoint, payload, uplink, control, window) =>
+        this.open(endpoint, payload, uplink, peer, control, window)
       const connection = new RemoteStreamMuxConnection(websocket, bound, this.failure, this.streamInboxBytes, alive)
       const done = connection.run()
       this.connections.add(done)
@@ -240,7 +242,10 @@ class RemoteStreamMuxConnection {
   ): Promise<void> {
     let outcome: { readonly failed: false } | { readonly failed: true; readonly error: unknown }
     try {
-      const source = await this.open(endpoint, payload, active.inbox, active.abort)
+      const source = await this.open(endpoint, payload, active.inbox, active.abort, {
+        maxBytes: this.streamInboxBytes,
+        frameOverheadBytes: Buffer.byteLength(JSON.stringify({ type: 'item', streamId, value: null }), 'utf8') - 'null'.length,
+      })
       for await (const value of source) {
         await this.send({ type: 'item', streamId, value })
       }
