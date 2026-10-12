@@ -659,7 +659,7 @@ describe('built-in conversation node Definitions', () => {
     }
   })
 
-  it('opens exchanges only for human input claimed for Step 1', () => {
+  it('opens exchanges only for human input claimed for Step 1; every other input stays an input', () => {
     const human = textMessage('block-human', 'first task')
     const steer = textMessage('block-steer', 'adjust course')
     const notice = { ...textMessage('block-notice', 'background work finished'), source: { kind: 'schedule' } }
@@ -693,7 +693,7 @@ describe('built-in conversation node Definitions', () => {
       at(15, 'turn/start', { turn: 2 }),
       at(16, 'agent/inbox/spliced', { target: 'next-turn', start: 0, removedCount: 1, inserted: [] }),
     ])
-    expect(inputs(snapshot(value))).toEqual([['user', 'exchange'], ['steering', null]])
+    expect(inputs(snapshot(value))).toEqual([['user', 'exchange'], ['steering', 'input']])
     expect(bottomTurns(snapshot(value))).toEqual([1, 2])
 
     value.append(at(17, 'step/start', { turn: 2, step: 1 }))
@@ -702,7 +702,7 @@ describe('built-in conversation node Definitions', () => {
     value.append(at(20, 'step/end', { turn: 2, step: 1 }))
     value.append(at(21, 'turn/end', { turn: 2, reason: { kind: 'completed' } }))
     value.flush()
-    expect(inputs(snapshot(value))).toEqual([['user', 'exchange'], ['steering', null], ['turn-trigger', null]])
+    expect(inputs(snapshot(value))).toEqual([['user', 'exchange'], ['steering', 'input'], ['turn-trigger', 'input']])
     expect(bottomTurns(snapshot(value))).toEqual([1, 2])
 
     value.append(at(22, 'agent/inbox/spliced', { target: 'next-step', start: 0, inserted: [idle] }))
