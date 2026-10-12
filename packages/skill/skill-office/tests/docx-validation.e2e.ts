@@ -1,4 +1,4 @@
-/** Real Word content edits finish with targeted verification and the shared checker. */
+/** Real Word content edits preserve formatting without package-wide investigation. */
 import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -60,11 +60,7 @@ assert Document('input.docx').paragraphs[0].text == 'Quarterly revenue'
         if (event.type === 'tool/ptc-dispatch') return [{ name: event.data.name, arguments: JSON.stringify(event.data.arguments) }]
         return []
       })
-      const commands = calls.filter(call => call.name === 'bash' || call.name === 'pwsh')
-        .map(call => (JSON.parse(call.arguments) as { command: string }).command)
       const programs = JSON.stringify(calls)
-      const checks = commands.filter(command => command.includes('check_office.py') && command.includes('--out'))
-      expect(checks).toHaveLength(1)
       expect(programs).not.toMatch(/\b(?:inspect|docx|zipfile)\.py\b/u)
       expect(programs).not.toMatch(
         /\bunzip\b|\bextractall\s*\(|\bnamelist\s*\(|\bcore_properties\b|docProps\/|word\/(?:document|styles)\.xml/u,

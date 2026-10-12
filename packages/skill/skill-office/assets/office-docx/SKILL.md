@@ -21,15 +21,7 @@ python-docx does not paginate or render documents. Do not represent ordinary rep
 
 ## Check and deliver
 
-Use the full loaded skill result, including `resourceBase.path`, for script paths. In PTC, print or return the full result rather than only `.content`. Run the shared Python checker once per saved version; `<skill-directory>` is that resource path. Do not search other directories for the checker. In PowerShell, prefix the quoted Python executable with `&`.
-
-```text
-"<python>" "<skill-directory>/../scripts/check_office.py" <document.docx> --out <checks.json>
-```
-
-It checks ZIP/XML integrity and internal relationships, and reports paragraphs, logical table dimensions, and sections. Optional `--contains TEXT` arguments assert required text. A successful structural check does not verify pagination, clipping, fonts, or visual appearance. Compare the summary and reopened document with the user's request, including unchanged content that matters to an edit.
-
-For routine text edits, the shared checker and targeted content/formatting verification are sufficient; deliver when both pass. Do not dump or unpack OOXML, enumerate styles, inspect document properties, or compare whole packages for reassurance. Use package-level investigation only for a concrete validation failure, ambiguous edit target, unsupported feature, or explicit user requirement. Repair script/import errors before continuing. If the checker cannot run, report the structural-validation limit.
+Reopen the saved document with python-docx and verify the requested content, related formatting, and unchanged content that must be preserved. Deliver when these checks pass. Investigate package-level details only for a concrete failure, ambiguous edit target, unsupported feature, or explicit user requirement.
 
 Creating a file or changing content with incidental basic formatting does not require additional operations. Load `office-render` for requested images or visual inspection. When styling, font color, spacing, sizing, or text alignment is the requested edit, load `office-render` and inspect the changed page even without a separate visual-check request, unless the user explicitly skips rendering. For PDF output load `office-export-pdf`.
 

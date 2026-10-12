@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-alpha.2/office-checker/guide.md
+/:
+  en: f4b19b20596dbad2
+  zh: 25a90d5e8c51f3cd
+/office-checker-removal:
+  en: fdc485db7a686d77
+  zh: f2a854177c14e43d
+/office-checker-removal/change:
+  en: 5639536624303537
+  zh: 8d55fe469d69247c
+/office-checker-removal/migration:
+  en: a76670cef92daa37
+  zh: cc95cc2c84cd78d9
