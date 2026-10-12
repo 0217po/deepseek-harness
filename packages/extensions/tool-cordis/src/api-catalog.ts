@@ -5638,7 +5638,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'InvokeRemoteRequest',
-    declaration: 'export interface InvokeRemoteRequest {\n    readonly namespace: string;\n    readonly method: string;\n    readonly args: Readonly<Record<string, unknown>>;\n    readonly uplink?: AsyncIterable<unknown>;\n    readonly peer?: PeerScope;\n    readonly signal?: AbortSignal;\n}',
+    declaration: 'export interface InvokeRemoteRequest {\n    readonly namespace: string;\n    readonly method: string;\n    readonly args: Readonly<Record<string, unknown>>;\n    readonly uplink?: AsyncIterable<unknown>;\n    readonly uplinkWindow?: RemoteUplinkWindow | undefined;\n    readonly peer?: PeerScope;\n    readonly signal?: AbortSignal;\n}',
   },
   {
     name: 'JobAppendOptions',
@@ -6479,6 +6479,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'RemoteStream',
     declaration: 'export type RemoteStream<Out, In = never> = AsyncIterable<Out> & {\n    readonly [STREAM_UPLINK]?: In;\n};',
+  },
+  {
+    name: 'RemoteUplinkWindow',
+    declaration: 'export interface RemoteUplinkWindow {\n    readonly maxBytes: number;\n    readonly frameOverheadBytes: number;\n}',
   },
   {
     name: 'RenderedDocumentBytes',
@@ -7798,11 +7802,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TerminalEnvironment',
-    declaration: 'export interface TerminalEnvironment {\n    readonly cwd: string;\n    readonly maxInputBytes: number;\n    readonly maxCols: number;\n    readonly maxRows: number;\n    readonly scrollback: number;\n}',
+    declaration: 'export interface TerminalEnvironment {\n    readonly cwd: string;\n    readonly maxInputBytes: number;\n    readonly maxBufferedBytes: number;\n    readonly maxCols: number;\n    readonly maxRows: number;\n    readonly scrollback: number;\n}',
   },
   {
     name: 'TerminalFrame',
-    declaration: 'export type TerminalFrame = {\n    readonly type: \'snapshot\';\n    readonly sequence: number;\n    readonly screen: string;\n    readonly info: WebTerminalInfo;\n    readonly writable: boolean;\n} | {\n    readonly type: \'output\';\n    readonly sequence: number;\n    readonly data: string;\n} | {\n    readonly type: \'state\';\n    readonly info: WebTerminalInfo;\n    readonly writable: boolean;\n} | {\n    readonly type: \'ack\';\n    readonly sequence: number;\n    readonly refusal?: \'read-only\' | \'not-running\';\n};',
+    declaration: 'export type TerminalFrame = {\n    readonly type: \'snapshot\';\n    readonly sequence: number;\n    readonly screen: string;\n    readonly info: WebTerminalInfo;\n    readonly writable: boolean;\n    readonly inputWindow?: RemoteUplinkWindow;\n} | {\n    readonly type: \'output\';\n    readonly sequence: number;\n    readonly data: string;\n} | {\n    readonly type: \'state\';\n    readonly info: WebTerminalInfo;\n    readonly writable: boolean;\n} | {\n    readonly type: \'ack\';\n    readonly sequence: number;\n    readonly refusal?: \'read-only\' | \'not-running\';\n};',
   },
   {
     name: 'TerminalInput',

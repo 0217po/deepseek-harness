@@ -34,11 +34,11 @@ export class TerminalFollower {
   }
 
   /**
-   * Fail this attachment without stopping its terminal.
+   * Fail this attachment without stopping its terminal; failures after finish or close are ignored.
    * @param error - input or output failure reported to the attached consumer.
    */
   fail(error: Error): void {
-    if (this.closed) return
+    if (!this.active) return
     this.failure = error
     this.close()
   }

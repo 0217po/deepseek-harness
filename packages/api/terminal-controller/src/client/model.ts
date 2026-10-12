@@ -1,8 +1,9 @@
 /** React-free browser terminal state and reconnecting Remote-stream ownership. */
 import { preferredShell, rememberShell } from './shell-preference.ts'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import { Deque } from '@deepseek-ai/dsh-deque'
 import { RemoteStreamCarrierError, type ClientRemote, type RemoteStream } from '@deepseek-ai/dsh-api-gateway/client'
-import { RemoteError, remoteErrorOf, type RemoteResult, type RemoteStreamHandle } from '@deepseek-ai/dsh-typert-protocol'
+import { RemoteError, remoteErrorOf, type RemoteResult, type RemoteStreamHandle, type RemoteUplinkWindow } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-api-terminal-controller/remote'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
@@ -45,13 +46,22 @@ export interface TerminalViewState {
   readonly issue?: TerminalViewIssue | undefined
 }
 
+interface InputCost {
+  readonly inputBytes: number
+  readonly frameBytes: number
+}
+
 interface TerminalInputAttachment {
   readonly handle: RemoteStreamHandle<TerminalFrame, TerminalInput>
   readonly signal: AbortSignal
   sequence: number
   acknowledged: number
-  readonly pending: Map<number, number>
+  readonly pending: Map<number, InputCost>
+  readonly queued: Deque<InputCost & { readonly command: TerminalInput }>
+  window: RemoteUplinkWindow | undefined
   bytes: number
+  bufferedBytes: number
+  inFlightBytes: number
 }
 
 /** A view survives DOM unmount; its process only ends on explicit close. */
@@ -171,9 +181,18 @@ export class TerminalView {
         await this.retain?.(signal)
         signal.throwIfAborted()
         const handle = this.remote.attach(this.sessionId, info.id, signal)
-        const attachment = { handle, signal, sequence: 0, acknowledged: 0, pending: new Map<number, number>(), bytes: 0 }
+        const attachment: TerminalInputAttachment = {
+          handle, signal, sequence: 0, acknowledged: 0,
+          pending: new Map(), queued: new Deque(), window: undefined,
+          bytes: 0, bufferedBytes: 0, inFlightBytes: 0,
+        }
         this.attachment = attachment
-        try { yield* handle }
+        try {
+          for await (const frame of handle) {
+            if (frame.type === 'snapshot') attachment.window = frame.inputWindow
+            yield frame
+          }
+        }
         finally { if (this.attachment === attachment) this.attachment = undefined }
       }.bind(this),
       ended: () => new TerminalViewError('attachmentEnded'),
@@ -195,7 +214,7 @@ export class TerminalView {
   }
 
   /**
-   * Queue raw input within the current attachment's unacknowledged UTF-8 byte budget.
+   * Queue input within the raw UTF-8 and encoded-frame budgets, waiting for carrier capacity.
    * @param data - input from the terminal emulator; never replayed after disconnection.
    */
   write(data: string): void {
@@ -204,7 +223,7 @@ export class TerminalView {
     if (!state.writable || state.info === undefined || attachment === undefined || attachment.signal.aborted) return
     if (data.length === 0) return
     const bytes = new TextEncoder().encode(data).byteLength
-    if (attachment.bytes + bytes > (state.environment?.maxInputBytes ?? 0)) { this.fail(new TerminalViewError('inputFull')); return }
+    if (attachment.bytes + bytes > (state.environment?.maxInputBytes ?? 0)) { this.failInput(new TerminalViewError('inputFull')); return }
     this.send(attachment, { type: 'write', sequence: attachment.sequence + 1, data }, bytes)
   }
 
@@ -224,12 +243,37 @@ export class TerminalView {
   }
 
   private send(attachment: TerminalInputAttachment, command: TerminalInput, bytes: number): void {
-    try {
-      attachment.handle.send(command)
-      attachment.sequence = command.sequence
-      if (bytes > 0) attachment.pending.set(command.sequence, bytes)
-      attachment.bytes += bytes
-    } catch (error) { this.fail(error) }
+    const frameBytes = new TextEncoder().encode(JSON.stringify(command)).byteLength + (attachment.window?.frameOverheadBytes ?? 0)
+    if (attachment.bufferedBytes + frameBytes > (this.state.getSnapshot().environment?.maxBufferedBytes ?? 0)
+      || (attachment.window !== undefined && frameBytes > attachment.window.maxBytes)) {
+      this.failInput(new TerminalViewError('inputFull'))
+      return
+    }
+    attachment.queued.pushBack({ command, inputBytes: bytes, frameBytes })
+    attachment.sequence = command.sequence
+    attachment.bytes += bytes
+    attachment.bufferedBytes += frameBytes
+    this.flushInput(attachment)
+  }
+
+  private flushInput(attachment: TerminalInputAttachment): void {
+    while (this.attachment === attachment && !attachment.signal.aborted && this.state.getSnapshot().writable) {
+      const next = attachment.queued.popFront()
+      if (next === undefined) return
+      if (attachment.window !== undefined && attachment.inFlightBytes + next.frameBytes > attachment.window.maxBytes) {
+        attachment.queued.pushFront(next)
+        return
+      }
+      try { attachment.handle.send(next.command) }
+      catch (error) { this.failInput(error); return }
+      attachment.pending.set(next.command.sequence, { inputBytes: next.inputBytes, frameBytes: next.frameBytes })
+      attachment.inFlightBytes += next.frameBytes
+    }
+  }
+
+  private failInput(error: unknown): void {
+    this.fail(error)
+    this.detach()
   }
 
   /**
@@ -307,11 +351,15 @@ export class TerminalView {
           const attachment = this.attachment
           /* v8 ignore next -- the physical opener retains its handle until this consumer advances. */
           if (attachment === undefined) throw new TerminalViewError('invalidOutput', 'Terminal acknowledgement has no attachment')
-          if (frame.sequence !== attachment.acknowledged + 1 || frame.sequence > attachment.sequence) throw new TerminalViewError('invalidOutput', 'Terminal input acknowledgement is out of order')
+          const pending = attachment.pending.get(frame.sequence)
+          if (frame.sequence !== attachment.acknowledged + 1 || pending === undefined) throw new TerminalViewError('invalidOutput', 'Terminal input acknowledgement is out of order')
           attachment.acknowledged = frame.sequence
-          attachment.bytes -= attachment.pending.get(frame.sequence) ?? 0
+          attachment.bytes -= pending.inputBytes
+          attachment.bufferedBytes -= pending.frameBytes
+          attachment.inFlightBytes -= pending.frameBytes
           attachment.pending.delete(frame.sequence)
           if (frame.refusal !== undefined) this.patch({ writable: false })
+          this.flushInput(attachment)
           continue
         }
         if (frame.type !== 'output') {

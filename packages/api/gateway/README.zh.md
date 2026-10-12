@@ -87,7 +87,7 @@ Client waterfall 的 Context 解析保持同步。解析器可以返回借用的
 - lookup 解析器按 key 配置；当前无法让单个 Remote 参数或 endpoint 在同一 `agent`/`session` key 下选择 live-only 策略。
 - 被转发的事件到达 `$on` 时不做业务载荷投影或脱敏。普通通知在重连后不重放；Agent-scoped waterfall 只投影选择 Client Context 所需的顶层 Agent 身份，并自行携带 pending 生命周期。
 - `websocketHeartbeatIntervalMs` 同时是 Ping 周期和 Pong 截止时间。对端未在下一周期前回复时，Host 会终止连接；如果部署的事件循环或网络可能停顿超过该间隔，必须调大此配置。
-- 上行除了有界的 Host inbox 之外没有流控：Client 发送快于方法读取，或发给从未取用 uplink 的方法时，其流以 `gateway/uplink-overflow` 失败；上行项不会跨载体代际重放，需要恢复上行的领域在重开的请求里自带确认游标。
+- Gateway 通过 `invocation.uplinkWindow` 提供每条 WebSocket 流的 inbox 容量与 JSON 封装开销；没有编码帧 inbox 限额的载体省略该字段。领域协议可以公布该窗口并通过确认约束在途字节数。Gateway 本身不发放额度：Client 发送快于方法读取，或发给从未取用 uplink 的方法时，其流以 `gateway/uplink-overflow` 失败；上行项不会跨载体代际重放，需要恢复上行的领域在重开的请求里自带确认游标。
 
 
 <a id="dev-note"></a>

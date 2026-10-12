@@ -72,7 +72,7 @@ describe('TerminalController', () => {
   it('creates the environment default shell and keeps an existing identity when that default changes', async () => {
     const { controller, agent, subprocess } = fixture({ shell: undefined })
     subprocess.terminalEnvironment.mockResolvedValue({ platform: 'posix', defaultShell: '/usr/local/bin/zsh' })
-    expect(controller.environment(agent, signal())).toEqual({ cwd: '/workspace', maxCols: 200, maxRows: 100, maxInputBytes: 1000, scrollback: 100 })
+    expect(controller.environment(agent, signal())).toEqual({ cwd: '/workspace', maxCols: 200, maxRows: 100, maxInputBytes: 1000, maxBufferedBytes: 100_000, scrollback: 100 })
     expect(subprocess.terminalEnvironment).not.toHaveBeenCalled()
     const created = await controller.create(agent, request, signal())
     expect(created.shell.path).toBe('/usr/local/bin/zsh')
@@ -716,14 +716,30 @@ it('classifies missing and closing terminal identities for localized recovery ac
   await expect(h.controller.create(h.agent, request, signal())).rejects.toMatchObject({ code: 'terminal/unavailable' })
 })
 
+it('publishes the carrier input window in the attachment snapshot', async () => {
+  const { controller, agent } = fixture()
+  await controller.create(agent, request, signal())
+  const abort = new AbortController()
+  const window = { maxBytes: 512, frameOverheadBytes: 76 }
+  const frames = attachController(agent, id, abort.signal, inputChannel<TerminalInput>().source, window)[Symbol.asyncIterator]()
+  try {
+    expect(await frames.next()).toMatchObject({ value: { type: 'snapshot', inputWindow: window } })
+  } finally {
+    abort.abort()
+    await frames.return?.()
+  }
+})
+
 function attachController(
   agent: Agent, terminalId: WebTerminalId, signal: AbortSignal,
   input: AsyncIterable<unknown> = inputChannel<TerminalInput>().source,
+  uplinkWindow?: RemoteInvocation['uplinkWindow'],
 ) {
   const invocation: RemoteInvocation = {
     request: { namespace: 'terminal', method: 'attach', args: {} }, service: 'terminalController', signal,
     peer: { id: 'test-peer' as PeerId, ctx: agent.ctx, dispose: async () => {} },
     uplink: <In>() => input as AsyncIterable<In>,
+    uplinkWindow,
   }
   return agent.ctx.extend({ invocation }).terminalController.attach(agent, terminalId, signal)
 }

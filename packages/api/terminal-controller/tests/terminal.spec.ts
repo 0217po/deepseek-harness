@@ -242,6 +242,40 @@ it.each(['write', 'resize'] as const)('fails the attachment on a provider %s err
   expect(handle.write).toHaveBeenLastCalledWith('fresh')
 })
 
+it.each(['write', 'resize'] as const)('preserves final output when an in-flight %s is refused during process exit', async (operation) => {
+  const { terminal, handle, output, outcome } = fixture()
+  const view = await attach(terminal)
+  const entered = Promise.withResolvers<undefined>()
+  const release = Promise.withResolvers<undefined>()
+  cleanups.push(async () => { release.resolve(undefined) })
+  handle[operation].mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise })
+  view.input.push(operation === 'write' ? { type: 'write', sequence: 1, data: 'late' } : { type: 'resize', sequence: 1, cols: 90, rows: 25 })
+  await entered.promise
+  outcome.resolve({ exitCode: 7, signal: null })
+  output.end('FINAL OUTPUT')
+  release.reject(new Error('terminal process has exited'))
+  const frames = [await readFrame(view.iterator), await readFrame(view.iterator), await readFrame(view.iterator)]
+  expect(frames).toEqual(expect.arrayContaining([
+    { type: 'ack', sequence: 1, refusal: 'not-running' },
+    expect.objectContaining({ type: 'output', data: 'FINAL OUTPUT' }),
+  ]))
+  expect(frames.find(frame => frame.type === 'state')).toMatchObject({ writable: false, info: { state: 'exited', exitCode: 7 } })
+})
+
+it('refuses queued input once the process completes while output is still draining', async () => {
+  const { terminal, handle, output, outcome } = fixture()
+  const view = await attach(terminal)
+  outcome.resolve({ exitCode: 0, signal: null })
+  await outcome.promise
+  expect(terminal.info.state).toBe('running')
+  view.input.push({ type: 'write', sequence: 1, data: 'late' })
+  expect(await readFrame(view.iterator)).toEqual({ type: 'ack', sequence: 1, refusal: 'not-running' })
+  expect(handle.write).not.toHaveBeenCalled()
+  output.end('FINAL OUTPUT')
+  expect(await readFrame(view.iterator)).toMatchObject({ type: 'output', data: 'FINAL OUTPUT' })
+  expect(await readFrame(view.iterator)).toMatchObject({ type: 'state', writable: false, info: { state: 'exited' } })
+})
+
 it('refuses input after exit without ending the screen attachment', async () => {
   const { terminal, output, outcome, handle } = fixture()
   const view = await attach(terminal)

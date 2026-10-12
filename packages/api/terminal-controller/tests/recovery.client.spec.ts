@@ -16,7 +16,9 @@ import * as TerminalClient from '../src/client/index.ts'
 
 const sessionId = 'session' as SessionId
 const info: WebTerminalInfo = { id: 'terminal' as WebTerminalId, shell: { name: 'zsh', path: '/bin/zsh', args: ['-i'] }, title: 'zsh', cwd: '/workspace', rows: 24, cols: 80, state: 'running', exitCode: null }
-const environment: TerminalEnvironment = { cwd: info.cwd, maxInputBytes: 1000, maxCols: 200, maxRows: 100, scrollback: 100 }
+const environment: TerminalEnvironment = {
+  cwd: info.cwd, maxInputBytes: 1000, maxBufferedBytes: 100_000, maxCols: 200, maxRows: 100, scrollback: 100,
+}
 const success = <T>(value: T): RemoteResult<T> => ({ ok: true, value })
 const failure = (message: string): RemoteResult<never> => ({ ok: false, error: new RemoteError('gateway/bad-request', message, {}) })
 const cleanups: (() => void | Promise<void>)[] = []

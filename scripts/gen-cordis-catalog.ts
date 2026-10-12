@@ -282,6 +282,7 @@ export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
  */
 export const LINK_MAP: Readonly<Record<string, string>> = {
   RemoteStream: 'typert.md',
+  RemoteUplinkWindow: 'typert.md',
   EventLogOptions: 'otel.md',
   EventLogReporter: 'otel.md',
   SessionLogOptions: 'otel.md',

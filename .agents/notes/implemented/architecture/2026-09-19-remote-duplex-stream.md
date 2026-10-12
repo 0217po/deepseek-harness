@@ -41,7 +41,7 @@ These consumers need Client-to-Host data while a related operation remains activ
 - **Input authority.** A terminal retains its controlling attachment as a Host-local follower. Snapshot and state frames report each attachment's `writable` state; older attachments keep receiving output after control transfers.
 - **Ordering and acknowledgement.** Terminal writes and resizes share a consecutive command sequence and the terminal's operation queue. An `ack` reports provider acceptance or a control refusal; it never authorizes replay after disconnection.
 - **Independent lifetimes.** Cancelling `attach` stops its input and output delivery, drops unstarted commands, and joins an in-flight input operation. The PTY lifetime is owned separately by retention and explicit close.
-- **Distinct byte limits.** The Gateway caps complete encoded uplink frames with `streamInboxBytes`. The terminal Client caps unacknowledged raw UTF-8 input with `maxInputBytes`; its output follower separately caps encoded downlink frames. Raw input accounting excludes command and transport metadata.
+- **Coordinated byte limits.** The Gateway exposes its complete-frame inbox capacity and this stream's JSON envelope cost through `invocation.uplinkWindow`. The terminal publishes that window in its snapshot and uses provider acknowledgements to release in-flight capacity. Writes and resizes wait in a bounded Client queue when the window is full. `maxInputBytes` limits raw UTF-8 input; `maxBufferedBytes` separately limits the complete encoded input retained by the Client and output retained by each follower.
 - **Remaining separate carriers.** Approval answers still correlate `$events` with the `$events/result` RPC through `clientId` and `eventId`. Moving this protocol onto the duplex stream remains deferred.
 
 ### Relation to background jobs
@@ -66,7 +66,7 @@ Every Remote stream accepts a Client uplink. The method's return type `RemoteStr
                  Client                                             Host
    ─────────────────────────────────              ───────────────────────────────────────────
    const s = remote.job.attach(req, signal)
-        │  open { streamId, endpoint, payload } ───────▶  opener(endpoint, payload, uplink, peer, control)
+        │  open { streamId, endpoint, payload } ───────▶  opener(endpoint, payload, uplink, peer, control, window)
         │                                                     │ prepareInvocation
         │  s.send(v1) → item { streamId, v1 }    ───────▶  inbox.push(v1)   │ invocation = { request, service, peer, signal, uplink() }
         │  s.send(v2) → item { streamId, v2 }    ───────▶  inbox.push(v2)   │ receiverContext.extend({ invocation }).get(service)
@@ -139,6 +139,7 @@ export interface RemoteInvocation {
   readonly peer: PeerScope
   /** Carrier cancellation: Client cancel, socket closure, uplink failure. */
   readonly signal: AbortSignal
+  readonly uplinkWindow?: RemoteUplinkWindow | undefined
   /**
    * The uplink items of this call. Can be taken once; the second call throws. With an uplink codec
    * in the descriptor each item is decoded to In; without one, items are delivered as unknown with
@@ -379,6 +380,7 @@ export type RemoteStreamOpener = (
   uplink: AsyncIterable<unknown>,
   peer: PeerScope,
   control: AbortController,
+  window: RemoteUplinkWindow,
 ) => Promise<AsyncIterable<unknown>>
 
 // index.ts Config addition
@@ -598,7 +600,6 @@ Retention cases in `gateway-stream.host.spec.ts` and `gateway.client.spec.ts` co
 - `$stream` / snapshot / journal expose the handle's `send` to upper-layer protocols.
 - Duplex `$events`: waterfall answers become uplink items on the same `streamId`, and `$events/result` and `clientId` retire.
 - Credit frames: wait for a consumer that needs sustained high-volume uplink; the inbox limit is the initial credit.
-- Coordinate the terminal's raw-input budget with the Gateway's complete-frame inbox limit, including short-command bursts and resize commands.
 - A Host-initiated half-close frame (the Host stops reading the uplink but keeps writing the downlink): no consumer; not added.
 - `uplink()` on unary methods: it can read items that arrive while the method runs, semantically valid but of doubtful use; allowed, noted in the README.
 

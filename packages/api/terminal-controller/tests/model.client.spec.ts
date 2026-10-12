@@ -2,7 +2,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { RemoteStream, RemoteStreamCarrierError, type ClientRemote, type RemoteStreamOptions } from '@deepseek-ai/dsh-api-gateway/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import { RemoteError, type RemoteResult, type RemoteUplinkWindow } from '@deepseek-ai/dsh-typert-protocol'
 import { RemoteMock, streamMethod, type StreamHandle } from '@deepseek-ai/dsh-remote-mock'
 import type {} from '@deepseek-ai/dsh-api-terminal-controller/remote'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -12,7 +12,7 @@ import type { TerminalInput, TerminalEnvironment, TerminalFrame, WebTerminalId, 
 const sessionId = 'session' as SessionId
 const info: WebTerminalInfo = { id: 'terminal' as WebTerminalId, shell: { name: 'bash', path: '/bin/bash', args: ['-i'] }, title: 'bash', cwd: '/workspace', rows: 24, cols: 80, state: 'running', exitCode: null }
 const environment: TerminalEnvironment = {
-  cwd: info.cwd, maxInputBytes: 1000, maxCols: 200, maxRows: 100, scrollback: 100,
+  cwd: info.cwd, maxInputBytes: 1000, maxBufferedBytes: 100_000, maxCols: 200, maxRows: 100, scrollback: 100,
 }
 const success = <T>(value: T): RemoteResult<T> => ({ ok: true, value })
 const cleanups: (() => void | Promise<void>)[] = []
@@ -29,14 +29,14 @@ function failure(message: string): RemoteResult<never> {
   return { ok: false, error: new RemoteError('gateway/bad-request', message, {}) }
 }
 
-function fixture(prepareStream?: <Item>(stream: RemoteStream<Item>) => void) {
+function fixture(prepareStream?: <Item>(stream: RemoteStream<Item>) => void, inputWindow?: RemoteUplinkWindow) {
   const attachments: StreamHandle[] = []
   const sent: TerminalInput[][] = []
   const mock = RemoteMock.create().stream('terminal/attach', async (args, stream) => {
     attachments.push(stream)
     const commands: TerminalInput[] = []
     sent.push(commands)
-    stream.push({ type: 'snapshot', sequence: 0, screen: 'ready', info: { ...info, id: args[1] }, writable: true })
+    stream.push({ type: 'snapshot', sequence: 0, screen: 'ready', info: { ...info, id: args[1] }, writable: true, ...inputWindow === undefined ? {} : { inputWindow } })
     for await (const command of stream.uplink) commands.push(command as TerminalInput)
   })
   const remote: TerminalRemote = {
@@ -446,7 +446,7 @@ it('rejects an out-of-order acknowledgement and reports synchronous send failure
   expect(h.model.state.getSnapshot()).toMatchObject({ phase: 'failed', error: 'send failed' })
 })
 
-it('ignores empty input and stale render acknowledgements and handles missing view metadata', async () => {
+it.each(['write', 'resize'] as const)('ignores empty input and stale render acknowledgements and refuses %s without limits', async (operation) => {
   const h = fixture()
   await connected(h.model)
   h.model.acknowledge(-1)
@@ -457,11 +457,100 @@ it('ignores empty input and stale render acknowledgements and handles missing vi
   h.model.resize(100, 30)
   expect(h.sent[0]).toEqual([])
   h.model.state.set({ ...state, environment: undefined })
-  h.model.resize(100, 30)
-  await expect.poll(() => h.sent[0]?.length).toBe(1)
-  h.attachments[0]!.push({ type: 'ack', sequence: 1 })
-  h.attachments[0]!.push({ type: 'state', info: { ...info, cols: 100 }, writable: true })
-  await expect.poll(() => h.model.state.getSnapshot().info?.cols).toBe(100)
-  h.model.write('no budget')
+  if (operation === 'write') h.model.write('no budget')
+  else h.model.resize(100, 30)
+  expect(h.sent[0]).toEqual([])
   expect(h.model.state.getSnapshot().issue).toBe('inputFull')
+})
+
+function encodedFrame(command: TerminalInput): number {
+  return new TextEncoder().encode(JSON.stringify({ type: 'item', streamId: '00000000-0000-0000-0000-000000000000', value: command })).byteLength
+}
+
+function inputWindow(maxBytes: number): RemoteUplinkWindow {
+  const command: TerminalInput = { type: 'write', sequence: 1, data: 'a' }
+  return { maxBytes, frameOverheadBytes: encodedFrame(command) - new TextEncoder().encode(JSON.stringify(command)).byteLength }
+}
+
+it('waits for complete-frame capacity and sends queued write and resize commands in order', async () => {
+  const commands: TerminalInput[] = [
+    { type: 'write', sequence: 1, data: '\u0001界' },
+    { type: 'resize', sequence: 2, cols: 90, rows: 25 },
+    { type: 'write', sequence: 3, data: 'last' },
+  ]
+  const h = fixture(undefined, inputWindow(Math.max(...commands.map(encodedFrame))))
+  await connected(h.model)
+  h.model.write('\u0001界')
+  h.model.resize(90, 25)
+  h.model.write('last')
+  await expect.poll(() => h.sent[0]).toEqual(commands.slice(0, 1))
+  h.attachments[0]!.push({ type: 'ack', sequence: 1 })
+  await expect.poll(() => h.sent[0]).toEqual(commands.slice(0, 2))
+  h.attachments[0]!.push({ type: 'ack', sequence: 2 })
+  await expect.poll(() => h.sent[0]).toEqual(commands)
+  expect(h.model.state.getSnapshot()).toMatchObject({ phase: 'connected', issue: undefined })
+})
+
+it('keeps a burst of short commands within the advertised inbox and resumes on acknowledgements', async () => {
+  const window = inputWindow(262_144)
+  const h = fixture(undefined, window)
+  vi.mocked(h.remote.environment).mockResolvedValue(success({ ...environment, maxInputBytes: 65_536, maxBufferedBytes: 2_097_152 }))
+  await connected(h.model)
+  for (let index = 0; index < 3000; index++) h.model.write('a')
+  await expect.poll(() => h.sent[0]?.length).toBe(2250)
+  const first = h.sent[0]!
+  expect(first.reduce((bytes, command) => bytes + encodedFrame(command), 0)).toBeLessThanOrEqual(window.maxBytes)
+  for (let sequence = 1; sequence <= 1000; sequence++) h.attachments[0]!.push({ type: 'ack', sequence })
+  await expect.poll(() => h.sent[0]?.length).toBe(3000)
+  expect(h.sent[0]!.slice(1000).reduce((bytes, command) => bytes + encodedFrame(command), 0)).toBeLessThanOrEqual(window.maxBytes)
+  expect(h.model.state.getSnapshot()).toMatchObject({ phase: 'connected', issue: undefined })
+})
+
+it('counts queued resize frames against the Client buffer and cancels unsent commands on overflow', async () => {
+  const command: TerminalInput = { type: 'resize', sequence: 1, cols: 90, rows: 25 }
+  const bytes = encodedFrame(command)
+  const h = fixture(undefined, inputWindow(bytes))
+  vi.mocked(h.remote.environment).mockResolvedValue(success({ ...environment, maxBufferedBytes: 2 * bytes }))
+  await connected(h.model)
+  h.model.resize(90, 25)
+  h.model.resize(91, 25)
+  await expect.poll(() => h.sent[0]?.length).toBe(1)
+  h.model.resize(92, 25)
+  expect(h.model.state.getSnapshot()).toMatchObject({ phase: 'failed', issue: 'inputFull' })
+  expect(h.sent[0]).toEqual([command])
+})
+
+it('refuses a single escaped input frame larger than the carrier window before sending it', async () => {
+  const h = fixture(undefined, inputWindow(150))
+  await connected(h.model)
+  h.model.write('\u0001'.repeat(20))
+  expect(h.model.state.getSnapshot()).toMatchObject({ phase: 'failed', issue: 'inputFull' })
+  expect(h.sent[0]).toEqual([])
+})
+
+it('rejects acknowledgements for commands still waiting in the Client queue', async () => {
+  const h = fixture(undefined, inputWindow(120))
+  await connected(h.model)
+  h.model.write('a')
+  h.model.write('b')
+  await expect.poll(() => h.sent[0]?.length).toBe(1)
+  h.attachments[0]!.push({ type: 'ack', sequence: 2 })
+  await expect.poll(() => h.model.state.getSnapshot().issue).toBe('invalidOutput')
+})
+
+it('drops waiting commands when input is refused and never replays them on a new attachment', async () => {
+  const h = fixture(undefined, inputWindow(120))
+  await connected(h.model)
+  h.model.write('a')
+  h.model.write('b')
+  await expect.poll(() => h.sent[0]?.length).toBe(1)
+  h.attachments[0]!.push({ type: 'ack', sequence: 1, refusal: 'read-only' })
+  await expect.poll(() => h.model.state.getSnapshot().writable).toBe(false)
+  expect(h.sent[0]).toHaveLength(1)
+  h.model.connect()
+  await expect.poll(() => h.attachments.length).toBe(2)
+  await expect.poll(() => h.model.state.getSnapshot().writable).toBe(true)
+  acknowledge(h.model)
+  h.model.write('c')
+  await expect.poll(() => h.sent[1]).toEqual([{ type: 'write', sequence: 1, data: 'c' }])
 })

@@ -41,7 +41,7 @@ Client 句柄的 `send()` 提供上行项，`end()` 半关闭上行，`dispose()
 - **输入权限**。终端通过 Host 本地的 follower 持有控制附件。快照和状态帧报告各附件的 `writable` 状态；控制权转移后，旧附件继续接收输出。
 - **顺序与确认**。终端输入和尺寸调整共用连续命令序列及终端操作队列。`ack` 报告提供者已接受操作或输入权限拒绝，绝不授权断线后重放。
 - **独立生命周期**。取消 `attach` 会停止其输入和输出传递、丢弃尚未开始的命令，并等待在途输入操作收尾。PTY 的生命周期由保留机制和显式关闭独立管理。
-- **不同的字节限额**。Gateway 用 `streamInboxBytes` 限制完整编码后的上行帧。终端 Client 用 `maxInputBytes` 限制未确认的原始 UTF-8 输入；输出 follower 另行限制编码后的下行帧。原始输入计量不包含命令和传输元数据。
+- **协调字节限额**。Gateway 通过 `invocation.uplinkWindow` 提供完整帧 inbox 容量及本流的 JSON 封装开销。终端在快照中公布窗口，并通过提供者确认释放在途额度。窗口满时，输入和尺寸调整命令在有界 Client 队列中等待。`maxInputBytes` 限制原始 UTF-8 输入；`maxBufferedBytes` 分别限制 Client 保留的完整编码输入及每个 follower 保留的输出。
 - **仍独立的载体**。审批回答仍通过 `clientId` 和 `eventId` 将 `$events` 与 `$events/result` RPC 关联。将该协议迁入双工流仍属后续工作。
 
 ### 与后台 job 的关系
@@ -66,7 +66,7 @@ Client 句柄的 `send()` 提供上行项，`end()` 半关闭上行，`dispose()
                  Client                                             Host
    ─────────────────────────────────              ───────────────────────────────────────────
    const s = remote.job.attach(req, signal)
-        │  open { streamId, endpoint, payload } ───────▶  opener(endpoint, payload, uplink, peer, control)
+        │  open { streamId, endpoint, payload } ───────▶  opener(endpoint, payload, uplink, peer, control, window)
         │                                                     │ prepareInvocation
         │  s.send(v1) → item { streamId, v1 }    ───────▶  inbox.push(v1)   │ invocation = { request, service, peer, signal, uplink() }
         │  s.send(v2) → item { streamId, v2 }    ───────▶  inbox.push(v2)   │ receiverContext.extend({ invocation }).get(service)
@@ -139,6 +139,7 @@ export interface RemoteInvocation {
   readonly peer: PeerScope
   /** Carrier cancellation: Client cancel, socket closure, uplink failure. */
   readonly signal: AbortSignal
+  readonly uplinkWindow?: RemoteUplinkWindow | undefined
   /**
    * The uplink items of this call. Can be taken once; the second call throws. With an uplink codec
    * in the descriptor each item is decoded to In; without one, items are delivered as unknown with
@@ -379,6 +380,7 @@ export type RemoteStreamOpener = (
   uplink: AsyncIterable<unknown>,
   peer: PeerScope,
   control: AbortController,
+  window: RemoteUplinkWindow,
 ) => Promise<AsyncIterable<unknown>>
 
 // index.ts Config addition
@@ -598,7 +600,6 @@ for await (const reply of stream) replies.push(reply)   // ['> a', '> b']
 - `$stream` / snapshot / journal 把句柄的 `send` 透出给上层协议。
 - 双工 `$events`：waterfall 的回答成为同一 `streamId` 上的上行项，`$events/result` 与 `clientId` 退场。
 - credit 帧：等需要持续大流量上行的消费者出现；inbox 上限就是初始授信。
-- 协调终端的原始输入预算与 Gateway 的完整帧 inbox 限额，包括短命令突发和尺寸调整命令。
 - Host 发起的半关闭帧（Host 不再读上行但继续写下行）：没有消费者，不加。
 - unary 方法的 `uplink()`：能读到方法运行期间到达的项，语义成立但用处存疑；允许，README 注明。
 

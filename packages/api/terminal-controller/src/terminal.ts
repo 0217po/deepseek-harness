@@ -1,6 +1,6 @@
 /** One PTY, a bounded terminal emulator and its detachable browser followers. */
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import { RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
+import { RemoteError, remoteErrorOf, type RemoteUplinkWindow } from '@deepseek-ai/dsh-typert-protocol'
 import type { Terminal as HeadlessTerminal } from '@xterm/headless'
 import type { SerializeAddon as Serializer } from '@xterm/addon-serialize'
 import type { SubprocessTerminalHandle } from '@deepseek-ai/dsh-subprocess'
@@ -20,6 +20,8 @@ export class BrowserTerminal {
   private sequence = 0
   private operations: Promise<unknown> = Promise.resolve()
   private readonly drained: Promise<void>
+  /** Provider completion precedes output drainage and the published exit state. */
+  private exited = false
   private closing: Promise<void> | undefined
   private retention: TerminalRetention | undefined
   private controller: TerminalFollower | undefined
@@ -74,16 +76,17 @@ export class BrowserTerminal {
    * @param input - Gateway-decoded commands; returning its iterator must interrupt pending reads.
    * @param limits - input byte and PTY dimension limits validated at the Remote boundary.
    * @param signal - attachment cancellation; never terminates the process.
+   * @param inputWindow - carrier frame capacity; absent for a carrier without an encoded-frame inbox limit.
    * @returns a screen baseline, output, per-attachment state and ordered command acknowledgements.
    */
-  async *attach(input: AsyncIterable<TerminalInput>, limits: Pick<TerminalEnvironment, 'maxInputBytes' | 'maxCols' | 'maxRows'>, signal: AbortSignal): AsyncIterable<TerminalFrame> {
+  async *attach(input: AsyncIterable<TerminalInput>, limits: Pick<TerminalEnvironment, 'maxInputBytes' | 'maxCols' | 'maxRows'>, signal: AbortSignal, inputWindow?: RemoteUplinkWindow): AsyncIterable<TerminalFrame> {
     signal.throwIfAborted()
     const follower = new TerminalFollower(this.maxBufferedBytes)
     const baseline = await this.enqueue(() => {
       signal.throwIfAborted()
       this.controller = follower
       this.broadcastState()
-      const snapshot: TerminalFrame = { type: 'snapshot', sequence: this.sequence, screen: this.serializer.serialize(), info: this.info, writable: this.writable(follower) }
+      const snapshot: TerminalFrame = { type: 'snapshot', sequence: this.sequence, screen: this.serializer.serialize(), info: this.info, writable: this.writable(follower), ...inputWindow === undefined ? {} : { inputWindow } }
       this.followers.add(follower)
       return snapshot
     })
@@ -139,14 +142,17 @@ export class BrowserTerminal {
         follower.push({ type: 'ack', sequence })
       } catch (error) {
         const failure = remoteErrorOf(error)
-        if (failure?.code !== 'terminal/control-unavailable') throw error
-        follower.push({ type: 'ack', sequence, refusal: failure.details.reason })
+        if (failure?.code === 'terminal/control-unavailable') {
+          follower.push({ type: 'ack', sequence, refusal: failure.details.reason })
+        } else if (this.exited) {
+          follower.push({ type: 'ack', sequence, refusal: 'not-running' })
+        } else throw error
       }
     }
   }
 
   private writable(follower: TerminalFollower): boolean {
-    return this.closing === undefined && this.info.state === 'running' && this.controller === follower
+    return !this.exited && this.closing === undefined && this.info.state === 'running' && this.controller === follower
   }
 
   private broadcastState(): void {
@@ -189,7 +195,7 @@ export class BrowserTerminal {
   }
 
   private requireController(follower: TerminalFollower): void {
-    if (this.closing !== undefined || this.info.state !== 'running') throw new RemoteError('terminal/control-unavailable', 'Terminal is not running', { reason: 'not-running' })
+    if (this.exited || this.closing !== undefined || this.info.state !== 'running') throw new RemoteError('terminal/control-unavailable', 'Terminal is not running', { reason: 'not-running' })
     if (this.controller !== follower || !follower.active) throw new RemoteError('terminal/control-unavailable', 'Terminal input is controlled by another attachment', { reason: 'read-only' })
   }
 
@@ -205,7 +211,7 @@ export class BrowserTerminal {
 
   private async consume(): Promise<void> {
     const decoder = new TextDecoder('utf-8', { ignoreBOM: true })
-    const outcome = this.handle.done.then(value => ({ value }), (error: unknown) => ({ error }))
+    const outcome = this.handle.done.then((value) => { this.exited = true; return { value } }, (error: unknown) => ({ error }))
     try {
       for await (const chunk of this.handle.output) {
         // Node Readable's iterator is untyped; this provider explicitly emits Buffer chunks.

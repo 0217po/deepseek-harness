@@ -1,6 +1,6 @@
 /** Browser terminal identities, metadata and screen-stream frames. */
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type {} from '@deepseek-ai/dsh-typert-protocol'
+import type { RemoteUplinkWindow } from '@deepseek-ai/dsh-typert-protocol'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
@@ -33,6 +33,8 @@ export interface TerminalEnvironment {
   /** Logged current directory, read without filesystem validation. */
   readonly cwd: string
   readonly maxInputBytes: number
+  /** Maximum complete encoded Client input bytes retained until acknowledgement. */
+  readonly maxBufferedBytes: number
   readonly maxCols: number
   readonly maxRows: number
   readonly scrollback: number
@@ -66,9 +68,12 @@ export type TerminalInput =
   | { readonly type: 'write'; readonly sequence: number; readonly data: string }
   | { readonly type: 'resize'; readonly sequence: number; readonly cols: number; readonly rows: number }
 
-/** Every attachment begins with a complete bounded screen, then ordered output. */
+/**
+ * Every attachment begins with a complete bounded screen, then ordered output.
+ * inputWindow is absent when the carrier has no encoded-frame inbox limit.
+ */
 export type TerminalFrame =
-  | { readonly type: 'snapshot'; readonly sequence: number; readonly screen: string; readonly info: WebTerminalInfo; readonly writable: boolean }
+  | { readonly type: 'snapshot'; readonly sequence: number; readonly screen: string; readonly info: WebTerminalInfo; readonly writable: boolean; readonly inputWindow?: RemoteUplinkWindow }
   | { readonly type: 'output'; readonly sequence: number; readonly data: string }
   | { readonly type: 'state'; readonly info: WebTerminalInfo; readonly writable: boolean }
   | { readonly type: 'ack'; readonly sequence: number; readonly refusal?: 'read-only' | 'not-running' }

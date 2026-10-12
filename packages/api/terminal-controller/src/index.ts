@@ -44,7 +44,7 @@ export interface Config {
   readonly maxRows: number
   /** Screen history rows retained for reconnecting clients. */
   readonly scrollback: number
-  /** Maximum queued UTF-8 frame bytes per output follower before disconnection. */
+  /** Maximum queued UTF-8 frame bytes per output follower and in the Client input buffer. */
   readonly maxBufferedBytes: number
   /** Maximum raw UTF-8 bytes per input command and across unacknowledged Client input. */
   readonly maxInputBytes: number
@@ -120,7 +120,7 @@ export class TerminalController extends TypertRemoteService {
     signal.throwIfAborted()
     const { workingDirectory } = this.execution(agent)
     return { cwd: workingDirectory.get(agent.session),
-      maxInputBytes: this.config.maxInputBytes, maxCols: this.config.maxCols,
+      maxInputBytes: this.config.maxInputBytes, maxBufferedBytes: this.config.maxBufferedBytes, maxCols: this.config.maxCols,
       maxRows: this.config.maxRows, scrollback: this.config.scrollback }
   }
 
@@ -216,7 +216,7 @@ export class TerminalController extends TypertRemoteService {
   attach(agent: Agent, id: WebTerminalId, signal: AbortSignal): RemoteStream<TerminalFrame, TerminalInput> {
     const invocation = this.ctx.invocation
     if (invocation === undefined) throw new Error('Terminal attachment requires a Remote invocation')
-    return this.terminal(agent, id).attach(invocation.uplink<TerminalInput>(), this.config, signal)
+    return this.terminal(agent, id).attach(invocation.uplink<TerminalInput>(), this.config, signal, invocation.uplinkWindow)
   }
 
   /**

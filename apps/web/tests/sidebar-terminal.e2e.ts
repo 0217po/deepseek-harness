@@ -568,7 +568,14 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
       const frames: {
         type: string
         streamId: string
-        value?: { type: string; data?: string; sequence?: number; writable?: boolean; refusal?: string }
+        value?: {
+          type: string
+          data?: string
+          sequence?: number
+          writable?: boolean
+          refusal?: string
+          inputWindow?: { maxBytes: number; frameOverheadBytes: number }
+        }
         error?: { code: string }
       }[] = []
       const waiters = new Set<() => void>()
@@ -607,12 +614,44 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
         await new Promise<void>((resolve) => { socket.addEventListener('close', () => { resolve() }, { once: true }) })
       }
     }, { sessionId, terminalId })
+    const window = result.find(frame => frame.streamId === 'first' && frame.value?.type === 'snapshot')?.value?.inputWindow
+    expect(window).toEqual({
+      maxBytes: 262_144,
+      frameOverheadBytes: Buffer.byteLength(JSON.stringify({ type: 'item', streamId: 'first', value: null }), 'utf8') - 'null'.length,
+    })
     expect(result.some(frame => frame.streamId === 'first' && frame.value?.type === 'state' && !frame.value.writable)).toBe(true)
     expect(result.find(frame => frame.streamId === 'first' && frame.value?.type === 'ack')?.value)
       .toEqual({ type: 'ack', sequence: 1, refusal: 'read-only' })
     expect(result.find(frame => frame.streamId === 'second' && frame.type === 'error')?.error?.code).toBe('gateway/input-invalid')
     expect(handles).toHaveLength(1)
     expect(tripwire.pageErrors).toEqual([])
+  })
+
+  it('delivers a short-key burst through the real mux while the provider pauses input', async () => {
+    onTestFailed(() => saveFailureShot(page, 'sidebar-terminal-input-window'))
+    await openTerminal(page)
+    const handle = handles[0]!
+    const write = handle.write.bind(handle)
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const paused = vi.spyOn(handle, 'write').mockImplementation(async (data) => {
+      entered.resolve(undefined)
+      await release.promise
+      await write(data)
+    })
+    try {
+      await page.locator('.xterm-helper-textarea:visible').click()
+      await page.keyboard.type(`printf 'BUFFER_%s\\n' OK # ${'a'.repeat(3000)}`)
+      await entered.promise
+      expect(paused).toHaveBeenCalledTimes(1)
+      release.resolve(undefined)
+      await page.keyboard.press('Enter')
+      await expect.poll(() => page.locator('.xterm-rows:visible').innerText()).toContain('BUFFER_OK')
+      expect(handles).toHaveLength(1)
+      expect(tripwire.pageErrors).toEqual([])
+    } finally {
+      release.resolve(undefined)
+    }
   })
 
   it('offers reconnection after transport loss and resumes the same process without a new terminal', async () => {
