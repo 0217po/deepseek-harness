@@ -215,7 +215,7 @@ Host lib build
 → Vite 构建 Web
 ```
 
-顶层 `build` 运行 `scripts/build.ts` 中的步骤图，先完成 Host bundle 与 Remote artifact，再启动 Client TypeScript 编译。`build:lib` 仍是 `build:bench` 使用的完整串行 lib 构建，其 Host 部分 `build:lib:host` 供 `typecheck` 与 vendor 发布 workflow 使用。一次干净构建不能依赖上次残留的 `.d.ts`。
+顶层 `build` 运行 `scripts/build.ts` 中的步骤图，先完成 Host bundle 与 Remote artifact，再启动 Client TypeScript 编译。`build:lib` 仍是 `build:bench` 使用的完整串行 lib 构建，其 Host 部分 `build:lib:host` 供 vendor 发布 workflow 使用。`typecheck` 与 Host 编译并行，经 `scripts/generate-typert.ts` 写出 Remote artifact，再启动 Client TypeScript 编译。一次干净构建不能依赖上次残留的 `.d.ts`。
 
 即使主要输入是源文件，需要通过编译器解析消费方 surface 的仓库门禁也有相同的前置条件。公共 `typecheck`、`lint` 和 `doc-typecheck` 命令会先执行 Host 约定 pass。门禁调度器仅可在显式的 Typert 约定依赖或完整构建依赖完成后使用对应的 `*:contracts-ready` 变体，使并行 lane 既不会读取缺失的声明，也不会针对同一输出并发运行多个生成器。
 

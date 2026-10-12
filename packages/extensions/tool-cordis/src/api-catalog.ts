@@ -203,7 +203,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote(\'select\') async select(agent: Agent, agentPreset: string): Promise<string>',
-        description: 'Select a preset before a session starts its first turn.',
+        description: 'Select a preset before a session starts its first turn. A Session whose log records the preset and whose Agent runs its current revision keeps its composition; nothing is logged or announced.',
         parameters: [{ name: 'agent', description: 'Target Agent.' }, { name: 'agentPreset', description: 'Requested identity.' }],
         returns: 'Committed preset identity.',
       },
@@ -1983,9 +1983,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote(\'create\') create(request: SessionCreateRequest): Promise<SessionCreateValue>',
-        description: 'Create or idempotently adopt one ordinary Session.',
-        parameters: [{ name: 'request', description: 'requested identity, location, and Agent preset.' }],
-        returns: 'the Session identity and resolved preset when configured.',
+        description: 'Create one ordinary Session for a new conversation, reusing the named blank Session while it is reusable.',
+        parameters: [{ name: 'request', description: 'optional blank Session to reuse, location, and Agent preset.' }],
+        returns: 'the created or reused Session identity and its preset when configured.',
       },
       {
         signature: '@Remote(\'selectModel\') selectModel(request: SessionSelectModelRequest): Promise<SessionSelectModelValue>',

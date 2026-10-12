@@ -217,12 +217,10 @@
   "packages/api/session-controller/tests/agent.host.spec.ts": {
     "40b9b8efe71e65b5bddad33acf9b7595d58a7427f077e3aa9ccc488ebb23f4d0": 1,
     "4ddb5771e76b6c641d7049711207ce32902b1599afc4736514bab35c6e1fdf07": 1,
-    "65a8ca744226b51c6d14cca4d9b98aeb74b36fddce821aa5a3ea00c3b01d5aed": 1,
     "d381c9934a9225f359ab85e75d8823e512d0bf3500c9523ab22fc83d400b8f39": 1
   },
   "packages/api/session-controller/tests/commands-create-fork.host.spec.ts": {
     "9910c2717b4be0b1d931a81447639094b314012297de3133d0557df9d2f76401": 1,
-    "d961dc67779f636692251bbcf8c152c886f273e0f821202e9d13a4ee4ed063f7": 1,
     "e929814f19128d947cc0188ecfe39833ffd5cf3f2c7155ddfef94ba9740d2bfd": 1
   },
   "packages/api/session-controller/tests/commands-queue-attachment.host.spec.ts": {
