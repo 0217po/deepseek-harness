@@ -255,6 +255,18 @@ match 结果带 `exclusive: true` 时，即在该 Definition 的 target 上认�
 
 `target` 与 `buildViewNode(context)` 必须同时声明一项由 target 拥有的渲染贡献。把 `context.key` 保留为 React 侧身份，根据持久排序证据选择 `anchorSeq`，并且只返回 renderer 可以直接使用的数据。某个 target Node 一旦发布，就要继续返回同一个 key；需要暂时离开可见流时使用 `visibility: 'hidden'`，不要改为返回 `null` 撤回它。
 
+Chat Node 还通过 `groupTree` 选择所在行的位置。位置由外到内排列，站在某个位置的 Node 同时具有所有内层位置的效果。Chat 的过程分组、整轮折叠和轮次输入判断只读取这个位置；完整契约见 [group-tree.ts](../../packages/client/ui-chat/src/client/contract/group-tree.ts)。
+
+| Node 是 | 声明 |
+|---|---|
+| Step 1 认领的人的输入，所在轮次开启一个交互段 | `exchange` |
+| 所在轮次的其他输入，如之后的人的输入或触发通知；位于过程之前时是开场输入，之后出现时整个轮次保持展开 | `input` |
+| 留在整轮折叠之外的轮次通知，如错误或已完成轮次页脚 | `turn` |
+| 整轮折叠仍会隐藏的独立行，如模型重试 | `process` |
+| 并入相邻步骤组的普通过程内容 | 不声明 `groupTree` |
+
+各内置 Node 声明的位置见 [Chat 业务规则](../../packages/client/ui-chat/src/client/conversation-nodes/README.zh.md#process-grouping)。如果同一 target 的通用 Definition 也会匹配你的 Node 所呈现的事件，按上文用 `exclusive: true` 认领该事件。
+
 ## Predecessor read
 
 有些 Definition 需要另一个业务 kind 在当前位置之前的最新 State。`start` 会收到 `ConversationContextReader`；应在这里调用 `reader.previous<State>(kind)`，不要接收 Context 集合或扫描事件。Reader 返回当前 start `seq` 之前最近一个已启动 Context 的只读数据。

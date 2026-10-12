@@ -253,6 +253,18 @@ A match result with `exclusive: true` claims that event on the Definition's targ
 
 `target` and `buildViewNode(context)` declare one target-owned rendering contribution and must appear together. Preserve `context.key` as the React-facing identity, choose `anchorSeq` from the matched event ordering, and return only renderer-ready data. Once a target Node has been published, keep returning the same key; use `visibility: 'hidden'` when it must temporarily leave the visible flow rather than withdrawing it with `null`.
 
+A Chat Node also chooses where its row stands through `groupTree`. Positions are ordered from the outermost inward, and a Node at a position also has the effect of every inner one. Chat process grouping, whole-Turn folding, and Turn-input detection read only this position; [group-tree.ts](../../packages/client/ui-chat/src/client/contract/group-tree.ts) holds the complete contract.
+
+| The Node is | Declare |
+|---|---|
+| A person's input claimed in Step 1; its Turn opens an exchange | `exchange` |
+| Another input of its Turn, such as later human input or a trigger notice; before the process it is the opening input, after it the whole Turn stays open | `input` |
+| A Turn notice that stays outside whole-Turn folding, such as an error or the completed-turn footer | `turn` |
+| An independent row that whole-Turn folding still hides, such as a model retry | `process` |
+| Ordinary process content that joins the surrounding step run | omit `groupTree` |
+
+The [Chat business rules](../../packages/client/ui-chat/src/client/conversation-nodes/README.md#process-grouping) list the positions the built-in Nodes declare. When a generic Definition of the same target also matches the event your Node presents, claim the event with `exclusive: true` as described above.
+
 ## Predecessor reads
 
 Some Definitions need the latest earlier State of another business kind. `start` receives a `ConversationContextReader`; call `reader.previous<State>(kind)` there instead of accepting a Context collection or scanning events. The reader returns the nearest started Context before the current start `seq` as read-only data.
