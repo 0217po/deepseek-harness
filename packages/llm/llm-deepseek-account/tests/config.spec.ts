@@ -6,15 +6,9 @@ import { Config, plainAccountOptions, resolveAccountOptions } from '../src/confi
 it('derives the listing endpoint from the Messages origin and applies the cache defaults', () => {
   expect(resolveAccountOptions({}).catalog).toEqual({ url: 'https://api.deepseek.com/models', timeoutMs: 5_000, maxAgeMs: 600_000 })
   expect(resolveAccountOptions({ baseURL: 'http://127.0.0.1:9/anthropic' }).catalog.url).toBe('http://127.0.0.1:9/models')
-  expect(resolveAccountOptions({ baseURL: 'http://127.0.0.1:9/anthropic', modelsURL: 'http://127.0.0.1:9/v2/models' }).catalog.url)
-    .toBe('http://127.0.0.1:9/v2/models')
 })
 
 it.each([
-  [{ modelsURL: 'models' }, /modelsURL must be an absolute HTTP\(S\) URL/],
-  [{ modelsURL: 'ftp://api.deepseek.com/models' }, /without credentials, query, or fragment/],
-  [{ modelsURL: 'https://api.deepseek.com/models?all=1' }, /without credentials, query, or fragment/],
-  [{ modelsURL: 'https://other.example/models' }, /must share the Messages baseURL origin/],
   [{ modelsTimeoutMs: 0 }, /modelsTimeoutMs must be a positive finite number/],
   [{ modelsTimeoutMs: MAX_TIMER_DELAY_MS + 1 }, /modelsTimeoutMs must be a positive finite number/],
   [{ modelsMaxAgeMs: -1 }, /modelsMaxAgeMs must be a non-negative safe integer/],

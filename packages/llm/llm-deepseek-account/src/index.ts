@@ -33,11 +33,11 @@ function refuse(model: string, refusal: CatalogRefusal | undefined): void {
   switch (refusal.kind) {
     case 'upgrade-required':
       throw new LlmError(
-        `DeepSeek model "${model}" requires DeepSeek Harness ${refusal.requiredVersion} or later; this build is ${APP_IDENTITY.version}`,
+        `DeepSeek model "${model}" requires DeepSeek Harness ${refusal.requiredVersion} or later; current version is ${APP_IDENTITY.version}`,
         'CLIENT_UPGRADE_REQUIRED',
       )
     case 'unsupported':
-      throw new LlmError(`DeepSeek model "${model}" is not supported by DeepSeek Harness ${APP_IDENTITY.version}`, 'MODEL_UNSUPPORTED')
+      throw new LlmError(`DeepSeek model "${model}" is not supported by DeepSeek Harness; current version is ${APP_IDENTITY.version}`, 'MODEL_UNSUPPORTED')
     /* v8 ignore next 2 -- catalog resolution produces only the closed refusal union */
     default:
       assertNever(refusal, 'account catalog refusal')

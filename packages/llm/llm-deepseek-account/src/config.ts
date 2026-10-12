@@ -17,8 +17,6 @@ export type ModelOverride = Omit<DeepSeekCatalogModel, 'id'>
 
 /** Account route configuration; authentication comes exclusively from the account service. */
 export interface Config extends Omit<ProtocolConfig, 'models'> {
-  /** Model-listing endpoint; defaults to `/models` at the Messages `baseURL` origin, which it must share. */
-  modelsURL: Volatile<string | undefined>
   /** Deadline of one listing request, which also bounds a first-use wait (default five seconds). */
   modelsTimeoutMs: Volatile<number>
   /**
@@ -26,7 +24,7 @@ export interface Config extends Omit<ProtocolConfig, 'models'> {
    * a failed load retries after the same age (default ten minutes).
    */
   modelsMaxAgeMs: Volatile<number>
-  /** Field overrides by model id, layered over the account listing and this build's model knowledge. */
+  /** Field overrides by model id, layered over the account listing and the built-in catalog. */
   modelOverrides: Volatile<Record<string, ModelOverride>>
 }
 
@@ -40,7 +38,6 @@ const modelOverride: z<ModelOverride> = z.object({
 
 export const Config = z.object({
   ...protocolFields,
-  modelsURL: z.string().volatile(),
   modelsTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_MODELS_TIMEOUT_MS).volatile(),
   modelsMaxAgeMs: z.number().step(1).min(0).max(Number.MAX_SAFE_INTEGER).default(DEFAULT_MODELS_MAX_AGE_MS).volatile(),
   modelOverrides: z.dict(modelOverride).default({}).volatile(),
@@ -48,7 +45,6 @@ export const Config = z.object({
 
 /** Plain account options accepted by {@link resolveAccountOptions}. */
 export type AccountOptions = Omit<ProtocolOptions, 'models'> & {
-  modelsURL?: string
   modelsTimeoutMs?: number
   modelsMaxAgeMs?: number
   modelOverrides?: Record<string, ModelOverride>
@@ -83,21 +79,9 @@ export function plainAccountOptions(config: Config): AccountOptions {
   return Object.fromEntries(Object.entries(config).map(([key, value]) => [key, isVolatile(value) ? value.get() : value]))
 }
 
-function listingEndpoint(explicit: string | undefined, baseURL: string): string {
-  const messages = new URL(baseURL)
-  let url: URL
-  try {
-    url = explicit === undefined ? new URL('/models', messages.origin) : new URL(explicit)
-  } catch (error) {
-    throw new Error('llm-deepseek-account: modelsURL must be an absolute HTTP(S) URL', { cause: error })
-  }
-  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
-    throw new Error('llm-deepseek-account: modelsURL must be an HTTP(S) URL without credentials, query, or fragment')
-  }
-  if (url.origin !== messages.origin) {
-    throw new Error('llm-deepseek-account: modelsURL must share the Messages baseURL origin, the only origin that receives the account token')
-  }
-  return url.href
+/** The listing endpoint: `/models` at the Messages origin, the only origin that receives the account token. */
+function listingEndpoint(baseURL: string): string {
+  return new URL('/models', new URL(baseURL).origin).href
 }
 
 /** Keep an override's declared fields: parsed configuration carries unset fields as `undefined` and unset arrays as `[]`. */
@@ -132,7 +116,7 @@ export function resolveAccountOptions(options: AccountOptions, environment?: Lau
       + 'Remove models from this entry and adjust single models with modelOverrides.<model id>')
   }
   const {
-    modelsURL, modelsTimeoutMs = DEFAULT_MODELS_TIMEOUT_MS, modelsMaxAgeMs = DEFAULT_MODELS_MAX_AGE_MS,
+    modelsTimeoutMs = DEFAULT_MODELS_TIMEOUT_MS, modelsMaxAgeMs = DEFAULT_MODELS_MAX_AGE_MS,
     modelOverrides = {}, ...protocolOptions
   } = options
   if (!Number.isFinite(modelsTimeoutMs) || modelsTimeoutMs <= 0 || modelsTimeoutMs > MAX_TIMER_DELAY_MS) {
@@ -144,7 +128,7 @@ export function resolveAccountOptions(options: AccountOptions, environment?: Lau
   const protocol = resolveAdapterOptions(protocolOptions, environment)
   return {
     protocol,
-    catalog: { url: listingEndpoint(modelsURL, protocol.baseURL), timeoutMs: modelsTimeoutMs, maxAgeMs: modelsMaxAgeMs },
+    catalog: { url: listingEndpoint(protocol.baseURL), timeoutMs: modelsTimeoutMs, maxAgeMs: modelsMaxAgeMs },
     modelOverrides: Object.fromEntries(Object.entries(modelOverrides).map(([id, override]) => [id, resolveOverride(id, override)])),
   }
 }

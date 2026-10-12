@@ -127,7 +127,7 @@ export function resolveAccountCatalog(input: AccountCatalogInput): AccountCatalo
   const listedIds = new Set(input.listing.map(entry => entry.id))
   for (const id of Object.keys(input.overrides)) {
     if (!listedIds.has(id) && !supported.has(id)) {
-      overrideErrors.push(`modelOverrides names "${id}", which neither the account listing nor this build describes`)
+      overrideErrors.push(`modelOverrides names "${id}", which neither the account listing nor the built-in catalog describes`)
     }
   }
   const resolution = resolveAdapterOptions({

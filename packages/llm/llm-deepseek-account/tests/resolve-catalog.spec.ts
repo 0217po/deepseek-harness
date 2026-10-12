@@ -136,7 +136,7 @@ describe('with a listing', () => {
     expect(catalog.offered[0]).not.toHaveProperty('imageMaxBytes')
     expect(catalog.overrideErrors).toEqual([
       expect.stringMatching(/^modelOverrides\.deepseek-v4-pro does not apply \(.*cannot declare image request limits/),
-      'modelOverrides names "retired", which neither the account listing nor this build describes',
+      'modelOverrides names "retired", which neither the account listing nor the built-in catalog describes',
     ])
   })
 })

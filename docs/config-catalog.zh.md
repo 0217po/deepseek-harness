@@ -1717,8 +1717,6 @@ export interface Config {
 ```ts config-catalog
 /** Account route configuration; authentication comes exclusively from the account service. */
 export interface Config extends Omit<ProtocolConfig, 'models'> {
-  /** Model-listing endpoint; defaults to `/models` at the Messages `baseURL` origin, which it must share. */
-  modelsURL: Volatile<string | undefined>
   /** Deadline of one listing request, which also bounds a first-use wait (default five seconds). */
   modelsTimeoutMs: Volatile<number>
   /**
@@ -1726,7 +1724,7 @@ export interface Config extends Omit<ProtocolConfig, 'models'> {
    * a failed load retries after the same age (default ten minutes).
    */
   modelsMaxAgeMs: Volatile<number>
-  /** Field overrides by model id, layered over the account listing and this build's model knowledge. */
+  /** Field overrides by model id, layered over the account listing and the built-in catalog. */
   modelOverrides: Volatile<Record<string, ModelOverride>>
 }
 
