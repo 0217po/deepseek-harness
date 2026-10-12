@@ -255,3 +255,20 @@ describe('desktop macOS release signature', () => {
     expect(verified).toEqual(['/tmp/release.dmg'])
   })
 })
+
+it('signs debugging artifacts without Apple credentials and isolates them from releases', async () => {
+  const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
+  const config = createElectronBuilderConfig({ ...RELEASE_ENVIRONMENT,
+    APPLE_API_KEY: undefined, APPLE_API_KEY_ID: undefined, APPLE_API_ISSUER: undefined,
+    DSH_DESKTOP_MACOS_SKIP_NOTARIZATION: '1',
+  }, 'darwin', 'arm64')
+  expect(config.mac.forceCodeSigning).toBe(true)
+  expect(config.mac.notarize).toBe(false)
+  expect(config.dmg.sign).toBe(true)
+  expect(config.mac).toMatchObject({ target: ['dmg', 'zip'] })
+  expect(config.artifactName).toContain('-unnotarized.')
+  expect(portablePath(config.directories.output)).toContain('/unnotarized-artifacts')
+  expect(config.artifactBuildCompleted({ file: 'debug.dmg' })).toBeUndefined()
+  expect(() => createElectronBuilderConfig({ ...RELEASE_ENVIRONMENT, DSH_DESKTOP_MACOS_SKIP_NOTARIZATION: 'yes' }, 'darwin', 'arm64')).toThrow(/must be 0 or 1/u)
+  expect(() => createElectronBuilderConfig({ ...RELEASE_ENVIRONMENT, DSH_DESKTOP_MACOS_SKIP_NOTARIZATION: '1', DSH_DESKTOP_UNSIGNED: '1' }, 'darwin', 'arm64')).toThrow(/requires a signed macOS build/u)
+})

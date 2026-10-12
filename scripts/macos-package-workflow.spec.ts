@@ -25,5 +25,16 @@ it('confines signed Mac packaging to manual dispatch and a dedicated Apple Silic
   expect(uploads).toHaveLength(2)
   expect(uploads[0]?.if).toBe("always() && steps.checkout.outcome == 'success'")
   expect(uploads[1]?.if).toBe('success()')
-  expect(uploads[1]?.with?.path).toBe('apps/desktop/.desktop-build/targets/mac-arm64/artifacts/*.dmg\napps/desktop/.desktop-build/targets/mac-arm64/artifacts/*.zip\n')
+  expect(uploads[1]?.with?.path).toBe('apps/desktop/.desktop-build/targets/mac-arm64/${{ steps.settings.outputs.artifacts }}/*.dmg\napps/desktop/.desktop-build/targets/mac-arm64/${{ steps.settings.outputs.artifacts }}/*.zip\n')
+})
+
+
+it('defaults to notarization and labels the explicit debugging option', () => {
+  expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: { skip_notarization: {
+    type: 'boolean', default: false,
+    description: 'Skip notarization/stapling: internal debugging only, not for distribution or updates',
+  } } })
+  const steps = workflow.jobs.package!.steps
+  expect(steps.filter(step => step.run?.includes('args+=(--skip-notarization)'))).toHaveLength(2)
+  expect(steps.at(-1)?.with?.name).toContain('${{ steps.settings.outputs.mode }}')
 })

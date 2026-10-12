@@ -59,3 +59,39 @@ it.skipIf(process.platform !== 'darwin')('prepares private machine directories w
     await rm(root, { recursive: true, force: true })
   }
 })
+
+it('records debugging artifact paths only for an explicit CI selection without notarization credentials', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'macos-ci-settings-'))
+  try {
+    await mkdir(join(root, 'presets'))
+    await mkdir(join(root, 'secrets'))
+    await writeFile(join(root, 'certificate.p12'), 'fixture')
+    await writeFile(join(root, 'presets/test.env'), [
+      'DSH_DESKTOP_APP_ID=com.example.fixture', 'DSH_DESKTOP_AUTO_UPDATE_ENV=test',
+      'DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN=https://policy.example.com',
+      'DSH_DESKTOP_MANDATORY_UPDATE_CONFIG={"allowedAuthOrigins":["https://login.example.com"]}',
+      'DOWNLOAD_TEST_ORIGIN=https://updates.example.com', 'DOWNLOAD_TEST_RELEASE_ID=0123456789abcdef0123456789abcdef',
+    ].join('\n'))
+    await writeFile(join(root, 'secrets/macos-signing.env'), [
+      'CSC_LINK=../certificate.p12', 'CSC_KEY_PASSWORD=fixture-password',
+      'DSH_DESKTOP_MACOS_SIGNING_IDENTITY=Example Company (TEAMID1234)', 'DSH_DESKTOP_MACOS_TEAM_ID=TEAMID1234',
+    ].join('\n'))
+    const output = join(root, 'output')
+    const summary = join(root, 'summary')
+    const run = (skip: string) => spawnSync(process.execPath,
+      [join(import.meta.dirname, '../scripts/prepare-macos-ci.mjs')], { encoding: 'utf8', env: {
+        ...process.env, DSH_PACKAGING_CONFIG_DIR: root, DSH_PACKAGING_PRESET: 'test',
+        PACKAGE_SKIP_NOTARIZATION: skip, PACKAGE_BUILD_VERSION: 'auto',
+        GITHUB_RUN_NUMBER: '1', GITHUB_RUN_ATTEMPT: '1', GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: summary,
+      } })
+    expect(run('false').status).toBe(1)
+    expect(run('yes').status).toBe(1)
+    const debugging = run('true')
+    expect(debugging.stderr).toBe('')
+    expect(debugging.status).toBe(0)
+    expect(await readFile(output, 'utf8')).toContain('artifacts=unnotarized-artifacts\nmode=unnotarized-debug\n')
+    expect(await readFile(summary, 'utf8')).toContain('Internal debugging only')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
