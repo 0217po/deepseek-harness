@@ -64,7 +64,6 @@ it('rejects missing presets, traversal, deployment mismatches and secrets in pub
     const load = (override = {}) => loadDesktopPackageEnvironment('win32', { ...env, ...override }, root, { unsigned: true })
     expect(() => load({ DSH_PACKAGING_CONFIG_DIR: 'relative' })).toThrow(/absolute/u)
     expect(() => load({ DSH_PACKAGING_CONFIG_DIR: undefined })).toThrow(/absolute/u)
-    expect(() => loadDesktopPackageEnvironment('darwin', env)).toThrow(/Windows only/u)
     expect(() => load({ DSH_PACKAGING_PRESET: '../secrets' })).toThrow(/preset must/u)
     expect(() => load({ DSH_PACKAGING_PRESET: 'production' })).toThrow(/cannot read/u)
     await writeFile(join(root, 'presets/test.env'), 'DSH_DESKTOP_AUTO_UPDATE_ENV=production\n')

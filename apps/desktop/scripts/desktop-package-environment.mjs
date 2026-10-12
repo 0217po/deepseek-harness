@@ -33,31 +33,38 @@ export function localMacOSPackageEnvironment(environment = process.env) {
 }
 
 /**
- * Read a Windows machine preset when selected, otherwise the target's required dotenv; no ambient release fallback.
+ * Read a machine preset when selected, otherwise the target's required dotenv; no ambient release fallback.
  * @param {'win32' | 'darwin'} platform Target platform.
  * @param {NodeJS.ProcessEnv} environment Parent environment, retained only for unrelated build tools.
  * @param {string} appRoot Desktop application directory; relative credential paths resolve here.
- * @param {{ unsigned?: boolean, prepareOnly?: boolean }} options Unsigned and preparation-only presets never read signing credentials.
+ * @param {{ unsigned?: boolean, prepareOnly?: boolean }} options Unsigned presets and Windows preparation-only presets never read signing credentials.
  * @returns {NodeJS.ProcessEnv} Isolated environment with file-owned release settings.
  */
 export function loadDesktopPackageEnvironment(platform, environment = process.env, appRoot = APP_ROOT, options = {}) {
   const preset = environment.DSH_PACKAGING_PRESET
   let path = join(appRoot, platform === 'win32' ? '.env.windows' : '.env.macos')
   if (preset !== undefined) {
-    if (platform !== 'win32') throw new Error('desktop package: presets support Windows only')
     if (preset !== 'test' && preset !== 'production') throw new Error('desktop package: preset must be test or production')
     const root = environment.DSH_PACKAGING_CONFIG_DIR
     if (!root || !isAbsolute(root)) throw new Error('desktop package: DSH_PACKAGING_CONFIG_DIR must be an absolute directory')
     path = join(root, 'presets', `${preset}.env`)
   }
   const platformSetting = platform === 'win32' ? WINDOWS_SETTING : MACOS_SETTING
+  const publicPlatformSetting = platform === 'win32'
+    ? /^DSH_DESKTOP_WINDOWS_SIGNATURE_CACHE_(?:DIR|CONCURRENCY)$/u
+    : /^DSH_DESKTOP_MACOS_(?:PACK_CONCURRENCY|DOWNLOAD_PROXY|NOTARIZATION_PROXY)$/u
   const settings = readSettings(path, name => preset === undefined
     ? SHARED_SETTING.test(name) || platformSetting.test(name)
-    : /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN)|WINDOWS_SIGNATURE_CACHE_(?:DIR|CONCURRENCY))|DOWNLOAD_TEST_(?:ORIGIN|RELEASE_ID))$/u.test(name))
+    : /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN))|DOWNLOAD_TEST_(?:ORIGIN|RELEASE_ID))$/u.test(name) || publicPlatformSetting.test(name))
   if (preset !== undefined) {
     if (settings.DSH_DESKTOP_AUTO_UPDATE_ENV !== preset) throw new Error('desktop package: preset deployment must match its name')
-    if (!options.unsigned && !options.prepareOnly) Object.assign(settings, readSettings(join(dirname(dirname(path)), 'secrets', 'windows-signing.env'),
-      name => /^DSH_DESKTOP_WINDOWS_(?:CER_FILE|SIGNTOOL|KEY_CONTAINER|TOKEN_PIN)$/u.test(name)))
+    if (!options.unsigned && (platform === 'darwin' || !options.prepareOnly)) {
+      const filename = platform === 'win32' ? 'windows-signing.env' : 'macos-signing.env'
+      Object.assign(settings, readSettings(join(dirname(dirname(path)), 'secrets', filename),
+        name => platform === 'win32'
+          ? /^DSH_DESKTOP_WINDOWS_(?:CER_FILE|SIGNTOOL|KEY_CONTAINER|TOKEN_PIN)$/u.test(name)
+          : MACOS_SETTING.test(name) && !publicPlatformSetting.test(name)))
+    }
   }
   return {
     ...Object.fromEntries(Object.entries(environment).filter(([name]) => !AMBIENT_RELEASE_SETTING.test(name))),
