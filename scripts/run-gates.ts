@@ -92,8 +92,8 @@ export interface ConcurrencyDefault {
 type GateExecutor = (gate: Gate, signal?: AbortSignal) => Promise<GateResult>
 type ResultObserver = (result: GateResult) => void
 
-/** Worker cap of the local documentation and hygiene aggregates, whose leaves each build a full ts.Program. */
-const LOCAL_PROGRAM_MODE_CAP = 8
+/** Worker cap of the documentation and hygiene aggregates, locally and in CI, whose leaves each build a full ts.Program. */
+const PROGRAM_MODE_CAP = 8
 
 const root = resolve(import.meta.dirname, '..')
 if (import.meta.main) {
@@ -191,16 +191,16 @@ export function defaultConcurrency(
 ): ConcurrencyDefault {
   const budget = defaultParallelism(env, cpus)
   const budgetSource = describeDefaultParallelism(env, cpus)
-  // Local modes cap workers: several doc gates each build a full ts.Program,
+  // These modes cap workers: several doc gates each build a full ts.Program,
   // so an uncapped default on a large host trades wall clock for memory blowups.
   const localCap = selectedMode === 'check-all'
     || selectedMode === 'hygiene'
     || selectedMode === 'doc-sync'
     || selectedMode === 'doc-quick'
-  const modeLimit = localCap ? Math.min(LOCAL_PROGRAM_MODE_CAP, budget) : budget
+  const modeLimit = localCap ? Math.min(PROGRAM_MODE_CAP, budget) : budget
   return {
     workers: Math.min(total, modeLimit),
-    source: localCap ? `${budgetSource}, ${selectedMode} cap ${String(LOCAL_PROGRAM_MODE_CAP)}` : budgetSource,
+    source: localCap ? `${budgetSource}, ${selectedMode} cap ${String(PROGRAM_MODE_CAP)}` : budgetSource,
   }
 }
 

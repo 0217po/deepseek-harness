@@ -51,7 +51,7 @@ Status: implemented
 
 - **共用生成：** [`scripts/generate-typert.ts`](../../../../scripts/generate-typert.ts) 对 `WORKSPACE_TYPERT_FACES`（[`scripts/typert-faces.ts`](../../../../scripts/typert-faces.ts)，即 Host tsdown 插件同样生成的 face）调用 `WorkspaceTypertGenerator.generateContributors()`，并用 [`artifact-files.ts`](../../../../packages/typert/generator/src/artifact-files.ts) 中插件同样使用的 `writeWorkspaceArtifacts()` 写出结果。与插件一样，它跳过 TypeScript 诊断，这些诊断由 Host 包编译报告；Typert 分析错误使 host-typert 失败，正如它在 `build` 中使 Host bundle 失败。host-typert 由 Node 加 tsx 的 ESM 钩子运行，而不经 `pnpm exec`，因为后者的启动开销会拉长通往 Client 编译的路径。
 - **以 build mode 运行聚合检查：** host-check 与 client-check 在本侧 face 的包编译之后才开始，因此 build mode 发现所有 references 都是最新的，只检查聚合根程序，并在根程序的 tsbuildinfo 为最新时跳过它。
-- **只读源码的分析：** host-typert 能与 host-src 并行，是因为它的 Host program 不读取任何工作区构建产物。`tsconfig.base.json` 把 `@deepseek-ai/dsh-client-file-upload/types` 映射到源码；没有这条别名时，该说明符经包 `exports` 解析到 `lib/types/types.d.ts`。有了它，Host program 加载 1,289 个文件，其中没有一个位于工作区包的 `lib/` 下。`generate-typert.ts` 开启 `rejectBuildOutputs`：face program 加载工作区包 `lib/` 目录下的文件时，[`build-output-guard.ts`](../../../../packages/typert/generator/src/build-output-guard.ts) 以 `TypertAnalysisError` 使分析失败，并指出解析到那里的每个 import 说明符，以及把它映射到源码的 `paths` 条目。tsdown 插件不开启该选项，因为在 `build` 中 Typert 总在 Host 包编译之后运行。[Typert generator README](../../../../packages/typert/generator/README.zh.md) 记录了这些写入函数与该选项。
+- **只读源码的分析：** host-typert 能与 host-src 并行，是因为它的 Host program 不读取任何工作区构建产物。`tsconfig.base.json` 把 `@deepseek-ai/dsh-client-file-upload/types` 映射到源码；没有这条别名时，该说明符经包 `exports` 解析到 `lib/types/types.d.ts`。有了它，Host program 加载 1,289 个文件，其中没有一个位于工作区包的 `lib/` 下。`generate-typert.ts` 开启 `rejectBuildOutputs`：face program 加载工作区包 `lib/` 目录下的文件，或无法解析对工作区包的 import（例如包尚未编译的工作区）时，[`build-output-guard.ts`](../../../../packages/typert/generator/src/build-output-guard.ts) 以 `TypertAnalysisError` 使分析失败，并指出每个这样的 import 说明符，以及把它映射到源码的 `paths` 条目。因此无论 host-src 是否已运行，缺失的别名都会使生成失败。tsdown 插件不开启该选项，因为在 `build` 中 Typert 总在 Host 包编译之后运行。[Typert generator README](../../../../packages/typert/generator/README.zh.md) 记录了这些写入函数与该选项。
 - **无损依据：** 没有任何工作区 tsconfig 设置 `allowJs`，每个 `exports` 的 `types` 条件都指向 `lib/types/` 内或 `lib/typert.*`，每个 tsdown 配置都设置 `dts: false`，因此没有类型检查读取 tsdown 产物。140 个 Typert 文件（28 个包 × 5 个输出）在以下场景中逐字节一致：基线 tsdown 阶段、当前 tsdown 阶段、删除全部 Typert 输出后运行 `generate-typert.ts`、隐藏全部 344 个 `lib/types` 目录后运行 `generate-typert.ts`；临时给 `packages/goal/goal` 加一个 Remote 方法时，tsdown 阶段与 `generate-typert.ts` 写出的文件也相同。`typecheck` 检查两个 face 的全部包 project 与两个聚合根程序，即 `build` 检查的程序。
 - **性能：** 无需重查时 `typecheck` 为 34.1/35.0 → 21.9/20.0 s。两个聚合根程序都需要重查时为 83.5 → 76.0/72.1 s，其关键路径是约 66–70 s 的 Host 聚合检查。`lint` 与 `doc-typecheck` 的前置步骤为 52.2/29.6 → 12.5/11.3 s。
 - **取舍：** `typecheck`、`lint`、`lint:fix`、`doc-typecheck` 与 `typert-contracts` 写出 Typert 声明但不写 bundle，因此在下一次 `build:artifacts` 之前，可运行的 `lib/` JavaScript 可能落后于这些声明。
@@ -67,7 +67,7 @@ Status: implemented
 ### 3. 本地默认 worker 预算
 
 - **目的：** 按共享工作站或容器确定默认并行度；在这类环境中 Node 报告的是宿主 CPU 数而不是 CPU 配额。
-- **改动：** [`scripts/parallelism.ts`](../../../../scripts/parallelism.ts) 拥有默认值。`CI=true` 时它是 Node 报告的 CPU 数。否则，run-gates 调度器、`build`、`typecheck`、Oxlint 与 publint 的上限为 12（`LOCAL_PARALLELISM_CAP`），Vitest fork 与本地覆盖率预算的上限为 48（`LOCAL_TEST_PARALLELISM_CAP`）。`doc-sync`、`test:docs`、`hygiene` 与 `check:all` 的每个门禁都构建完整的 `ts.Program`，它们最多并发 8 个门禁。显式的 `DSH_GATE_CONCURRENCY`、`DSH_OXLINT_THREADS`、`DSH_COVERAGE_MAX_WORKERS` 与 Vitest `--maxWorkers` 优先；CI 中，除非 run-gates 的 CI 环境设置了这些变量，Vitest 与 Oxlint 使用各自的默认值。[开发指南](../../../../docs/development.zh.md)向贡献者说明这些默认值。
+- **改动：** [`scripts/parallelism.ts`](../../../../scripts/parallelism.ts) 拥有默认值。`CI=true` 时它是 Node 报告的 CPU 数。否则，run-gates 调度器、`build`、`typecheck`、Oxlint 与 publint 的上限为 12（`LOCAL_PARALLELISM_CAP`），Vitest fork 与本地覆盖率预算的上限为 48（`LOCAL_TEST_PARALLELISM_CAP`）。`doc-sync`、`test:docs`、`hygiene` 与 `check:all` 的每个门禁都构建完整的 `ts.Program`，它们最多并发 8 个门禁，CI 中同样如此。显式的 `DSH_GATE_CONCURRENCY`、`DSH_OXLINT_THREADS`、`DSH_COVERAGE_MAX_WORKERS` 与 Vitest `--maxWorkers` 优先；CI 中，除非 run-gates 的 CI 环境设置了这些变量，Vitest 与 Oxlint 使用各自的默认值。[开发指南](../../../../docs/development.zh.md)向贡献者说明这些默认值。
 
 四种 fork 数下的 `pnpm run test`，运行的是第 8 项所替换的落盘版 `type-model.spec.ts`，32 个 worker 那次的 wall 由它决定：
 
@@ -80,7 +80,7 @@ Status: implemented
 
 - **Oxlint：** Oxlint 自身的默认值是 64 线程（读取 cgroup 配额）；12 线程时其 wall 保持约 87–90 s，CPU 少约 15%；8 线程时慢约 4 s。
 - **文档聚合：** 并发 8 个门禁时 `test:docs` 为 50.9 s，并发 4 个时为 74.7 s。不含第 4 项时测得的 `doc-sync` 在并发 4、8、12 个门禁时分别为 341.8、295.0、253.2 s，RSS 峰值分别为 10.0、13.5、16.3 GiB。
-- **取舍：** CPU 配额超过上限的机器，默认并行度也不超过 12 或 48，需要使用覆盖变量；配额低于上限的容器仍会超额订阅，因为 Node 报告的是宿主 CPU 数。并发 8 个门禁时 `doc-sync` 的 RSS 峰值为 13.5 GiB，并发 4 个时为 10.0 GiB；并发 12 个门禁快 41.8 s，但峰值为 16.3 GiB。
+- **取舍：** CPU 配额超过上限的机器，默认并行度也不超过 12 或 48，需要使用覆盖变量；配额低于上限的容器仍会超额订阅，因为 Node 报告的是宿主 CPU 数。并发 8 个门禁时 `doc-sync` 的 RSS 峰值为 13.5 GiB，并发 4 个时为 10.0 GiB；并发 12 个门禁快 41.8 s，但峰值为 16.3 GiB。CI 的文档 workflow 运行 `doc-sync` 时同样最多并发 8 个门禁。
 
 ### 4. 仓库引用候选对照一次对象列表解析
 
