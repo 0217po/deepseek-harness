@@ -176,7 +176,7 @@ Prefix-stable while the visible tool names are unchanged; adding or removing a v
 
 #### What the model sees
 
-When the calling agent reaches or exceeds a visible tool's effective numeric depth cap, a required runtime-context snapshot tells it to do the work directly. The cap is resolved again at each request, including after settings changes or session resume. Hidden tools and `provider-managed` limits contribute no depth text. For a child at depth one with a cap of one:
+When the calling agent reaches or exceeds a visible tool's effective numeric depth cap, an optional runtime-context snapshot tells it to do the work directly. The cap is resolved again at each request, including after settings changes or session resume. Hidden tools and `provider-managed` limits contribute no depth text. For a child at depth one with a cap of one:
 
 ##### Depth-limit notice
 
@@ -186,7 +186,7 @@ Delegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do no
 
 #### Token effect
 
-One short contribution per capped tool joins the user-role runtime-context snapshot. Unchanged snapshots are not appended again; agents below the cap receive no additional text. Optional-context suppression retains this operational limit notice.
+One short contribution per capped tool joins the user-role runtime-context snapshot. Unchanged snapshots are not appended again; agents below the cap receive no additional text. `includeRuntimeContext: false` suppresses this notice without changing runtime depth enforcement.
 
 #### KV Cache effect
 

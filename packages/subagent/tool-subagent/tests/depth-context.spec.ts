@@ -38,8 +38,14 @@ describe('delegation depth context', () => {
         + ' Do not call `subagent` at this depth; carry out the work directly.',
     ] : [])
     const restore = agent.ctx.systemPrompt.suppressRuntimeContext()
+    try {
+      expect(await depthContext(ctx, agent)).toEqual([])
+      expect(ctx.systemPrompt.refreshContext(assembly, assembleContextFor(agent))
+        .contexts.some(part => part.name.endsWith(':depth'))).toBe(false)
+    } finally {
+      restore()
+    }
     expect(await depthContext(ctx, agent)).toHaveLength(remaining === 0 ? 1 : 0)
-    restore()
   })
 
   it('uses the runtime depth when it is deeper than the saved header', async () => {

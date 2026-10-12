@@ -176,7 +176,7 @@ Start independent delegations with `subagent` or `subagent_fork` together in one
 
 #### 模型看到什么
 
-当调用方 agent 达到或超过某个可见工具实际生效的数值深度上限时，必需的运行时上下文快照会提示它直接完成工作。每次请求都会重新解析上限，包括 settings 变更或会话恢复之后。隐藏的工具和 `provider-managed` 上限不贡献深度文本。深度和上限都为一时，子 agent 看到：
+当调用方 agent 达到或超过某个可见工具实际生效的数值深度上限时，可选的运行时上下文快照会提示它直接完成工作。每次请求都会重新解析上限，包括 settings 变更或会话恢复之后。隐藏的工具和 `provider-managed` 上限不贡献深度文本。深度和上限都为一时，子 agent 看到：
 
 ##### 深度上限提示
 
@@ -186,7 +186,7 @@ Delegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do no
 
 #### Token 影响
 
-每个达到上限的工具向用户角色的运行时上下文快照贡献一小段文本。未变化的快照不会重复追加；未达到上限的 agent 不收到额外文本。抑制可选上下文时，仍保留这条操作限制提示。
+每个达到上限的工具向用户角色的运行时上下文快照贡献一小段文本。未变化的快照不会重复追加；未达到上限的 agent 不收到额外文本。`includeRuntimeContext: false` 会抑制这条提示，但不改变运行时对深度上限的强制执行。
 
 #### KV Cache 影响
 

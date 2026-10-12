@@ -387,7 +387,6 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
     runtimeCtx.systemPrompt.context({
       name: `tool:${toolName}:depth`,
       order: runtimeCtx.systemPrompt.getContextOrder('SUBAGENT_DELEGATION'),
-      required: true,
       text: (context) => {
         if (context.agent === undefined || mounted === undefined
           || runtimeCtx.tools.get(toolName, context.scope) !== mounted.definition) return ''
