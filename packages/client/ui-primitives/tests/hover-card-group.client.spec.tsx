@@ -131,7 +131,7 @@ describe('HoverCardGroup', () => {
     expect(screen.queryByText('details B')).toBeNull()
   })
 
-  it('resets warmth on physical portal exit without closing readable, copyable content', async () => {
+  it('shares warmth through readable, copyable portals until the pointer leaves both surfaces', async () => {
     const previous = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
     const writeText = vi.fn(async () => {})
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
@@ -149,16 +149,63 @@ describe('HoverCardGroup', () => {
       expect(writeText).toHaveBeenCalledWith('A')
       expect(screen.getByRole('status').textContent).toBe('Copied')
       move(portal, b)
-      expect(screen.queryByText('details B')).toBeNull()
-      tick(799)
-      expect(screen.queryByText('details B')).toBeNull()
-      tick(1)
       expect(screen.getByText('details B')).toBeTruthy()
       expect(screen.queryByRole('button', { name: 'Copy: A' })).toBeNull()
+      const secondPortal = screen.getByRole('button', { name: 'Copy: B' })
+      move(b, secondPortal)
+      move(secondPortal, document.body)
+      tick(300)
+      expect(screen.queryByText('details B')).toBeNull()
+      move(document.body, a)
+      tick(799)
+      expect(screen.queryByText('details A')).toBeNull()
+      tick(1)
+      expect(screen.getByText('details A')).toBeTruthy()
     } finally {
       if (previous === undefined) Reflect.deleteProperty(navigator, 'clipboard')
       else Object.defineProperty(navigator, 'clipboard', previous)
     }
+  })
+
+  it('bridges the list-to-card gaps with the active card existing pointer grace', () => {
+    render(<HoverCardGroup><Card name="A" /><Card name="B" /></HoverCardGroup>)
+    const a = screen.getByText('A')
+    const b = screen.getByText('B')
+    move(document.body, a)
+    tick(800)
+    const portal = screen.getByRole('button', { name: 'Copy: A' })
+    move(a, document.body)
+    tick(100)
+    move(document.body, portal)
+    tick(500)
+    expect(portal.isConnected).toBe(true)
+    move(portal, document.body)
+    tick(100)
+    move(document.body, b)
+    expect(screen.getByText('details B')).toBeTruthy()
+    expect(screen.queryByText('details A')).toBeNull()
+    move(b, document.body)
+    tick(300)
+    move(document.body, a)
+    tick(799)
+    expect(screen.queryByText('details A')).toBeNull()
+    tick(1)
+    expect(screen.getByText('details A')).toBeTruthy()
+  })
+
+  it('warms a keyboard-open card only when the pointer visits that card', () => {
+    render(<HoverCardGroup>
+      <HoverCard inline grouped openDelayMs={800} anchor={<button type="button">A</button>}
+        content={<span>details A</span>} />
+      <Card name="B" />
+    </HoverCardGroup>)
+    fireEvent.keyDown(document, { key: 'Tab' })
+    act(() => { screen.getByRole('button', { name: 'A' }).focus() })
+    const portal = screen.getByText('details A')
+    move(document.body, portal)
+    move(portal, screen.getByText('B'))
+    expect(screen.getByText('details B')).toBeTruthy()
+    expect(screen.queryByText('details A')).toBeNull()
   })
 
   it('rejects stale clipboard feedback after a group handoff and return', async () => {
@@ -204,6 +251,61 @@ describe('HoverCardGroup', () => {
     expect(screen.queryByText('details B')).toBeNull()
     tick(800)
     expect(screen.getByText('details B')).toBeTruthy()
+  })
+
+  it('does not warm a group through a portal belonging to an ungrouped card', () => {
+    render(<HoverCardGroup><Card name="Project" grouped={false} /><Card name="B" /></HoverCardGroup>)
+    const project = screen.getByText('Project')
+    const b = screen.getByText('B')
+    move(document.body, project)
+    tick(800)
+    const portal = screen.getByRole('button', { name: 'Copy: Project' })
+    move(project, portal)
+    tick(500)
+    expect(portal.isConnected).toBe(true)
+    move(portal, b)
+    expect(screen.queryByText('details B')).toBeNull()
+    tick(799)
+    expect(screen.queryByText('details B')).toBeNull()
+    tick(1)
+    expect(screen.getByText('details B')).toBeTruthy()
+  })
+
+  it('cools when the active portal is removed from under the pointer', () => {
+    const markup = (showA: boolean) => <HoverCardGroup>
+      {showA && <Card name="A" />}<Card name="B" />
+    </HoverCardGroup>
+    const view = render(markup(true))
+    const a = screen.getByText('A')
+    move(document.body, a)
+    tick(800)
+    const portal = screen.getByRole('button', { name: 'Copy: A' })
+    move(a, portal)
+    view.rerender(markup(false))
+    move(portal, screen.getByText('B'))
+    expect(screen.queryByText('details B')).toBeNull()
+    tick(800)
+    expect(screen.getByText('details B')).toBeTruthy()
+  })
+
+  it('cools when keyboard focus replaces the portal under the pointer', () => {
+    render(<HoverCardGroup>
+      <HoverCard inline grouped anchor={<button type="button">A</button>} content={<span>details A</span>} />
+      <HoverCard inline grouped anchor={<button type="button">B</button>} content={<span>details B</span>} />
+      <Card name="C" />
+    </HoverCardGroup>)
+    const a = screen.getByRole('button', { name: 'A' })
+    move(document.body, a)
+    tick(500)
+    const portal = screen.getByText('details A')
+    move(a, portal)
+    fireEvent.keyDown(document, { key: 'Tab' })
+    act(() => { screen.getByRole('button', { name: 'B' }).focus() })
+    expect(screen.getByText('details B')).toBeTruthy()
+    move(portal, screen.getByText('C'))
+    expect(screen.queryByText('details C')).toBeNull()
+    tick(800)
+    expect(screen.getByText('details C')).toBeTruthy()
   })
 
   it('releases an unmounted active card without cooling its still-mounted list', () => {

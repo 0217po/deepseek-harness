@@ -27,7 +27,8 @@ const VIEWPORT_MARGIN = 8
  * @param props.widthAnchorRef - optional element whose width and horizontal position size the preview.
  * @param props.inline - keep the anchor in prose; show a contained preview on hover or keyboard focus.
  * @param props.disabled - suppress opening; turning true dismisses an open card.
- * @param props.grouped - share first-display dwell and exclusive display with the surrounding HoverCardGroup.
+ * @param props.grouped - share first-display dwell across the surrounding list and active portal.
+ * Group replacement removes the previous card immediately, including a fading preview.
  * @param props.copyText - optional primary value copied by activation and
  * included in the card's accessible name.
  * @param props.copyLabel - localized accessible activation-label prefix.
@@ -105,7 +106,8 @@ export function HoverCard({
   const groupVisible = open && positioned
   useLayoutEffect(() => {
     if (!groupVisible || group === null) return
-    group.shown(groupOwner, dismissImmediately)
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- The visible card's ref is attached before layout effects.
+    group.shown(groupOwner, dismissImmediately, cardRef.current!)
     return () => { group.release(groupOwner) }
   }, [group, groupOwner, groupVisible, dismissImmediately])
 
