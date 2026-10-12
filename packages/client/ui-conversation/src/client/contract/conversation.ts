@@ -8,6 +8,13 @@ import type {
 export interface ConversationMatchResult {
   readonly id: string
   readonly role: 'start' | 'update'
+  /**
+   * Claim this event on the Definition's target: no other Definition of the
+   * same target receives it. Definitions of other targets and Definitions
+   * without a target still receive it. Two claims on one target, or a claim
+   * from a Definition without a target, throw during dispatch.
+   */
+  readonly exclusive?: true
 }
 
 /** Merge-extensible business values published against one Turn. */
