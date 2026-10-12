@@ -16,10 +16,10 @@ import { orderedVisibleChatNodes } from '../src/client/conversation-nodes/chat-s
 import { ChatTurnProcessProjector } from '../src/client/conversation-nodes/turn-process-presentation.ts'
 import { hasAssistantReplyContent } from '../src/client/contract/assistant-content.ts'
 import {
-  isSubagentDelegationTool, sameTurnProcessSpec, TURN_PROCESS_INDEPENDENT_KINDS,
+  isSubagentDelegationTool, sameTurnProcessSpec,
   type TurnProcessSpec,
 } from '../src/client/contract/turn-process.ts'
-import { isAtOrOutside } from '../src/client/contract/group-tree.ts'
+import { isAtOrOutside, type ChatGroupTree } from '../src/client/contract/group-tree.ts'
 
 const EMPTY: readonly never[] = []
 
@@ -245,6 +245,19 @@ class FixtureTurnDataStore implements ConversationLocationDataStore<Conversation
   }
 }
 
+/** Positions the production Definitions declare for the legacy kinds this fixture projects. */
+function fixtureGroupTree(kind: string, inTurn: boolean): ChatGroupTree | undefined {
+  switch (kind) {
+    // A fixture user message inside a Turn stands for its opening human input.
+    case 'user': return inTurn ? 'exchange' : 'input'
+    case 'steering': return 'input'
+    case 'turn-error':
+    case 'turn-max-tokens': return 'turn'
+    case 'model-retry': return 'process'
+    default: return undefined
+  }
+}
+
 function assistantData(node: AssistantMessageNode): FinalAssistantChatData {
   return {
     status: node.interrupted === true ? 'interrupted' as const : 'settled' as const,
@@ -272,8 +285,7 @@ function settledNode(
       ? { kind: 'session' as const }
       : { kind: 'turn' as const, turn },
     visibility: 'visible' as const,
-    // A fixture user message inside a Turn stands for its opening human input.
-    groupTree: node.kind === 'user' && turn !== undefined ? 'exchange' as const : undefined,
+    groupTree: fixtureGroupTree(node.kind, turn !== undefined),
   }
   switch (node.kind) {
     case 'assistant':
@@ -426,7 +438,7 @@ export function chatSnapshotFixture(input: {
     const turn = turns.get(turnNumber)
     const controlAnchorSeq = controlAnchor?.anchorSeq ?? turn?.start?.seq
     if (controlAnchorSeq === undefined) continue
-    const processStart = inTurn.find(candidate => !TURN_PROCESS_INDEPENDENT_KINDS.has(candidate.kind))
+    const processStart = inTurn.find(candidate => !isAtOrOutside(candidate, 'turn'))
       ?? controlAnchor
     const inlineReasoning = answer?.blocks.some(block => block.kind === 'reasoning' && block.text.trim() !== '') === true
     const candidate: TurnProcessSpec = {
@@ -463,6 +475,7 @@ export function chatSnapshotFixture(input: {
         anchorSeq: spec.controlAnchorSeq - 0.1,
         location: { kind: 'turn', turn },
         visibility: 'visible',
+        groupTree: 'turn',
         data: spec,
       })
     }
@@ -503,6 +516,7 @@ export function chatSnapshotFixture(input: {
       anchorSeq: endSeq,
       location: { kind: 'turn', turn },
       visibility: 'visible',
+      groupTree: 'turn',
       data: tailData,
     })
   }
