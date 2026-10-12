@@ -386,11 +386,11 @@ function SessionTree({
       }
     }
   }, [groupExpansion, parents, revealGroup, setGroupExpanded])
-  const baselineWatermark = (group: GroupNode): number => Math.max(SESSION_WATERMARK_BASE, requiredWatermark(
+  const baselines = new Map(groups.map(group => [group.key, Math.max(SESSION_WATERMARK_BASE, requiredWatermark(
     group.sessions,
     current,
     group.key === revealGroup ? revealSessionId : undefined,
-  ))
+  ))]))
   const foldedKeys = new Set(groups.filter(group => !group.expanded).map(group => group.key))
   const underFoldedAncestor = (key: string): boolean => {
     for (let owner = parents.get(key); owner !== undefined; owner = parents.get(owner)) {
@@ -399,13 +399,12 @@ function SessionTree({
     return false
   }
   // A group hidden by a folded ancestor keeps its own expansion and rows but must not raise its watermark.
-  const requiredWatermarks = new Map(groups
-    .filter(group => !underFoldedAncestor(group.key))
-    .map(group => [group.key, baselineWatermark(group)]))
+  const requiredWatermarks = new Map([...baselines].filter(([key]) => !underFoldedAncestor(key)))
   const sessionWatermarks = raiseWatermarks(storedWatermarks, requiredWatermarks)
   // Raising during render keeps the watermark monotonic without committing a lower frame first.
   if (sessionWatermarks !== storedWatermarks) setStoredWatermarks(marks => raiseWatermarks(marks, requiredWatermarks))
   const dropWatermarks = (drop: (key: string) => boolean): void => {
+    if (!Object.keys(storedWatermarks).some(drop)) return
     setStoredWatermarks(marks => Object.fromEntries(Object.entries(marks).filter(([key]) => !drop(key))))
     setWatermarkMotionKey(key => key + 1)
   }
@@ -478,7 +477,7 @@ function SessionTree({
     const children = childrenByParent.get(group.key) ?? []
     const compatibleDrag = workspaceDrag !== null && parents.get(workspaceDrag.workspaceId) === parents.get(group.key)
     const watermark = sessionWatermarks[group.key] ?? SESSION_WATERMARK_BASE
-    const collapsed = watermarkRows(group.sessions, baselineWatermark(group))
+    const collapsed = watermarkRows(group.sessions, baselines.get(group.key) ?? SESSION_WATERMARK_BASE)
     const visible = watermarkRows(group.sessions, watermark)
     const sessionsExpanded = visible.hiddenCount === 0
     rowKeys.push(`workspace:${group.key}`)

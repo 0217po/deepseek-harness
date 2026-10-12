@@ -809,6 +809,29 @@ describe('WorkspaceBrowser', () => {
     expectVisible(8)
   })
 
+  it('keeps the raised row count, not the Session, when a new Session pushes it down', () => {
+    const items = Array.from({ length: 12 }, (_, index) => summary(`session-${index + 1}`, 20 - index))
+    const b = mount({
+      useSessions: hook(sessionState(items)),
+      useWorkspaces: hook(workspaceState([workspace('alpha', items.map(item => item.id))])),
+    })
+    fireEvent.click(screen.getByText('alpha'))
+    const running = (value: boolean) => hook<SessionStatusSnapshot>(new Map([[sid('session-9'), {
+      running: value, pendingInteraction: undefined, completionUnread: false,
+    }]]))
+    rerender(b, { useSessionStatus: running(true) })
+    rerender(b, { useSessionStatus: running(false) })
+    expect(screen.getByText('session-9')).toBeTruthy()
+    const newest = summary('newest', 30)
+    rerender(b, {
+      useSessions: hook(sessionState([newest, ...items])),
+      useWorkspaces: hook(workspaceState([workspace('alpha', [newest.id, ...items.map(item => item.id)])])),
+    })
+    expect(screen.getByText('session-8')).toBeTruthy()
+    expect(screen.queryByText('session-9')).toBeNull()
+    expect(screen.getByRole('button', { name: '展开其余 4 个会话' })).toBeTruthy()
+  })
+
   it('stops automatic raises at 50 rows while Show more continues past them', () => {
     const items = Array.from({ length: 60 }, (_, index) => summary(`session-${index + 1}`, 60 - index))
     const b = mount({
