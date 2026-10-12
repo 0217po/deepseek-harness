@@ -1,7 +1,7 @@
 /** Own fixture services outside the managed, short-lived native launcher. */
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { appendFile, mkdir, readFile, realpath } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { userInfo } from 'node:os'
 import { join } from 'node:path'
@@ -14,8 +14,9 @@ import { createInterface } from 'node:readline'
  */
 export async function startFixtureHost(helperPath) {
   helperPath = await realpath(helperPath)
+  const source = await readFile(helperPath, 'utf8')
   const marker = `\n// Fixture host: ${JSON.stringify(helperPath)}\n`
-  if (!(await readFile(helperPath, 'utf8')).includes(marker)) await appendFile(helperPath, marker)
+  if (!source.includes(marker)) await appendFile(helperPath, marker)
   const runtimeKey = createHash('sha256').update(await readFile(helperPath)).digest('hex')
   const directory = `/tmp/dsh-cua-${userInfo().uid}`
   await mkdir(directory, { recursive: true, mode: 0o700 })
@@ -32,7 +33,7 @@ export async function startFixtureHost(helperPath) {
     })
     const done = new Promise(resolve => { child.once('close', resolve) })
     const ready = new Promise((resolve, reject) => {
-      child.once('message', () => { if (child.connected) child.disconnect(); resolve() })
+      child.once('message', () => { resolve() })
       child.once('error', reject)
       child.once('exit', (code, signal) => reject(new Error(`Fixture service exited before readiness: ${code}, ${signal}`)))
     })
@@ -75,6 +76,6 @@ export async function startFixtureHost(helperPath) {
       for (const { child } of children) child.kill('SIGKILL')
     }, 5000)
     try { await Promise.all([...children].map(service => service.done)) }
-    finally { clearTimeout(timer) }
+    finally { clearTimeout(timer); await writeFile(helperPath, source) }
   }
 }
