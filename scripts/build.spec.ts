@@ -5,8 +5,18 @@ import { buildGates, parseBuildArguments } from './build.ts'
 
 const root = resolve(import.meta.dirname, '..')
 
-function graph(scope: Parameters<typeof buildGates>[1]): Record<string, string[] | undefined> {
-  return Object.fromEntries(buildGates(root, scope).map(gate => [gate.id, gate.needs]))
+const artifactGraph = {
+  'native': [],
+  'host-src': ['native'],
+  'host-bundle': ['host-src'],
+  'desktop-bundle': ['host-bundle'],
+  'client-src': ['desktop-bundle'],
+  'client-bundle': ['client-src'],
+  'web': ['client-bundle'],
+}
+
+function graph(gates: ReturnType<typeof buildGates>): Record<string, string[] | undefined> {
+  return Object.fromEntries(gates.map(gate => [gate.id, gate.needs]))
 }
 
 describe('repository build CLI', () => {
@@ -35,12 +45,14 @@ describe('repository build CLI', () => {
     expect(parseBuildArguments([])).toEqual({ scope: 'complete', profile: undefined })
     expect(parseBuildArguments(['--scope', 'artifacts', '--profile', 'official'])).toEqual({ scope: 'artifacts', profile: 'official' })
     expect(parseBuildArguments(['--scope', 'check'])).toEqual({ scope: 'check', profile: undefined })
+    expect(parseBuildArguments(['--scope', 'typecheck'])).toEqual({ scope: 'typecheck', profile: undefined })
   })
 
   it.each([
-    [['--scope', 'complete'], '--scope must be artifacts or check'],
-    [['--scope', 'lib'], '--scope must be artifacts or check'],
+    [['--scope', 'complete'], '--scope must be artifacts, check, or typecheck'],
+    [['--scope', 'lib'], '--scope must be artifacts, check, or typecheck'],
     [['--scope', 'check', '--profile', 'official'], '--profile selects artifact values and does not apply to --scope check'],
+    [['--scope', 'typecheck', '--profile', 'official'], '--profile selects artifact values and does not apply to --scope typecheck'],
   ])('rejects %j', (args, message) => {
     expect(() => parseBuildArguments(args)).toThrow(message)
   })
@@ -48,31 +60,40 @@ describe('repository build CLI', () => {
 
 describe('repository build steps', () => {
   it('keeps artifact steps in serial dependency order', () => {
-    expect(graph('artifacts')).toEqual({
-      'native': [],
-      'host-src': ['native'],
-      'host-bundle': ['host-src'],
-      'desktop-bundle': ['host-bundle'],
-      'client-src': ['desktop-bundle'],
-      'client-bundle': ['client-src'],
-      'web': ['client-bundle'],
-    })
+    expect(graph(buildGates(root, 'artifacts'))).toEqual(artifactGraph)
   })
 
   it('checks both aggregate programs without artifact predecessors', () => {
-    expect(graph('check')).toEqual({ 'host-check': [], 'client-check': [] })
-    expect(buildGates(root, 'check').map(gate => gate.args.slice(-2))).toEqual([
+    const gates = buildGates(root, 'check')
+    expect(graph(gates)).toEqual({ 'host-check': [], 'client-check': [] })
+    expect(gates.map(gate => gate.args.slice(-2))).toEqual([
       ['-p', 'tsconfig.host.json'],
       ['-p', 'tsconfig.client.json'],
     ])
   })
 
   it('starts each aggregate check after its own package compilation in the complete build', () => {
-    expect(graph('complete')).toEqual({
-      ...graph('artifacts'),
+    expect(graph(buildGates(root, 'complete'))).toEqual({
+      ...artifactGraph,
       'host-check': ['host-src'],
       'client-check': ['client-src'],
     })
+  })
+
+  it('type-checks every program with the source-only Typert pass beside Host compilation', () => {
+    const gates = buildGates(root, 'typecheck')
+    expect(graph(gates)).toEqual({
+      'host-src': [],
+      'host-typert': [],
+      'client-src': ['host-src', 'host-typert'],
+      'host-check': ['host-src'],
+      'client-check': ['client-src'],
+    })
+    expect(gates.find(gate => gate.id === 'host-typert')?.args.at(-1)).toBe(resolve(root, 'scripts/generate-typert.ts'))
+    expect(gates.filter(gate => gate.id.endsWith('-check')).map(gate => gate.args.slice(-2))).toEqual([
+      ['-b', 'tsconfig.host.json'],
+      ['-b', 'tsconfig.client.json'],
+    ])
   })
 
   it('applies the environment overlay to every step', () => {
