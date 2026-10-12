@@ -2005,6 +2005,23 @@ describe('ChatView', () => {
     expect(renderedFlowKinds(view.container)).toEqual(['user', 'turn-process'])
   })
 
+  it('matches echoes past an input Node whose payload carries no message source', () => {
+    const base = chatSnapshotFixture({ nodes: [user(1, 'question')] })
+    const snapshot = new ChatSnapshotBuilder().replace({
+      nodes: [...base.nodes.values(), {
+        key: 'plugin-input', id: 'plugin-input', kind: 'plugin-input', target: 'chat', anchorSeq: 2,
+        location: { kind: 'session' }, visibility: 'visible', groupTree: 'input', data: null,
+      }],
+      timeline: base.timeline,
+    })
+    const h = makeHarness({}, { pendingSubmissions: [{
+      requestId: 'pending' as never, placement: 'transcript', time: 1_000, text: 'pending text', attachments: [],
+    }] }, snapshot)
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getByText('pending text')).toBeTruthy()
+    expect(view.container.querySelector('[data-submission-echo]')).not.toBeNull()
+  })
+
   it.each(['ABC', 'ACB', 'BAC', 'BCA', 'CAB', 'CBA'])(
     'uses the first local opening echo until Host admission identifies the input (%s)', (hostOrder) => {
       const pending: SessionSnapshot['pendingSubmissions'] = ['A', 'B', 'C'].map(text => ({
