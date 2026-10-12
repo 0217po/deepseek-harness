@@ -126,8 +126,6 @@ Welcome loads the shared Toast palette and shadow tokens, with system typography
 
 <a id="bundled-command-runtime"></a>
 
-<a id="bundled-command-runtime"></a>
-
 ## Bundled command runtime
 
 The installed `resources/runtime/cli/bin/dsh` shell script (`dsh.cmd` on Windows) runs the ordinary CLI dispatcher using Desktop's Electron executable and bundled pnpm. It works while Desktop is closed and retains the Electron runtime limitations. Ordinary profile, configuration, and plugin commands use the same implementation as npm dsh; the command does not open Desktop.

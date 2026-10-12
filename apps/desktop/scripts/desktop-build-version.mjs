@@ -10,7 +10,7 @@
  * sequence number, so one test feed can carry several builds of a single
  * product version: `0.1.6-alpha.1.20260916.1` from a prerelease base and
  * `0.1.6-test.20260916.1` from a stable one, as the release versions table in
- * `apps/desktop/README.md` gives them. Passing that version here keeps it out
+ * `apps/desktop/packaging/README.md#release-versions` gives them. Passing that version here keeps it out
  * of the manifests, so the tracked version stays the product's while the build
  * version reaches electron-builder, the update feed, and the upload validation
  * as one input.

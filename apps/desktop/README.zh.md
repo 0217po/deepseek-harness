@@ -126,8 +126,6 @@ Welcome 加载共享 Toast 的配色和阴影变量，挂载在 body 下的通�
 
 <a id="bundled-command-runtime"></a>
 
-<a id="bundled-command-runtime"></a>
-
 ## 内置命令运行时
 
 安装后的 `resources/runtime/cli/bin/dsh` shell 脚本（Windows 为 `dsh.cmd`）使用 Desktop 的 Electron 可执行文件和内置 pnpm 运行普通 CLI 分派入口。Desktop 关闭时也可使用，并保留 Electron 运行时限制。普通 profile、配置和插件命令与 npm dsh 使用相同实现；该命令不会打开 Desktop。
