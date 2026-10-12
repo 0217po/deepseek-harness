@@ -59,7 +59,7 @@ In `workspace` mode it emits every explicit contributor once without blocking bu
 
 `writeWorkspaceArtifacts()` and `writePackageArtifacts()` are the plugin's file writers: each artifact becomes `lib/typert.<face>.{js,d.ts}`, plus `lib/typert.remote-client.{js,d.ts,d.ts.map}` when it carries Remote methods, and a Host artifact without Remote methods removes stale Remote client files. Writing the result of `WorkspaceTypertGenerator.generateContributors()` through them leaves the same bytes as the `workspace`-mode plugin, and `findWorkspaceRoot()` applies the plugin's workspace-root rule. The repository's bundle-free pass, [`scripts/generate-typert.ts`](../../../scripts/generate-typert.ts), generates the Host face this way for type checks that need no bundle.
 
-With `rejectBuildOutputs: true`, analysis fails with a `TypertAnalysisError` when a face program loads a file from a workspace package's `lib/` directory. The error names each import specifier that resolved there and the source file a `paths` alias should map it to, so a passing generation depends only on workspace source and can run before or beside package compilation. Leave it off for a face whose sources import generated outputs, such as a Client face importing `/remote`.
+With `rejectBuildOutputs: true`, analysis fails with a `TypertAnalysisError` when a face program loads a file from a workspace package's `lib/` directory, or cannot resolve an import of a workspace package, as on a tree whose packages are not yet compiled. The error names each such import specifier and the source file a `paths` alias should map it to, so a passing generation depends only on workspace source and can run before or beside package compilation. Leave it off for a face whose sources import generated outputs, such as a Client face importing `/remote`.
 
 -----
 
@@ -86,7 +86,7 @@ The generator is built on one separation: extraction and emission are decoupled 
 | [`src/workspace.ts`](src/workspace.ts) | `WorkspaceTypertGenerator`: discovery, generation, export and files validation; workspace-root lookup |
 | [`src/tsdown-plugin.ts`](src/tsdown-plugin.ts) | tsdown plugin face: decorator lowering and artifact emission |
 | [`src/artifact-files.ts`](src/artifact-files.ts) | Package-local artifact writers shared by the plugin and bundle-free generation |
-| [`src/build-output-guard.ts`](src/build-output-guard.ts) | Detection of workspace `lib/` files in a face program for `rejectBuildOutputs` |
+| [`src/build-output-guard.ts`](src/build-output-guard.ts) | Detection of workspace `lib/` files and unresolved workspace imports in a face program for `rejectBuildOutputs` |
 | [`src/worker.ts`](src/worker.ts) | Worker Thread entry for workspace-mode generation |
 | [`src/cordis-catalog.ts`](src/cordis-catalog.ts) | Catalog projection used by the generated Cordis catalogs |
 

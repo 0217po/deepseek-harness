@@ -63,13 +63,14 @@ function writeFixtureFile(path: string, content: string): void {
 export const DEPENDENT_TYPERT_SOURCE = "import type { Shape } from '@fixture/dep/types'\n\n/** @typert schema */\nexport interface Payload { shape: Shape }\n"
 
 /**
- * Add a compiled Host package, `@fixture/dep`, linked into `node_modules` and referenced from
+ * Add a Host package, `@fixture/dep`, linked into `node_modules` and referenced from
  * `tsconfig.host.json`. Without a `paths` alias, `@fixture/dep/types` resolves through the link to
- * its compiled `lib/types/types.d.ts`.
+ * its compiled `lib/types/types.d.ts`, or to nothing before the package compiles.
  * @param root - workspace written by {@link writeTypertWorkspace}.
+ * @param compiled - whether `lib/types/types.d.ts` exists, as after package compilation.
  * @returns absolute path of the dependency package.
  */
-export function writeCompiledDependency(root: string): string {
+export function writeCompiledDependency(root: string, compiled = true): string {
   const dependency = join(root, 'packages/fixture/dep')
   const declaration = 'export interface Shape { side: number }\n'
   writeFixtureFile(join(dependency, 'package.json'), `${JSON.stringify({
@@ -87,7 +88,7 @@ export function writeCompiledDependency(root: string): string {
   aggregate.references.push({ path: './packages/fixture/dep' })
   writeFixtureFile(aggregatePath, `${JSON.stringify(aggregate, null, 2)}\n`)
   writeFixtureFile(join(dependency, 'src/types.ts'), declaration)
-  writeFixtureFile(join(dependency, 'lib/types/types.d.ts'), declaration)
+  if (compiled) writeFixtureFile(join(dependency, 'lib/types/types.d.ts'), declaration)
   mkdirSync(join(root, 'node_modules/@fixture'), { recursive: true })
   symlinkSync(dependency, join(root, 'node_modules/@fixture/dep'), 'junction')
   return dependency

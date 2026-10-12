@@ -28,7 +28,8 @@ export interface WorkspaceTypertGeneratorOptions {
   readonly checkDiagnostics?: boolean
   /**
    * Fail when an analyzed face program loads a file from a workspace
-   * package's `lib/` directory (default false); see
+   * package's `lib/` directory or cannot resolve an import of a workspace
+   * package (default false); see
    * `WorkspaceAnalyzerOptions.rejectBuildOutputs`.
    */
   readonly rejectBuildOutputs?: boolean

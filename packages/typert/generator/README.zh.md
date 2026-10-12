@@ -59,7 +59,7 @@ JSON、YAML、SVG、PNG、JPEG 和 WebP 资源导出不提供 TypeScript 声明�
 
 `writeWorkspaceArtifacts()` 与 `writePackageArtifacts()` 是插件的写盘函数：每个产物写成 `lib/typert.<face>.{js,d.ts}`，带 Remote 方法时另写 `lib/typert.remote-client.{js,d.ts,d.ts.map}`，没有 Remote 方法的 Host 产物会删除残留的 Remote client 文件。把 `WorkspaceTypertGenerator.generateContributors()` 的结果交给它们写盘，得到的字节与 `workspace` 模式插件相同；`findWorkspaceRoot()` 采用插件的工作区根目录规则。仓库中不打包的生成 [`scripts/generate-typert.ts`](../../../scripts/generate-typert.ts) 就以这种方式为不需要 bundle 的类型检查生成 Host face。
 
-设置 `rejectBuildOutputs: true` 后，若 face program 载入了工作区包 `lib/` 目录下的文件，分析会以 `TypertAnalysisError` 失败。错误信息列出解析到那里的每个 import 说明符，以及应由 `paths` 别名映射到的源文件；因此通过的生成只依赖工作区源码，可以在包编译之前或与之并行运行。若某个 face 的源码 import 生成产物（例如 Client face import `/remote`），则不要开启它。
+设置 `rejectBuildOutputs: true` 后，若 face program 载入了工作区包 `lib/` 目录下的文件，或无法解析对工作区包的 import（例如包尚未编译的工作区），分析会以 `TypertAnalysisError` 失败。错误信息列出每个这样的 import 说明符，以及应由 `paths` 别名映射到的源文件；因此通过的生成只依赖工作区源码，可以在包编译之前或与之并行运行。若某个 face 的源码 import 生成产物（例如 Client face import `/remote`），则不要开启它。
 
 -----
 
@@ -86,7 +86,7 @@ JSON、YAML、SVG、PNG、JPEG 和 WebP 资源导出不提供 TypeScript 声明�
 | [`src/workspace.ts`](src/workspace.ts) | `WorkspaceTypertGenerator`：发现、生成、导出与文件清单校验；工作区根目录查找 |
 | [`src/tsdown-plugin.ts`](src/tsdown-plugin.ts) | tsdown 插件面：装饰器转换与产物生成 |
 | [`src/artifact-files.ts`](src/artifact-files.ts) | 插件与不打包生成共用的包内产物写盘函数 |
-| [`src/build-output-guard.ts`](src/build-output-guard.ts) | 为 `rejectBuildOutputs` 检测 face program 中的工作区 `lib/` 文件 |
+| [`src/build-output-guard.ts`](src/build-output-guard.ts) | 为 `rejectBuildOutputs` 检测 face program 中的工作区 `lib/` 文件与无法解析的工作区 import |
 | [`src/worker.ts`](src/worker.ts) | workspace 模式生成所用的 Worker Thread 入口 |
 | [`src/cordis-catalog.ts`](src/cordis-catalog.ts) | 生成 Cordis 目录所用的目录投影 |
 

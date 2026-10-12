@@ -8,8 +8,8 @@
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { dirname, extname, join, relative, resolve, sep } from 'node:path'
 import ts from 'typescript'
-import { findBuildOutputLoads } from './build-output-guard.ts'
-import type { BuildOutputLoad } from './build-output-guard.ts'
+import { findBuildOutputLoads, findUnresolvedWorkspaceImports } from './build-output-guard.ts'
+import type { BuildOutputLoad, UnresolvedWorkspaceImport } from './build-output-guard.ts'
 import type {
   CrossFaceLink,
   DocumentationModel,
@@ -83,10 +83,11 @@ export interface WorkspaceAnalyzerOptions {
   readonly caches?: WorkspaceCaches
   /**
    * Fail analysis when a face program loads a file from a workspace
-   * package's `lib/` directory (default false). Enable it for faces that
-   * import no generated output, so that the result depends only on workspace
-   * source and never on whether package compilation ran; the failure names
-   * each importing specifier and the source a `paths` alias should map it to.
+   * package's `lib/` directory, or cannot resolve an import of a workspace
+   * package (default false). Enable it for faces that import no generated
+   * output, so that the result depends only on workspace source and never on
+   * whether package compilation ran; the failure names each importing
+   * specifier and the source a `paths` alias should map it to.
    */
   readonly rejectBuildOutputs?: boolean
 }
@@ -382,7 +383,13 @@ export class WorkspaceAnalyzer {
         const host = this.caches.programHost(face, options)
         const program = ts.createProgram({ rootNames, options, host })
         if (this.options.rejectBuildOutputs) {
-          rejectBuildOutputLoads(face, this.options.root, aggregatePath, findBuildOutputLoads(program, this.options.root, host))
+          rejectBuildOutputLoads(
+            face,
+            this.options.root,
+            aggregatePath,
+            findBuildOutputLoads(program, this.options.root, host),
+            findUnresolvedWorkspaceImports(program, this.options.root, host),
+          )
         }
         faces.push(new FaceAnalyzer({
           root: this.options.root,
@@ -3354,13 +3361,31 @@ function slash(value: string): string {
   return value.replaceAll('\\', '/')
 }
 
-function rejectBuildOutputLoads(face: TypertFace, root: string, aggregatePath: string, loads: readonly BuildOutputLoad[]): void {
-  if (loads.length === 0) return
+function rejectBuildOutputLoads(
+  face: TypertFace,
+  root: string,
+  aggregatePath: string,
+  loads: readonly BuildOutputLoad[],
+  unresolved: readonly UnresolvedWorkspaceImport[],
+): void {
+  if (loads.length === 0 && unresolved.length === 0) return
   const path = (file: string): string => slash(relative(root, file))
   const config = path(aggregatePath)
-  const lines = [
-    `typert(${face}): the ${face} program loads workspace build outputs instead of source; resolve each import below to source so that generation does not depend on package compilation:`,
-  ]
+  const lines: string[] = []
+  const addAlias = (specifier: string, source: string): void => {
+    lines.push(`    add ${JSON.stringify(specifier)}: [${JSON.stringify(`./${path(source)}`)}] to the compilerOptions.paths of ${config} or the config it extends`)
+  }
+  if (unresolved.length > 0) {
+    lines.push(`typert(${face}): the ${face} program cannot resolve workspace imports, which would analyze as unknown types; map each import below to source:`)
+    for (const entry of unresolved) {
+      lines.push(`  '${entry.specifier}' imported by ${path(entry.file)}`)
+      if (entry.source === undefined) lines.push(`    add a compilerOptions.paths alias for it to ${config} or the config it extends`)
+      else addAlias(entry.specifier, entry.source)
+    }
+  }
+  if (loads.length > 0) {
+    lines.push(`typert(${face}): the ${face} program loads workspace build outputs instead of source; resolve each import below to source so that generation does not depend on package compilation:`)
+  }
   for (const load of loads) {
     lines.push(`  ${path(load.file)}`)
     if (load.importers.length === 0) {
@@ -3373,9 +3398,7 @@ function rejectBuildOutputLoads(face: TypertFace, root: string, aggregatePath: s
     if (load.source === undefined) {
       lines.push('    no workspace source compiles to it; import a source module instead')
     } else {
-      for (const specifier of specifiers) {
-        lines.push(`    add ${JSON.stringify(specifier)}: [${JSON.stringify(`./${path(load.source)}`)}] to the compilerOptions.paths of ${config} or the config it extends`)
-      }
+      for (const specifier of specifiers) addAlias(specifier, load.source)
     }
   }
   throw new TypertAnalysisError(lines.join('\n'))

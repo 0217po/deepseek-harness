@@ -107,6 +107,21 @@ describe('bundle-free Typert pass', { timeout: 60_000 }, () => {
     expect(Object.keys(typertOutputs(pkg))).toEqual(['typert.host.d.ts', 'typert.host.js'])
   })
 
+  it('rejects an unresolved workspace import before the package compiles and names the missing alias', () => {
+    const { root, pkg } = workspace(DEPENDENT_TYPERT_SOURCE)
+    writeCompiledDependency(root, false)
+    const output = captureConsole()
+
+    expect(main([], root)).toBe(1)
+
+    expect(output.error().split('\n').slice(1, 4)).toEqual([
+      '  TypertAnalysisError: typert(host): the host program cannot resolve workspace imports, which would analyze as unknown types; map each import below to source:',
+      "    '@fixture/dep/types' imported by packages/fixture/probe/src/index.ts",
+      '      add "@fixture/dep/types": ["./packages/fixture/dep/src/types.ts"] to the compilerOptions.paths of tsconfig.host.json or the config it extends',
+    ])
+    expect(existsSync(join(pkg, 'lib'))).toBe(false)
+  })
+
   it('reports a failed write as a possibly mixed generation', () => {
     const { root, pkg } = workspace()
     writeFileSync(join(pkg, 'lib'), 'not a directory\n')
