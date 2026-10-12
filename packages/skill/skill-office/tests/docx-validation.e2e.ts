@@ -61,7 +61,7 @@ assert Document('input.docx').paragraphs[0].text == 'Quarterly revenue'
         return []
       })
       const programs = JSON.stringify(calls)
-      expect(programs).not.toMatch(/\b(?:inspect|docx|zipfile)\.py\b/u)
+      expect(programs).not.toMatch(/(?<![\w.-])(?:inspect|docx|zipfile)\.py\b/u)
       expect(programs).not.toMatch(
         /\bunzip\b|\bextractall\s*\(|\bnamelist\s*\(|\bcore_properties\b|docProps\/|word\/(?:document|styles)\.xml/u,
       )

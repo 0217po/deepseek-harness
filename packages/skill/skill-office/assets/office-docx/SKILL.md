@@ -17,7 +17,19 @@ For text edits, locate the target by its text or position and inspect only its r
 
 Use paragraph styles for headings and body text. Size tables for the section that contains them, and account for merged cells and nested tables. Chinese, Japanese, and Korean text may need an explicit `w:eastAsia` font assignment in addition to `run.font.name`; font names alone do not establish glyph availability or rendered appearance.
 
-python-docx does not paginate or render documents. Do not represent ordinary replacement, colored text, or comments as tracked changes. When real revisions or unsupported OOXML features matter, preserve their package parts and verify the requested operation rather than silently discarding them.
+For a new document, use the selected Python executable:
+
+```python
+from docx import Document
+
+document = Document()
+document.add_heading("Project report", level=0)
+document.add_paragraph("Summary", style="Heading 1")
+document.add_paragraph("The requested findings go here.")
+document.save("report.docx")
+```
+
+python-docx does not paginate or render documents. Do not represent ordinary replacement, colored text, or comments as tracked changes. When real revisions or unsupported OOXML features matter, preserve their package parts and verify the requested operation rather than silently discarding them. When writing package parts directly, create a new ZIP and copy each unchanged member once; appending a replacement member duplicates its name and corrupts the package.
 
 ## Check and deliver
 
