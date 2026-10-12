@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { mkdir, mkdtemp, realpath, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { parseEnv } from 'node:util'
 import { expect, it } from 'vitest'
 import { loadDesktopPackageEnvironment } from '../scripts/desktop-package-environment.mjs'
 
@@ -12,7 +13,7 @@ it('loads machine signing credentials independently of the checkout and rejects 
     await mkdir(join(root, 'secrets'))
     const preset = join(root, 'presets/test.env')
     const secrets = join(root, 'secrets/macos-signing.env')
-    await writeFile(preset, 'DSH_DESKTOP_AUTO_UPDATE_ENV=test\nDSH_DESKTOP_MACOS_PACK_CONCURRENCY=2\n')
+    await writeFile(preset, 'DSH_DESKTOP_AUTO_UPDATE_ENV=test\nDSH_DESKTOP_MACOS_PACK_CONCURRENCY=2\nDSH_DESKTOP_MACOS_SIGNATURE_CACHE_DIR=/machine/cache\n')
     await writeFile(secrets, 'CSC_LINK=../certificates/app.p12\nCSC_KEY_PASSWORD=machine-secret\nAPPLE_API_KEY=../certificates/key.p8\n')
     const env = { DSH_PACKAGING_PRESET: 'test', DSH_PACKAGING_CONFIG_DIR: root, CSC_KEY_PASSWORD: 'ambient-secret' }
     for (const options of [{}, { prepareOnly: true }]) {
@@ -21,6 +22,7 @@ it('loads machine signing credentials independently of the checkout and rejects 
       expect(selected.APPLE_API_KEY).toBe(join(root, 'certificates/key.p8'))
       expect(selected.CSC_KEY_PASSWORD).toBe('machine-secret')
       expect(selected.DSH_DESKTOP_MACOS_PACK_CONCURRENCY).toBe('2')
+      expect(selected.DSH_DESKTOP_MACOS_SIGNATURE_CACHE_DIR).toBe('/machine/cache')
     }
     await rm(secrets)
     expect(loadDesktopPackageEnvironment('darwin', env, root, { unsigned: true }).CSC_KEY_PASSWORD).toBeUndefined()
@@ -43,6 +45,7 @@ it.skipIf(process.platform !== 'darwin')('prepares private machine directories w
       [join(import.meta.dirname, '../scripts/setup-macos-packaging.mjs'), machine, ...args], { encoding: 'utf8' })
     expect(run().status).toBe(0)
     const config = join(machine, 'packaging/presets/test.env.example')
+    expect(parseEnv(await readFile(config, 'utf8')).DSH_DESKTOP_MACOS_SIGNATURE_CACHE_DIR).toBe(join(machine, 'cache/macos-signatures'))
     await writeFile(config, 'keep existing configuration\n')
     expect(run().status).toBe(0)
     expect(await readFile(config, 'utf8')).toBe('keep existing configuration\n')
