@@ -6,7 +6,7 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/clie
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
-import { MenuItemButton, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { HoverCardGroup, MenuItemButton, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { MenuOpenState, SessionRowOwnerProps } from '../src/client/contract/slots.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
@@ -71,6 +71,59 @@ function installClipboard(writeText: (text: string) => Promise<void>): () => voi
     else Object.defineProperty(navigator, 'clipboard', prior)
   }
 }
+
+describe('Workspace and Session hover handoff', () => {
+  it.each(['workspace', 'session'] as const)('shares the first %s dwell across mixed rows and resets on list exit', (first) => {
+    vi.useFakeTimers()
+    try {
+      const workspace = (key: string): GroupNode => ({
+        key, workspaceId: wid(key), cwd: `/projects/${key}`, createdAt: 0, label: key,
+        sessionCount: 0, expanded: true, containsCurrent: false, sessions: [],
+      })
+      const session: SessionNode = {
+        id: sid('session'), title: 'Session', blank: false, running: false,
+        runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+      }
+      render(<HoverCardGroup>
+        <ProjectRowItem group={workspace('Workspace A')} onToggle={vi.fn()} onCreate={vi.fn()} t={t} />
+        <SessionNodeItem node={session} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />
+        <ProjectRowItem group={workspace('Workspace B')} onToggle={vi.fn()} onCreate={vi.fn()} t={t} />
+      </HoverCardGroup>)
+      const a = { anchor: screen.getByText('Workspace A'), copy: '/projects/Workspace A' }
+      const b = { anchor: screen.getByText('Workspace B'), copy: '/projects/Workspace B' }
+      const s = { anchor: screen.getByText('Session'), copy: 'Session' }
+      // jsdom lacks PointerEvent; MouseEvent carries physical relatedTarget across row wrappers.
+      const move = (from: Element, to: Element): void => {
+        fireEvent(from, new MouseEvent('pointerout', { bubbles: true, relatedTarget: to }))
+        fireEvent(to, new MouseEvent('pointerover', { bubbles: true, relatedTarget: from }))
+      }
+      const order = first === 'workspace' ? [a, s, b, a] : [s, a, b, s]
+      const initial = order[0]!
+      move(document.body, initial.anchor)
+      act(() => { vi.advanceTimersByTime(799) })
+      expect(screen.queryAllByRole('button', { name: /^复制:/ })).toHaveLength(0)
+      act(() => { vi.advanceTimersByTime(1) })
+      let previous = initial.anchor
+      for (const current of order) {
+        move(previous, current.anchor)
+        expect(screen.getAllByRole('button', { name: /^复制:/ })).toHaveLength(1)
+        expect(screen.getByRole('button', { name: `复制: ${current.copy}` })).toBeTruthy()
+        previous = current.anchor
+      }
+      move(previous, document.body)
+      act(() => { vi.advanceTimersByTime(300) })
+      expect(screen.queryAllByRole('button', { name: /^复制:/ })).toHaveLength(0)
+      move(document.body, b.anchor)
+      act(() => { vi.advanceTimersByTime(799) })
+      expect(screen.queryAllByRole('button', { name: /^复制:/ })).toHaveLength(0)
+      act(() => { vi.advanceTimersByTime(1) })
+      expect(screen.getByRole('button', { name: `复制: ${b.copy}` })).toBeTruthy()
+    } finally {
+      cleanup()
+      vi.useRealTimers()
+    }
+  })
+})
 
 const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn() }
 

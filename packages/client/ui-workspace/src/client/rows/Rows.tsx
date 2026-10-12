@@ -320,6 +320,7 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
         t={t}
       />}
       openDelayMs={800}
+      grouped
       disabled={menuOpen}
       copyText={row.cwd}
       copyLabel={t('copy')}

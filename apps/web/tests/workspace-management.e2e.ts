@@ -638,6 +638,71 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
     }
   }, 60_000)
 
+  it('shares one dwell and one visible card across Workspace and Session rows', async () => {
+    const hoverScaffold = await launchWebScaffold({})
+    let ownedPage: Page | undefined
+    try {
+      for (const title of ['gamma-ws', 'beta-ws']) {
+        const cwd = join(hoverScaffold.workspaceCwd, title)
+        await mkdir(cwd, { recursive: true })
+        await hoverScaffold.ctx.workspaceRegistry.create(cwd, title)
+      }
+      const sessionId = SessionId('mixed-hover-session')
+      await seedSession(hoverScaffold, await readFile(SEED, 'utf8'), sessionId)
+      await hoverScaffold.ctx.sessionController.rename({ sessionId, title: 'Mixed hover session' })
+      const hoverPage = await newEnglishPage(browser)
+      ownedPage = hoverPage
+      const consoleWatch = watchConsole(hoverPage)
+      await hoverPage.goto(hoverScaffold.authenticatedUrl)
+      const session = await seededSessionRow(hoverPage)
+      const sessionTitle = await session.locator('[class*="title"]').innerText()
+      const workspace = (title: string) => hoverPage.locator('[data-row-key^="workspace:"]')
+        .filter({ hasText: title }).locator('[class*="title"]')
+      const first = workspace('gamma-ws')
+      const second = workspace('beta-ws')
+      const card = hoverPage.getByRole('button', { name: /^Copy: / })
+      const observations: { stage: string; exclusive: boolean }[] = []
+      const clockStart = Date.now()
+      await hoverPage.clock.install({ time: clockStart })
+      await hoverPage.clock.pauseAt(clockStart + 1000)
+      await hoverPage.getByRole('button', { name: 'Settings' }).hover()
+      await hoverPage.clock.runFor(300)
+      await first.hover()
+      await hoverPage.clock.runFor(799)
+      expect(await card.count()).toBe(0)
+      await hoverPage.clock.runFor(1)
+      const record = async (stage: string, title: string): Promise<void> => {
+        // The clock stays paused: wait for React's commit without advancing another hover dwell.
+        await card.getByText(title, { exact: true }).waitFor()
+        expect(await card.count()).toBe(1)
+        expect(await card.getByText(title, { exact: true }).isVisible()).toBe(true)
+        observations.push({ stage, exclusive: true })
+      }
+      await record('first-workspace-after-dwell', 'gamma-ws')
+      await second.hover()
+      await record('workspace-to-workspace-immediate', 'beta-ws')
+      await session.locator('[class*="title"]').hover()
+      await record('workspace-to-session-immediate', sessionTitle)
+      await first.hover()
+      await record('session-to-workspace-immediate', 'gamma-ws')
+      await hoverPage.getByRole('button', { name: 'Settings' }).hover()
+      await hoverPage.clock.runFor(300)
+      expect(await card.count()).toBe(0)
+      await second.hover()
+      await hoverPage.clock.runFor(799)
+      expect(await card.count()).toBe(0)
+      await hoverPage.clock.runFor(1)
+      await record('list-reentered-after-dwell', 'beta-ws')
+      await compareOrRefreshGolden(
+        fileURLToPath(new URL('./expected/session-row-hover/mixed-rows.expected.json', import.meta.url)),
+        JSON.stringify(observations, null, 2), MODE,
+      )
+      expect(consoleWatch.pageErrors).toEqual([])
+    } finally {
+      try { await ownedPage?.close() } finally { await hoverScaffold.close() }
+    }
+  }, 60_000)
+
   it.each(['In one list', 'Workspace Tree'])('shares the first session dwell only within the physical %s list', async (layout) => {
     const hoverScaffold = await launchWebScaffold({})
     let hoverPage: Page | undefined
