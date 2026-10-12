@@ -1127,25 +1127,3 @@ describe('user-explicit invocation injection', () => {
     expect(invoked).toEqual(['shared-skill'])
   })
 })
-
-it('carries nested skill instructions on the enclosing result', async () => {
-  const home = await tempDir('nested-skill')
-  const ctx = await setup(home)
-  try {
-    ctx.skills.register({ name: 'nested-demo', description: 'Nested fixture', source: 'runtime', provider: 'fixture', content: 'Follow these instructions.' })
-    ctx.tools.register(defineContentToolFixture({
-      name: 'nested-loader', description: 'Nested fixture', parameters: {},
-      async execute(_args, exec) {
-        const result = await ctx.tools.execute({ name: 'skill', callId: ToolCallId('nested'), arguments: { name: 'nested-demo' }, signal: exec.signal, parent: exec.token })
-        for (const context of result.additionalContexts ?? []) exec.deferContext(context)
-        return result.content
-      },
-    }))
-    const nested = await ctx.tools.execute({ name: 'nested-loader', callId: ToolCallId('outer'), arguments: {}, signal: testToolSignal })
-    expect(nested.isError).toBe(false)
-    expect(nested.additionalContexts).toEqual([expect.objectContaining({
-      source: { kind: 'skill-invocation', name: 'nested-demo', form: 'instructions' },
-    })])
-    expect(nested.additionalContexts?.[0]?.content.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('Follow these instructions.')
-  } finally { await ctx.fiber.dispose() }
-})

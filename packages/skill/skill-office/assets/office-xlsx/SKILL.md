@@ -43,6 +43,8 @@ Do not rename `.xls`, `.xlsb`, encrypted files, or macro-enabled files to `.xlsx
 
 Run the shared structural checker when `office-check` is available:
 
+Run the shared checker after saving. Resolve `<skill-directory>` from the loaded skill's `resourceBase.path`; do not substitute an ad hoc ZIP check when the script is available.
+
 In PowerShell, prefix the quoted Python executable with `&`. Resolve the checker path relative to this skill directory.
 
 ```text

@@ -147,10 +147,6 @@ export function apply(ctx: Context, config: Config = {}): void {
       if (!isModelInvocable(skill)) {
         throw new Error(`skill "${args.name}" is not available for model invocation`)
       }
-      if (exec.parent !== undefined) exec.deferContext(createUserMessage({
-        content: [{ type: 'text', text: renderSkillContent(skill) }],
-        source: { kind: 'skill-invocation', name: skill.name, form: 'instructions' },
-      }))
       return {
         name: skill.name,
         provider: skill.provider,

@@ -68,6 +68,9 @@ it.each(['native', 'ptc'] as const)('loads the router and authoring body in %s; 
   expect(requests[1]).toContain('Office task routing')
   expect(requests[1]).not.toContain('python-docx')
   expect(requests[2]).toContain('python-docx')
+  if (mode === 'ptc') {
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'user/message' && event.data.source.kind === 'skill-invocation')).toEqual([])
+  }
   expect(requests[2]).toContain('office-render')
   expect(requests[2]).not.toContain('dsoffice')
   expect(requests[0]).not.toContain('dsoffice')
