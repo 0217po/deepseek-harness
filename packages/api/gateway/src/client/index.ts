@@ -156,7 +156,10 @@ class ClientRemoteService extends Service implements ClientRemote {
     this.ownerCtx = ctx
     const connection = ctx.get('connection') as ConnectionHandle
     this.connection = connection
-    this.streams = new RemoteStreamMuxClient(path => connection.openWebSocket(path))
+    this.streams = new RemoteStreamMuxClient(
+      path => connection.openWebSocket(path),
+      connection.interactions === 'answer',
+    )
     if (connection.interactions === 'answer') {
       this.events = new ClientRemoteEvents(
         ctx,

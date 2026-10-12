@@ -61,8 +61,14 @@ export class RemoteStreamMuxClient {
   private disposed = false
   private failure: RemoteStreamCarrierError | undefined
 
-  /** @param openSocket - selected authenticated carrier; omission uses the browser socket. */
-  constructor(private readonly openSocket: (path: string) => ConnectionWebSocket = () => new WebSocket(remoteStreamUrl())) {}
+  /**
+   * @param openSocket - selected authenticated carrier; omission uses the browser socket.
+   * @param waitForReconnect - answering Clients wait for Connection to replace a lost socket; passive Clients fail later opens immediately.
+   */
+  constructor(
+    private readonly openSocket: (path: string) => ConnectionWebSocket = () => new WebSocket(remoteStreamUrl()),
+    private readonly waitForReconnect = false,
+  ) {}
 
   /** Ensure a physical attempt exists, following the current attempt once if needed. */
   start(): void {
@@ -94,8 +100,9 @@ export class RemoteStreamMuxClient {
 
   /**
    * Open one logical stream on the persistent physical connection.
-   * If no physical attempt is active, opening waits for Connection to request
-   * one or for the signal to abort.
+   * After an established socket is lost, answering Clients wait for Connection
+   * to reconnect or for their signal to abort; passive Clients reject immediately.
+   * An initial socket failure rejects both modes.
    * @param endpoint - Typert Remote stream endpoint.
    * @param payload - endpoint request encoded on the wire.
    * @param signal - cancellation for this logical stream.
@@ -344,9 +351,11 @@ export class RemoteStreamMuxClient {
   ): void {
     if (this.socket !== socket) return
     this.socket = undefined
-    this.failure = error
+    if (!this.waitForReconnect) this.failure = error
     this.failAll(error)
-    for (const waiter of [...this.waiters]) waiter.reject(error)
+    if (!this.waitForReconnect) {
+      for (const waiter of [...this.waiters]) waiter.reject(error)
+    }
   }
 
   private maintain(): void {
