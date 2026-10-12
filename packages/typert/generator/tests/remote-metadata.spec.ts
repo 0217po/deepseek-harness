@@ -737,6 +737,73 @@ void ready
     expect(() => method.input({ strict: true }).create().parse(withExtraValue)).toThrow()
   })
 
+  it('enforces index values on named fields without rejecting their merged nested fields', async () => {
+    const root = fixture()
+    editFile(root, 'packages/remote/src/types.ts', source => source.replace('readonly title: string',
+      'readonly title: string\n  readonly payload: Record<string, { readonly base: string }> & { readonly fixed: { readonly own: string } }'))
+    const [artifact] = new WorkspaceTypertGenerator(root).generate()
+    const generated = await executable(artifact!.remote!.js)
+    const method = generated.TYPERT_REMOTE.methods['goals/create']!
+    const valid = { agentId: 'agent', request: { title: 'ship', payload: {
+      fixed: { base: 'common', own: 'specific' }, extra: { base: 'value' },
+    } } }
+    const strict = method.input({ strict: true })
+    expect(strict.jsonSchema).toBeUndefined()
+    expect(strict.jsonSchemaError).toContain('selected dictionaries')
+    for (const view of [method.input(), strict]) {
+      expect(view.create().parse(valid)).toEqual(valid)
+      expect(() => view.create().parse({ ...valid, request: { ...valid.request, payload: {
+        ...valid.request.payload, fixed: { own: 'specific' },
+      } } })).toThrow()
+    }
+    expect(() => strict.create().parse({ ...valid, request: { ...valid.request, payload: {
+      ...valid.request.payload, fixed: { base: 'common' },
+    } } })).toThrow()
+    expect(() => strict.create().parse({ ...valid, request: { ...valid.request, payload: {
+      ...valid.request.payload, fixed: { ...valid.request.payload.fixed, unexpected: true },
+    } } })).toThrow()
+    expect(() => strict.create().parse({ ...valid, request: { ...valid.request, payload: {
+      ...valid.request.payload, extra: { base: 'value', unexpected: true },
+    } } })).toThrow()
+    expect(() => strict.create().parse({ ...valid, request: { ...valid.request, payload: {
+      ...valid.request.payload, extra: { own: 'missing base' },
+    } } })).toThrow()
+    const outer = { ...valid, request: { ...valid.request, payload: { ...valid.request.payload, extraOuter: true } } }
+    expect(() => strict.create().parse(outer)).toThrow()
+  })
+
+  it('merges overlapping indexed fields before closing their nested objects', async () => {
+    const root = fixture()
+    editFile(root, 'packages/remote/src/types.ts', source => source.replace('readonly title: string',
+      'readonly title: string\n  readonly payload: Record<string, { readonly base: string; readonly nested: { readonly left: string } }> & { readonly fixed: { readonly own: string; readonly nested: { readonly right: string } } }'))
+    const [artifact] = new WorkspaceTypertGenerator(root).generate()
+    const generated = await executable(artifact!.remote!.js)
+    const strict = generated.TYPERT_REMOTE.methods['goals/create']!.input({ strict: true })
+    const fixed = { base: 'common', own: 'specific', nested: { left: 'index', right: 'declared' } }
+    const input = { agentId: 'agent', request: { title: 'ship', payload: { fixed } } }
+    expect(strict.create().parse(input)).toEqual(input)
+    for (const nested of [{ right: 'declared' }, { left: 'index' }, { ...fixed.nested, extra: true }]) {
+      expect(() => strict.create().parse({ ...input, request: { ...input.request, payload: {
+        fixed: { ...fixed, nested },
+      } } })).toThrow()
+    }
+  })
+
+  it('keeps a shared indexed value type valid for a named field', async () => {
+    const root = fixture()
+    editFile(root, 'packages/remote/src/types.ts', source => `${source}\ntype Entry = { readonly base: string }\n`)
+    editFile(root, 'packages/remote/src/types.ts', source => source.replace('readonly title: string',
+      'readonly title: string\n  readonly payload: Record<string, Entry> & { readonly fixed: Entry }'))
+    const [artifact] = new WorkspaceTypertGenerator(root).generate()
+    const generated = await executable(artifact!.remote!.js)
+    const strict = generated.TYPERT_REMOTE.methods['goals/create']!.input({ strict: true })
+    const input = { agentId: 'agent', request: { title: 'ship', payload: { fixed: { base: 'common' } } } }
+    expect(strict.create().parse(input)).toEqual(input)
+    expect(() => strict.create().parse({ ...input, request: { ...input.request, payload: {
+      fixed: { base: 'common', extra: true },
+    } } })).toThrow()
+  })
+
   it('keeps normal and closed recursive helper identifiers distinct', async () => {
     const root = fixture()
     editFile(root, 'packages/remote/src/types.ts', source => `${source}\nexport interface Branch { readonly value: string; readonly next?: Branch }\nexport interface closed$Branch { readonly value: string; readonly next?: closed$Branch }\n`)

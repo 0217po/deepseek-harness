@@ -937,9 +937,10 @@ class SchemaEmitter {
     subject: string,
     substitutions: ReadonlyMap<string, string>,
   ): string {
-    const properties: string[] = []
+    const properties: Extract<MemberModel, { kind: 'property' }>[] = []
     const indices: string[] = []
     let stringIndexValue: string | undefined
+    let stringIndexType: TypeNodeId | undefined
     let symbolMembers = 0
     for (const member of members) {
       if (member.static || member.visibility !== 'public') continue
@@ -957,30 +958,65 @@ class SchemaEmitter {
         }
         const key = this.typeSchema(parameter.type, substitutions)
         const value = this.typeSchema(member.signature.returns, substitutions)
-        if (key === 'z.string()') stringIndexValue = value
+        if (key === 'z.string()') {
+          stringIndexValue = value
+          stringIndexType = member.signature.returns
+        }
         indices.push(this.readonly(`z.record(${key}, ${value})`, member.readonly))
         continue
       }
       if (member.kind !== 'property') this.fail(subject, `${member.kind} member ${member.name} is not data-schema projectable`)
-      // Freezing a union may freeze its populated Uint8Array member.
-      const schema = this.readonly(this.typeSchema(member.type, substitutions),
-        member.readonly && !containsBytes(this.renderer, member.type, false))
-      const property = this.describe(
-        this.optional(schema, member.optional),
-        member,
-      )
-      properties.push(`${quote(member.jsonName ?? member.name)}: ${property}`)
+      properties.push(member)
     }
     if (indices.length > 1) this.fail(subject, 'object type has more than one JSON index signature')
     // A unique-symbol-only object is a compile-time marker and imposes no JSON shape.
     if (properties.length === 0 && indices.length === 0 && symbolMembers > 0) return 'z.unknown()'
-    const object = `z.${this.options.closedObjects && indices.length === 0 ? 'strictObject' : 'object'}({${properties.length === 0 ? '' : `\n${properties.map(property => `  ${property},`).join('\n')}\n`}})`
+    const fields = properties.map((member) => {
+      // Freezing a union may freeze its populated Uint8Array member.
+      const type = this.options.closedObjects && stringIndexType !== undefined
+        ? this.indexedPropertySchema(member.type, stringIndexType, substitutions)
+        : this.typeSchema(member.type, substitutions)
+      const schema = this.readonly(type,
+        member.readonly && !containsBytes(this.renderer, member.type, false))
+      return `${quote(member.jsonName ?? member.name)}: ${this.describe(this.optional(schema, member.optional), member)}`
+    })
+    const object = `z.${this.options.closedObjects && indices.length === 0 ? 'strictObject' : 'object'}({${fields.length === 0 ? '' : `\n${fields.map(field => `  ${field},`).join('\n')}\n`}})`
     const index = indices[0]
     if (index === undefined) return object
     if (properties.length === 0) return index
-    // Declared properties can narrow index values; only additional keys use the index schema.
+    // Named keys enforce both their declared type and the index value; the catchall checks other keys.
     if (this.options.closedObjects && stringIndexValue !== undefined) return `${object}.catchall(${stringIndexValue})`
     return `z.intersection(${object}, ${index})`
+  }
+
+  private indexedPropertySchema(
+    declared: TypeNodeId,
+    indexed: TypeNodeId,
+    substitutions: ReadonlyMap<string, string>,
+  ): string {
+    if (declared === indexed) return this.typeSchema(declared, substitutions)
+    const own = this.renderer.node(declared)
+    const value = this.renderer.node(indexed)
+    const ownProperties = own.kind === 'object'
+      ? own.members.filter((member): member is Extract<MemberModel, { kind: 'property' }> => member.kind === 'property') : []
+    const valueProperties = value.kind === 'object'
+      ? value.members.filter((member): member is Extract<MemberModel, { kind: 'property' }> => member.kind === 'property') : []
+    if (own.kind === 'object' && value.kind === 'object' && !own.json && !value.json
+      && ownProperties.length === own.members.length && valueProperties.length === value.members.length
+      && [...ownProperties, ...valueProperties].every(member => !member.static
+        && member.visibility === 'public' && member.computed === undefined)) {
+      const indexedFields = new Map(valueProperties.map(member => [member.jsonName ?? member.name, member]))
+      const overlaps = ownProperties.flatMap((member) => {
+        const inherited = indexedFields.get(member.jsonName ?? member.name)
+        if (inherited === undefined) return []
+        const combined = this.indexedPropertySchema(member.type, inherited.type, substitutions)
+        const schema = this.readonly(this.optional(combined, member.optional && inherited.optional),
+          (member.readonly || inherited.readonly) && !containsBytes(this.renderer, member.type, false))
+        return [`${quote(member.jsonName ?? member.name)}: ${this.describe(schema, member)}`]
+      })
+      return `z.strictObject({ ...${this.typeSchema(indexed, substitutions)}.shape, ...${this.typeSchema(declared, substitutions)}.shape${overlaps.length === 0 ? '' : `, ${overlaps.join(', ')}`} })`
+    }
+    return `z.intersection(${this.typeSchema(declared, substitutions)}, ${this.typeSchema(indexed, substitutions)})`
   }
 
   private exportSchemaName(model: SchemaModel): string {

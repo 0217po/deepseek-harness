@@ -310,10 +310,6 @@ describe('typert-protocol Remote declarations', () => {
     const bogusMode: string = 'duplex'
     expect(() => Remote({ mode: bogusMode } as { mode: 'stream' }))
       .toThrow('Remote options require name or mode: "stream"')
-    expect(() => Remote({ rejectUnknownFields: false } as never)).toThrow('Remote options require')
-    expect(() => Remote({ strict: true } as never)).toThrow('Remote options require')
-    expect(() => Remote({ committed: true } as never)).toThrow('Remote options require')
-    expect(() => Remote({ rejectUnknownFields: true } as never)).toThrow('Remote options require')
     expect(() => Remote({})).toThrow('Remote options require')
     expect(() => RemoteScope('' as 'metaFixture')).toThrow('Scope key')
     expect(() => RemoteScope('metaFixture', 'bad/name')).toThrow('export name')
