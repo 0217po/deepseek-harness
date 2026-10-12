@@ -6,18 +6,21 @@ import type { ChatConversationViewNode } from './chat-nodes.ts'
  * - `exchange`: the Node's Turn opens an exchange, the run of Turns that lasts
  *   until the next opening Turn.
  * - `input`: the Node is an input of its Turn. An input before the Turn's
- *   process opens the Turn; a later one is interleaved and keeps the whole
- *   Turn open.
+ *   process is the Turn's opening input; a later one is interleaved and keeps
+ *   the whole Turn open.
  * - `turn`: the Node stays in its Turn outside the Turn's process disclosure.
  * - `process`: the Node stays in the process disclosure outside step runs.
  * - absent: the Node joins the step run around it.
  *
  * The Definition that builds a Node chooses its position, and step runs, the
- * process disclosure, and Turn inputs are selected by position. Two rows are
- * placed without one: an `assistant-step` Node splits into a reasoning row in
- * the step run and a reply row outside it, and the Turn's process
- * specification keeps the finalized answer's reply outside the disclosure,
- * because which step answers changes as later steps arrive.
+ * process disclosure, and Turn inputs are selected by position. An
+ * `assistant-step` Node places its rows without one: its reasoning row joins
+ * the step run and its reply row stands outside it.
+ *
+ * Whole-Turn folding also exempts the finalized answer's reply. That exemption
+ * comes from the Turn's process specification (`answerAnchorSeq` and
+ * `answerStep`), not from a position, because which step answers changes as
+ * later steps arrive.
  */
 export type ChatGroupTree = 'exchange' | 'input' | 'turn' | 'process'
 
