@@ -5,11 +5,11 @@ import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
+import { TestRemote, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as settingsApply, inject as settingsInject } from '@deepseek-ai/dsh-client-ui-settings/client'
-import { apply, inject, SETTINGS_NS } from '@deepseek-ai/dsh-client-ui-theme/client'
-import type { AppearanceRowInjected, FontSettingsInjected, ThemeRuntime } from '@deepseek-ai/dsh-client-ui-theme/client'
-import { THEME_SETTINGS_NAMESPACE, ThemeSettingsSchema } from '../src/theme-settings.ts'
+import { apply, inject, SETTINGS_NS, ThemeRuntime } from '@deepseek-ai/dsh-client-ui-theme/client'
+import type { AppearanceRowInjected, FontSettingsInjected, ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
+import { THEME_SETTINGS_NAMESPACE, ThemeSettingsSchema, type ThemeSettings } from '../src/theme-settings.ts'
 import { AppearanceRow } from '../src/client/AppearanceRow.tsx'
 import type { createAppearanceRowStore, createFontRowStore } from '../src/client/settings-store.ts'
 import { FontSettingsGroup } from '../src/client/FontSettingsGroup.tsx'
@@ -49,8 +49,7 @@ async function bench(isLoopback = true) {
     value: { writable: true, hasDocument: true, namespaces: [namespace()] },
   }))
   const mutate = vi.fn((_ns: string, ops: { path: string[]; value: unknown }[]) => {
-    const op = ops[0]!
-    section[op.path[0]!] = op.value
+    for (const op of ops) section[op.path[0]!] = op.value
     return Promise.resolve({ ok: true as const, value: namespace() })
   })
   const events = new TestRemote(ctx, { settings: { describe, mutate } })
@@ -122,7 +121,69 @@ function fontKeyboard(ctx: Context, runtime: Shortcuts['runtime'] = 'desktop', p
   }
 }
 
+/** Isolate theme write outcomes behind the same registered keyboard input. */
+async function keyboardTheme(host = stubConfigForm<ThemeSettings>()) {
+  const ctx = new Context()
+  ctx.provide('locale', new LocaleRuntime(ctx))
+  const keyboard = fontKeyboard(ctx)
+  const events: ThemeSnapshot[] = []
+  ctx.on('theme/change', (snapshot) => { events.push(snapshot) })
+  await ctx.plugin({ apply: (scope) => {
+    scope.provide('theme', new ThemeRuntime(scope, host.scope))
+  } }).await()
+  return { theme: ctx.get('theme') as ThemeRuntime, keyboard, events, host }
+}
+
 describe('ui-theme apply', () => {
+  it('steps all font sizes in one settings mutation and one snapshot', async () => {
+    const { theme, keyboard, events, host } = await keyboardTheme()
+    keyboard.press()
+    expect(theme.getTheme().fontSizes).toEqual({ text: 15, code: 12, terminal: 14 })
+    expect(host.mutate).toHaveBeenCalledExactlyOnceWith([
+      { op: 'set', path: ['fontSize'], value: 15 },
+      { op: 'set', path: ['codeFontSize'], value: 12 },
+      { op: 'set', path: ['terminalFontSize'], value: 14 },
+    ])
+    expect(host.set).not.toHaveBeenCalled()
+    expect(events).toHaveLength(1)
+    expect(events[0]?.fontSizes).toEqual({ text: 15, code: 12, terminal: 14 })
+  })
+
+  it('continues stepping other font roles when one has reached its own limit', async () => {
+    const { theme, keyboard, host } = await keyboardTheme()
+    theme.setFontSize('text', 22)
+    theme.setFontSize('code', 10)
+    theme.setFontSize('terminal', 20)
+    keyboard.press()
+    expect(theme.getTheme().fontSizes).toEqual({ text: 22, code: 11, terminal: 20 })
+    expect(host.mutate).toHaveBeenCalledExactlyOnceWith([
+      { op: 'set', path: ['codeFontSize'], value: 11 },
+    ])
+    keyboard.press({ code: 'Minus' })
+    expect(theme.getTheme().fontSizes).toEqual({ text: 21, code: 10, terminal: 19 })
+    keyboard.press({ code: 'Minus' })
+    expect(theme.getTheme().fontSizes).toEqual({ text: 20, code: 10, terminal: 18 })
+    expect(host.mutate).toHaveBeenLastCalledWith([
+      { op: 'set', path: ['fontSize'], value: 20 },
+      { op: 'set', path: ['terminalFontSize'], value: 18 },
+    ])
+  })
+
+  it('adopts all durable font sizes together after a refused batch settles', async () => {
+    const host = stubConfigForm<ThemeSettings>()
+    const section: ThemeSettings = { preference: 'system', fontSize: 14, codeFontSize: 11, terminalFontSize: 13,
+      textFontFamily: '', codeFontFamily: '', terminalFontFamily: '' }
+    host.publish({ status: 'ready', value: section, revision: 1, writable: true })
+    const { theme, keyboard } = await keyboardTheme(host)
+    const write = Promise.withResolvers<boolean>()
+    host.mutate.mockReturnValue(write.promise)
+    keyboard.press()
+    host.publish({ value: section, revision: 2 })
+    expect(theme.getTheme().fontSizes).toEqual({ text: 15, code: 12, terminal: 14 })
+    write.resolve(false)
+    await vi.waitFor(() => { expect(theme.getTheme().fontSizes).toEqual({ text: 14, code: 11, terminal: 13 }) })
+  })
+
   it.each(['macos', 'windows', 'linux'] as const)('shares %s font shortcuts with the settings control and durable values', async (platform) => {
     const b = await bench()
     const keyboard = fontKeyboard(b.ctx, 'desktop', platform)
@@ -133,16 +194,21 @@ describe('ui-theme apply', () => {
     const { instance, face } = fontSettingsFaceOf(b.slots)
 
     expect(keyboard.press()).toHaveBeenCalledOnce()
-    expect(theme.getTheme().fontSizes.text).toBe(15)
+    expect(theme.getTheme().fontSizes).toEqual({ text: 15, code: 12, terminal: 14 })
     keyboard.press({ shift: true }, { region: 'editable' })
-    expect(instance.getSnapshot().fontSizes.text).toBe(16)
+    expect(instance.getSnapshot().fontSizes).toEqual({ text: 16, code: 13, terminal: 15 })
     keyboard.press({ code: 'Minus' })
-    expect(instance.getSnapshot().fontSizes.text).toBe(15)
+    expect(instance.getSnapshot().fontSizes).toEqual({ text: 15, code: 12, terminal: 14 })
     face.setFontSize('text', 20)
     keyboard.press()
-    expect(theme.getTheme().fontSizes).toEqual({ text: 21, code: 11, terminal: 13 })
+    expect(theme.getTheme().fontSizes).toEqual({ text: 21, code: 13, terminal: 15 })
     await vi.waitFor(() => { expect(b.mutate).toHaveBeenCalledTimes(5) })
-    expect(b.mutate.mock.calls.at(-1)?.[1][0]?.value).toBe(21)
+    expect(b.mutate.mock.calls.at(-1)?.[1]).toEqual([
+      { op: 'set', path: ['fontSize'], value: 21 },
+      { op: 'set', path: ['codeFontSize'], value: 13 },
+      { op: 'set', path: ['terminalFontSize'], value: 15 },
+    ])
+    expect(theme.getTheme().fontSizes).toEqual({ text: 21, code: 13, terminal: 15 })
 
     await fiber.dispose()
     expect(keyboard.registry.fixedCatalog.getSnapshot()).toEqual([])
@@ -166,7 +232,7 @@ describe('ui-theme apply', () => {
           ],
           "keys": [
             "⌘",
-            "+",
+            "=",
           ],
           "label": "增大字号",
         },
@@ -191,14 +257,18 @@ describe('ui-theme apply', () => {
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     const theme = b.ctx.get('theme') as ThemeRuntime
     theme.setFontSize('text', 22)
-    await vi.waitFor(() => { expect(b.mutate).toHaveBeenCalledOnce() })
+    theme.setFontSize('code', 16)
+    theme.setFontSize('terminal', 20)
+    await vi.waitFor(() => { expect(b.mutate).toHaveBeenCalledTimes(3) })
     expect(keyboard.press()).toHaveBeenCalledOnce()
     expect(keyboard.press({ shift: true })).toHaveBeenCalledOnce()
     theme.setFontSize('text', 10)
-    await vi.waitFor(() => { expect(b.mutate).toHaveBeenCalledTimes(2) })
+    theme.setFontSize('code', 10)
+    theme.setFontSize('terminal', 10)
+    await vi.waitFor(() => { expect(b.mutate).toHaveBeenCalledTimes(6) })
     expect(keyboard.press({ code: 'Minus' })).toHaveBeenCalledOnce()
-    expect(theme.getTheme().fontSizes.text).toBe(10)
-    expect(b.mutate).toHaveBeenCalledTimes(2)
+    expect(theme.getTheme().fontSizes).toEqual({ text: 10, code: 10, terminal: 10 })
+    expect(b.mutate).toHaveBeenCalledTimes(6)
     await b.ctx.fiber.dispose()
   })
 
