@@ -11,7 +11,7 @@ English | [中文](guide.zh.md)
 
 In Web and Desktop, New Session creates a fresh Session and Agent using the current preset definition. It previously reused an existing empty Session in the workspace, which could retain an earlier preset definition.
 
-Client calls to `uiWorkspace.startSession(workspaceId)` follow the same behavior. Workspace reconnection through `openWorkspace` or `connectWorkspace` still reuses an eligible blank, which runs the requested or default preset as [`session.create` blank reuse](../session-create-blank-reuse/guide.md) describes. Calls with draft-preparation options preserve their existing reuse and content rules. Existing Agents retain their preset composition; global optional tools update on their next request when a bundle is switched.
+Client calls to `uiWorkspace.startSession(workspaceId)` follow the same behavior. Workspace reconnection through `openWorkspace` or `connectWorkspace` still reuses an eligible blank. Calls with draft-preparation options preserve their existing reuse and content rules. Existing Agents retain their preset composition; global optional tools update on their next request when a bundle is switched.
 
 ## Migration
 
