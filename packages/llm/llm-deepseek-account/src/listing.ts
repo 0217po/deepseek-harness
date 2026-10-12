@@ -1,8 +1,12 @@
 /** DeepSeek `GET /models` listing: one authenticated request and per-entry decoding. */
 import { APP_IDENTITY, attributionHeaders, LlmError } from '@deepseek-ai/dsh-llm'
 import type { ModelModality } from '@deepseek-ai/dsh-llm'
+import { timeoutOf } from '@deepseek-ai/dsh-timeout'
 
 const LISTED_MODALITIES = ['text', 'image'] as const satisfies readonly ModelModality[]
+
+/** Code of a listing deadline's timeout reason; {@link requestModelListing} reports it as `TIMEOUT`. */
+export const LISTING_TIMEOUT = 'MODEL_LISTING_TIMEOUT'
 
 /** The requirement one listing entry declares under this client's product token. */
 export type ClientRequirement =
@@ -139,7 +143,8 @@ export function parseModelListing(body: unknown): ModelListing {
  * @param headers - authentication headers for this endpoint.
  * @param signal - cancellation and deadline of the whole exchange.
  * @returns the decoded listing.
- * @throws LlmError `ABORTED` or `TRANSPORT` before a complete body, `HTTP_<status>` for a non-2xx answer,
+ * @throws LlmError `TIMEOUT` when a {@link LISTING_TIMEOUT} deadline elapses before a complete body, `ABORTED` for
+ *   another abort, `TRANSPORT` for a network failure, `HTTP_<status>` for a non-2xx answer,
  *   and `INVALID_RESPONSE` for a body that is not a JSON listing.
  */
 export async function requestModelListing(
@@ -154,6 +159,10 @@ export async function requestModelListing(
     })
     text = await response.text()
   } catch (error) {
+    const expired = timeoutOf(signal, LISTING_TIMEOUT)
+    if (expired !== undefined) {
+      throw new LlmError(`DeepSeek model listing request to ${url} timed out after ${expired.timeoutMs} ms`, 'TIMEOUT', { cause: error })
+    }
     throw signal.aborted
       ? new LlmError(`DeepSeek model listing request to ${url} was aborted`, 'ABORTED', { cause: error })
       : new LlmError(`could not reach ${url}`, 'TRANSPORT', { cause: error })

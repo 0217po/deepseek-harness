@@ -1,6 +1,8 @@
 /** Credential-scoped listing cache: first-use waits, background refresh, retention, and disposal. */
 import { expect, it, vi } from 'vitest'
+import { timeoutOf } from '@deepseek-ai/dsh-timeout'
 import { AccountModelCatalog } from '../src/catalog.ts'
+import { LISTING_TIMEOUT } from '../src/listing.ts'
 import type { ModelListing } from '../src/listing.ts'
 
 const listing = (...ids: string[]): ModelListing => ({
@@ -56,8 +58,9 @@ it('shares one first load between concurrent callers', async () => {
 })
 
 it('bounds the first wait by the request deadline and serves no listing after a failure', async () => {
-  const { catalog, warn } = harness(5)
+  const { catalog, loads, warn } = harness(5)
   await expect(catalog.view()).resolves.toEqual({ signedIn: true, listing: undefined })
+  expect(timeoutOf(loads[0]!.signal, LISTING_TIMEOUT)?.timeoutMs).toBe(5)
   expect(warn).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('using the bundled catalog'))
 })
 

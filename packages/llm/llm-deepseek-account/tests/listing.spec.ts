@@ -3,7 +3,8 @@ import { createServer } from 'node:http'
 import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import { afterEach, describe, expect, it } from 'vitest'
 import { APP_IDENTITY } from '@deepseek-ai/dsh-llm'
-import { parseModelListing, requestModelListing } from '../src/listing.ts'
+import { deadline } from '@deepseek-ai/dsh-timeout'
+import { LISTING_TIMEOUT, parseModelListing, requestModelListing } from '../src/listing.ts'
 import type { ListedCapabilities } from '../src/listing.ts'
 
 /** The account listing the service returned on 2026-09-24. */
@@ -143,8 +144,15 @@ describe('requestModelListing', () => {
     await expect(requestModelListing(url, {}, AbortSignal.timeout(5_000))).rejects.toMatchObject({ code: 'TRANSPORT' })
   })
 
-  it('reports the deadline as an aborted request', async () => {
+  it('reports the listing deadline as a timeout and another abort as an aborted request', async () => {
     const url = await listen(() => { /* never answers */ })
-    await expect(requestModelListing(url, {}, AbortSignal.timeout(20))).rejects.toMatchObject({ code: 'ABORTED' })
+    using limit = deadline(undefined, 20, LISTING_TIMEOUT)
+    await expect(requestModelListing(url, {}, limit.signal)).rejects.toMatchObject({
+      code: 'TIMEOUT', message: `DeepSeek model listing request to ${url} timed out after 20 ms`,
+    })
+    const caller = new AbortController()
+    const pending = requestModelListing(url, {}, caller.signal)
+    caller.abort()
+    await expect(pending).rejects.toMatchObject({ code: 'ABORTED' })
   })
 })

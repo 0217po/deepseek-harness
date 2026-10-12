@@ -1,6 +1,8 @@
 /** Credential-scoped `/models` cache with single-flight loads, background refresh, and last-known-good retention. */
 import { createHash } from 'node:crypto'
+import { deadline } from '@deepseek-ai/dsh-timeout'
 import type { CatalogSettings } from './config.ts'
+import { LISTING_TIMEOUT } from './listing.ts'
 import type { ModelListing } from './listing.ts'
 
 /** Host-owned inputs of one catalog instance. */
@@ -9,7 +11,7 @@ export interface CatalogDependencies {
   readonly settings: () => CatalogSettings
   /** The account token allowed for `url`, or `undefined` while signed out. */
   readonly token: (url: string) => Promise<string | undefined>
-  /** Perform one listing request authenticated with `token`. */
+  /** Perform one listing request authenticated with `token`; `signal` carries the {@link LISTING_TIMEOUT} request deadline. */
   readonly load: (url: string, token: string, signal: AbortSignal) => Promise<ModelListing>
   /** Wall clock used for listing age. */
   readonly now: () => number
@@ -107,7 +109,8 @@ export class AccountModelCatalog {
     const generation = this.generation
     const request = new AbortController()
     this.request = request
-    const run = this.dependencies.load(settings.url, token, AbortSignal.any([request.signal, AbortSignal.timeout(settings.timeoutMs)]))
+    const limit = deadline(request.signal, settings.timeoutMs, LISTING_TIMEOUT)
+    const run = this.dependencies.load(settings.url, token, limit.signal)
       .then((listing) => {
         if (generation !== this.generation) return
         this.listing = listing
@@ -123,7 +126,10 @@ export class AccountModelCatalog {
         this.settledAt = this.dependencies.now()
         this.failing = true
       })
-      .finally(() => { if (this.inflight === run) this.inflight = undefined })
+      .finally(() => {
+        limit[Symbol.dispose]()
+        if (this.inflight === run) this.inflight = undefined
+      })
     this.inflight = run
     return run
   }
