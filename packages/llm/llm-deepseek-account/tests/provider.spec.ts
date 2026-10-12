@@ -24,6 +24,7 @@ afterEach(async () => {
   for (const ctx of contexts.splice(0)) await ctx.fiber.dispose()
   await Promise.all(servers.splice(0).map(server => new Promise(resolve => server.close(resolve))))
   vi.unstubAllEnvs()
+  vi.restoreAllMocks()
 })
 
 /** Loopback listing endpoint: `reply` answers GET /models; any other request fails the test through its status. */
@@ -98,14 +99,18 @@ it('resolves listed capabilities with this build\'s model knowledge', async () =
 })
 
 it('falls back to the bundled catalog when the listing fails', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   const server = await listing((_request, response) => { response.writeHead(503).end('down') })
   const ctx = await host(server.origin)
   await ctx.plugin(Account, { baseURL: server.baseURL })
   expect((await ctx.llm.listModels('deepseek-account')).map(row => row.id)).toEqual(['deepseek-flash', 'deepseek-v4-pro'])
+  expect(warn).toHaveBeenCalledExactlyOnceWith('[llm-deepseek-account]', expect.stringContaining('using the bundled catalog') as string)
   await expect(ctx.llm.resolveModelInfo('deepseek-account', 'deepseek-flash')).resolves.toMatchObject({ context: { contextWindow: 1_000_000 } })
 })
 
 it('hides and refuses listed models this build cannot serve before any inference request', async () => {
+  const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   const server = await listing(json({ data: [
     FLASH,
     { ...PRO, id: 'deepseek-v5' },
@@ -119,9 +124,11 @@ it('hides and refuses listed models this build cannot serve before any inference
   await expect(ctx.llm.prepareCall({ provider: 'deepseek-account', model: 'deepseek-v5' })).rejects.toMatchObject({ code: 'MODEL_UNSUPPORTED' })
   await expect(ctx.llm.prepareCall({ provider: 'deepseek-account', model: 'deepseek-v4-pro' })).rejects.toMatchObject({ code: 'MODEL_UNSUPPORTED' })
   await expect(ctx.llm.prepareCall({ provider: 'deepseek-account', model: 'deepseek-v5-next' }))
-    .rejects.toMatchObject({ code: 'CLIENT_UPGRADE_REQUIRED', message: expect.stringContaining('99.0.0-alpha.1') as string })
+    .rejects.toMatchObject({ code: 'CLIENT_UPGRADE_REQUIRED', message: expect.stringMatching(/requires DeepSeek Harness 99\.0\.0-alpha\.1 or later; current version is /) as string })
   await expect(ctx.llm.prepareCall({ provider: 'deepseek-account', model: 'unlisted-pass-through' })).resolves.toBeDefined()
   expect(server.requests.map(request => request.url)).toEqual(['/models'])
+  expect(info).toHaveBeenCalledExactlyOnceWith('[llm-deepseek-account]', expect.stringContaining('loaded 5 model(s), skipped 0 row(s)') as string)
+  expect(warn).toHaveBeenCalledExactlyOnceWith('[llm-deepseek-account]', 'model "deepseek-v4-pro" declares no api_capabilities.anthropic_messages')
 })
 
 it('applies model overrides and reports stale ones on the provider directory until they resolve', async () => {

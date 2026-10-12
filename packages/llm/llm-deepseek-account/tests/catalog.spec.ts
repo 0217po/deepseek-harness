@@ -12,6 +12,7 @@ function harness(timeoutMs = 60_000, honorsAbort = true) {
   let clock = 0
   let token: string | undefined = 'token-a'
   const loads: Array<{ token: string; signal: AbortSignal; settle: PromiseWithResolvers<ModelListing> }> = []
+  const info = vi.fn()
   const warn = vi.fn()
   const catalog = new AccountModelCatalog({
     settings: () => ({ url: 'https://api.example/models', timeoutMs, maxAgeMs: 100 }),
@@ -23,11 +24,12 @@ function harness(timeoutMs = 60_000, honorsAbort = true) {
       return settle.promise
     },
     now: () => clock,
+    info,
     warn,
   })
   const flush = () => new Promise(resolve => setImmediate(resolve))
   return {
-    catalog, loads, warn, flush,
+    catalog, loads, info, warn, flush,
     advance: (ms: number) => { clock += ms },
     account: (value: string | undefined) => { token = value },
   }
@@ -41,7 +43,7 @@ it('reports a signed-out view without loading', async () => {
 })
 
 it('shares one first load between concurrent callers', async () => {
-  const { catalog, loads, flush } = harness()
+  const { catalog, loads, info, flush } = harness()
   const first = catalog.view()
   const second = catalog.view()
   await flush()
@@ -50,6 +52,7 @@ it('shares one first load between concurrent callers', async () => {
   await expect(first).resolves.toEqual({ signedIn: true, listing: listing('a') })
   await expect(second).resolves.toEqual({ signedIn: true, listing: listing('a') })
   expect(catalog.current()).toEqual({ signedIn: true, listing: listing('a') })
+  expect(info).toHaveBeenCalledExactlyOnceWith('model listing from https://api.example/models loaded 1 model(s), skipped 0 row(s)')
 })
 
 it('bounds the first wait by the request deadline and serves no listing after a failure', async () => {

@@ -13,6 +13,8 @@ export interface CatalogDependencies {
   readonly load: (url: string, token: string, signal: AbortSignal) => Promise<ModelListing>
   /** Wall clock used for listing age. */
   readonly now: () => number
+  /** Report a loaded listing. */
+  readonly info: (message: string) => void
   /** Report the first failure of a failing streak. */
   readonly warn: (message: string) => void
 }
@@ -111,11 +113,12 @@ export class AccountModelCatalog {
         this.listing = listing
         this.settledAt = this.dependencies.now()
         this.failing = false
+        this.dependencies.info(`model listing from ${settings.url} loaded ${listing.entries.length} model(s), skipped ${listing.skipped} row(s)`)
       }, (error: unknown) => {
         if (generation !== this.generation) return
         if (!this.failing) {
           const fallback = this.listing === undefined ? 'using the bundled catalog' : 'keeping the previous catalog'
-          this.dependencies.warn(`llm-deepseek-account: model listing from ${settings.url} failed (${String(error)}); ${fallback}`)
+          this.dependencies.warn(`model listing from ${settings.url} failed (${String(error)}); ${fallback}`)
         }
         this.settledAt = this.dependencies.now()
         this.failing = true

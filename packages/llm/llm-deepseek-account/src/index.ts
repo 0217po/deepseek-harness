@@ -22,6 +22,8 @@ export const inject = ['llm']
 const PROVIDER = 'deepseek-account'
 /** Header carrying the account token on Messages, Files, and model-listing requests. */
 const TOKEN_HEADER = 'x-dsh-auth-token'
+/** Console tag of listing diagnostics; product profiles mount no console exporter for `ctx.logger`. */
+const LOG_TAG = '[llm-deepseek-account]'
 
 /** Connection facts of one account operation: protocol settings plus the catalog resolved with them. */
 interface AccountConnection extends ResolvedDeepSeekOptions {
@@ -73,8 +75,11 @@ export function apply(ctx: Context, config: Config): void {
     token: async url => account()?.resolveToken(url),
     load: (url, token, signal) => requestModelListing(url, { [TOKEN_HEADER]: token }, signal),
     now: () => Date.now(),
-    warn: (message) => { ctx.logger.warn(message) },
+    info: (message) => { console.info(LOG_TAG, message) },
+    warn: (message) => { console.warn(LOG_TAG, message) },
   })
+  let loggedListing: ModelListing | undefined
+  /** Resolve the catalog for one view, logging the listing's hidden entries once per listing. */
   const connectionOf = (view: CatalogView): AccountConnection => {
     const resolved = settings()
     const result = resolveAccountCatalog({
@@ -84,19 +89,18 @@ export function apply(ctx: Context, config: Config): void {
       routeMaxTokens: resolved.protocol.maxTokens,
       clientVersion: APP_IDENTITY.version,
     })
+    if (view.listing !== loggedListing) {
+      loggedListing = view.listing
+      for (const problem of result.problems) console.warn(LOG_TAG, problem)
+    }
     return { ...resolved.protocol, models: result.resolution, catalog: result }
   }
   const entry = { provider: PROVIDER, displayName: 'DeepSeek Account', settingsNs: ctx.fiber.entry?.options.id ?? name, settingsPath: [] }
   const directory = ctx.llm.registerConfigurableProviders([entry])
-  let loggedListing: ModelListing | undefined
   let reportedError: string | undefined
-  /** Log listing problems once per listing and publish override diagnostics on the provider directory. */
+  /** Publish override diagnostics on the provider directory. */
   const discovered = (view: CatalogView): AccountConnection => {
     const connection = connectionOf(view)
-    if (view.listing !== loggedListing) {
-      loggedListing = view.listing
-      for (const problem of connection.catalog.problems) ctx.logger.warn(`llm-deepseek-account: ${problem}`)
-    }
     const error = connection.catalog.overrideErrors.length === 0 ? undefined : connection.catalog.overrideErrors.join('; ')
     if (error !== reportedError) {
       reportedError = error
