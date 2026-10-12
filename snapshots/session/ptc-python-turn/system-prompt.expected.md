@@ -341,7 +341,7 @@ class SendMessageOutput(TypedDict):
     messageId: str
 
 class SkillArgs(TypedDict):
-    # The exact skill name from the catalog, loaded skill instructions, or an explicit user request.
+    # The exact skill name from the available skills list.
     name: str
     # Additional keys beyond those declared are allowed.
 

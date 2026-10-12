@@ -36,12 +36,6 @@
             name: '@deepseek-ai/dsh-tool-schedule'
           - id: skill-filesystem
             name: '@deepseek-ai/dsh-skill-filesystem'
-          - id: workspace-dependencies
-            name: '@deepseek-ai/dsh-tool-workspace-dependencies'
-            disabled: !!js "!(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME)"
-            config:
-              source: !!js "process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME ?? '')"
-              root: !!js "process.env.DSH_PRIMARY_RUNTIME === undefined ? process.env.DSH_BUNDLED_PRIMARY_RUNTIME_ROOT : undefined"
           - id: tool-skill
             name: '@deepseek-ai/dsh-tool-skill'
           - id: command-goal

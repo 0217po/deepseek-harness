@@ -187,31 +187,6 @@ async function mintAgentScope(ctx: Context, subject: string | Agent): Promise<{ 
 }
 
 describe('dsh-tool-skill', () => {
-  it('keeps unlisted winners callable without advertising a shadowed listed skill', async () => {
-    const home = await tempDir('unlisted-skill')
-    const ctx = await setup(home)
-    try {
-      ctx.skills.register({ name: 'nested', description: 'Global listed version', content: 'Global body', source: 'runtime' })
-      const { agent, scope } = await mintAgentScope(ctx, home)
-      try {
-        const registry = scope.ctx.get('skills')!
-        registry.register({ name: 'nested', description: 'Private scoped version', content: 'Scoped body', source: 'runtime', modelCatalogVisibility: 'unlisted' })
-        registry.register({ name: 'forbidden', description: 'Forbidden', content: 'Forbidden body', source: 'runtime', modelCatalogVisibility: 'unlisted', invocation: { modelInvocable: false, userInvocable: false } })
-        expect(await composePrefixForAgent(ctx, agent)).toEqual([])
-        const result = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('nested'), agent, name: 'skill', arguments: { name: 'nested' } })
-        expect(result.isError).toBeFalsy()
-        expect(JSON.stringify(result)).toContain('Scoped body')
-        expect(JSON.stringify(result)).not.toContain('Global body')
-        const denied = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('denied'), agent, name: 'skill', arguments: { name: 'forbidden' } })
-        expect(denied.isError).toBe(true)
-        const decision = await proposeStep(ctx, agent, [createUserMessage({ content: [{ type: 'text', text: '/nested go' }], source: { kind: 'user' } })])
-        if (decision.kind !== 'enter') throw new Error('expected enter')
-        expect(decision.messages.at(-1)?.source).toMatchObject({ kind: 'skill-invocation', name: 'nested' })
-      } finally { await scope.dispose() }
-      expect(JSON.stringify(await composePrefix(ctx, home))).toContain('Global listed version')
-    } finally { await ctx.fiber.dispose() }
-  })
-
   it('registers the skill tool schema and removes it on dispose', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
@@ -541,7 +516,7 @@ describe('dsh-tool-skill', () => {
 
     const removal = catalogMessages(session)[2]
     if (removal?.type !== 'user/message') throw new Error('expected catalog removal')
-    expect(JSON.stringify(removal.data.content)).toContain('No skills are currently listed')
+    expect(JSON.stringify(removal.data.content)).toContain('No skills are currently available')
     expect(JSON.stringify(removal.data.content)).not.toContain('first-skill')
     expect(JSON.stringify(removal.data.content)).not.toContain('second-skill')
 

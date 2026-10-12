@@ -99,8 +99,9 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each(['native', 'ptc'
         const fixture = kind === 'blank' || kind === 'formula'
           ? await renderCliFixture(controlRoot, python!, kind === 'blank') : undefined
         await writeFile(configPath, JSON.stringify([
-          { id: 'skill-office', config: { assetRoot } },
-          { id: 'office-commands', config: { assetRoot, ...fixture ? { command: [process.execPath, fixture.cli] } : {} } },
+          { insert: [{ id: 'skill-office', name: '@deepseek-ai/dsh-skill-office', config: { assetRoot } }] },
+          { insert: [{ id: 'office-commands', name: '@deepseek-ai/dsh-skill-office/commands', config: { assetRoot, ...fixture ? { command: [process.execPath, fixture.cli] } : {} } }] },
+          { insert: [{ id: 'workspace-dependencies', name: '@deepseek-ai/dsh-tool-workspace-dependencies', config: { source: runtime! } }] },
           ...officeModelPatches(),
           { id: 'attachment-local', config: { dshHome: imageRoot } },
           { id: 'session-persistence-jsonl', config: { root: sessionRoot, compression: 'none' } },

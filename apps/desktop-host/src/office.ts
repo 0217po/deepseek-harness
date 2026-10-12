@@ -1,10 +1,16 @@
-/** Desktop resource paths consumed by the shared Web Office configuration. */
+/** Desktop Office skills and bundled authoring dependencies. */
 
 import { realpathSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runtimeArchivePath } from './office-engine.ts'
+import type { Context } from '@deepseek-ai/cordis'
+import * as officeSkills from '@deepseek-ai/dsh-skill-office'
+import * as officeCommands from '@deepseek-ai/dsh-skill-office/commands'
+import * as workspaceDependencies from '@deepseek-ai/dsh-tool-workspace-dependencies'
 
+/** Loader identity for the application-owned Office composition. */
+export const name = 'desktop-office'
 /** Application-selected bundled payload and installation directories. */
 export interface Config {
   /** Bundled payload directory. Missing sibling `office-skills` resources fail Host startup. */
@@ -16,17 +22,21 @@ export interface Config {
 }
 
 /**
- * Resolve carrier defaults before the shared profile evaluates its configuration.
- * @param config - Bundled payload, installation root, and application dependency directory.
- * @returns Resource environment consumed by patchable Web bundle rows.
+ * Enable offline Office authoring and structural checks in the Desktop profile.
+ * @param ctx - Profile scope; child plugins declare their own service requirements.
+ * @param config - Bundled payload source and Harness-home installation root.
  */
-export function desktopOfficeEnvironment(config: Config): Record<string, string> {
+export async function apply(ctx: Context, config: Config): Promise<void> {
+  await ctx.plugin(workspaceDependencies, config)
   const archive = runtimeArchivePath(config.runtimeDir) === undefined ? undefined : dirname(realpathSync(config.runtimeDir))
   const manifest = fileURLToPath(import.meta.resolve('@deepseek-ai/libreoffice-kit/package.json'))
   const packageRoot = dirname(archive === undefined ? manifest : join(`${archive}.unpacked`, relative(archive, manifest)))
-  return {
-    DSH_BUNDLED_PRIMARY_RUNTIME: config.source,
-    DSH_BUNDLED_PRIMARY_RUNTIME_ROOT: config.root,
-    DSH_BUNDLED_OFFICE_CLI: join(packageRoot, 'lib', 'cli.js'),
-  }
+  await ctx.plugin(officeSkills, {
+    assetRoot: join(dirname(config.source), 'office-skills'),
+  })
+  await ctx.plugin(officeCommands, {
+    assetRoot: join(dirname(config.source), 'office-skills'),
+    command: [join(config.source, 'dependencies', 'node', 'bin', process.platform === 'win32' ? 'node.exe' : 'node'), join(packageRoot, 'lib', 'cli.js')],
+    checkCommand: [join(config.source, 'dependencies', 'python', process.platform === 'win32' ? 'python.exe' : 'bin/python3'), join(dirname(config.source), 'office-skills', 'scripts', 'check_office.py')],
+  })
 }

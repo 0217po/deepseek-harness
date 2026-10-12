@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The initial catalog lists one short `office` summary. Its router selects an authoring skill or a separate rendering, recalculation, or PDF export skill. Skills use `office-check` and `dsoffice` through the existing shell tools without exposing interpreter or package paths. Web enables the skills and Kit command without a Python runtime. Other base compositions enable them when a carrier supplies a runtime or the deployment explicitly selects one. Ordinary Web does not provide or download script runtimes; its checker requires an explicitly supplied environment, and minimal presets retain their shell-only tool set.
+The catalog lists the Office router and six authoring or operation skills. Full instructions load on demand. Skills use `office-check` and `dsoffice` through existing shell tools without exposing interpreter or package paths. SDK and Desktop each mount the skill provider, command plugin, and dependency query; ordinary Web does not mount them by default.
 
 ## Table of Contents
 
@@ -54,11 +54,11 @@ Command overrides require an absolute executable as their first argument. Launch
 <a id="progressive-loading"></a>
 ### Progressive loading
 
-The model chooses skills from the task; the host does not inject complete instructions based on file extensions. Subskills are unlisted in the initial catalog but remain callable by name through `skill`, including explicit user invocation. Requested appearance changes, including spreadsheet cell fills and text alignment, require rendering even without an explicit visual-check request; an explicit request to skip rendering takes precedence. Pure operations can enter the corresponding skill directly.
+The model chooses skills from the task; the host does not inject complete instructions based on file extensions. All seven skills are listed and loadable by name through `skill` or explicit user invocation. Requested appearance changes, including spreadsheet cell fills and text alignment, require rendering even without an explicit visual-check request; an explicit request to skip rendering takes precedence. Pure operations can enter the corresponding skill directly.
 
 ```mermaid
 flowchart TD
-    A["Initial catalog: office summary"]
+    A["Initial catalog: seven Office summaries"]
     A -->|Non-Office task| N["Continue without loading Office instructions"]
     A -->|Office task| B["skill(office): task routing"]
 
@@ -99,7 +99,7 @@ New files and content, data, or formula edits do not require rendering solely be
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The provider reads descriptions at registration and bodies on demand. Only `office` has `modelCatalogVisibility: listed`; the six subskills use `unlisted`. Registry precedence, scope, and invocation permissions apply to every skill. Each loaded skill includes its resource directory for relative references. Disposal unregisters all candidates.
+The provider reads descriptions at registration and bodies on demand. Registry precedence, scope, and invocation permissions apply to every skill. Each loaded skill includes its resource directory for relative references. Disposal unregisters all candidates.
 
 The provider registers no tools or activation projection. Loaded skill results remain logged through the generic skill loader. Resume and fork use existing session history and tool declaration reconciliation. The command plugin hides carrier-specific executable paths behind local launchers and registers their directory with the shell environment; disposal removes both the contribution and the directory. Windows launcher directories support long `DSH_HOME` paths; `PATH` entries use ordinary absolute paths. When an executable path exceeds the Windows process launch limit, the plugin temporarily links its parent directory through a short path under the system temporary directory and removes that link on disposal.
 

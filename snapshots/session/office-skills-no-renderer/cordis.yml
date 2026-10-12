@@ -1,6 +1,8 @@
-- id: skill-office
-  config:
-    assetRoot: !!js process.cwd() + '/office-skills'
+- insert:
+    - id: skill-office
+      name: '@deepseek-ai/dsh-skill-office'
+      config:
+        assetRoot: !!js process.cwd() + '/office-skills'
 
 - id: llm-deepseek
   config:
@@ -16,6 +18,8 @@
 - id: tool-pwsh
   disabled: true
 
-- id: office-commands
-  config:
-    command: false
+- insert:
+    - id: office-commands
+      name: '@deepseek-ai/dsh-skill-office/commands'
+      config:
+        command: false

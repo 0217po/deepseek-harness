@@ -20,7 +20,7 @@ const repoRoot = fileURLToPath(new URL('../../../../../../', import.meta.url))
 interface DefaultWeb {
   root: string
   url: string
-  request: (command: 'roster' | 'mount-experimental' | 'mount-experimental-entry' | 'office-catalog' | 'office-dependencies' | 'office-render') => Promise<RuntimeRoster>
+  request: (command: 'roster' | 'mount-experimental' | 'mount-experimental-entry') => Promise<RuntimeRoster>
 }
 
 /**
@@ -32,7 +32,7 @@ interface DefaultWeb {
 export async function withDefaultWeb(
   test: TestContext,
   inspect: (app: DefaultWeb) => Promise<void>,
-  options: { patches?: readonly string[]; prepare?: (root: string) => Promise<void>; env?: NodeJS.ProcessEnv } = {},
+  options: { patches?: readonly string[]; prepare?: (root: string) => Promise<void> } = {},
 ): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), 'dsh-web-default-isolation-'))
   let removal: Promise<void> | undefined
@@ -65,11 +65,6 @@ export async function withDefaultWeb(
         '--patch', patch, '--host', '127.0.0.1', '--port', '0', '--no-open',
       ],
       env: {
-        ...options.env,
-        DSH_PRIMARY_RUNTIME: options.env?.DSH_PRIMARY_RUNTIME,
-        DSH_BUNDLED_PRIMARY_RUNTIME: options.env?.DSH_BUNDLED_PRIMARY_RUNTIME,
-        DSH_BUNDLED_PRIMARY_RUNTIME_ROOT: options.env?.DSH_BUNDLED_PRIMARY_RUNTIME_ROOT,
-        DSH_BUNDLED_OFFICE_CLI: options.env?.DSH_BUNDLED_OFFICE_CLI,
         NODE_OPTIONS: undefined,
         NODE_PATH: undefined,
         TSX_TSCONFIG_PATH: undefined,

@@ -1463,11 +1463,6 @@
     },
     {
       "doc": "docs/subsystems/skills.md",
-      "symbol": "ModelCatalogVisibility",
-      "source": "packages/skill/skill/src/index.ts"
-    },
-    {
-      "doc": "docs/subsystems/skills.md",
       "symbol": "SkillSource",
       "source": "packages/skill/skill/src/index.ts"
     },

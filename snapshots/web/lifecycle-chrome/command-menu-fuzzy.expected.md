@@ -1,6 +1,3 @@
 - listbox "Trigger suggestions":
   - text: Commands
   - option "Compact Compact older conversation history" [selected]
-  - text: Skills
-  - option "office-pptx Create, read, edit, and validate PowerPoint presentations (.pptx)."
-  - option "office-export-pdf Convert an Office document to a requested PDF with LibreOffice Kit."

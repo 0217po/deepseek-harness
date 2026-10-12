@@ -19,8 +19,7 @@ describe('bundled Office skills', () => {
       await ctx.plugin(SkillRegistry)
       await ctx.plugin(SkillOffice)
       const catalog = await ctx.skills.list()
-      const listed = catalog.filter(skill => skill.modelCatalogVisibility === 'listed')
-      expect(listed.map(skill => skill.name)).toEqual(['office'])
+      expect(catalog.map(skill => skill.name)).toEqual(names)
       const route = (await ctx.skills.get('office'))!
       expect(Math.ceil(route.description.length / 4)).toBeLessThanOrEqual(50)
       expect(Math.ceil(route.content.length / 4)).toBeLessThanOrEqual(200)
@@ -28,8 +27,8 @@ describe('bundled Office skills', () => {
         const skill = (await ctx.skills.get(name))!
         expect(Math.ceil(skill.content.length / 4)).toBeLessThanOrEqual(Math.floor(previousTokens * 0.65))
         expect(skill.content).not.toMatch(/read_image|transparent|DPI/)
-        if (name === 'office-xlsx') expect(skill.content).not.toContain('dsoffice')
-        else expect(skill.content).toContain('--pages "1,3,4"')
+        expect(skill.content).not.toContain('dsoffice')
+        expect(skill.content).toContain('office-render')
       }
     } finally { await ctx.fiber.dispose() }
   })
@@ -49,7 +48,6 @@ describe('bundled Office skills', () => {
         const raw = await readFile(join(assets, skill.name, 'SKILL.md'), 'utf8')
         const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/u, '').trim()
         expect(loaded?.content).toBe(body)
-        expect(skill.modelCatalogVisibility).toBe(skill.name === 'office' ? 'listed' : 'unlisted')
       }
       await fiber.dispose()
       expect(await ctx.skills.list()).toEqual([])

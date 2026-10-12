@@ -64,11 +64,12 @@ it.each(['native', 'ptc'] as const)('loads the router and authoring body in %s; 
   expect(adapter.requests).toHaveLength(3)
   const requests = adapter.requests.map(request => JSON.stringify(request))
   expect(requests[0]).toContain('Create, edit, inspect, or convert Office')
-  expect(requests[0]).not.toContain('office-docx')
+  expect(requests[0]).toContain('office-docx')
   expect(requests[1]).toContain('Office task routing')
   expect(requests[1]).not.toContain('python-docx')
   expect(requests[2]).toContain('python-docx')
-  expect(requests[2]).toContain('dsoffice render')
+  expect(requests[2]).toContain('office-render')
+  expect(requests[2]).not.toContain('dsoffice')
   expect(requests[0]).not.toContain('dsoffice')
   expect(requests[1]).not.toContain('dsoffice')
   for (const request of requests) {
@@ -82,7 +83,8 @@ it.each(['native', 'ptc'] as const)('loads the router and authoring body in %s; 
   for (const request of adapter.requests.slice(3)) {
     const text = JSON.stringify(request)
     expect(text).toContain('python-docx')
-    expect(text).toContain('dsoffice render')
+    expect(text).toContain('office-render')
+    expect(text).not.toContain('dsoffice')
     expect(text).not.toMatch(/uniformly blank|fragment rectangles/)
   }
   expect(agent.session.snapshotEvents()).toEqual(seed)

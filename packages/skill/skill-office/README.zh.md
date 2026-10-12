@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-初始目录只列出简短的 `office` 摘要。路由选择创作技能，或独立的渲染、重计算、PDF 导出技能。技能通过现有 shell 工具使用 `office-check` 和 `dsoffice`，不暴露解释器或包路径。Web 无需 Python 运行时即可启用技能和 Kit 命令。其他基础组合在载体提供运行时或部署显式选择运行时时启用它们。普通 Web 不提供或下载脚本运行时；检查器需要显式提供环境，minimal 预设仍只提供 shell 工具。
+目录列出 Office 路由及六个创作或操作技能，完整说明按需加载。技能通过现有 shell 工具使用 `office-check` 和 `dsoffice`，不暴露解释器或包路径。SDK 和 Desktop 分别挂载技能提供者、命令插件及依赖查询；普通 Web 默认不挂载它们。
 
 ## 目录
 
@@ -54,11 +54,11 @@ kind: "package-reference"
 <a id="progressive-loading"></a>
 ### 渐进加载
 
-模型依据任务选择技能；宿主不会根据文件扩展名注入完整说明。子技能不显示在初始目录中，但仍可通过 `skill` 按名称调用，包括用户显式调用。用户要求的外观修改，包括电子表格单元格填充和文本对齐，即使没有明确要求视觉检查，也需要渲染；用户明确要求跳过渲染时以该要求为准。纯操作任务可以直接进入对应技能。
+模型依据任务选择技能；宿主不会根据文件扩展名注入完整说明。七个技能均列入目录，可通过 `skill` 按名称加载或由用户显式调用。用户要求的外观修改，包括电子表格单元格填充和文本对齐，即使没有明确要求视觉检查，也需要渲染；用户明确要求跳过渲染时以该要求为准。纯操作任务可以直接进入对应技能。
 
 ```mermaid
 flowchart TD
-    A["Initial catalog: office summary"]
+    A["Initial catalog: seven Office summaries"]
     A -->|Non-Office task| N["Continue without loading Office instructions"]
     A -->|Office task| B["skill(office): task routing"]
 
@@ -99,7 +99,7 @@ flowchart TD
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-提供者在注册时读取摘要，按需读取正文。只有 `office` 使用 `modelCatalogVisibility: listed`；六个子技能使用 `unlisted`。注册表优先级、作用域和调用权限适用于全部技能。加载结果包含用于解析相对引用的资源目录。卸载提供者会移除全部候选技能。
+提供者在注册时读取摘要，按需读取正文。注册表优先级、作用域和调用权限适用于全部技能。加载结果包含用于解析相对引用的资源目录。卸载提供者会移除全部候选技能。
 
 提供者不注册工具或激活投影。通用技能加载器记录已加载技能的结果。恢复和 fork 使用现有会话历史及工具声明更新机制。命令插件用本地启动器封装载体专属可执行路径，并将其目录注册到 shell 环境；释放时移除该贡献与目录。Windows 启动器目录支持较长的 `DSH_HOME` 路径；`PATH` 条目使用普通绝对路径。可执行程序路径超过 Windows 进程启动长度限制时，插件在系统临时目录下建立通往其父目录的短路径链接，并在释放时移除该链接。
 

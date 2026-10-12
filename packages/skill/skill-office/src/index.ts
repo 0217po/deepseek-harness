@@ -59,7 +59,6 @@ export function apply(ctx: Context, input: Config = {}): void {
     const { description } = parseSkill(readFileSync(path, 'utf8'), path)
     return {
       name: skillName, description,
-      modelCatalogVisibility: skillName === 'office' ? 'listed' : 'unlisted',
       invocation: { modelInvocable: true, userInvocable: true },
       provider: 'dsh-office', source: 'bundled', rank: BUNDLED_SKILL_RANK,
       resourceBase: { kind: 'directory', path: directory.split(sep).join('/') }, locator: path,

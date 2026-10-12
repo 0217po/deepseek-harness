@@ -83,7 +83,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     name: 'skill',
     description: 'Load the full instructions for a skill. Call it before acting on a task that names or clearly matches a skill in the session skill catalog.',
     parameters: {
-      name: { type: 'string', required: true, description: 'The exact skill name from the catalog, loaded skill instructions, or an explicit user request.' },
+      name: { type: 'string', required: true, description: 'The exact skill name from the available skills list.' },
     },
     output: {
       schema: {
@@ -229,7 +229,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       : { skills: [], complete: true }
     signal.throwIfAborted()
     if (!snapshot.complete) return decision
-    const skills = snapshot.skills.filter(skill => isModelInvocable(skill) && skill.modelCatalogVisibility !== 'unlisted')
+    const skills = snapshot.skills.filter(isModelInvocable)
     const entries = catalogSourceEntries(skills, catalogDescriptionMaxLength)
     const digest = digestCatalogEntries(entries)
     const history = catalogHistory(agent)
@@ -285,11 +285,11 @@ function renderCatalogMessage(entries: SkillCatalogSource['entries']): UserMessa
 function renderCatalogUpdate(entries: SkillCatalogSource['entries']): UserMessage {
   const availability = entries.length === 0
     ? [
-      'No skills are currently listed. Names from loaded skill instructions or an explicit user request may still be invoked; the loader checks current availability and permissions.',
+      'No skills are currently available through the `skill` tool. Do not use names from earlier skill catalogs.',
       'A user may still invoke a skill directly; its <skill_content> block then appears in this conversation. Follow it, and do not call the `skill` tool for it.',
     ]
     : [
-      'Use this catalog for discovery. Names from loaded skill instructions or an explicit user request may also be invoked. Load the matching skill before acting, unless its instructions are already in the conversation.',
+      'Use only names in this replacement catalog. If the user names a listed skill, or the task clearly matches its description, call the `skill` tool with the exact name before acting.',
       'A user may also invoke a skill directly; its <skill_content> block then appears in this conversation. Follow it, and do not call the `skill` tool again for that skill.',
     ]
   return createUserMessage({

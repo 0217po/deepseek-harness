@@ -22,8 +22,9 @@ const launch = {
 async function prepareOffice(cwd: string) {
   await writeFile(join(cwd, 'office.patch.json'), JSON.stringify([
     ...officeModelPatches(),
-    { id: 'skill-office', config: { assetRoot: join(repo, 'packages/skill/skill-office/assets') } },
-    { id: 'office-commands', config: { assetRoot: join(repo, 'packages/skill/skill-office/assets') } },
+    { insert: [{ id: 'skill-office', name: '@deepseek-ai/dsh-skill-office', config: { assetRoot: join(repo, 'packages/skill/skill-office/assets') } }] },
+    { insert: [{ id: 'office-commands', name: '@deepseek-ai/dsh-skill-office/commands', config: { assetRoot: join(repo, 'packages/skill/skill-office/assets') } }] },
+    { insert: [{ id: 'workspace-dependencies', name: '@deepseek-ai/dsh-tool-workspace-dependencies', config: { source: runtime! } }] },
     { id: 'session-persistence-jsonl', config: { root: join(cwd, '.sessions'), compression: 'none' } },
   ]))
 }

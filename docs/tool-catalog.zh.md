@@ -1771,7 +1771,7 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
   "properties": {
     "name": {
       "type": "string",
-      "description": "The exact skill name from the catalog, loaded skill instructions, or an explicit user request."
+      "description": "The exact skill name from the available skills list."
     }
   },
   "required": [

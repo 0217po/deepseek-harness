@@ -463,8 +463,6 @@ describe('SkillRegistry registry', () => {
     expect(received).toBe(candidate)
     expect(received?.locator).toBe(locator)
     expect(loaded).toBe(definition)
-    expect(loaded?.metadata).toBe(definition.metadata)
-    expect(loaded?.resourceBase).toBe(definition.resourceBase)
   })
 
   it('preserves readonly runtime resource identities while adding the default provider', async () => {

@@ -14,12 +14,6 @@
 
 # ── surface-specific values the base deliberately omits ─────────────────────
 
-- id: skill-office
-  disabled: false
-
-- id: office-commands
-  disabled: false
-
 - id: system-prompt
   config:
     personaPrefix: >-
@@ -509,9 +503,6 @@
   disabled: true
 
 - id: tool-skill
-  disabled: true
-
-- id: workspace-dependencies
   disabled: true
 
 # The goal service and session driver stay on the host plane, where Gateway

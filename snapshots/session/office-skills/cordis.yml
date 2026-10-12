@@ -1,6 +1,8 @@
-- id: skill-office
-  config:
-    assetRoot: !!js process.cwd() + '/office-skills'
+- insert:
+    - id: skill-office
+      name: '@deepseek-ai/dsh-skill-office'
+      config:
+        assetRoot: !!js process.cwd() + '/office-skills'
 
 - id: tool-bash
   disabled: true
@@ -8,6 +10,8 @@
 - id: tool-pwsh
   disabled: true
 
-- id: office-commands
-  config:
-    command: !!js "[process.cwd() + '/office-node', process.cwd() + '/office-cli.js']"
+- insert:
+    - id: office-commands
+      name: '@deepseek-ai/dsh-skill-office/commands'
+      config:
+        command: !!js "[process.cwd() + '/office-node', process.cwd() + '/office-cli.js']"

@@ -80,8 +80,6 @@ The project root is the nearest ancestor containing `.git`; without one, the cur
 
 Chokidar watches existing roots for direct bundle/flat-entry additions and removals plus direct skill-entry changes. A missing root is followed one absent path segment at a time from its nearest existing ancestor until Chokidar can attach. Resource files below a bundle are not catalog changes. Model-facing `write` and `edit` observations synchronously invalidate the provider when their target is catalog-relevant, while the host watcher covers IDE, Git, shell, and external-process mutations. Watcher failures make the current observation incomplete without hiding readable candidates from direct loads; project-scoped watchers use a configured bounded LRU.
 
-`SkillInvocationSource` records the name of loaded instruction context. The [skill loader](../../packages/skill/tool-skill/README.md) persists direct loads as tool-result metadata and nested loads as instruction context.
-
 ## Skill identity
 
 Skill names are kebab-case (`^[a-z0-9]+(?:-[a-z0-9]+)*$`). The local provider accepts directory bundles (`<name>/SKILL.md`) and flat Markdown files (`<name>.md`). Nested recursive `**/SKILL.md` discovery is not supported.
@@ -93,21 +91,16 @@ type SkillSource = 'project-dsh' | 'project-agents' | 'runtime' | 'user-dsh' | '
 
 ## Summaries, candidates, and complete definitions
 
-`SkillSummary` is the registry's invocation-neutral summary shape. Consumers choose which entries and fields to render; the model session catalog uses only the `name` and `description` of model-invocable winners whose `modelCatalogVisibility` is not `unlisted`, never the body or absolute file path. `SkillInvocationPolicy` normalizes the two independent invocation controls into positive booleans, and every resolved summary, candidate, and definition carries it without turning arbitrary frontmatter into the domain model.
+`SkillSummary` is the registry's invocation-neutral summary shape. Consumers choose which entries and fields to render; the model session catalog uses only model-invocable `name` and `description`, never the body or absolute file path. `SkillInvocationPolicy` normalizes the two independent invocation controls into positive booleans, and every resolved summary, candidate, and definition carries it without turning arbitrary frontmatter into the domain model.
 
 ```ts type-equiv
 /** Invocation controls shared by skill discovery consumers. */
 interface SkillInvocationPolicy {
-  /** Whether model-facing loaders may invoke this skill. */
+  /** Whether model-facing catalogs and loaders include this skill. */
   readonly modelInvocable: boolean
   /** Whether human-facing command catalogs and loaders include this skill. */
   readonly userInvocable: boolean
 }
-```
-
-```ts type-equiv
-/** Whether a model catalog advertises a skill; invocation permissions are independent. */
-type ModelCatalogVisibility = 'listed' | 'unlisted'
 ```
 
 ```ts type-equiv
@@ -123,8 +116,6 @@ interface SkillSummary {
   readonly whenToUse?: string
   /** Resolved model and user invocation controls. */
   readonly invocation: SkillInvocationPolicy
-  /** Model catalog visibility; omission is listed. Applied after same-name winner selection. */
-  readonly modelCatalogVisibility?: ModelCatalogVisibility
   /** Discovery source that produced this winning skill. */
   readonly source: SkillSource
   /** Provider that owns this skill body. */

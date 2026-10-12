@@ -116,12 +116,6 @@ flowchart LR
   cfg --> plugin_dsh_base_skill
   plugin_dsh_base_skill_filesystem["skill-filesystem<br/>@deepseek-ai/dsh-skill-filesystem"]
   cfg --> plugin_dsh_base_skill_filesystem
-  plugin_dsh_base_skill_office["skill-office<br/>@deepseek-ai/dsh-skill-office"]
-  cfg --> plugin_dsh_base_skill_office
-  plugin_dsh_base_office_commands["office-commands<br/>@deepseek-ai/dsh-skill-office/commands"]
-  cfg --> plugin_dsh_base_office_commands
-  plugin_dsh_base_workspace_dependencies["workspace-dependencies<br/>@deepseek-ai/dsh-tool-workspace-dependencies"]
-  cfg --> plugin_dsh_base_workspace_dependencies
   plugin_dsh_base_tool_skill["tool-skill<br/>@deepseek-ai/dsh-tool-skill"]
   cfg --> plugin_dsh_base_tool_skill
   plugin_dsh_base_commands["commands<br/>@deepseek-ai/dsh-commands"]
@@ -260,9 +254,6 @@ flowchart LR
 | `agent-instructions` | `@deepseek-ai/dsh-agent-instructions` |
 | `skill` | `@deepseek-ai/dsh-skill` |
 | `skill-filesystem` | `@deepseek-ai/dsh-skill-filesystem` |
-| `skill-office` | `@deepseek-ai/dsh-skill-office` |
-| `office-commands` | `@deepseek-ai/dsh-skill-office/commands` |
-| `workspace-dependencies` | `@deepseek-ai/dsh-tool-workspace-dependencies` |
 | `tool-skill` | `@deepseek-ai/dsh-tool-skill` |
 | `commands` | `@deepseek-ai/dsh-commands` |
 | `command-feedback` | `@deepseek-ai/dsh-command-feedback` |

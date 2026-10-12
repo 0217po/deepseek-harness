@@ -192,7 +192,7 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** Load the full instructions for a skill. Call it before acting on a task that names or clearly matches a skill in the session skill catalog. */
   skill: {
-    /** The exact skill name from the catalog, loaded skill instructions, or an explicit user request. */
+    /** The exact skill name from the available skills list. */
     name: string;
   } & Record<string, JsonValue>;
   /** Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes. */
