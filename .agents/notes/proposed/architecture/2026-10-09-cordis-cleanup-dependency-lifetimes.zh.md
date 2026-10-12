@@ -20,7 +20,7 @@ Status: proposed
 
 ### Session 持久化丢失清理期间发出的事件
 
-**所有者与证据。** JSONL 服务在 provider fiber 上安装[追踪器 (`JsonlSessionPersistence`)](../../../../packages/session/session-persistence-jsonl/src/index.ts)。追踪器的[事件与 flush 监听器 (`JsonlBackendTracker.install`)](../../../../packages/session/session-persistence-jsonl/src/storage.ts)和[句柄关闭清扫 (`JsonlBackendTracker.install`)](../../../../packages/session/session-persistence-jsonl/src/storage.ts)是同级 effect。Agent loop [取消运行，等待 idle 与 scope 释放，然后关闭句柄 (`AgentLoop.prepare`)](../../../../packages/core/agent-loop/src/index.ts)。`AgentLoop.prepare` 的清理注释明确要求后端实时事件监听器在驱动器关闭期间保持挂载，以接收结束事件。其[轮次收尾 (`ReactLoopAgent.turn`)](../../../../packages/core/agent-loop/src/agent.ts)可能在 await 后发布补齐的工具结果与结束事件。
+**所有者与证据。** [JSONL 插件 (`apply`)](../../../../packages/session/session-persistence-jsonl/src/index.ts)通过组合清理，先撤回服务，再释放追踪器。[追踪器 (`JsonlBackendTracker.install`)](../../../../packages/session/session-persistence-jsonl/src/storage.ts)先移除实时事件监听器，再关闭句柄。这能保护由 provider 撤回触发卸载的消费方，但根资源并发释放可能在服务撤回发现消费方 fiber 之前，就已将其注销；插件明确不保证这种情形的释放顺序。Agent loop [取消运行，等待 idle 与 scope 释放，然后关闭句柄 (`AgentLoop.prepare`)](../../../../packages/core/agent-loop/src/index.ts)。`AgentLoop.prepare` 的清理注释明确要求后端实时事件监听器在驱动器关闭期间保持挂载，以接收结束事件。其[轮次收尾 (`ReactLoopAgent.turn`)](../../../../packages/core/agent-loop/src/agent.ts)可能在 await 后发布补齐的工具结果与结束事件。
 
 **失败与修正。** 根资源释放时，暂停轮次的取消收尾。JSONL 可以先移除路由监听器，并关闭当前已缓冲的前缀，然后轮次才发出最终事件。这些事件进入实时 Session，却从未进入写入器；之后幂等的句柄关闭无法恢复它们。应保留路由、写入器与写所有权，直到所有生产者结束，再执行最终排空。此项由源码追踪确认；仍需完整 Session 复现。
 

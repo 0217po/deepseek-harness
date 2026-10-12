@@ -15,8 +15,8 @@
   en: 630ab3bad5d44193
   zh: 71d3ba982c6f9a42
 /agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/p0-findings/session-persistence-drops-events-emitted-during-cleanup:
-  en: 392779b4aea2279d
-  zh: 7228140dd5f47b40
+  en: 347916370af3b6b2
+  zh: 39b1da819efc1ef9
 /agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/p0-findings/storage-closes-before-schedule-commits-accepted-delivery:
   en: 8a9578bbc700c0bf
   zh: 8ee46e5ef1cf3972
