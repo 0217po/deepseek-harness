@@ -229,6 +229,8 @@ export interface HostConnectionHandle {
 
   /**
    * Authenticate one frontend index request, owning a token redirect or 401.
+   * The cookie this mints is `Secure` when the mounted Web carrier serves TLS,
+   * which only that listener's protocol decides.
    * @param request - root or configured-index HTTP request.
    * @param response - response owned when the result is false.
    * @returns true only when the frontend may serve index.html.

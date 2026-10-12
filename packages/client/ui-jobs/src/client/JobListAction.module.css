@@ -48,7 +48,7 @@
   max-width: min(560px, calc(100vw - 32px));
   max-height: min(480px, calc(100vh - 140px));
   margin: 0;
-  padding: 3px;
+  padding: 4px;
   overflow: auto;
   list-style: none;
   border: 0;
@@ -155,6 +155,10 @@
   background: transparent;
 }
 
+.rowLineLive .row {
+  border-radius: var(--dsw-radius-sm);
+}
+
 .rowLineLive .row:focus-visible {
   background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);
 }
@@ -229,7 +233,7 @@
   min-height: 28px;
   padding: 4px 7px;
   border: 0;
-  border-radius: var(--dsw-radius-sm);
+  border-radius: var(--dsw-radius-md);
   background: transparent;
   color: var(--dsw-alias-label-primary);
   font-size: 12px;

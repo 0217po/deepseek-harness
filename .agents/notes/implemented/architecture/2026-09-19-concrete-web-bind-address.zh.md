@@ -28,6 +28,8 @@ Web 监听器只接受 `127.0.0.1` 或 `0.0.0.0`。通配绑定会暴露机器�
 
 操作者只暴露 `--host` 点名的接口，并无需额外配置即可通过该字面量访问监听器；其他每个远程 authority 都是一个 `--trusted-host` 决定。曾绑定 `0.0.0.0` 的组合在加载时失败，并给出点名被拒绝拼写的消息。纯 IPv6 主机得到端到端支持，包括打印与打开的 URL。
 
+[原生 HTTPS 监听器决策](2026-09-23-native-https-web-listener.zh.md)取代本说明仅支持 HTTP 传输的前提。非回环警告只适用于未启用 TLS 的监听器；绑定地址校验与 authority 接纳保持不变。
+
 ## 测试
 
 `packages/host/webserver/tests/webserver.spec.ts` 分类通配与回环拼写并拒绝通配配置；`packages/bundle/web-app/tests/startup.spec.ts` 在消费者激活前拒绝通配 `--host`；`packages/client/connection/tests/api-request-trust.host.spec.ts` 与 `node-half.host.spec.ts` 在任意端口上接纳绑定字面量而不接纳其他 authority；`packages/bundle/web-app/tests/web-app.spec.ts` 覆盖带方括号的 IPv6 URL 与明文 HTTP 警告；`apps/cli/tests/profiles/web/tests/public-url.expected.e2e.ts` 在非回环地址与带 zone 的回环地址上启动已构建的 profile；`web-failure-matrix.expected.e2e.ts` 与 `packages/boot/app-boot/tests/app-boot.spec.ts` 报告必需的 `web-runtime` 条目。

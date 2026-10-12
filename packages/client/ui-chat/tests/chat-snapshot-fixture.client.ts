@@ -19,6 +19,7 @@ import {
   isSubagentDelegationTool, sameTurnProcessSpec, TURN_PROCESS_INDEPENDENT_KINDS,
   type TurnProcessSpec,
 } from '../src/client/contract/turn-process.ts'
+import { isAtOrOutside } from '../src/client/contract/group-tree.ts'
 
 const EMPTY: readonly never[] = []
 
@@ -105,6 +106,9 @@ class FixtureNodeStore implements ChatNodeStore {
   private readonly turnProcesses = new ChatTurnProcessProjector()
   private readonly sources = new Map<string, FixtureSource<ChatConversationViewNode | undefined>>()
   private readonly processSources = new Map<string, FixtureSource<ChatTurnProcessPresentation | undefined>>()
+  private readonly bottomSources = new Map<string, FixtureSource<boolean>>()
+  /** First Turn of the latest loaded exchange. */
+  bottomStart: number | undefined
   private readonly dirtyKeys = new Set<string>()
   private readonly dirtyProcessKeys = new Set<string>()
   private list: readonly ChatConversationViewNode[] = EMPTY
@@ -115,6 +119,14 @@ class FixtureNodeStore implements ChatNodeStore {
 
   source(key: string): ChatNodeSource {
     return cachedSource(this.sources, key, () => new FixtureSource(() => this.get(key)))
+  }
+
+  bottomSource(key: string): ReturnType<ChatNodeStore['bottomSource']> {
+    return cachedSource(this.bottomSources, key, () => new FixtureSource(() => {
+      const location = this.get(key)?.location
+      return this.bottomStart !== undefined && (location?.kind === 'turn' || location?.kind === 'step')
+        && location.turn.turn >= this.bottomStart
+    }))
   }
 
   turnDataSource(): never {
@@ -174,6 +186,7 @@ class FixtureNodeStore implements ChatNodeStore {
     this.dirtyProcessKeys.clear()
     for (const key of dirty) this.sources.get(key)?.publish()
     for (const key of dirtyProcesses) this.processSources.get(key)?.publish()
+    for (const source of this.bottomSources.values()) source.publish()
   }
 }
 
@@ -259,6 +272,8 @@ function settledNode(
       ? { kind: 'session' as const }
       : { kind: 'turn' as const, turn },
     visibility: 'visible' as const,
+    // A fixture user message inside a Turn stands for its opening human input.
+    groupTree: node.kind === 'user' && turn !== undefined ? 'exchange' as const : undefined,
   }
   switch (node.kind) {
     case 'assistant':
@@ -516,6 +531,11 @@ export function chatSnapshotFixture(input: {
     && previous.legacy.turnEnds === legacy.turnEnds
     ? previous.timeline
     : { turnOrder: [...turns.keys()], turns }
+  const openingTurns = store.values().flatMap((node) => {
+    const location = node.location
+    return isAtOrOutside(node, 'exchange') && (location.kind === 'turn' || location.kind === 'step') ? [location.turn.turn] : []
+  })
+  store.bottomStart = openingTurns.length === 0 ? timeline.turnOrder[0] : Math.max(...openingTurns)
   const derived = timeline.turnOrder
     .map(turn => turnNavigationItem(turn, locations, store))
     .filter((item): item is TurnNavigationItem => item !== undefined)

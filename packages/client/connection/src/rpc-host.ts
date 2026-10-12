@@ -103,15 +103,11 @@ export class HostConnectionService extends Service implements HostConnectionHand
     }
   }
 
-  /** Active Web carrier's bind address; absent when no Web carrier is mounted. */
-  private get bindHost(): string | undefined {
-    return this.ctx.get('webServer')?.host
-  }
-
   /** Apply the Host/Origin fence, then browser authentication. */
   requestRejection(request: ConnectionTrustRequest): ConnectionRequestRejection {
-    if (!isTrustedApiRequest(request, this.trustedHosts, this.bindHost)) return 403
-    return this.browserAuth.isAuthenticated(request) ? undefined : 401
+    const carrier = this.ctx.get('webServer')
+    if (!isTrustedApiRequest(request, this.trustedHosts, carrier?.host, carrier?.protocol ?? 'http:')) return 403
+    return this.browserAuth.isAuthenticated(request, carrier?.protocol === 'https:') ? undefined : 401
   }
 
   /** A request that passes the fence and authentication speaks for the operator. */
@@ -120,9 +116,11 @@ export class HostConnectionService extends Service implements HostConnectionHand
     return rejection === undefined ? { peer: this.operator } : { rejection }
   }
 
-  /** Authenticate an index request through the process-token exchange or cookie. */
+  /**
+   * Authenticate an index request; native TLS listeners mint Secure cookies.
+   */
   authorizeIndex(request: ConnectionIndexRequest, response: ConnectionIndexResponse): boolean {
-    return this.browserAuth.authorizeIndex(request, response)
+    return this.browserAuth.authorizeIndex(request, response, this.ctx.get('webServer')?.protocol === 'https:')
   }
 
   /** Add this process's launch token to the clean application URL. */

@@ -28,6 +28,8 @@ The advertised URL uses IPv4 for mapped loopback binds, brackets other IPv6 bind
 
 An operator exposes exactly the interfaces named by `--host` and reaches the listener through that literal without further configuration; every other remote authority is a `--trusted-host` decision. Compositions that bound `0.0.0.0` fail at load with a message naming the rejected spelling. IPv6-only hosts are supported end to end, including the printed and opened URL.
 
+The [native HTTPS listener decision](2026-09-23-native-https-web-listener.md) supersedes this note's HTTP-only transport assumption. The non-loopback warning applies only without TLS; bind-address validation and authority admission remain unchanged.
+
 ## Testing
 
 `packages/host/webserver/tests/webserver.spec.ts` classifies wildcard and loopback spellings and rejects wildcard config; `packages/bundle/web-app/tests/startup.spec.ts` refuses wildcard `--host` before consumers activate; `packages/client/connection/tests/api-request-trust.host.spec.ts` and `node-half.host.spec.ts` admit the bind literal on any port without admitting other authorities; `packages/bundle/web-app/tests/web-app.spec.ts` covers the bracketed IPv6 URL and the plain-HTTP warning; `apps/cli/tests/profiles/web/tests/public-url.expected.e2e.ts` boots the built profile on a non-loopback and a zoned loopback address; `web-failure-matrix.expected.e2e.ts` and `packages/boot/app-boot/tests/app-boot.spec.ts` report the required `web-runtime` entry.

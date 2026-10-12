@@ -308,9 +308,15 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     await expect.poll(() => titleRequests(following.agent).length).toBe(1)
     expect(titleRequests(following.agent)[0]?.data.titleProvider).toBe('session-title-all-prompts-llm')
     await expect.poll(() => ctx.sessionTitle.get(following.agent.session)?.source.kind).toBe('provider')
+    const currentTitle = ctx.sessionTitle.get(following.agent.session)?.title
+    const firstInput = titleRequests(following.agent)[0]?.data.messages[0]?.content[0]
+    expect(firstInput?.type === 'text' && firstInput.text).toContain('Generate the session title from this JSON array')
     await turn(following.agent, 'Continue the growing conversation.', [textResponse('TWO')])
     await expect.poll(() => titleRequests(following.agent).length).toBe(2)
     expect(titleRequests(following.agent).every(event => event.data.titleProvider === 'session-title-all-prompts-llm')).toBe(true)
+    const followingInput = titleRequests(following.agent)[1]?.data.messages[0]?.content[0]
+    expect(followingInput?.type === 'text' && followingInput.text)
+      .toContain(`Update the session title from this JSON object:\n{"currentTitle":${JSON.stringify(currentTitle)},`)
     await select(bundles.titles, false)
     const restored = await agent()
     await turn(restored.agent, 'Restore first-prompt titles.', [textResponse('ONE')])

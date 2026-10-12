@@ -62,6 +62,7 @@ import {
   type SdkPromptContentBlock,
 } from '@deepseek-ai/dsh-sdk-client'
 import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import { deriveReplayScript, parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 
 const corpusRoot = fileURLToPath(new URL('../', import.meta.url))
 
@@ -102,6 +103,8 @@ function dirOf(url: string): string {
 interface SdkAssertions {
   /** Additional profile patches applied after the shared composition. */
   patches?: readonly string[]
+  /** Wait for the recorded provider title before sending each subsequent prompt. */
+  waitForProviderTitle?: boolean
   /** Final response required from a completed turn before updating goldens. */
   expectedFinalResponse?: string
   /** Environment overrides passed to the runtime subprocess. */
@@ -124,6 +127,7 @@ interface SdkAssertions {
 }
 
 const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
+  'session-title-stability': { waitForProviderTitle: true },
   'dynamic-tool-updates': {
     expectedFinalResponse: 'DONE',
   },
@@ -599,6 +603,16 @@ async function runScenario(scenario: CorpusScenario): Promise<{
     ignoredRootEntries: RUNTIME_WORKSPACE_ENTRIES,
   })
   const [parentFixture, ...childFixtures] = replayFixtures
+  const actions = turnActions(primaryFixture)
+  const resumeReplayFile = scenario.name === 'session-resume' && !recording
+    ? join(patchRoot, 'resume-replay.json') : undefined
+  const prepareTurnReplay = async (turn: number): Promise<void> => {
+    if (resumeReplayFile === undefined || parentFixture === undefined) return
+    const events = parseSessionLog(await readFile(parentFixture, 'utf8'))
+      .filter(event => 'turn' in event.data && event.data.turn === turn)
+    await writeFile(resumeReplayFile, JSON.stringify(deriveReplayScript(events)))
+  }
+  if (actions[0] !== undefined) await prepareTurnReplay(actions[0].turn)
   const env: Record<string, string> = {
     ...Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== undefined)) as Record<string, string>,
     DSH_SNAPSHOT: mode,
@@ -617,19 +631,22 @@ async function runScenario(scenario: CorpusScenario): Promise<{
     ...scenario.manifest.environment,
     ...assertions.environment,
     ...childEnvironment,
+    ...resumeReplayFile === undefined ? {} : { DSH_SNAPSHOT_OVERRIDE: resumeReplayFile },
   }
 
-  const harness = new DeepSeekHarness({
+  const createHarness = (): DeepSeekHarness => new DeepSeekHarness({
     profile: 'sdk',
     patches,
     dshHome,
     processCwd: cwd,
     env,
+    initializeTimeoutMs: 110_000,
     requestTimeoutMs: 110_000,
     cwd,
     provider: route.provider,
     model: route.model,
   })
+  let harness = createHarness()
   try {
     const notifications: HarnessNotification[] = []
     const observedMethods = new Set<string>()
@@ -637,7 +654,12 @@ async function runScenario(scenario: CorpusScenario): Promise<{
     const sessionId = 'fixture-root-session'
     const liveSessions: (string | undefined)[] = [sessionId]
     await harness.start()
-    const subscription = harness.client.subscribeSessionTree(sessionId)
+    let subscription = harness.client.subscribeSessionTree(sessionId)
+    const titleSubscription = assertions.waitForProviderTitle === true
+      ? harness.client.subscribeSessionTree(sessionId)
+      : undefined
+    const expectedTitles = records(primaryFixture).filter(event => event.type === 'session/title'
+      && ((event.data as JsonObject).source as JsonObject).kind === 'provider')
     const completionSubscription = scenario.name === 'subagent-continuable'
       ? harness.client.subscribeSessionTree(sessionId)
       : undefined
@@ -649,8 +671,8 @@ async function runScenario(scenario: CorpusScenario): Promise<{
       liveSessions.push(child)
     }
     try {
-      const session = harness.session(sessionId)
-      for (const action of turnActions(primaryFixture)) {
+      let session = harness.session(sessionId)
+      for (const action of actions) {
         if (action.content === undefined) {
           await waitForRootEvent(
             subscription,
@@ -660,6 +682,17 @@ async function runScenario(scenario: CorpusScenario): Promise<{
           )
           continue
         }
+        if (scenario.name === 'session-resume' && results.length > 0) {
+          subscription.close()
+          await harness.close()
+          await prepareTurnReplay(action.turn)
+          harness = createHarness()
+          await harness.start()
+          subscription = harness.client.subscribeSessionTree(sessionId)
+          await expect(harness.resumeSession('missing-session')).rejects.toThrow()
+          session = await harness.resumeSession(sessionId)
+          expect(session.id).toBe(sessionId)
+        }
         const result = await session.run(materializeInput(action.content, scenario, cwd, liveSessions), {
           onNotification: (notification) => {
             notifications.push(notification)
@@ -667,6 +700,13 @@ async function runScenario(scenario: CorpusScenario): Promise<{
           },
         })
         results.push(result)
+        if (titleSubscription !== undefined) {
+          const expected = expectedTitles[results.length - 1]?.data as JsonObject | undefined
+          expect(expected, 'each turn has a recorded provider title').toBeDefined()
+          await waitForRootEvent(titleSubscription, sessionId, event => event.type === 'session/title'
+            && ((event.data as JsonObject).source as JsonObject).kind === 'provider'
+            && (event.data as JsonObject).title === expected?.title, observe)
+        }
         if (completionSubscription !== undefined) {
           expect(result.finalResponse, 'run returns at the first parent idle').toBe('DONE')
           expect(result.events.filter(event => event.type === 'turn/end'))
@@ -715,6 +755,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
     } finally {
       subscription.close()
       completionSubscription?.close()
+      titleSubscription?.close()
     }
     await harness.close()
     const logs = (await Promise.all([

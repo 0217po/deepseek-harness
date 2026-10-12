@@ -1,7 +1,7 @@
 /** Select local test defaults or platform release settings without changing the caller's environment. */
 
 import { accessSync, constants, readFileSync, statSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseEnv } from 'node:util'
 import { resolveDesktopAppId, resolveMacOSNotarizationEnvironment, resolveMacOSSigningEnvironment, resolveNpmRegistry } from './desktop-release-environment.mjs'
@@ -33,14 +33,46 @@ export function localMacOSPackageEnvironment(environment = process.env) {
 }
 
 /**
- * Read the target's required UTF-8 dotenv file; release settings never fall back to ambient values.
+ * Read a Windows machine preset when selected, otherwise the target's required dotenv; no ambient release fallback.
  * @param {'win32' | 'darwin'} platform Target platform.
  * @param {NodeJS.ProcessEnv} environment Parent environment, retained only for unrelated build tools.
  * @param {string} appRoot Desktop application directory; relative credential paths resolve here.
+ * @param {{ unsigned?: boolean, prepareOnly?: boolean }} options Unsigned and preparation-only presets never read signing credentials.
  * @returns {NodeJS.ProcessEnv} Isolated environment with file-owned release settings.
  */
-export function loadDesktopPackageEnvironment(platform, environment = process.env, appRoot = APP_ROOT) {
-  const path = join(appRoot, platform === 'win32' ? '.env.windows' : '.env.macos')
+export function loadDesktopPackageEnvironment(platform, environment = process.env, appRoot = APP_ROOT, options = {}) {
+  const preset = environment.DSH_PACKAGING_PRESET
+  let path = join(appRoot, platform === 'win32' ? '.env.windows' : '.env.macos')
+  if (preset !== undefined) {
+    if (platform !== 'win32') throw new Error('desktop package: presets support Windows only')
+    if (preset !== 'test' && preset !== 'production') throw new Error('desktop package: preset must be test or production')
+    const root = environment.DSH_PACKAGING_CONFIG_DIR
+    if (!root || !isAbsolute(root)) throw new Error('desktop package: DSH_PACKAGING_CONFIG_DIR must be an absolute directory')
+    path = join(root, 'presets', `${preset}.env`)
+  }
+  const platformSetting = platform === 'win32' ? WINDOWS_SETTING : MACOS_SETTING
+  const settings = readSettings(path, name => preset === undefined
+    ? SHARED_SETTING.test(name) || platformSetting.test(name)
+    : /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN)|WINDOWS_SIGNATURE_CACHE_(?:DIR|CONCURRENCY))|DOWNLOAD_TEST_(?:ORIGIN|RELEASE_ID))$/u.test(name))
+  if (preset !== undefined) {
+    if (settings.DSH_DESKTOP_AUTO_UPDATE_ENV !== preset) throw new Error('desktop package: preset deployment must match its name')
+    if (!options.unsigned && !options.prepareOnly) Object.assign(settings, readSettings(join(dirname(dirname(path)), 'secrets', 'windows-signing.env'),
+      name => /^DSH_DESKTOP_WINDOWS_(?:CER_FILE|SIGNTOOL|KEY_CONTAINER|TOKEN_PIN)$/u.test(name)))
+  }
+  return {
+    ...Object.fromEntries(Object.entries(environment).filter(([name]) => !AMBIENT_RELEASE_SETTING.test(name))),
+    ...settings,
+    ...(preset === undefined ? {} : { DSH_PACKAGING_PRESET: preset }),
+  }
+}
+
+/**
+ * Read an explicitly selected dotenv without exposing credential-bearing parser errors.
+ * @param {string} path Selected file; relative file settings resolve beside it.
+ * @param {(name: string) => boolean} accepts Whether this file may declare a setting.
+ * @returns {NodeJS.ProcessEnv} Validated file settings.
+ */
+function readSettings(path, accepts) {
   let contents
   try {
     contents = readFileSync(path, 'utf8')
@@ -56,9 +88,8 @@ export function loadDesktopPackageEnvironment(platform, environment = process.en
     // Parser diagnostics can contain credential-bearing input.
     throw new Error(`desktop package: invalid dotenv syntax in ${path}`)
   }
-  const platformSetting = platform === 'win32' ? WINDOWS_SETTING : MACOS_SETTING
   for (const name of Object.keys(settings)) {
-    if (!SHARED_SETTING.test(name) && !platformSetting.test(name)) {
+    if (!accepts(name)) {
       throw new Error(`desktop package: unsupported setting ${name} in ${path}; use the platform template`)
     }
     if (settings[name].includes('\0')) throw new Error(`desktop package: ${name} cannot contain a NUL character`)
@@ -66,10 +97,7 @@ export function loadDesktopPackageEnvironment(platform, environment = process.en
   for (const name of FILE_SETTINGS) {
     if (settings[name]?.trim()) settings[name] = resolve(dirname(path), settings[name].trim())
   }
-  return {
-    ...Object.fromEntries(Object.entries(environment).filter(([name]) => !AMBIENT_RELEASE_SETTING.test(name))),
-    ...settings,
-  }
+  return settings
 }
 
 function requireReadableFile(environment, name) {

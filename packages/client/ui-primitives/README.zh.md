@@ -54,7 +54,7 @@ kind: "package-library"
 | `PathLabel` | 单行文件路径：目录使用弱化颜色，文件名使用主色，悬停可查看完整路径。空间足够时靠左显示；溢出时保留尾部并在左侧渐隐，路径或尺寸变化时更新。 |
 | `StateDot` | 10px 槽内的绿色 `done`、琥珀色 `warning`、红色 `error`、中性灰色 `idle` 圆点，以及 tertiary 灰色 14px 旋转 `ongoing` loading，其动画在挂载时以及每次动画重启（如列表重排）时固定到文档时间零点，所以所有可见 loading 同相旋转。它是 `aria-hidden` 的，名称由渲染点提供。 `appearance="step"` 以实心勾表示完成、空心圆表示等待。 |
 | `ConnectionIndicator` | 行内连接恢复控件，覆盖断线、重试与已恢复三种状态。 |
-| `DisclosureRow` | 24px 紧凑折叠行，标题与内容左右排列。标题行默认使用 tertiary，悬停时使用 secondary；文字与图标继承该颜色，不受能否展开及开合状态影响，调用方可提供功能专属覆盖。语义状态色保持显式指定。收起时悬停预览向下箭头，展开后持续显示向上箭头。使用浅层 prop 比较进行 memo；内容未变时，保持回调与 React 节点 prop 的引用稳定。 |
+| `DisclosureRow` | 24px 紧凑折叠行，标题与内容左右排列。标题行默认使用 tertiary，悬停时使用 secondary；文字与图标继承该颜色，不受能否展开及开合状态影响，调用方可提供功能专属覆盖。语义状态色保持显式指定。收起时悬停预览向下箭头，展开后持续显示向上箭头。`headerAccessory` 将独立操作放在折叠触发区域和流光之外；有此操作时，标题行收窄到内容宽度。使用浅层 prop 比较进行 memo；内容未变时，保持回调与 React 节点 prop 的引用稳定。 |
 | `TextShimmer` | 同一道高光从左到右扫过一行的标题、分隔符、摘要与后缀：首次等待 300ms，扫动一秒，再静止 500ms。遮罩覆盖内容宽度，并限制在可见行宽内，相对垂直方向倾斜 15°，峰值区域平坦，两侧柔和渐隐。移动的装饰层始终裁剪在行内，不会扩大可滚动区域。底色继承调用方的颜色，包括悬停变化；主题提供半透明高光。图标和箭头放在 `TextShimmer` 外，只有文字和分隔符参与扫光。字符串子节点沿用稳定的文字接口；嵌套的 `TextShimmer` 共用外层动画。活动期间组合子节点渲染两次，因此不得带副作用或元素 id。分隔符标记 `data-shimmer-decoration`，让填色参与扫光。`DisclosureRow` 将 `contentClassName` 传给文字区域，将 `contentLayoutClassName` 传给内部布局。惰性装饰副本不参与交互、选区和无障碍访问；文字更新保留动画，减少动态效果模式保留静态底色。 |
 | `Modal` | 页面遮罩之上的居中对话框。嵌套对话框可通过 `onKeyDownCapture` 在文档级 Escape 处理器之前拦截按键。 色层与弹窗淡入，背景模糊始终完整生效，并遵循减少动态效果偏好。调用方已模糊源页面时设置 `backdropBlur={false}`。 |
 | `RiskConfirmation` | 以显式复选框把关的敏感操作确认。 |
@@ -66,10 +66,11 @@ kind: "package-library"
 | `SettingsFormModel`、`settingsNumberField`、`settingsTextField` | 这类页面背后基于设置 scope 的暂存编辑模型：草稿先暂存、保存时写入，字段是否被覆盖看用户层是否含有它，未落地的保存保留草稿。 |
 | `JsonTree`、`JsonBlock` | 只读 JSON 查看。 |
 | `MarkdownText`、`MarkdownDelegateProvider`、`CodeBlock` | 不可信 GFM 与 TeX 数学、owner 委托的 HTTP(S) 导航，以及高亮代码。`CodeBlock` 可通过 `lineNumbers` 开启行号；复制的源码不含行号栏，`contentRef` 则向需要把稳定源码包装节点用作滚动区的 owner 提供该节点。调用方提供自己的语言与复制工具栏时，设置 `showHeader={false}`。 |
+| `UserTextRun`、`ReferenceChip` | 不做解析的行内文本，以及业务已解析的引用标签或激活按钮。 |
 | `CommandText` | 可选中的命令或参数文本；仅横向溢出时添加具名的键盘聚焦目标。 |
 | `TerminalBlock`、`ReadBlock`、`DiffBlock`、`SearchBlock`、`WebBlock` | 与各类工具结果意图对应的 agent 输出卡片。 |
 | `icons/*`、`FishLogo`、`BrandWordmark`、`ReferenceIconRegular`/`ReferenceIconMedium`、`LinkIconRegular`/`LinkIconMedium` | 字形与品牌标识。思考图标的轨道在 16px 视口内保留内边距。`LinkIconMedium` 用于 14px 的可点击链接分类及已知站点标记。 |
-| `PermissionIconReadOnlyRegular`/`Medium`、`PermissionIconWorkspaceWriteRegular`/`Medium`、`PermissionIconFullAccessRegular`/`Medium` | 只读、工作区写入与完全访问选项使用的权限模式图形。 |
+| `PermissionIconReadOnlyRegular`/`Medium`、`PermissionIconWorkspaceWriteRegular`/`Medium`、`PermissionIconFullAccessRegular`/`Medium`、`PermissionIconAutoReviewRegular`/`Medium` | 只读、工作区写入、完全访问与自动审查选项使用的权限模式图形。 |
 | `PluginArtworkTerminal`/`Loop`/`Subagent`/`Search`/`Default` | 固定配色的 36×36 插件插画；`Terminal` 为插件卡片和侧边栏开始页入口提供浅蓝色提示符。`Default` 用于没有自有插画的插件。def id 按实例生成，同一插画可在一页中安全重复。 |
 | `GuideArtworkBrowser`/`Files` | 固定配色的 36×36 浏览器与文件夹插画，用于侧栏引导入口。 |
 | `FileTypeIcon`、`classifyFileType`、`fileExtension` | 按类别着色的 28px 文件或文件夹图形，以及它背后共享的不区分大小写文件名映射。代码与配置文件使用细分的全彩技术图形；链接前置图形使用 `LinkIconMedium`，图片内容使用图片预览。 |
@@ -96,7 +97,7 @@ kind: "package-library"
 
 最近的 `MarkdownDelegateProvider` 提供可选的 `openExternalLink` 和 `openFile` 导航回调。嵌套 Provider 替换外层能力，回调变化无需重新构建 Markdown 即可到达已渲染链接。其 `openFile` 使本地 Markdown 链接在落定后可点击。绝对路径和工作区相对路径支持百分号转义以及 `#L24` / `#L24-L30` 片段；范围定位到起始行。文件名中的字面 `?` 和 `#` 必须百分号编码。悬停提示使用解码后的路径，并在标签为空时提供可访问名称。回调接收解码后的路径和可选行号，渲染器保留标签并显示文件图标。不传回调时，本地链接仍为文本。URL 协议、查询串、不支持的片段及格式错误的目标不会传给文件打开器。
 
-`MarkdownText` 渲染不可信的 GFM 与 TeX 公式、阻止不安全的链接与图片，并可把已解析的文件提及转换为显式控件。外层 `MarkdownDelegateProvider` 会接收普通点击产生的已净化 HTTP(S) URL；带修饰键的点击和 Provider 外的链接保留原生外部 anchor 行为。当 owner 传入 `pathImages` 词表时，本地媒体路径的图片目标只在落定渲染阶段重写为可展示 URL（与 file mentions 相同的流式门）；不传词表时本地目标保持惰性 alt 文本。重写后的图片支持 HTTP(S)、data、blob 及桌面端 `dsh-app://app/api/file` 路由；正文直接书写的桌面端 URL 仍保持惰性。加载或解码失败后，图片替换为作者的 alt 文本；alt 为空时显示原始目标路径；`fileImages` 还提供本地化的失败提示前缀。图片源变化后可重新加载。回复流式输出时，它冻结已完成的块、按已完成行推进顶层未闭合 fence，并从保存的 Shiki grammar state 为该 fence 增量高亮。已完成的 token 行进入固定大小的 React 分组，后续分片只 reconcile 正在增长的分组；最终全量解析解决跨文档语法时，未变化的 fence 会保留该 DOM。`TerminalBlock`、`ReadBlock`、`DiffBlock`、`SearchBlock` 与 `WebBlock` 把对应的工具结果意图渲染为带复制控件、溢出处理及适用时 ANSI 处理的卡片。`JsonTree` 与 `JsonBlock` 以只读方式检查 JSON 值；`projectUserText` 把已发送的用户文本投影为行内普通文本段与引用 chip，供消息气泡和排队行使用。引用名称继承调用方的换行规则：长名称在气泡内换行，排队预览保持单行布局。传入 `UserTextReferences` 时，文件和 skill 引用成为支持键盘操作的预览按钮，复用正文文件链接的悬停和聚焦样式；第一次指针点击可以打开预览，后续点击和已有选区保留原生选择行为。键盘激活在存在选区时仍可打开预览。
+`MarkdownText` 渲染不可信的 GFM 与 TeX 公式、阻止不安全的链接与图片，并可把已解析的文件提及转换为显式控件。外层 `MarkdownDelegateProvider` 会接收普通点击产生的已净化 HTTP(S) URL；带修饰键的点击和 Provider 外的链接保留原生外部 anchor 行为。当 owner 传入 `pathImages` 词表时，本地媒体路径的图片目标只在落定渲染阶段重写为可展示 URL（与 file mentions 相同的流式门）；不传词表时本地目标保持惰性 alt 文本。重写后的图片支持 HTTP(S)、data、blob 及桌面端 `dsh-app://app/api/file` 路由；正文直接书写的桌面端 URL 仍保持惰性。加载或解码失败后，图片替换为作者的 alt 文本；alt 为空时显示原始目标路径；`fileImages` 还提供本地化的失败提示前缀。图片源变化后可重新加载。回复流式输出时，它冻结已完成的块、按已完成行推进顶层未闭合 fence，并从保存的 Shiki grammar state 为该 fence 增量高亮。已完成的 token 行进入固定大小的 React 分组，后续分片只 reconcile 正在增长的分组；最终全量解析解决跨文档语法时，未变化的 fence 会保留该 DOM。`TerminalBlock`、`ReadBlock`、`DiffBlock`、`SearchBlock` 与 `WebBlock` 把对应的工具结果意图渲染为带复制控件、溢出处理及适用时 ANSI 处理的卡片。`JsonTree` 与 `JsonBlock` 以只读方式检查 JSON 值；`UserTextRun` 渲染不做解析的文本，`ReferenceChip` 渲染业务已解析的标签。显式传入 `onActivate` 后，胶囊成为可由键盘操作的按钮；重复指针点击和已有文本选区不触发激活，键盘激活仍然可用。标签继承所属容器的换行规则。识别和 JSON 变换由 [ui-conversation](../ui-conversation/README.zh.md#sent-user-text) 负责。
 
 `MarkdownText` 默认为 `variant="body"`。次级内容使用 `variant="compact"`：其 13px 字号与 20px 行高跟随内容字号设置，各级标题保持同一字号并使用 600 字重，段落与列表采用更紧凑的间距。正文、链接和代码均保持 tertiary 颜色，以点状下划线区分链接。代码标题栏随代码块滚动。表格和公式仍然启用，使用周围文字的字号，并在可用宽度内横向滚动。两个变体共享解析器与流式缓存。
 
@@ -161,7 +162,7 @@ kind: "package-library"
 
 ### 几何与溢出
 
-输出卡片共享同一套几何模型：`white-space: pre` 并横向滚动，让按列对齐的内容保持对齐；超过 `maxLines`（默认 16）时折叠为头部切片加尾部切片，由展开按钮控制，长正文不会撑高卡片。`TerminalBlock` 通过 `CommandText` 让每条原始命令行可选中并横向滚动；提示符和状态保持固定。只有横向溢出的文本以具名 group 进入 Tab 顺序，名称使用 owner 的本地化 `commandLine(line)` 标签。能完整显示的文本（包括 Jobs 中已换行的命令）不会添加 Tab 停靠点。尺寸、文本与字体变化会更新可聚焦状态，不改变滚动位置。`TerminalBlock` 把 ANSI 解析为 React span，并带逐行列缓冲处理光标移动，遵循行内擦除、制表位与字符宽度。宿主可按表层选择退出共享几何：把 `--dsl-terminal-command-whitespace` / `--dsl-terminal-line-whitespace` 重绑为 `pre-wrap` 让命令与输出完整换行且不横向滚动；`maxLines: Infinity` 为改用 `--dsl-terminal-output-max-height` 限高滚动的宿主禁用折叠；`copyText` 覆盖复制载荷（并让控件在任何输出出现之前就保持渲染）；`runStateDot: false` 在外围行已携带同一状态时省去状态点，并经 `--dsl-terminal-gutter` 收回其落区。横幅分割线跟随渲染出的正文：正在流式输出的 running 卡片像已结束卡片一样把命令与文本分隔开。
+输出卡片共享同一套几何模型：`white-space: pre` 并横向滚动，让按列对齐的内容保持对齐；超过 `maxLines`（默认 16）时折叠为头部切片加尾部切片，由展开按钮控制，长正文不会撑高卡片。`TerminalBlock` 通过 `CommandText` 让每条原始命令行可选中并横向滚动；提示符和状态保持固定。状态点始终对齐命令的第一个视觉行，包括命令自动折行时。只有横向溢出的文本以具名 group 进入 Tab 顺序，名称使用 owner 的本地化 `commandLine(line)` 标签。能完整显示的文本（包括 Jobs 中已换行的命令）不会添加 Tab 停靠点。尺寸、文本与字体变化会更新可聚焦状态，不改变滚动位置。`TerminalBlock` 把 ANSI 解析为 React span，并带逐行列缓冲处理光标移动，遵循行内擦除、制表位与字符宽度。宿主可按表层选择退出共享几何：把 `--dsl-terminal-command-whitespace` / `--dsl-terminal-line-whitespace` 重绑为 `pre-wrap` 让命令与输出完整换行且不横向滚动；`maxLines: Infinity` 为改用 `--dsl-terminal-output-max-height` 限高滚动的宿主禁用折叠；`copyText` 覆盖复制载荷（并让控件在任何输出出现之前就保持渲染）；`runStateDot: false` 在外围行已携带同一状态时省去状态点，并经 `--dsl-terminal-gutter` 收回其落区。`background` 默认为 false，透传调用的后台标志。后台调用的 `running` 表示启动调用进度：Start 显示该指示，回执使 `running` 变为 false，命令保持静态且不显示状态点或辅助标签。后台调用不显示输出、空输出提示、退出状态 pill 或默认输出 Copy 控件，显式 `copyText` 覆盖仍可使用。横幅分割线跟随渲染出的正文：正在流式输出的 running 卡片像已结束卡片一样把命令与文本分隔开。
 
 </details>
 
