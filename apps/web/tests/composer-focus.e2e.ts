@@ -47,6 +47,18 @@ function describeSelection(state: Awaited<ReturnType<typeof selectionState>>): s
 async function exerciseComposer(page: Page): Promise<string[]> {
   const input = page.locator('[data-composer-input][contenteditable="true"]')
   await input.click()
+  // DOM selection changes precede Chromium's queued selectionchange event.
+  // Observe that event before testing restoration of the saved editor selection.
+  await input.evaluate((el) => {
+    const onSelectionChange = (): void => {
+      const selection = el.ownerDocument.getSelection()
+      if (selection?.toString() !== 'beta' || selection.anchorOffset !== 10 || selection.focusOffset !== 6
+        || !el.contains(selection.anchorNode) || !el.contains(selection.focusNode)) return
+      el.dataset.selectionReady = 'true'
+      el.ownerDocument.removeEventListener('selectionchange', onSelectionChange)
+    }
+    el.ownerDocument.addEventListener('selectionchange', onSelectionChange)
+  })
   await page.keyboard.insertText('alpha beta gamma')
   await page.keyboard.press('Home')
   for (let index = 0; index < 10; index++) await page.keyboard.press('ArrowRight')
@@ -76,6 +88,8 @@ async function exerciseComposer(page: Page): Promise<string[]> {
     observations.push(`- ${point.name}: ${describeSelection(await selectionState(page))}`)
   }
 
+  await expect.poll(() => input.getAttribute('data-selection-ready')).toBe('true')
+  await input.evaluate((el) => { delete el.dataset.selectionReady })
   const top = points[0]!
   const cardBox = await page.locator('[data-composer-card]').boundingBox()
   await page.mouse.click(cardBox!.x - 12, top.y)
