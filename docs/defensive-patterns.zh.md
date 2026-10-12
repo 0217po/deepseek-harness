@@ -20,7 +20,7 @@
 
 ## dispose 必须达到完全停稳，而不仅仅是请求停止
 
-如果清理流程只发出终止或中止信号便返回，而不等待工作真正停止，就会留下孤儿进程。清理逻辑应采用异步流程，并等待子进程退出（发出终止信号后等待 `done`）。完成操作或最终持久化所需的资源与监听器，必须保持可用直到消费者结束。Cordis 在撤销服务时会等待依赖者卸载，但同级 disposer（清理函数）并发运行：仅有 `inject` 不能建立资源释放顺序。[Cordis 审查 skill](../.agents/skills/cordis-styling-nitpicking/SKILL.md#p0-cleanup-dependency-released-before-consumer-completion) 定义了所有权检查步骤。
+发出终止或中止信号后，等待子进程退出。可选通知可以提前停止；完成操作或最终持久化所需的资源与监听器，必须保持可用直到消费者结束。参见 [Cordis 所有权检查](../.agents/skills/cordis-styling-nitpicking/SKILL.md#p0-cleanup-dependency-released-before-consumer-completion)。
 
 ## 在分发器中隔离回调异常
 

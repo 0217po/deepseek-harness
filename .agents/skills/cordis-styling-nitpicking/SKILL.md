@@ -3,7 +3,7 @@ name: cordis-styling-nitpicking
 description: Use during code review of DeepSeek Harness Cordis plugins and helpers reachable from their entrypoints, including pull requests, and during focused lifecycle audits. Checks singleton state, unreversed side effects, and cleanup dependencies released before consumers finish; reports substantiated P0 findings with ownership evidence and deterministic verification.
 ---
 
-# Cordis Styling Nitpicking
+# Cordis Ownership and Lifecycle Audit
 
 This is a focused semantic review of Cordis ownership and lifecycle. Start a repository audit from exported plugin entrypoints (`apply` or a concrete default export invoked by Cordis), then trace module initialization, registered services, listeners, effects, disposers, and transitive calls reachable from those roots. Exclude unrelated helpers, build tools, CLI paths, and tests as finding targets. Read tests and vendored Cordis to establish behavior; report a generated defect against its owning source. Do not report defects in vendored code under this skill.
 

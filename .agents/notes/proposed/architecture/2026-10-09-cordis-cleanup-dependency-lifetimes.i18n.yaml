@@ -6,8 +6,8 @@
   en: 5697ed719fc785dc
   zh: 6752482fc87287bd
 /agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/problem:
-  en: 6e888020a4aa2342
-  zh: 34a0b69c2b6350e6
+  en: 8097f1f18de77ada
+  zh: 6ac996a2e319b376
 /agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/proposal:
   en: cd7c3cd7a85e3653
   zh: fe76a2eddddec695
@@ -15,23 +15,23 @@
   en: 630ab3bad5d44193
   zh: 71d3ba982c6f9a42
 /agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/p0-findings/session-persistence-drops-events-emitted-during-cleanup:
-  en: 768daa2d4923ba75
-  zh: c9b330c97eea4b6e
+  en: 392779b4aea2279d
+  zh: 7228140dd5f47b40
 /agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/p0-findings/storage-closes-before-schedule-commits-accepted-delivery:
-  en: 0c5cc4df39139e5e
-  zh: edba7ae9b1d37882
+  en: 8a9578bbc700c0bf
+  zh: 8ee46e5ef1cf3972
 /agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/p0-findings/authorization-loses-required-observation-or-an-accepted-credential-write:
-  en: 11db754f4a82518e
-  zh: 320e40ba82f2edbd
+  en: 33312dc2b9813ef9
+  zh: ba2fb5fac770e698
 /agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/p0-findings/ssh-disables-cleanup-requests-before-dependent-process-cleanup-finishes:
-  en: 6bcf52fa7787d074
-  zh: bb0d03d560faf11d
+  en: 85fb2b564bc40230
+  zh: 97c3e794124f8044
 /agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/p0-findings/windows-sandbox-releases-temporary-process-resources-during-consumer-cleanup:
-  en: 26f69066bae53851
-  zh: 4f3447d068824fd3
+  en: faa50d48dca589c5
+  zh: a9e651ccff96ae31
 /agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/scope-and-existing-decisions:
-  en: f39906ee5595279e
-  zh: f72402cf6b0f584f
+  en: 8cf4a670022dcb47
+  zh: 0611538847281f9a
 /agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/alternatives-considered:
   en: 383a83fd09d3fe0d
   zh: cf55505415b6f197
