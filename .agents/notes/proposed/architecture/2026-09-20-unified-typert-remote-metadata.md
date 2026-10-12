@@ -180,7 +180,7 @@ pnpm dsh --profile <profile-name> <profile-arguments>
 - Ordinary artifacts emit one static method spec per endpoint and return lazy class instances; direct method indexes alias descriptor objects, with full stream/binary typing, separate compiler faces, and full-face augmentation retention.
 - Descriptor indexes and each input-policy view, parser, and projection are independently lazy and cached; Loader validates static specs and callable helpers without calling selectors, parsers, or projections.
 - Every input parameter emits normal and strict codecs from the same model; consumers select policy without a method annotation. Both envelopes reject extra named arguments; strict input recursively closes declared objects without closing JSON or dictionary keys or changing Host dispatch and results.
-- Protocol source and built entries have no Zod runtime dependency; generated artifacts explicitly supply Zod, zero-argument endpoints create empty inputs that reject extra fields, and the production-profile Loader regression asserts actual Session events.
+- Protocol source and built entries have no Zod runtime dependency; generated artifacts explicitly supply Zod, zero-argument endpoints create empty inputs that reject extra fields, and the [production headless-profile Loader regression](<../../../../packages/context/time-context/tests/time-context.e2e.ts>) asserts actual Session events.
 - Registry identity, atomic registration, withdrawal, and disposal remain intact.
 - Missing documentation or unsupported optional projection does not disable generation; selected tools reject missing requirements and still parse outputs.
 - Strict source/artifact invocation and limited fallback have separate tests; a withdrawn strict descriptor never enables fallback.

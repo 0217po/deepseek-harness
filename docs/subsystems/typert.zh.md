@@ -372,7 +372,7 @@ interface TypertGateway {
 
 `ctx.remote` 只暴露由已导入 `/remote` 产物贡献的 namespace。`$mount()` 会把生成的 descriptor 与具体方法作为一项由 fiber 持有的操作统一注册。每个 namespace 都是可追踪的 `remote.<namespace>` Cordis 子服务，其生命周期覆盖已挂载的方法；JavaScript Proxy 与 Host 业务服务类型都不会进入消费方。
 
-元数据所有权与连接所有权相互独立；[注册表参考](<../../packages/typert/registry/README.zh.md>)说明离线注册与挂载生命周期。导入、注册、列出或调用 Remote 方法都不会取得交互 waterfall 的所有权。Gateway Client 保持被动，除非连接通过 `forwardedEvents: true` 选择加入 Host 事件；Web bundle 通过 Host Gateway 行把这一选择发布给已服务的页面。
+元数据所有权与连接所有权相互独立；[注册表参考](<../../packages/typert/registry/README.zh.md>)说明离线注册与挂载生命周期。
 
 ```ts type-equiv
 /** Client Remote capability implemented by the Gateway and consumed by Remote assemblies. */

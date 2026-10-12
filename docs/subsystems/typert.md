@@ -372,7 +372,7 @@ interface TypertGateway {
 
 `ctx.remote` exposes only namespaces contributed by imported `/remote` artifacts. `$mount()` installs generated descriptors and concrete methods as one fiber-owned operation. Each namespace is a traced `remote.<namespace>` Cordis child Service whose lifetime spans its mounted methods; no JavaScript Proxy or Host business Service type enters the consumer.
 
-Metadata ownership is separate from connection ownership; the [registry reference](<../../packages/typert/registry/README.md>) covers offline registration and mount lifetimes. Importing, registering, listing, or calling Remote methods does not acquire interaction-waterfall ownership. Gateway Clients remain passive unless the connection opts into Host events with `forwardedEvents: true`; the Web bundle publishes that choice to served pages through the Host Gateway row.
+Metadata ownership is separate from connection ownership; the [registry reference](<../../packages/typert/registry/README.md>) covers offline registration and mount lifetimes.
 
 ```ts type-equiv
 /** Client Remote capability implemented by the Gateway and consumed by Remote assemblies. */

@@ -219,8 +219,8 @@ export function Remote<This extends object, Args extends unknown[], Result>(
   context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Result>,
 ): void
 /**
- * Mark one method with an exported name, stream delivery, or closed generated request objects.
- * @param option - endpoint name or explicit Remote options.
+ * Mark one public instance method with an endpoint name or stream delivery.
+ * @param option - endpoint name or Remote options for name and mode.
  * @returns a standard method decorator.
  */
 export function Remote(option: string | RemoteMethodOptions): RemoteMethodDecorator

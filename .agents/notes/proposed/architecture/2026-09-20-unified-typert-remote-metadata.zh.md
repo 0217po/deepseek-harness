@@ -180,7 +180,7 @@ pnpm dsh --profile <profile-name> <profile-arguments>
 - 普通产物为每个端点生成一份静态方法 spec，并返回惰性类实例；直接方法索引引用描述符对象，保留完整流式/二进制类型、独立编译面及完整编译面的声明合并。
 - 描述符索引与每种输入策略的视图、解析器和投影都独立惰性求值并缓存；Loader 校验静态 spec 及可调用辅助能力，不调用选择器、解析器或投影。
 - 每个输入参数从同一模型生成普通与严格 codec；消费方无需方法注解即可选择策略。两种封装都拒绝额外具名参数；严格输入递归关闭已声明对象，但不关闭 JSON 或字典键，也不改变 Host 分发和结果。
-- 协议源码与构建入口没有 Zod 运行时依赖；生成产物显式提供 Zod，无参端点也能创建拒绝额外字段的空输入对象；生产 profile 的 Loader 回归保留真实 Session 事件断言。
+- 协议源码与构建入口没有 Zod 运行时依赖；生成产物显式提供 Zod，无参端点也能创建拒绝额外字段的空输入对象；[生产 headless profile 的 Loader 回归](<../../../../packages/context/time-context/tests/time-context.e2e.ts>)断言真实 Session 事件。
 - Registry 身份、原子注册、撤销和释放保持不变。
 - 缺少文档或不支持可选投影不阻止生成；选中的工具拒绝缺少必需信息的条目，并仍然解析输出。
 - 严格源码/产物调用与有限 fallback 分别测试；撤销严格 descriptor 绝不启用 fallback。
