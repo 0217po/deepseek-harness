@@ -9,11 +9,12 @@
  * @module @deepseek-ai/dsh-typert-generator/tsdown
  */
 
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import ts from 'typescript'
-import { hasTypertExport, WorkspaceTypertGenerator } from './workspace.ts'
+import { writePackageArtifacts, writeWorkspaceArtifacts } from './artifact-files.ts'
+import { findWorkspaceRoot, hasTypertExport, WorkspaceTypertGenerator } from './workspace.ts'
 import type { WorkspaceEmitResult } from './workspace.ts'
 import type { TypertFace } from './model.ts'
 import type { WorkspaceWorkerRequest, WorkspaceWorkerResponse } from './worker.ts'
@@ -82,7 +83,7 @@ export function typertPlugin(pluginOptions: TypertPluginOptions = {}): TypertPlu
     buildStart(inputOptions) {
       // tsdown builds every workspace package concurrently through this one
       // plugin instance; the first package build to start launches generation.
-      if (pluginOptions.mode === 'workspace') void workspaceGeneration(workspaceRoot(inputOptions.cwd))
+      if (pluginOptions.mode === 'workspace') void workspaceGeneration(findWorkspaceRoot(inputOptions.cwd))
     },
     transform: {
       // Rolldown evaluates the id filter natively, so non-TypeScript modules
@@ -111,7 +112,7 @@ export function typertPlugin(pluginOptions: TypertPluginOptions = {}): TypertPlu
       // nearest package.json owns the bundle even when a custom config writes
       // a nested output such as <package>/lib/dev.
       if (bundleOptions.dir === undefined) return
-      const root = workspaceRoot(bundleOptions.dir)
+      const root = findWorkspaceRoot(bundleOptions.dir)
       if (emittedWorkspaces.has(root)) return
       if (pluginOptions.mode === 'workspace') {
         // The first bundle to finish claims emission and reports any failure;
@@ -119,7 +120,7 @@ export function typertPlugin(pluginOptions: TypertPluginOptions = {}): TypertPlu
         emittedWorkspaces.add(root)
         const outcome = await workspaceGeneration(root)
         if (!outcome.ok) throw outcome.error
-        for (const artifact of outcome.artifacts) emitArtifacts(join(root, artifact.packageRoot), [artifact])
+        writeWorkspaceArtifacts(root, outcome.artifacts)
         return
       }
       const packageDir = packageRoot(bundleOptions.dir, root)
@@ -137,7 +138,7 @@ export function typertPlugin(pluginOptions: TypertPluginOptions = {}): TypertPlu
           : generator.generate(undefined, pluginOptions.faces)
         artifactsByRoot.set(root, artifacts)
       }
-      emitArtifacts(packageDir, artifacts.filter(candidate => candidate.package === manifest.name))
+      writePackageArtifacts(packageDir, artifacts.filter(candidate => candidate.package === manifest.name))
     },
   }
 }
@@ -257,29 +258,6 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function emitArtifacts(packageDir: string, artifacts: readonly WorkspaceEmitResult[]): void {
-  const output = join(packageDir, 'lib')
-  mkdirSync(output, { recursive: true })
-  let emittedRemote = false
-  for (const artifact of artifacts) {
-    writeFileSync(join(output, `typert.${artifact.face}.js`), artifact.js)
-    writeFileSync(join(output, `typert.${artifact.face}.d.ts`), artifact.dts)
-    if (artifact.remote !== undefined) {
-      emittedRemote = true
-      writeFileSync(join(output, 'typert.remote-client.js'), artifact.remote.js)
-      writeFileSync(join(output, 'typert.remote-client.d.ts'), artifact.remote.dts)
-      writeFileSync(join(output, 'typert.remote-client.d.ts.map'), artifact.remote.dtsMap)
-    }
-  }
-  if (!emittedRemote && artifacts.some(artifact => artifact.face === 'host')) {
-    for (const file of [
-      'typert.remote-client.js',
-      'typert.remote-client.d.ts',
-      'typert.remote-client.d.ts.map',
-    ]) rmSync(join(output, file), { force: true })
-  }
-}
-
 function packageRoot(start: string, workspace: string): string | undefined {
   let current = resolve(start)
   while (current !== workspace) {
@@ -287,19 +265,4 @@ function packageRoot(start: string, workspace: string): string | undefined {
     current = dirname(current)
   }
   return undefined
-}
-
-/**
- * The analyzer registers projects under `<root>/packages`, so the workspace
- * root also holds that directory; a package's own `tsconfig.host.json` face
- * leaf does not qualify.
- */
-function workspaceRoot(start: string): string {
-  let current = resolve(start)
-  while (!existsSync(join(current, 'tsconfig.host.json')) || !existsSync(join(current, 'packages'))) {
-    const parent = dirname(current)
-    if (parent === current) throw new Error(`typert-generator: cannot find workspace root above ${start}`)
-    current = parent
-  }
-  return current
 }
