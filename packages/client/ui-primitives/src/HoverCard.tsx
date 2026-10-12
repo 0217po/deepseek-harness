@@ -5,7 +5,6 @@ import { createPortal } from 'react-dom'
 import { writeClipboard } from './clipboard.ts'
 import { usePointerGrace } from './pointer-grace.ts'
 import { overlayTopMargin } from './overlay-top-margin.ts'
-import { TooltipSuppression } from './Tooltip.tsx'
 import { HoverCardGroupContext } from './HoverCardGroup.tsx'
 import css from './HoverCard.module.css'
 
@@ -18,7 +17,7 @@ const ANCHOR_GAP = 8
 const VIEWPORT_MARGIN = 8
 
 /**
- * Render an anchor with a hover-triggered preview card, hidden while a tooltip within the anchor is visible.
+ * Render an anchor with a hover-triggered preview card independently of nested tooltips.
  * @param props.anchor - the hover target (rendered in place inside a wrapper span).
  * @param props.content - card content; the pointer may rest on it, so it is
  * readable and selectable, but it carries no dismissal affordance of its own.
@@ -29,7 +28,6 @@ const VIEWPORT_MARGIN = 8
  * @param props.inline - keep the anchor in prose; show a contained preview on hover or keyboard focus.
  * @param props.disabled - suppress opening; turning true dismisses an open card.
  * @param props.grouped - share first-display dwell and exclusive display with the surrounding HoverCardGroup.
- * @param props.dismissOnTooltip - a visible anchor tooltip dismisses this card until the pointer leaves the anchor.
  * @param props.copyText - optional primary value copied by activation and
  * included in the card's accessible name.
  * @param props.copyLabel - localized accessible activation-label prefix.
@@ -37,7 +35,7 @@ const VIEWPORT_MARGIN = 8
  * @returns anchor wrapper with the conditional portaled card.
  */
 export function HoverCard({
-  anchor, content, openDelayMs = 500, disabled = false, grouped = false, dismissOnTooltip = false,
+  anchor, content, openDelayMs = 500, disabled = false, grouped = false,
   copyText, copyLabel, copiedLabel, variant = 'compact', widthAnchorRef, inline = false,
 }: {
   anchor: ReactNode
@@ -47,7 +45,6 @@ export function HoverCard({
   openDelayMs?: number
   disabled?: boolean
   grouped?: boolean
-  dismissOnTooltip?: boolean
   variant?: 'compact' | 'preview'
   widthAnchorRef?: RefObject<HTMLElement | null>
 } & ({ copyText?: string | undefined; copyLabel: string; copiedLabel: string } | {
@@ -69,12 +66,9 @@ export function HoverCard({
   const [pos, setPos] = useState<{ left: number; top: number; width?: number; maxHeight?: number } | null>(null)
   const positioned = pos !== null
   const [copied, setCopied] = useState(false)
-  const [suppressed, setSuppressed] = useState(false)
   const parentGroup = useContext(HoverCardGroupContext)
   const group = grouped ? parentGroup : null
   const [groupOwner] = useState(() => Symbol('hover-card'))
-  const dismissedForVisit = useRef(false)
-  const anchorSuppressed = useRef(false)
 
   const clearCopied = useCallback(() => {
     if (copyTimerRef.current !== null) {
@@ -107,17 +101,8 @@ export function HoverCard({
     clearCopied()
     setPhase('closed')
   }, [clearTimer, cancelClose, clearCopied])
-  const suppressionPolicy = useRef({ dismissOnTooltip, dismissImmediately })
-  suppressionPolicy.current = { dismissOnTooltip, dismissImmediately }
-  const onTooltipSuppression = useCallback((active: boolean) => {
-    anchorSuppressed.current = active
-    setSuppressed(active)
-    if (active && suppressionPolicy.current.dismissOnTooltip) {
-      dismissedForVisit.current = true
-      suppressionPolicy.current.dismissImmediately()
-    }
-  }, [])
-  const groupVisible = phase === 'open' && positioned && !suppressed && !disabled && !dismissedForVisit.current
+  // A fading preview still owns the group's visible card until it unmounts or another card replaces it.
+  const groupVisible = open && positioned
   useLayoutEffect(() => {
     if (!groupVisible || group === null) return
     group.shown(groupOwner, dismissImmediately)
@@ -227,13 +212,13 @@ export function HoverCard({
   // card's real height is measurable, correct the bottom-edge clamp. The
   // correction converges — a clamped top satisfies the guard, so it runs once.
   useLayoutEffect(() => {
-    if (!open || pos === null || variant === 'preview' || inline || suppressed) return
+    if (!open || pos === null || variant === 'preview' || inline) return
     /* v8 ignore next -- the card is mounted whenever pos is set, so the ref is attached here. */
     const h = cardRef.current?.offsetHeight ?? 0
     if (pos.top + h > window.innerHeight - VIEWPORT_MARGIN) {
       setPos({ left: pos.left, top: window.innerHeight - h - VIEWPORT_MARGIN })
     }
-  }, [open, pos, variant, inline, suppressed])
+  }, [open, pos, variant, inline])
 
   const copy = async (text: string): Promise<void> => {
     if (copied || copyingRef.current) return
@@ -257,7 +242,7 @@ export function HoverCard({
     cancelClose()
     close()
   }
-  const card = open && pos !== null && !suppressed && (
+  const card = open && pos !== null && (
     <div
       ref={cardRef}
       className={clsx(css.card, variant === 'preview' && css.preview, inline && css.media, copyable && css.copyable, copied && css.feedback)}
@@ -303,8 +288,7 @@ export function HoverCard({
         if (!event.currentTarget.contains(event.relatedTarget)) { clearTimer(); cancelClose(); close() }
       } : undefined}
       onPointerEnter={(event) => {
-        if (disabled || (inline && event.pointerType === 'touch')
-          || (dismissOnTooltip && (dismissedForVisit.current || anchorSuppressed.current))) return
+        if (disabled || (inline && event.pointerType === 'touch')) return
         // Coming back inside during the grace (the gap, or the card itself)
         // keeps the current card rather than restarting the dwell.
         cancelClose()
@@ -314,7 +298,6 @@ export function HoverCard({
         else timerRef.current = setTimeout(() => { setPhase('open') }, openDelayMs)
       }}
       onPointerLeave={() => {
-        dismissedForVisit.current = false
         clearTimer()
         // Leaving a closed card schedules a no-op close; only arm while
         // open, matching Menu's shape.
@@ -323,8 +306,8 @@ export function HoverCard({
       onPointerDownCapture={dismissFromAnchor}
       onClickCapture={dismissFromAnchor}
     >
-      <TooltipSuppression.Provider value={onTooltipSuppression}>{anchor}</TooltipSuppression.Provider>
-      {open && !suppressed && copyable && <span className={css.status} role="status">{copied ? copiedLabel : ''}</span>}
+      {anchor}
+      {open && copyable && <span className={css.status} role="status">{copied ? copiedLabel : ''}</span>}
       {card !== false && createPortal(card, document.body)}
     </span>
   )

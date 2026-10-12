@@ -482,7 +482,7 @@ describe('workspace browser rows', () => {
     }
   })
 
-  it.each(['hover', 'focus'] as const)('shows only the new Session tooltip while its action owns %s', (trigger) => {
+  it.each(['hover', 'focus'] as const)('keeps workspace details alongside the new Session tooltip on %s', (trigger) => {
     vi.useFakeTimers()
     try {
       const group: GroupNode = {
@@ -504,7 +504,7 @@ describe('workspace browser rows', () => {
         fireEvent.focus(create)
       }
       expect(screen.getByRole('tooltip').textContent).toBe('新会话')
-      expect(screen.queryByText('/projects/project')).toBeNull()
+      expect(screen.getByText('/projects/project')).toBeTruthy()
 
       if (trigger === 'hover') fireEvent.mouseLeave(create, { relatedTarget: row })
       else fireEvent.blur(create, { relatedTarget: row })
@@ -515,7 +515,7 @@ describe('workspace browser rows', () => {
     }
   })
 
-  it('keeps workspace details hidden when the pointer first enters its new Session action', () => {
+  it('shows workspace details and the tooltip when the pointer first enters its new Session action', () => {
     vi.useFakeTimers()
     try {
       const group: GroupNode = {
@@ -529,7 +529,7 @@ describe('workspace browser rows', () => {
       fireEvent.mouseEnter(create)
       act(() => { vi.advanceTimersByTime(1000) })
       expect(screen.getByRole('tooltip').textContent).toBe('新会话')
-      expect(screen.queryByText('/projects/project')).toBeNull()
+      expect(screen.getByText('/projects/project')).toBeTruthy()
 
       fireEvent.mouseLeave(create, { relatedTarget: row })
       expect(screen.queryByRole('tooltip')).toBeNull()
@@ -755,7 +755,7 @@ describe('workspace browser rows', () => {
     }
   })
 
-  it.each([0, 400, 800])('dismisses the card only after the action tooltip dwell, then until row exit (%dms)', (dwell) => {
+  it.each([0, 400, 800])('keeps card dwell independent of the action tooltip (%dms)', (dwell) => {
     vi.useFakeTimers()
     try {
       const node: SessionNode = {
@@ -785,7 +785,10 @@ describe('workspace browser rows', () => {
       else expect(card()).not.toBeNull()
       act(() => { vi.advanceTimersByTime(1) })
       expect(screen.getByRole('tooltip').textContent).toBe('Archive')
-      expect(card()).toBeNull()
+      if (dwell === 0) expect(card()).toBeNull()
+      else expect(card()).not.toBeNull()
+      act(() => { vi.advanceTimersByTime(300) })
+      expect(card()).not.toBeNull()
 
       fireEvent(archive, new MouseEvent('pointerout', { bubbles: true, relatedTarget: title }))
       fireEvent(title, new MouseEvent('pointerover', { bubbles: true, relatedTarget: archive }))
@@ -794,9 +797,10 @@ describe('workspace browser rows', () => {
         onOpen={vi.fn()} renderSlot={renderSlot} t={t} />)
       act(() => { vi.advanceTimersByTime(1000) })
       expect(screen.queryByRole('tooltip')).toBeNull()
-      expect(card()).toBeNull()
+      expect(card()).not.toBeNull()
 
       fireEvent.pointerLeave(row, { relatedTarget: document.body })
+      act(() => { vi.advanceTimersByTime(300) })
       fireEvent.pointerEnter(row, { relatedTarget: document.body })
       act(() => { vi.advanceTimersByTime(799) })
       expect(card()).toBeNull()

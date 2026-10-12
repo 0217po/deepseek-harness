@@ -17,7 +17,7 @@ function move(from: Element, to: Element): void {
 }
 function tick(ms: number): void { act(() => { vi.advanceTimersByTime(ms) }) }
 function Card({ name, grouped = true, disabled = false }: { name: string; grouped?: boolean; disabled?: boolean }) {
-  return <HoverCard grouped={grouped} dismissOnTooltip disabled={disabled} openDelayMs={800}
+  return <HoverCard grouped={grouped} disabled={disabled} openDelayMs={800}
     anchor={<span>{name}<Tooltip label={`Archive ${name}`} delayMs={500}><button type="button">action {name}</button></Tooltip></span>}
     content={<span>details {name}</span>} copyText={name} copyLabel="Copy" copiedLabel="Copied" />
 }
@@ -83,7 +83,32 @@ describe('HoverCardGroup', () => {
     expect(screen.getByText('details B')).toBeTruthy()
   })
 
-  it('does not warm a list from a cancelled opening or an active tooltip', () => {
+  it.each(['pointer exit', 'disabled'] as const)('replaces a preview fading after %s before displaying the next card', (reason) => {
+    const markup = (disabled = false) => <HoverCardGroup>
+      <HoverCard grouped variant="preview" openDelayMs={800} disabled={disabled}
+        anchor={<span>A</span>} content={<span>details A</span>} />
+      <span>gap</span>
+      <Card name="B" />
+    </HoverCardGroup>
+    const view = render(markup())
+    const a = screen.getByText('A')
+    const gap = screen.getByText('gap')
+    move(document.body, a)
+    tick(800)
+    expect(screen.getByText('details A')).toBeTruthy()
+    move(a, gap)
+    // Pointer grace expires after 200ms; disabling closes immediately. Both retain the 100ms fade.
+    if (reason === 'disabled') view.rerender(markup(true))
+    else tick(200)
+    expect(screen.getByText('details A')).toBeTruthy()
+    move(gap, screen.getByText('B'))
+    expect(screen.getByText('details B')).toBeTruthy()
+    expect(screen.queryByText('details A')).toBeNull()
+    tick(100)
+    expect(screen.getByText('details B')).toBeTruthy()
+  })
+
+  it('keeps cancelled openings cold and shares displayed cards independently of action tooltips', () => {
     render(<HoverCardGroup><Card name="A" /><Card name="B" /></HoverCardGroup>)
     const a = screen.getByText('A')
     const b = screen.getByText('B')
@@ -93,22 +118,17 @@ describe('HoverCardGroup', () => {
     tick(799)
     expect(screen.queryByText('details A')).toBeNull()
     expect(screen.queryByText('details B')).toBeNull()
+    tick(1)
+    const card = screen.getByText('details B')
     const action = screen.getByRole('button', { name: 'action B' })
     move(b, action)
-    // The card may open before the tooltip reaches its independent 500ms dwell.
-    tick(1)
-    expect(screen.getByText('details B')).toBeTruthy()
-    move(action, document.body)
-    tick(300)
-    move(document.body, action)
     tick(500)
     expect(screen.getByRole('tooltip').textContent).toBe('Archive B')
-    tick(500)
-    expect(screen.queryByText('details B')).toBeNull()
+    expect(screen.getByText('details B')).toBe(card)
     move(action, a)
-    expect(screen.queryByText('details A')).toBeNull()
-    tick(800)
+    expect(screen.queryByRole('tooltip')).toBeNull()
     expect(screen.getByText('details A')).toBeTruthy()
+    expect(screen.queryByText('details B')).toBeNull()
   })
 
   it('resets warmth on physical portal exit without closing readable, copyable content', async () => {

@@ -16,21 +16,21 @@
   },
   {
     "stage": "archive",
-    "details": false,
+    "details": true,
     "tooltips": [
       "Archive"
     ]
   },
   {
     "stage": "pin",
-    "details": false,
+    "details": true,
     "tooltips": [
       "Pin"
     ]
   },
   {
     "stage": "back-to-title",
-    "details": false,
+    "details": true,
     "tooltips": []
   },
   {

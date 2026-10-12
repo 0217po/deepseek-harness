@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for 2026-10-11-chat-group-tree-exchanges.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-11-chat-group-tree-exchanges.md
+/agent-note-chat-group-tree-positions-and-exchanges:
+  en: b26212eda152d6c6
+  zh: a801a75ee0c07911
+/agent-note-chat-group-tree-positions-and-exchanges/problem:
+  en: 84858bc0e1e268ab
+  zh: 39ebb2979968d6cc
+/agent-note-chat-group-tree-positions-and-exchanges/decision:
+  en: c8c4091863dec269
+  zh: 57a0f26683867350
+/agent-note-chat-group-tree-positions-and-exchanges/why-mark-the-opening-rather-than-the-notice:
+  en: db8d77cd773ad646
+  zh: ab2f03b8fc58e952
+/agent-note-chat-group-tree-positions-and-exchanges/alternatives-considered:
+  en: 635ddcb04fefe8e2
+  zh: 360c171ccb613ed5
+/agent-note-chat-group-tree-positions-and-exchanges/consequences:
+  en: c8cfdc3009b19b12
+  zh: 36c541cd9692057d
+/agent-note-chat-group-tree-positions-and-exchanges/testing:
+  en: 0d7f5281e66b0c39
+  zh: 5be221de46e9e0f7

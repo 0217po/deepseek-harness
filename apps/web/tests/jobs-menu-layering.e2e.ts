@@ -126,7 +126,17 @@ describe.skipIf(MODE === 'record')('web e2e: jobs menu layering', () => {
     const reported = started.content.map(block => block.type === 'text' ? block.text : '').join('')
     const matched = /\bbash-\d+\b/.exec(reported)
     if (matched === null) throw new Error(`background bash reported no job id: ${reported}`)
-    jobId = JobId(matched[0])
+    const startedJobId = JobId(matched[0])
+    jobId = startedJobId
+    // Registration precedes shell startup; inspect its output before depending on a live row.
+    await expect.poll(() => {
+      const job = scaffold.ctx.jobs.get(startedJobId, agent.id)
+      const output = scaffold.ctx.jobs.readAt(startedJobId, 0, agent.id).chunks.map(chunk => chunk.text).join('')
+      return job.status !== 'running' || output.includes('jobs-menu-output')
+    }, { timeout: 15_000 }).toBe(true)
+    const readyJob = scaffold.ctx.jobs.get(startedJobId, agent.id)
+    const readyOutput = scaffold.ctx.jobs.readAt(startedJobId, 0, agent.id).chunks.map(chunk => chunk.text).join('')
+    expect(readyJob.status, `${readyJob.detail ?? ''}\n${readyOutput}`).toBe('running')
 
     await page.locator('[data-sidebar-right-expand]').click()
     const column = page.locator('[data-rightbar-col]')

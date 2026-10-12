@@ -54,43 +54,7 @@ function installClipboard(writeText: (text: string) => Promise<void>): () => voi
 }
 
 describe('HoverCard', () => {
-  it.each(['disabled', 'unmounted'] as const)('keeps opt-in dismissal after a tooltip is %s without changing default suppression', (released) => {
-    const markup = (state: 'active' | 'disabled' | 'unmounted', content = 'card body') => <HoverCard
-      dismissOnTooltip openDelayMs={800}
-      anchor={<div>row{state !== 'unmounted' && <Tooltip label="Archive" delayMs={500} disabled={state === 'disabled'}>
-        <button type="button">action</button>
-      </Tooltip>}</div>}
-      content={<div>{content}</div>}
-    />
-    const view = render(markup('active'))
-    const wrapper = screen.getByText('row').parentElement as HTMLElement
-    fireEvent.pointerEnter(wrapper)
-    act(() => { vi.advanceTimersByTime(800) })
-    const action = screen.getByRole('button', { name: 'action' })
-    fireEvent.mouseEnter(action)
-    act(() => { vi.advanceTimersByTime(499) })
-    expect(screen.getByText('card body')).toBeTruthy()
-    expect(screen.queryByRole('tooltip')).toBeNull()
-    fireEvent.mouseLeave(action)
-    act(() => { vi.advanceTimersByTime(100) })
-    expect(screen.getByText('card body')).toBeTruthy()
-    fireEvent.mouseEnter(action)
-    act(() => { vi.advanceTimersByTime(500) })
-    expect(screen.getByRole('tooltip').textContent).toBe('Archive')
-    view.rerender(markup('active', 'changed body'))
-    expect(screen.getByRole('tooltip').textContent).toBe('Archive')
-    expect(screen.queryByText('changed body')).toBeNull()
-    view.rerender(markup(released, 'changed body'))
-    act(() => { vi.advanceTimersByTime(1000) })
-    expect(screen.queryByRole('tooltip')).toBeNull()
-    expect(screen.queryByText('changed body')).toBeNull()
-    fireEvent.pointerLeave(wrapper)
-    fireEvent.pointerEnter(wrapper)
-    act(() => { vi.advanceTimersByTime(800) })
-    expect(screen.getByText('changed body')).toBeTruthy()
-  })
-
-  it.each(['disabled', 'unmounted'] as const)('restores its preview after a nested tooltip is %s', (released) => {
+  it.each(['disabled', 'unmounted'] as const)('keeps its preview mounted while a nested tooltip shows and is then %s', (released) => {
     const markup = (state: 'active' | 'disabled' | 'unmounted') => (
       <HoverCard
         anchor={<div>row{state !== 'unmounted' && (
@@ -106,11 +70,12 @@ describe('HoverCard', () => {
     act(() => { vi.advanceTimersByTime(500) })
     fireEvent.mouseEnter(screen.getByRole('button', { name: 'action' }))
     expect(screen.getByRole('tooltip').textContent).toBe('Create')
-    expect(screen.queryByText('card body')).toBeNull()
+    const card = screen.getByText('card body')
+    expect(card.isConnected).toBe(true)
 
     view.rerender(markup(released))
     expect(screen.queryByRole('tooltip')).toBeNull()
-    expect(screen.getByText('card body')).toBeTruthy()
+    expect(screen.getByText('card body')).toBe(card)
   })
 
   it('keeps card content mounted while its own tooltip is visible', () => {
@@ -256,7 +221,7 @@ describe('HoverCard', () => {
   it('keeps previews below the desktop frame clearance', () => {
     const prior = document.documentElement.style.getPropertyValue('--dsh-frame-top-clearance')
     const priority = document.documentElement.style.getPropertyPriority('--dsh-frame-top-clearance')
-    document.documentElement.style.setProperty('--dsh-frame-top-clearance', '120px')
+    document.documentElement.style.setProperty('--dsh-frame-top-clearance', '100px')
     try {
       const { wrapper } = mount({ variant: 'preview' })
       wrapper.getBoundingClientRect = () => DOMRect.fromRect({ x: 100, y: 600, width: 600, height: 32 })

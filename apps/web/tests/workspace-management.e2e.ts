@@ -17,7 +17,7 @@ import { join, sep } from 'node:path'
 import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { logPath } from '../../../packages/session/session-persistence-jsonl/src/format.ts'
 import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
@@ -561,7 +561,7 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('keeps session details dismissed after a row action until the pointer leaves the row', async () => {
+  it('keeps session details beside action tooltips with the tooltips above the card', async () => {
     const hoverPage = await newEnglishPage(browser)
     try {
       const consoleWatch = watchConsole(hoverPage)
@@ -593,19 +593,21 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
       await observe('archive-before-dwell')
       await hoverPage.clock.runFor(1)
       await tooltip.filter({ hasText: 'Archive' }).waitFor()
-      expect(await card.count()).toBe(0)
+      expect(await card.count()).toBe(1)
+      expect(await tooltip.evaluate(el => Number(getComputedStyle(el).zIndex)))
+        .toBeGreaterThan(await card.evaluate(el => Number(getComputedStyle(el).zIndex)))
       await observe('archive')
       await row.getByRole('button', { name: 'Pin session', exact: true }).hover()
       await hoverPage.clock.runFor(500)
       await tooltip.filter({ hasText: 'Pin' }).waitFor()
-      expect(await card.count()).toBe(0)
+      expect(await card.count()).toBe(1)
       await observe('pin')
 
       await title.hover()
       await tooltip.waitFor({ state: 'detached' })
       // Advance beyond both the 800ms card dwell and the 500ms action tooltip dwell.
       await hoverPage.clock.runFor(1600)
-      expect(await card.count()).toBe(0)
+      expect(await card.count()).toBe(1)
       await observe('back-to-title')
 
       const menu = row.getByRole('button', { name: /^Session actions for / })
@@ -902,11 +904,20 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
     await page.getByRole('button', { name: 'View options', exact: true }).click()
     await page.getByRole('menuitem', { name: 'Workspace Tree', exact: true }).click()
     await section.getByText('project-two', { exact: true }).waitFor()
+    const previousParentSessionIds = [...parentWorkspace.sessionIds]
+    const newParentSession = page.waitForResponse('**/api/session/create')
     await clickHoverAction(parent, 'New session in folder-group')
+    const createdResponse = await newParentSession
+    const createdBody = await createdResponse.json() as { result: { ok: boolean; value: { sessionId: string } } }
+    expect(createdBody.result.ok).toBe(true)
+    const createdSessionId = createdBody.result.value.sessionId
+    expect(previousParentSessionIds).not.toContain(createdSessionId)
+    await page.locator(`[data-conversation-session="${createdSessionId}"]`).waitFor()
     await expect.poll(() => section.locator('[aria-selected="true"]').evaluate(row =>
       row.closest('[class*="groupSection"]')?.querySelector('[role="treeitem"]')?.textContent,
     ), { timeout: 10_000 }).toBe('folder-group')
-    expect(parentWorkspace.sessionIds).toHaveLength(1)
+    await expect.poll(() => parentWorkspace.sessionIds).toHaveLength(previousParentSessionIds.length + 1)
+    expect(parentWorkspace.sessionIds).toEqual(expect.arrayContaining([...previousParentSessionIds, createdSessionId]))
     expect([...childWorkspace.sessionIds]).toEqual(childSessionIds)
     expect(tripwire.pageErrors).toEqual([])
   })
@@ -929,11 +940,10 @@ describe('web e2e: New Session after an outdated blank cache', () => {
         undefined, { createdAt: now - 60_000 })
       const stored = await scaffold.ctx.sessionPersistence.stat(id)
       if (stored === undefined) throw new Error('seeded Session is missing')
-      // A durable log may advance after its last blank projection checkpoint.
-      // An unregistered Session writes only the checkpoint, leaving the persisted log intact.
-      const blank = scaffold.ctx.sessions.prepare(id, {
-        eventState: 'detached', seed: [], meta: stored.header, inheritedEventCount: SessionLogOffset(0),
-      })
+      // A durable log may advance after its last blank projection checkpoint,
+      // which then records the cut before the first turn. An unregistered
+      // Session writes only the checkpoint, leaving the persisted log intact.
+      const blank = scaffold.ctx.sessions.prepare(id, { meta: stored.header })
       await scaffold.ctx.sessionProjectionCache.write(blank)
       const workspace = await scaffold.ctx.workspaceRegistry.create(scaffold.workspaceCwd, 'New session regression')
       await workspace.attachSession(id)
@@ -944,8 +954,14 @@ describe('web e2e: New Session after an outdated blank cache', () => {
       onTestFailed(() => saveFailureShot(page, 'web-e2e-new-session-stale-blank'))
 
       await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-      await page.getByRole('tab', { name: 'Chat', exact: true }).waitFor()
       const selected = page.locator('[role="treeitem"][aria-selected="true"]')
+      // Startup asks for a new conversation with the stale blank as its reuse
+      // candidate; the Host declines the started Session and creates a blank one.
+      await expect.poll(() => selected.innerText()).toBe('New Session')
+      await expect.poll(() => workspace.sessionIds.length).toBe(2)
+      // The declined Session's projections are reloaded, so its stale blank row reappears.
+      await page.getByRole('treeitem', { name: /^Use the read tool twice/ }).click()
+      await page.getByRole('tab', { name: 'Chat', exact: true }).waitFor()
       await expect.poll(() => selected.innerText()).not.toBe('New Session')
       const previous = (await selected.innerText()).split('\n')[0]!
       const before = await captureStableAria(page, '[role="tree"]', scaffold.workspaceCwd)
@@ -953,7 +969,8 @@ describe('web e2e: New Session after an outdated blank cache', () => {
       await page.getByRole('button', { name: 'New session', exact: true }).last().click()
       await expect.poll(() => selected.innerText()).toBe('New Session')
       await page.getByRole('tab', { name: 'Chat', exact: true }).waitFor({ state: 'hidden' })
-      await expect.poll(() => workspace.sessionIds.length).toBe(2)
+      // New Session creates a fresh Session; the blank startup created stays a member.
+      await expect.poll(() => workspace.sessionIds.length).toBe(3)
       expect(workspace.sessionIds).toContain(id)
       await page.getByRole('treeitem').filter({ hasText: previous }).waitFor()
       const after = await captureStableAria(page, '[role="tree"]', scaffold.workspaceCwd)
