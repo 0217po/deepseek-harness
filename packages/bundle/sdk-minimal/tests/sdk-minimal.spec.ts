@@ -34,9 +34,13 @@ describe('dsh-sdk-minimal bundle', () => {
       ['llm-deepseek', '@deepseek-ai/dsh-llm-deepseek-api-key'],
       ['sandbox', '@deepseek-ai/dsh-sandbox-local'],
       ['filesystem', '@deepseek-ai/dsh-fs-local'],
+      ['attachment-local', '@deepseek-ai/dsh-attachment-local'],
+      ['tool-fs', '@deepseek-ai/dsh-tool-fs'],
       ['working-directory', '@deepseek-ai/dsh-working-directory'],
       ['tool-working-directory', '@deepseek-ai/dsh-tool-working-directory'],
       ['session-projection', '@deepseek-ai/dsh-session-projection'],
+      ['token-meter', '@deepseek-ai/dsh-token-meter'],
+      ['compaction-basic', '@deepseek-ai/dsh-compaction-basic'],
       ['sandbox-policy', '@deepseek-ai/dsh-sandbox-policy'],
       ['subprocess', '@deepseek-ai/dsh-subprocess-local'],
       ['pty', '@deepseek-ai/dsh-terminal'],
@@ -73,6 +77,8 @@ describe('dsh-sdk-minimal bundle', () => {
       personaPrefix: { __jsExpr: "process.env.DSH_SYSTEM_PROMPT ?? 'You are a helpful software engineer assistant.'" },
     })
     expect(rows.find(row => row.id === 'agent-loop')?.config).toEqual({ agents: [] })
+    expect(rows.find(row => row.id === 'tool-fs')?.config).toEqual({ tools: ['read_image'] })
+    expect(rows.find(row => row.id === 'compaction-basic')?.config).toEqual({ auto: true })
     expect(rows.find(row => row.id === 'terminal-bash')).toMatchObject({
       disabled: { __jsExpr: "process.platform === 'win32'" },
     })

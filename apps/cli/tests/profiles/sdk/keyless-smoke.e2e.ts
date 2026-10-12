@@ -202,10 +202,13 @@ describe('Python SDK dsh profile keyless smoke', () => {
   }, 40_000)
 
   it.each([
-    { label: 'boots the standalone minimal profile through its generated manifest', editorEnabled: false },
-    { label: 'executes the documented editor opt-in patch with sdk-minimal', editorEnabled: true },
-  ])('$label', async ({ editorEnabled }) => {
+    { label: 'boots the standalone minimal profile through its generated manifest', editorEnabled: false, imageEnabled: false, optOut: false },
+    { label: 'executes the documented editor opt-in patch with sdk-minimal', editorEnabled: true, imageEnabled: false, optOut: false },
+    { label: 'sends a read_image result to the model with sdk-minimal', editorEnabled: false, imageEnabled: true, optOut: false },
+    { label: 'retains the previous tools through the documented opt-out patch', editorEnabled: false, imageEnabled: false, optOut: true },
+  ])('$label', async ({ editorEnabled, imageEnabled, optOut }) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-python-sdk-minimal-'))
+    onTestFinished(() => rm(root, { recursive: true, force: true }))
     const editorPatch = join(root, 'editor.patch.yml')
     if (editorEnabled) {
       const guide = await readFile(join(repoRoot, 'docs/user/guide/python-sdk.md'), 'utf8')
@@ -214,7 +217,16 @@ describe('Python SDK dsh profile keyless smoke', () => {
       expect(yaml).toBeDefined()
       await writeFile(editorPatch, yaml!)
     }
+    if (optOut) {
+      const guide = await readFile(join(repoRoot, 'docs/upgrade-guide/v0.2.1-alpha.2/sdk-minimal-image-compaction/guide.md'), 'utf8')
+      const yaml = guide.match(/```yaml\n([\s\S]*?)```/)?.[1]
+      expect(yaml).toBeDefined()
+      await writeFile(editorPatch, yaml!)
+    }
     const editorFile = join(root, 'editor.txt')
+    if (imageEnabled) await writeFile(join(root, 'red.png'), Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', 'base64',
+    ))
     const editorContent = 'sdk-minimal editor opt-in\n'
     const editorCalls = editorEnabled ? [
       { command: 'create', path: editorFile, file_text: editorContent },
@@ -222,17 +234,29 @@ describe('Python SDK dsh profile keyless smoke', () => {
     ] : []
     const modelRequests: Record<string, unknown>[] = []
     const modelServer = createServer((request, response) => {
+      if (imageEnabled && request.url?.endsWith('/files')) {
+        request.resume()
+        response.writeHead(200, { 'content-type': 'application/json' })
+        response.end(JSON.stringify({
+          id: 'file-minimal-image', type: 'file', size_bytes: 69,
+          created_at: new Date().toISOString(),
+          filename: 'red.png', mime_type: 'image/png',
+        }))
+        return
+      }
       let body = ''
       request.setEncoding('utf8')
       request.on('data', (chunk: string) => { body += chunk })
       request.on('end', () => {
         modelRequests.push(JSON.parse(body) as Record<string, unknown>)
         response.writeHead(200, { 'content-type': 'text/event-stream' })
-        const toolCall = editorCalls[modelRequests.length - 1]
+        const toolCall = imageEnabled && modelRequests.length === 1
+          ? { file_path: 'red.png' }
+          : editorCalls[modelRequests.length - 1]
         response.end(messagesResponse(toolCall ? {
           type: 'tool_use',
-          id: `editor-${toolCall.command}`,
-          name: 'str_replace_editor',
+          id: imageEnabled ? 'minimal-image-read' : `editor-${editorCalls[modelRequests.length - 1]?.command}`,
+          name: imageEnabled ? 'read_image' : 'str_replace_editor',
           input: toolCall,
         } : { type: 'text', text: 'done' }, toolCall ? 'tool_use' : 'end_turn'))
       })
@@ -244,7 +268,7 @@ describe('Python SDK dsh profile keyless smoke', () => {
       ...launch.args,
       '--profile',
       'sdk-minimal',
-      ...(editorEnabled ? ['--patch', editorPatch] : []),
+      ...(editorEnabled || optOut ? ['--patch', editorPatch] : []),
     ], {
       cwd: repoRoot,
       env: {
@@ -274,7 +298,7 @@ describe('Python SDK dsh profile keyless smoke', () => {
         jsonrpc: '2.0',
         id: 1,
         method: 'initialize',
-        params: { cwd: root, provider: 'deepseek-official', model: 'deepseek-v4-pro' },
+        params: { cwd: root, provider: 'deepseek-official', model: imageEnabled ? 'deepseek-flash' : 'deepseek-v4-pro' },
       })}\n`)
       await waitForLine(lines, value => value.id === 1, () => stderr)
       child.stdin.write(`${JSON.stringify({
@@ -302,10 +326,23 @@ describe('Python SDK dsh profile keyless smoke', () => {
       const tools = modelRequests[0]?.tools as { name?: string }[]
       expect(tools.map(tool => tool.name)).toEqual([
         process.platform === 'win32' ? 'pwsh' : 'bash',
+        ...(optOut ? [] : ['read_image']),
         ...(editorEnabled ? ['str_replace_editor'] : []),
         'working_directory',
       ])
-      expect(modelRequests).toHaveLength(editorEnabled ? 3 : 1)
+      expect(modelRequests).toHaveLength(editorEnabled ? 3 : imageEnabled ? 2 : 1)
+      if (imageEnabled) {
+        const messages = modelRequests[1]?.messages as {
+          content: { type: string; tool_use_id?: string; content?: { type: string; source?: { type: string; file_id: string } }[] }[]
+        }[]
+        const imageResult = messages.flatMap(message => message.content)
+          .find(block => block.type === 'tool_result' && block.tool_use_id === 'minimal-image-read')
+        expect(imageResult?.content).toEqual(expect.arrayContaining([
+          { type: 'image', source: { type: 'file', file_id: 'file-minimal-image' } },
+        ]))
+        const stored = await readdir(join(root, '.dsh', 'attachments', 'v1', 'objects'), { recursive: true })
+        expect(stored.some(file => /[a-f0-9]{64}$/u.test(file))).toBe(true)
+      }
       if (editorEnabled) {
         expect(await readFile(editorFile, 'utf8')).toBe(editorContent)
         expect(modelRequests[2]?.messages).toEqual(expect.arrayContaining([
@@ -334,7 +371,6 @@ describe('Python SDK dsh profile keyless smoke', () => {
       child.kill('SIGKILL')
       await child
       await new Promise<void>(resolve => modelServer.close(() => { resolve() }))
-      await rm(root, { recursive: true, force: true })
     }
   }, 40_000)
 

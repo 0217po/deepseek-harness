@@ -14,10 +14,9 @@
 - button "Read image red.png" [expanded]:
   - text: Read image
   - button "red.png"
-- text: red.png
 - button "red.png, click to view original":
   - img "red.png"
-- text: <path>{{cwd}}/red.png</path> <type>image</type> <content> image/png image, 1x1 px, 69 bytes </content>
+- text: {{cwd}}/red.png 1x1px, 69 bytes
 - button "Inspect"
 - paragraph: MINIMAL_IMAGE_OK
 - button "Copy"

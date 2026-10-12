@@ -1,6 +1,6 @@
 /**
  * Keyless snapshot coverage for the TypeScript SDK path: each scenario spawns
- * the real `dsh --profile sdk` runtime through
+ * the real `dsh --profile sdk` or `sdk-minimal` runtime through
  * `@deepseek-ai/dsh-sdk-client`, drives one turn over stdio JSON-RPC,
  * and pins the SDK `RunResult`, the complete notification stream, and the
  * persisted session logs. Replay serves recorded model
@@ -127,6 +127,10 @@ interface SdkAssertions {
 }
 
 const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
+  'minimal-image-compaction': {
+    expectedFinalResponse: 'MINIMAL_IMAGE_OK',
+    expectedTools: { bash: ['command'], read_image: ['file_path'], working_directory: [] },
+  },
   'session-title-stability': { waitForProviderTitle: true },
   'dynamic-tool-updates': {
     expectedFinalResponse: 'DONE',
@@ -222,7 +226,7 @@ async function collectCorpus(): Promise<CorpusScenario[]> {
 const corpus = await collectCorpus()
 const scenarioByKey = new Map(corpus.map(scenario => [scenario.key, scenario]))
 const sdkScenarios = corpus
-  .filter(scenario => scenario.manifest.profile === 'sdk')
+  .filter(scenario => scenario.manifest.profile === 'sdk' || scenario.manifest.profile === 'sdk-minimal')
   .sort((left, right) => left.name.localeCompare(right.name))
 const compositionOwners = new Map<string, CorpusScenario>()
 const headerPins = new Map<string, CorpusScenario>()
@@ -554,7 +558,7 @@ function authoredPatches(scenario: CorpusScenario, replaying: boolean): string[]
   ]
 }
 
-/** One SDK-controlled recorded scenario against a fresh `dsh --profile sdk` subprocess. */
+/** One SDK-controlled recorded scenario against a fresh SDK-profile subprocess. */
 async function runScenario(scenario: CorpusScenario): Promise<{
   results: RunResult[]
   notifications: HarnessNotification[]
@@ -576,7 +580,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
   await mkdir(patchRoot, { recursive: true })
   const assertions = SDK_ASSERTIONS[scenario.name] ?? {}
   const patches = [...authoredPatches(scenario, !recording), ...assertions.patches ?? []]
-    .map((patch, index) => materializeProfilePatch(patch, cwd, 'sdk', patchRoot, index))
+    .map((patch, index) => materializeProfilePatch(patch, cwd, scenario.manifest.profile, patchRoot, index))
   let childSessionsRoot: string | undefined
   let childEnvironment: Record<string, string> = {}
   if (assertions.dshSdkChild !== undefined) {
@@ -631,7 +635,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
   }
 
   const createHarness = (): DeepSeekHarness => new DeepSeekHarness({
-    profile: 'sdk',
+    profile: scenario.manifest.profile,
     patches,
     dshHome,
     processCwd: cwd,
@@ -910,7 +914,7 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
       && (scenario.manifest.recording === 'authored' || scenario.manifest.sessionFormat !== undefined)
       ? it.skip
       : it
-    scenarioTest(`${mode}s ${scenario.name} through dsh --profile sdk`, async () => {
+    scenarioTest(`${mode}s ${scenario.name} through dsh --profile ${scenario.manifest.profile}`, async () => {
       const scenarioDir = scenario.dir
       const retained = scenario.manifest.sessionFormat !== undefined
       const notificationsExpectedPath = join(scenarioDir, retained ? 'notifications.current.expected.jsonl' : 'notifications.expected.jsonl')
@@ -934,6 +938,34 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
       )
       reconcileCatalogCreationTimes(ordered.map(log => log.content), 'validate')
       const actualContext = contextOf(ordered, cwd)
+      if (scenario.name === 'minimal-image-compaction') {
+        const events = results.flatMap(result => result.events)
+        const image = events.find(event => event.type === 'tool/result')
+        expect(image).toMatchObject({ data: { message: {
+          toolCallId: 'minimal-image-read',
+          isError: false,
+          content: expect.arrayContaining([expect.objectContaining({ type: 'image', attachment: {
+            attachmentId: expect.stringMatching(/^sha256:/u),
+            mediaType: 'image/png', bytes: 69, width: 1, height: 1, name: 'red.png',
+          } })]),
+        } } })
+        const summaries = events.filter(event => event.type === 'compaction/summary')
+        expect(summaries).toHaveLength(1)
+        expect(summaries[0]).toMatchObject({ data: {
+          llmStreamCall: true,
+          rawOutput: [{ type: 'text', text: 'Read red.png and report MINIMAL_IMAGE_OK.' }],
+        } })
+        expect(summaries[0]?.data).not.toHaveProperty('sourceCommandId')
+        expect(events.filter(event => event.type === 'compaction/end')).toHaveLength(1)
+        expect(events.filter(event => event.type === 'compaction/error')).toHaveLength(0)
+        const subscribed = notifications.flatMap(notification => {
+          const event = notificationEvent(notification)
+          return event?.type === 'compaction/summary' ? [event] : []
+        })
+        expect(subscribed).toEqual(summaries)
+        expect(events.findLastIndex(event => event.type === 'assistant/message'))
+          .toBeGreaterThan(events.findIndex(event => event.type === 'compaction/summary'))
+      }
       expect(logs.some(log => log.content.includes('llm-replay: script exhausted')), `${scenario.name}: replay script covers every model request`).toBe(false)
       if (scenario.name === 'subagent-dsh-sdk-diagnostic' || scenario.name === 'subagent-dsh-sdk-dynamic-route') {
         const parentEvents = records(ordered[0]!.content)
