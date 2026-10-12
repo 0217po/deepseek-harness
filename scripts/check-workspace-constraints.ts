@@ -249,6 +249,7 @@ export function expectedDshPackageFiles(manifest: PackageManifest): readonly str
     const target = exportDefault(manifest, resource)
     if (target?.startsWith('./') && target.endsWith('.json')) localeFiles.add(target.slice(2))
   }
+  const browserClient = exportDefault(manifest, './client')
   const bundle = manifest.dsh?.bundle
   const bundleFiles = bundle === undefined ? [] : bundlePatchFiles(bundle).map(file => file.replace(/^\.\//, ''))
   const extras = [
@@ -272,11 +273,11 @@ export function expectedDshPackageFiles(manifest: PackageManifest): readonly str
     // Keyed on the artifact path, like ./client below.
     ...exportDefault(manifest, './worker') === './lib/worker.cjs' ? ['lib/worker.cjs'] : [],
     ...exportDefault(manifest, './worker') === './lib/worker.js' ? ['lib/worker.js'] : [],
-    // UI plugin packages ship their browser bundle beside the node lib
-    // (single-artifact ruling: dist/ retired, ./client resolves lib/client.js).
-    // Keyed on the artifact path, not the subpath name: a package's ./client is
-    // a browser-safe source channel, not a bundle.
-    ...exportDefault(manifest, './client') === './lib/client.js' ? ['lib/client.js'] : [],
+    // Only physical browser bundles need a publication entry; a ./client
+    // subpath may instead expose a browser-safe emitted source tree.
+    ...browserClient === './lib/client.js' ? ['lib/client.js'] : [],
+    ...browserClient === './lib/client.browser.js' ? ['lib/client.browser.js'] : [],
+    ...exportCondition(manifest, './client', 'node') === './lib/client.node.js' ? ['lib/client.node.js'] : [],
     // runtime's shell-held loader subpath ships as its own bundle beside the client half.
     ...exportDefault(manifest, './loader') === './lib/loader.js' ? ['lib/loader.js'] : [],
     // A store subpath ships its own bundle (single-entry builds; no shared chunk).
@@ -328,6 +329,12 @@ function exportDefault(manifest: PackageManifest, subpath: string): string | und
   const entry = manifest.exports?.[subpath]
   if (typeof entry === 'string') return entry
   const target = exportFields(entry)?.default
+  return typeof target === 'string' ? target : undefined
+}
+
+/** Exact named condition target of an export entry. */
+function exportCondition(manifest: PackageManifest, subpath: string, condition: string): string | undefined {
+  const target = exportFields(manifest.exports?.[subpath])?.[condition]
   return typeof target === 'string' ? target : undefined
 }
 

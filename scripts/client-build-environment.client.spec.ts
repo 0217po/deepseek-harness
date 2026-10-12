@@ -278,6 +278,13 @@ describe('client build environment', () => {
     const chunked = buildFixture(officialEnvironment)
     write(join(chunked, 'packages/client/example/lib/client.pdf.js'), 'module.exports = {}\n')
     expect(() => { readClientBuildRecord(chunked) }).toThrow(/artifacts differ/)
+
+    const dual = buildFixture(officialEnvironment)
+    write(join(dual, 'packages/client/example/lib/client.node.js'), 'export const node = true\n')
+    write(join(dual, 'packages/client/example/lib/client.node.helper.js'), 'export const helper = true\n')
+    expect(() => { readClientBuildRecord(dual) }).not.toThrow()
+    write(join(dual, 'packages/client/example/lib/client.browser.js'), 'module.exports = { browser: true }\n')
+    expect(() => { readClientBuildRecord(dual) }).toThrow(/artifacts differ/)
   })
 
   it('keeps public client values out of workflow-wide environments', () => {
