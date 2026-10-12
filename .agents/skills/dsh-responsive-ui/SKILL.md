@@ -1,6 +1,6 @@
 ---
 name: dsh-responsive-ui
-description: Use when designing, implementing, or reviewing responsive client layouts, text truncation, title wrapping, icon-only controls, mobile hover and tooltips, and focus during width changes in DeepSeek Harness.
+description: Use when designing, implementing, or reviewing responsive client layouts, text truncation, title wrapping, icon-only controls, mobile hover, tooltips and keyboard behavior, and focus during width changes in DeepSeek Harness.
 ---
 
 # Responsive client UI
@@ -48,3 +48,7 @@ Use a viewport width of 390 CSS px as the primary acceptance minimum. There must
 
 1. Do not show tooltips that only provide auxiliary information such as action names or keyboard shortcuts on mobile. For example, omit the “Copy” tooltip on a copy button; tapping still performs the original action directly.
 2. Tooltips that provide supplementary explanations must support tap-to-show on mobile. For example, the information tooltip beside the Plugins page description.
+
+## 8. Mobile keyboard
+
+On mobile, do not raise the input keyboard automatically unless it is explicitly intended.
