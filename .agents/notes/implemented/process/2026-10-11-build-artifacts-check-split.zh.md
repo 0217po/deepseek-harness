@@ -44,7 +44,7 @@ native → host-src ─┬─ host-check ─────────────
                                                                  └─ client-bundle → web ┘
 ```
 
-- client-src 必须在 host-bundle 之后：Client 包导入 `@deepseek-ai/dsh-*/remote`，其类型 `lib/typert.remote-client.d.ts` 只由 Host tsdown 中的 Typert 写出。host-check 不读取 Typert 输出，干净的串行构建一直在 Host tsdown 之前完成 Host 聚合检查。
+- client-src 必须在 host-bundle 之后：Client 包导入 `@deepseek-ai/dsh-*/remote`，其类型 `lib/typert.remote-client.d.ts` 由 Typert 写出：这些 scope 在 Host tsdown 中生成，typecheck scope 经 `scripts/generate-typert.ts` 生成。host-check 不读取 Typert 输出，干净的串行构建一直在 Host tsdown 之前完成 Host 聚合检查。
 - 产物链保留 native → host-src 与 desktop-bundle → client-src 这两条非数据依赖；只有两个 check 步骤并行挂接到链上。
 - [`compile-referenced-projects.ts`](../../../../scripts/compile-referenced-projects.ts) 拥有包库步骤列表 `libraryBuildSteps`、references 参数构造 `referencedProjectsCompilerArgs`（相对路径传参，避开 Windows 命令行长度上限）与聚合检查参数 `aggregateCheckArgs`。vendor 发布演练（`host-libraries`）与 CI benchmark（`--noCheck`）串行执行同一步骤列表。
 - check 步骤使用 project mode（`tsc -p`）：它读取 references 已有的声明而不编译任何 reference，incremental 状态写入聚合配置已有的 `tsconfig.{host,client}.tsbuildinfo`。`build` 与 `build:check` 使用同一条命令，因此诊断相同。
@@ -63,9 +63,9 @@ native → host-src ─┬─ host-check ─────────────
 |---|---|---|
 | `build`、`build:official`、`Makefile` `build`、`scripts/publish-npm-baseline.ts`、`apps/desktop/scripts/package-target.ts`、`scripts/dev-bundle-registry.ts`、`release-publish.yml`、`sandbox.yml`、`e2e.yml` 与 `release.yml` 的非 PR 分支 | `build` / `build:official` | 有 |
 | `test:web`、`test:web:refresh`、`test:web:perf`、`test:web:stress`、`apps/desktop` `test:updates:local`、`test:bench` / `build:bench` | `build`；`build:bench` 运行 `build:native-system`、`build:lib` 与 benchmark tsdown | 有 |
-| `typecheck`（pre-push hook 运行它） | `build:lib:host`（Host `tsc -b tsconfig.host.json`、Host bundle、Desktop bundle）与 Client `tsc -b tsconfig.client.json` | 有 |
+| `typecheck`（pre-push hook 运行它） | `build.ts --scope typecheck`：host-src 与 host-typert（不打包、只读源码的 Typert 生成 `generate-typert.ts`）并行 → client-src，各 face 包编译后运行 `tsc -b tsconfig.{host,client}.json`；不含任何 bundle | 有 |
 | `dev:web`（[`scripts/dev-web.ts`](../../../../scripts/dev-web.ts)）、`dev:desktop`（`apps/desktop/scripts/dev.ts`） | `build:artifacts` | 启动前无；`dev:web` 启动后的 `tsc -b tsconfig.client.json --watch` 持续检查 Client 聚合根程序 |
-| `lint`、`lint:fix`、`doc-typecheck` 与 CI 的 Typert contracts gate 的前置步骤 | Host 包编译与 Host bundle（`compile-referenced-projects.ts host-libraries`），不含 Desktop bundle | 无 |
+| `lint`、`lint:fix`、`doc-typecheck` 与 CI 的 Typert contracts gate 的前置步骤 | Host 包编译与不打包的 Typert 生成并行（`compile-referenced-projects.ts host-contracts`），不含任何 bundle | 无 |
 | CI node 24 / snapshots and artifacts（`check:ci:consumers`）、windows node 24 / build & observational（`check:ci:windows-blocking`） | `build` | 有，两个必需 lane |
 | CI node-compat 22.19 | `build:artifacts`（经 run-gates） | 无 |
 | CI python runtime | `build-exe-for-python-sdk.ts --build-artifacts` | 无 |
@@ -75,7 +75,7 @@ native → host-src ─┬─ host-check ─────────────
 | `release-vendor.yml` 的 PR 演练 | `compile-referenced-projects.ts host-libraries` | 无 |
 | `release-vendor.yml` 的非 PR 分支、`release-vendor-publish.yml` | `build:lib:host` | 仅 Host 聚合根程序 |
 
-`lint`、`lint:fix`、`doc-typecheck` 与 Typert contracts gate 只读取 Typert 输出与包声明：两个聚合配置都是 `noEmit`，oxlint 自行构建程序，`doc-typecheck` 只引用包 project，`host-libraries` 的消费方都不读取 `apps/desktop/lib`。它们的前置步骤因此跳过 Host 聚合检查与 Desktop bundle，耗时从 159.8 s 降到 90.9 s（见下文测量）。
+`lint`、`lint:fix`、`doc-typecheck` 与 Typert contracts gate 只读取 Typert 输出与包声明：两个聚合配置都是 `noEmit`，oxlint 自行构建程序，`doc-typecheck` 只引用包 project，它们都不读取 bundle。它们的前置步骤因此跳过 Host 聚合检查与所有 bundle；仅跳过 Host 聚合检查与 Desktop bundle 就使耗时从 159.8 s 降到 90.9 s（见下文测量）。
 
 consumers lane 的 HMR Web 测试启动 `dev:web`，因此在该 lane 内使用 `build:artifacts`；同一 lane 的 `build` gate 仍运行两个聚合检查。CI 不单独调用 `build:check`：两个必需 lane 已通过 `build` 获得同一组检查。[PR 产物构建决策](2026-10-05-pr-artifact-typechecks.zh.md)的必需完整构建、benchmark `--noCheck`、job 与 worker 上限、node-compat 串行 Vitest、覆盖率权重与 pnpm 打包检查仍然有效；其中的 PR 产物构建由 `build:artifacts` 执行。
 
@@ -101,7 +101,7 @@ wall 中位数从 249.4 s 降到 172.1 s（−77.3 s，−31%）。各步骤单�
 | 开发迭代：master `build`，本分支 `build:artifacts` | 317.1 s | 153.6 s（−51.6%） | 423.1 → 231.2 s（−45.4%） | 6.11 → 6.18 GiB |
 | `pnpm run build:check`（`build:artifacts` 之后） | — | 67.7 s | 144.6 s | 5.33 GiB |
 | `pnpm run build:check` 无改动重跑 | — | 19.4 s | 33.1 s | 未测量 |
-| `lint` 与 `doc-typecheck` 的前置步骤：master `build:lib:host`，本分支 `host-libraries` | 159.8 s | 90.9 s（−43.2%） | 234.7 → 136.0 s | 未测量 |
+| `lint` 与 `doc-typecheck` 的前置步骤：master `build:lib:host`，本分支 `host-libraries`（后由 `host-contracts` 取代，见[本地门禁提速](2026-10-12-local-gate-speedups.zh.md)） | 159.8 s | 90.9 s（−43.2%） | 234.7 → 136.0 s | 未测量 |
 
 本分支串行样本运行时主机上有其他工作（外来 CPU 742 s），因此它的 wall 可能高估串行成本。串行构建的各段中（master → 本分支，各一个样本），Host tsdown 从 22.5 s 降到 11.7 s，Client 包编译从 55.6 s 降到 48.7 s，Client 聚合检查从 68.2 s 降到 35.9 s，Client tsdown 从 13.9 s 降到 10.5 s；各段合计分别为 308.5 s 与 254.9 s。这些缩短来自[无损提速 Note](2026-10-11-lossless-build-speedups.zh.md)；从 254.9 s 的串行各段合计到 169.1 s 的并发构建，其余缩短来自本 Note 的调度，它把 Host 聚合检查（约 66 s）移出关键路径。并发构建的关键路径是 native → host-src → host-bundle → desktop-bundle → client-src → client-check，host-check 在最后一步结束前约 30 s 完成（取自更早的一个样本）。`build:check` 并发运行 Host 与 Client 聚合检查，因此其 wall 等于 Host 聚合检查的 wall（约 65 s）。
 
@@ -114,7 +114,7 @@ wall 中位数从 249.4 s 降到 172.1 s（−77.3 s，−31%）。各步骤单�
 | 包源码类型错误 | host-src / client-src | 不报告（读取已有声明） | host-src / client-src | 报告 | 报告 |
 | 只属于聚合根程序的测试、脚本、benchmark、website 类型错误 | 不报告 | host-check / client-check | host-check / client-check | 报告 | consumers、windows-build |
 | 包 tsconfig 配置错误 | host-src / client-src | 不报告（`tsc -p` 不校验被引用 project 的 tsconfig 选项与语法） | host-src / client-src | 报告 | 报告 |
-| Typert 分析错误 | host-bundle | 不报告 | host-bundle | 报告（经 Host bundle） | 报告 |
+| Typert 分析错误 | host-bundle | 不报告 | host-bundle | 报告（经 host-typert） | 报告 |
 | 前置产物缺失 | — | 编译器诊断（TS6305、TS2307） | — | — | — |
 
 负对照：在只属于 Host 聚合根程序的 `scripts/pnpm-invocation.spec.ts` 中加入类型错误（TS2322）后，`build:artifacts` 以 0 退出；`build:check` 以 1 退出，其中 Host 聚合检查失败、Client 聚合检查通过；`build` 以 1 退出，9 个步骤中 8 个通过、1 个失败，且不写 client build record。在临时 fixture 中，被引用 project 的 tsconfig 含无效 `target`、JSON 语法错误或未知编译选项时，`tsc -p` 以 0 退出，`tsc -b` 分别报告 TS6046、TS5092 与 TS1012、TS5023 并以 1 退出；被引用 project 缺少 `composite` 时，两者都报告 TS6306。
@@ -123,7 +123,7 @@ CI 证据：PR #6005 上，两个运行并发 `pnpm run build` 的必需 lane �
 
 ### 有意的取舍（非无损）
 
-- **部分命令跳过聚合检查：** `build:artifacts`、`dev:web` 与 `dev:desktop` 的启动构建，以及 `lint`、`lint:fix`、`doc-typecheck` 与 Typert contracts gate 的前置步骤，都不类型检查两个聚合根程序，这些前置步骤也不产出 `apps/desktop/lib`。完整性由 `build`、`build:check`、`typecheck`（pre-push hook）与两个必需 CI lane 负责；`dev:web` 与 `dev:desktop` 不会因测试类型错误而拒绝启动。
+- **部分命令跳过聚合检查：** `build:artifacts`、`dev:web` 与 `dev:desktop` 的启动构建，以及 `lint`、`lint:fix`、`doc-typecheck` 与 Typert contracts gate 的前置步骤，都不类型检查两个聚合根程序，这些前置步骤只产出声明与 Typert 输出，不打包。完整性由 `build`、`build:check`、`typecheck`（pre-push hook）与两个必需 CI lane 负责；`dev:web` 与 `dev:desktop` 不会因测试类型错误而拒绝启动。
 - **`build:check` 不检查新鲜度：** 在 `build:artifacts` 之后修改源码时，`build:check` 基于旧声明（包括 Typert Remote 声明）检查；需要先重跑 `build:artifacts`。完整 `build` 不受影响。
 - **并发 `build` 提高内存峰值：** 本分支完整 `build` 的进程树 RSS 峰值为 7.53 GiB，master 串行构建为 6.11 GiB（+1.42 GiB，2 个样本的中位数），本分支串行构建为 6.27 GiB（n=1）；同时 CPU 从 423.1 s 降到 374.4 s，因为[无损提速 Note](2026-10-11-lossless-build-speedups.zh.md) 省去的工作多于并发争用增加的工作。原型（不含 Typert 改动）中，单独的并发调度使 RSS 峰值增加约 2.1 GiB（5.9 → 8.0 GiB）、CPU 增加约 3.7%。上限由 `DSH_GATE_CONCURRENCY` 控制；内存紧张时使用 `DSH_GATE_CONCURRENCY=1 pnpm run build`，或分别运行 `build:artifacts` 与 `build:check`。windows-build lane 中 `build` 与 `docs:build` 同时运行。
 - **成功步骤的输出默认不显示：** 只有失败步骤打印完整输出。
@@ -150,7 +150,7 @@ CI 证据：PR #6005 上，两个运行并发 `pnpm run build` 的必需 lane �
 
 开发迭代可以用 `build:artifacts` 跳过两个聚合根程序（冷启动比 master 的 `build` 快 51.6%），在声明完成前用 `build:check` 或 `build` 补齐检查。`build` 保持完整：Host 聚合检查不在关键路径上，Client 聚合检查与 Client bundle、web 并行，冷启动比 master 快 46.7%（含无损提速 Note 的改动，2 个样本的中位数）。代价是更高的内存峰值、并发争用带来的少量额外 CPU、默认更少的成功输出，以及多个开发与前置命令不检查测试类型（见上文取舍）。
 
-删除或改变 consumers 与 windows-build 两个必需 lane 的 `build`，必须先把两个聚合检查转交另一处阻塞型 owner。若 Typert 以后获得独立的生成步骤，步骤表新增该步骤，client-src 改为依赖它；命令语义与调度不变。
+删除或改变 consumers 与 windows-build 两个必需 lane 的 `build`，必须先把两个聚合检查转交另一处阻塞型 owner。typecheck scope 与 lint 类前置步骤不打包即生成 Typert 约定（[本地门禁提速](2026-10-12-local-gate-speedups.zh.md)）；产物 scope 仍在 Host tsdown 中生成。
 
 [Typert Remote 方法调用](../architecture/2026-08-02-typert-remote-method-calls.zh.md)描述的“Client 编译前先完成 Host 与 Remote 产物”由 client-src 对 host-bundle 的依赖保证。
 

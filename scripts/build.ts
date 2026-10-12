@@ -4,11 +4,12 @@
  * `--scope artifacts` emits every artifact and binds the client outputs to their public environment;
  * `--scope check` type-checks only the Host and Client aggregate programs against the package
  * declarations already on disk; the default runs both step sets as one dependency graph, so the
- * aggregate checks overlap the remaining artifact steps.
+ * aggregate checks overlap the remaining artifact steps. `--scope typecheck` (`pnpm run typecheck`)
+ * type-checks every package project and both aggregate programs; beside Host compilation it writes
+ * the Typert declarations that Client compilation imports, without bundling.
  */
 
 import { rmSync } from 'node:fs'
-import { availableParallelism } from 'node:os'
 import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import {
@@ -19,18 +20,23 @@ import {
   resolveClientBuildEnvironment,
   writeClientBuildRecord,
 } from './client-build-environment.ts'
-import { aggregateCheckArgs, libraryBuildSteps } from './compile-referenced-projects.ts'
+import { aggregateBuildArgs, aggregateCheckArgs, contractSteps, libraryBuildSteps } from './compile-referenced-projects.ts'
+import type { LibraryStep } from './compile-referenced-projects.ts'
 import { pnpmCommand } from './release/process.ts'
+import { defaultParallelism, describeDefaultParallelism } from './parallelism.ts'
 import { runAggregate } from './run-gates.ts'
 import type { Gate } from './run-gates.ts'
 
-/** Steps one build invocation runs: every artifact and check, only artifacts, or only aggregate checks. */
-export type BuildScope = 'complete' | 'artifacts' | 'check'
+/**
+ * Steps one build invocation runs: every artifact and check, only artifacts, only aggregate checks,
+ * or every type check with the generated Typert declarations it needs.
+ */
+export type BuildScope = 'complete' | 'artifacts' | 'check' | 'typecheck'
 
 /** Parsed command-line selection of one build invocation. */
 export interface BuildArguments {
   readonly scope: BuildScope
-  /** Client build profile requested by `--profile`; artifact scopes only. */
+  /** Client build profile requested by `--profile`; `complete` and `artifacts` scopes only. */
   readonly profile: string | undefined
 }
 
@@ -38,7 +44,8 @@ export interface BuildArguments {
  * Parse the build command line.
  * @param args - Arguments after the script path.
  * @returns The selected scope and requested client build profile.
- * @throws If an option is unknown, the scope is not `artifacts` or `check`, or `--profile` accompanies `--scope check`.
+ * @throws If an option is unknown, the scope is not `artifacts`, `check`, or `typecheck`,
+ *   or `--profile` accompanies `--scope check` or `--scope typecheck`.
  */
 export function parseBuildArguments(args: readonly string[]): BuildArguments {
   const { values } = parseArgs({
@@ -49,12 +56,12 @@ export function parseBuildArguments(args: readonly string[]): BuildArguments {
     },
     allowPositionals: false,
   })
-  if (values.scope !== undefined && values.scope !== 'artifacts' && values.scope !== 'check') {
-    throw new Error(`build: --scope must be artifacts or check, got ${JSON.stringify(values.scope)}; omit it for the complete build`)
+  if (values.scope !== undefined && values.scope !== 'artifacts' && values.scope !== 'check' && values.scope !== 'typecheck') {
+    throw new Error(`build: --scope must be artifacts, check, or typecheck, got ${JSON.stringify(values.scope)}; omit it for the complete build`)
   }
   const scope: BuildScope = values.scope ?? 'complete'
-  if (scope === 'check' && values.profile !== undefined) {
-    throw new Error('build: --profile selects artifact values and does not apply to --scope check')
+  if ((scope === 'check' || scope === 'typecheck') && values.profile !== undefined) {
+    throw new Error(`build: --profile selects artifact values and does not apply to --scope ${scope}`)
   }
   return { scope, profile: values.profile }
 }
@@ -62,9 +69,13 @@ export function parseBuildArguments(args: readonly string[]): BuildArguments {
 /**
  * Construct the build steps of one scope as a gate dependency graph.
  * Artifact steps keep the serial order native, Host compilation, Host bundle (Typert),
- * Desktop bundle, Client compilation, Client bundle, then Web. In the complete scope each
- * aggregate check waits only for its own face's package compilation; alone, the checks
- * have no predecessors and read whatever declarations already exist.
+ * Desktop bundle, Client compilation, Client bundle, then Web. The typecheck scope runs Host
+ * compilation beside the bundle-free Typert pass, which reads only source, and then Client
+ * compilation, which needs both outputs; it writes no bundle. In the complete and typecheck
+ * scopes each aggregate check waits only for its own face's package compilation; alone, the
+ * checks have no predecessors and read whatever declarations already exist. The typecheck scope
+ * checks aggregates in build mode, which skips a program whose tsbuildinfo is current; the other
+ * scopes use project mode, which compiles no reference.
  * @param root - Repository root containing the compiler and bundle configurations.
  * @param scope - Steps to include.
  * @param environment - Environment overlay applied to every step; the parent value of a key mapped to `undefined` is removed.
@@ -78,35 +89,44 @@ export function buildGates(
 ): Gate[] {
   const env = { ...environment }
   const gates: Gate[] = []
-  if (scope !== 'check') {
+  if (scope === 'complete' || scope === 'artifacts') {
     gates.push(pnpmGate('native', 'native addon', ['run', 'build:native-system'], [], env))
     for (const step of libraryBuildSteps(root, 'all')) {
-      gates.push({
-        id: step.id,
-        label: step.label,
-        displayCommand: step.displayCommand,
-        command: step.command,
-        args: [...step.args],
-        needs: step.id === 'host-src' ? ['native'] : [...step.needs],
-        env,
-      })
+      gates.push(libraryGate(step, step.id === 'host-src' ? ['native'] : step.needs, env))
     }
     gates.push(pnpmGate('web', 'Web build', ['run', 'build:web'], ['client-bundle'], env))
+  }
+  if (scope === 'typecheck') {
+    for (const step of contractSteps(root, 'all')) gates.push(libraryGate(step, step.needs, env))
   }
   if (scope !== 'artifacts') {
     for (const face of ['host', 'client'] as const) {
       gates.push({
         id: `${face}-check`,
         label: `${face} aggregate check`,
-        displayCommand: `tsc -p tsconfig.${face}.json`,
+        displayCommand: `tsc ${scope === 'typecheck' ? '-b' : '-p'} tsconfig.${face}.json`,
         command: process.execPath,
-        args: aggregateCheckArgs(face),
-        needs: scope === 'complete' ? [`${face}-src`] : [],
+        args: scope === 'typecheck' ? aggregateBuildArgs(face) : aggregateCheckArgs(face),
+        // No Host aggregate file imports a generated `/typert` or `/remote` subpath, so
+        // host-check never reads what a concurrent host-typert step writes.
+        needs: scope === 'check' ? [] : [`${face}-src`],
         env,
       })
     }
   }
   return gates
+}
+
+function libraryGate(step: LibraryStep, needs: readonly string[], env: Record<string, string | undefined>): Gate {
+  return {
+    id: step.id,
+    label: step.label,
+    displayCommand: step.displayCommand,
+    command: step.command,
+    args: [...step.args],
+    needs: [...needs],
+    env,
+  }
 }
 
 function pnpmGate(
@@ -137,13 +157,13 @@ async function main(): Promise<number> {
   }
   const { scope, profile } = parseBuildArguments(process.argv.slice(2))
   const root = resolve(import.meta.dirname, '..')
-  const name = scope === 'complete' ? 'build' : `build:${scope}`
-  const available = availableParallelism()
+  const name = scope === 'complete' ? 'build' : scope === 'typecheck' ? 'typecheck' : `build:${scope}`
+  const budget = defaultParallelism()
   const workers = (gates: readonly Gate[]) => ({
-    workers: Math.min(gates.length, available),
-    source: `${String(available)} available CPU(s)`,
+    workers: Math.min(gates.length, budget),
+    source: describeDefaultParallelism(),
   })
-  if (scope === 'check') {
+  if (scope === 'check' || scope === 'typecheck') {
     const gates = buildGates(root, scope)
     return runAggregate(name, gates, workers(gates))
   }
