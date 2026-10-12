@@ -804,6 +804,59 @@ void ready
     } } })).toThrow()
   })
 
+  it.each([
+    {
+      name: 'a union of named object fields',
+      type: 'Record<string, { base: string }> & { fixed: { own: string } | { other: number } }',
+      valid: [{ base: 'base', own: 'own' }, { base: 'base', other: 1 }],
+      invalid: [{ own: 'own' }, { other: 1 }, { base: 'base' }, null],
+      optional: false,
+    },
+    {
+      name: 'an optional named field',
+      type: 'Record<string, { base: string }> & { fixed?: { own: string } }',
+      valid: [{ base: 'base', own: 'own' }],
+      invalid: [{ own: 'own' }, { base: 'base' }, null],
+      optional: true,
+    },
+    {
+      name: 'a nullable index value',
+      type: 'Record<string, { base: string } | null> & { fixed: { own: string } }',
+      valid: [{ base: 'base', own: 'own' }],
+      invalid: [{ own: 'own' }, { base: 'base' }, null],
+      optional: false,
+    },
+    {
+      name: 'unions on both the named field and index value',
+      type: 'Record<string, { base: string } | null> & { fixed: { own: string } | null }',
+      valid: [{ base: 'base', own: 'own' }, null],
+      invalid: [{ own: 'own' }, { base: 'base' }],
+      optional: false,
+    },
+  ])('combines indexed constraints for $name before closing objects', async ({ type, valid, invalid, optional }) => {
+    const root = fixture()
+    editFile(root, 'packages/remote/src/types.ts', source => source.replace('readonly title: string',
+      `readonly title: string\n  readonly payload: ${type}`))
+    const [artifact] = new WorkspaceTypertGenerator(root).generate()
+    const generated = await executable(artifact!.remote!.js)
+    const method = generated.TYPERT_REMOTE.methods['goals/create']!
+    const input = (payload: object) => ({ agentId: 'agent', request: { title: 'ship', payload } })
+    for (const view of [method.input(), method.input({ strict: true })]) {
+      expect(view.jsonSchema).toBeUndefined()
+      expect(view.jsonSchemaError).toMatch(/selected dictionaries|selected union branches/)
+      for (const fixed of valid) expect(view.create().parse(input({ fixed }))).toEqual(input({ fixed }))
+      for (const fixed of invalid) expect(() => view.create().parse(input({ fixed }))).toThrow()
+      if (optional) expect(view.create().parse(input({}))).toEqual(input({}))
+      else expect(() => view.create().parse(input({}))).toThrow()
+    }
+    for (const fixed of valid) {
+      if (fixed === null) continue
+      const extra = input({ fixed: { ...fixed, unexpected: true } })
+      expect(method.input().create().parse(extra)).toEqual(input({ fixed }))
+      expect(() => method.input({ strict: true }).create().parse(extra)).toThrow()
+    }
+  })
+
   it('keeps normal and closed recursive helper identifiers distinct', async () => {
     const root = fixture()
     editFile(root, 'packages/remote/src/types.ts', source => `${source}\nexport interface Branch { readonly value: string; readonly next?: Branch }\nexport interface closed$Branch { readonly value: string; readonly next?: closed$Branch }\n`)

@@ -757,10 +757,10 @@ export interface ClientMarker {
       message: 'Gateway service key must be a string literal',
     },
     {
-      name: 'source definitions in a Gateway binding',
+      name: 'an unsupported Gateway binding option',
       edit: (source: string) => source.replace(
         "    super(undefined, 'goals')",
-        "    super(undefined, 'goals', { definitions: {} })",
+        "    super(undefined, 'goals', { extra: true })",
       ),
       message: 'only supports a namespace option',
     },

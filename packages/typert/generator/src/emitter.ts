@@ -997,6 +997,12 @@ class SchemaEmitter {
     if (declared === indexed) return this.typeSchema(declared, substitutions)
     const own = this.renderer.node(declared)
     const value = this.renderer.node(indexed)
+    if (own.kind === 'union') {
+      return `z.union([${own.types.map(type => this.indexedPropertySchema(type, indexed, substitutions)).join(', ')}])`
+    }
+    if (value.kind === 'union') {
+      return `z.union([${value.types.map(type => this.indexedPropertySchema(declared, type, substitutions)).join(', ')}])`
+    }
     const ownProperties = own.kind === 'object'
       ? own.members.filter((member): member is Extract<MemberModel, { kind: 'property' }> => member.kind === 'property') : []
     const valueProperties = value.kind === 'object'
