@@ -752,10 +752,16 @@ function verifyNoMcpServers(log: string, ptc: boolean): void {
 
 /** Require an admitted failed job and zero process allocations before updating its recorded oracle. */
 async function verifyBackgroundConfinementFailure(log: string, cwd: string): Promise<void> {
-  const results = parseSessionLog(log).flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
+  const events = parseSessionLog(log)
+  const results = events.flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
   const started = results.find(result => result.toolCallId === 'async-confinement-start')
   const inspected = results.find(result => result.toolCallId === 'async-confinement-result')
-  expect(started).toMatchObject({ isError: false, content: [{ type: 'text', text: 'started background job bash-1' }] })
+  const registered = events.find(event => event.type === 'job/registered')
+  if (registered?.type !== 'job/registered') throw new Error('missing registered job')
+  expect(registered.data.jobId).toMatch(/^bash-[0-9a-f]{16}$/)
+  expect(started).toMatchObject({
+    isError: false, content: [{ type: 'text', text: `started background job ${registered.data.jobId}` }],
+  })
   expect(inspected?.isError).toBe(false)
   const text = inspected?.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
   expect(text).toContain('[status: failed,')
