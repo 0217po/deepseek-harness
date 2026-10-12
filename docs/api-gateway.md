@@ -96,7 +96,7 @@ The API Gateway package owns the Host dispatcher and Client Remote endpoint as p
 
 ## Strict generation pipeline
 
-The root build runs `build:lib:host`, `build:lib:client`, and `build:web` in order. The Host lib phase first runs `tsc -b tsconfig.host.json`, then `tsdown --env.DSH_BUILD_FACE host`; the normal Host Project Reference graph compiles the Typert generator, which runs during this tsdown pass with the Host aggregate as its only `ts.Program` seed. The Client lib phase then runs `tsc -b tsconfig.client.json` and `tsdown --env.DSH_BUILD_FACE client`, consuming the newly generated Remote Client declarations and runtime contributions without starting Typert again.
+The root build compiles and bundles the Host face, then the Client face, then builds the Web shell ([step order](development.md#typescript-project-layout)). The Host phase first compiles the Host package references, then runs `tsdown --env.DSH_BUILD_FACE host`; the normal Host Project Reference graph compiles the Typert generator, which runs during this tsdown pass with the Host aggregate as its only `ts.Program` seed. The Client phase then compiles the Client package references and runs `tsdown --env.DSH_BUILD_FACE client`, consuming the newly generated Remote Client declarations and runtime contributions without starting Typert again.
 
 Both tsdown passes match `vendor/*`, `packages/*/*`, and `apps/cli`, the Host pass also `apps/desktop-host` ([build order](development.md#typescript-project-layout)), and both bundle only JavaScript emitted to `lib/types` by the corresponding tsc phase. The root config does not scan Client artifacts, classify package names, or pass a maintained filter to tsdown; package-local configs return entries for the current phase based on `DSH_BUILD_FACE`. An ordinary Client plugin produces both its Node loader entry and browser bundle during the Client phase.
 
@@ -154,7 +154,7 @@ Changing only a Remote method's implementation body without changing its contrac
 pnpm run build:lib
 ```
 
-The running Client watcher consumes these generated files when it rebundles. If `pnpm run build:lib:host` has already refreshed the Host contract, `pnpm run build:lib:client` can complete the Client side; a clean worktree cannot skip the Host phase. Recompiling only the frontend source cannot infer new types from Host decorators. `pnpm run typecheck` runs the Host lib phase before Client tsc, and CI and release builds use the same order.
+The running Client watcher consumes these generated files when it rebundles. If `pnpm run build:lib:host` has already refreshed the Host contract, `pnpm run build:lib:client` can complete the Client side; a clean worktree cannot skip the Host phase. Recompiling only the frontend source cannot infer new types from Host decorators. `pnpm run typecheck` generates the Host contract with the bundle-free Typert pass before Client tsc, and the CI build lanes and release builds generate it in the Host bundle phase before Client tsc.
 
 ## Boundaries
 
