@@ -106,3 +106,15 @@ export function developmentRuntimeDirectory(
 ) {
   return join(resolveDesktopTargetBuildPaths(env, hostPlatform, hostArch).runtime, 'primary-runtime')
 }
+
+/**
+ * Select the output directory and filename suffix for one packaging mode.
+ * @param {{ artifacts: string, unsignedArtifacts: string, unnotarizedArtifacts: string }} paths Target artifact directories.
+ * @param {{ unsigned: boolean, skipNotarization: boolean }} mode Validated packaging mode.
+ * @returns {{ directory: string, suffix: string }} Matching artifact destination and filename marker.
+ */
+export function desktopArtifactOutput(paths, mode) {
+  if (mode.unsigned) return { directory: paths.unsignedArtifacts, suffix: '-unsigned' }
+  if (mode.skipNotarization) return { directory: paths.unnotarizedArtifacts, suffix: '-unnotarized' }
+  return { directory: paths.artifacts, suffix: '' }
+}

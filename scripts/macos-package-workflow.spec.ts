@@ -28,7 +28,6 @@ it('confines signed Mac packaging to manual dispatch and a dedicated Apple Silic
   expect(uploads[1]?.with?.path).toBe('apps/desktop/.desktop-build/targets/mac-arm64/${{ steps.settings.outputs.artifacts }}/*.dmg\napps/desktop/.desktop-build/targets/mac-arm64/${{ steps.settings.outputs.artifacts }}/*.zip\n')
 })
 
-
 it('defaults to notarization and labels the explicit debugging option', () => {
   expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: { skip_notarization: {
     type: 'boolean', default: false,

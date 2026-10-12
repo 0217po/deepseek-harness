@@ -8,7 +8,7 @@ import {
   desktopBuildRecordFilename,
   resolveDesktopAutoUpdateConfig,
 } from './desktop-auto-update-environment.mjs'
-import { desktopTargetBuildPaths } from './desktop-build-paths.mjs'
+import { desktopArtifactOutput, desktopTargetBuildPaths } from './desktop-build-paths.mjs'
 import { packageMacOSArtifacts, type DesktopPrepackagedArtifact } from './package-macos.ts'
 import { loadDesktopPackageEnvironment, localMacOSPackageEnvironment, validateDesktopPackageEnvironment } from './desktop-package-environment.mjs'
 import { createPackagingRun, recordPackagingEvent } from './packaging-run.mjs'
@@ -332,8 +332,7 @@ async function resolveRequestedBuildVersion(
     // Machine presets own packaging, not upload credentials; local auto numbering uses existing artifacts.
     environment: environment.DSH_PACKAGING_PRESET === undefined ? environment : {},
     // Unsigned builds land beside the signed output, so numbering has to read the directory this run writes.
-    artifactsRoot: invocation.unsigned ? paths.unsignedArtifacts
-      : invocation.skipNotarization ? paths.unnotarizedArtifacts : paths.artifacts,
+    artifactsRoot: desktopArtifactOutput(paths, invocation).directory,
   })
 }
 
@@ -348,7 +347,6 @@ async function main(): Promise<void> {
     : loadDesktopPackageEnvironment(target.platform, process.env, APP_ROOT, {
       unsigned: invocation.unsigned, prepareOnly: invocation.prepareOnly,
     })
-  environment.DSH_DESKTOP_MACOS_SKIP_NOTARIZATION = invocation.skipNotarization ? '1' : '0'
   const productVersion = packageVersion(join(APP_ROOT, 'package.json'), 'desktop package')
   // Release settings come from the selected configuration files, so the version this run publishes is an
   // argument; the environment variable below only carries it to the child processes that build.
@@ -401,8 +399,9 @@ async function main(): Promise<void> {
   }
   if (success && target.platform === 'darwin' && !invocation.directory && !invocation.prepareOnly) {
     const paths = desktopTargetBuildPaths(target.name)
-    const filename = `deepseek-harness-${buildVersion}-mac-${target.arch}${invocation.unsigned ? '-unsigned' : invocation.skipNotarization ? '-unnotarized' : ''}.dmg`
-    console.log(`DMG: ${join(invocation.unsigned ? paths.unsignedArtifacts : invocation.skipNotarization ? paths.unnotarizedArtifacts : paths.artifacts, filename)}`)
+    const output = desktopArtifactOutput(paths, invocation)
+    const filename = `deepseek-harness-${buildVersion}-mac-${target.arch}${output.suffix}.dmg`
+    console.log(`DMG: ${join(output.directory, filename)}`)
   }
 }
 
@@ -430,9 +429,7 @@ export async function packageTarget(
     rmSync(releaseRecordPath, { force: true })
     rmSync(`${releaseRecordPath}.tmp`, { force: true })
   }
-  const artifactsRoot = invocation.unsigned ? buildPaths.unsignedArtifacts
-    : invocation.skipNotarization ? buildPaths.unnotarizedArtifacts : buildPaths.artifacts
-  if (invocation.skipNotarization) rmSync(artifactsRoot, { recursive: true, force: true })
+  const artifactsRoot = desktopArtifactOutput(buildPaths, invocation).directory
   const buildEnv = withoutWindowsSigningEnvironment(withoutDesktopUploadCredentials(
     desktopElectronBuilderEnvironment(environment, invocation.unsigned)))
   const targetEnv: NodeJS.ProcessEnv = {

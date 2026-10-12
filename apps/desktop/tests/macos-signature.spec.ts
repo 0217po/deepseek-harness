@@ -268,7 +268,6 @@ it('signs debugging artifacts without Apple credentials and isolates them from r
   expect(config.mac).toMatchObject({ target: ['dmg', 'zip'] })
   expect(config.artifactName).toContain('-unnotarized.')
   expect(portablePath(config.directories.output)).toContain('/unnotarized-artifacts')
-  expect(config.artifactBuildCompleted({ file: 'debug.dmg' })).toBeUndefined()
   expect(() => createElectronBuilderConfig({ ...RELEASE_ENVIRONMENT, DSH_DESKTOP_MACOS_SKIP_NOTARIZATION: 'yes' }, 'darwin', 'arm64')).toThrow(/must be 0 or 1/u)
   expect(() => createElectronBuilderConfig({ ...RELEASE_ENVIRONMENT, DSH_DESKTOP_MACOS_SKIP_NOTARIZATION: '1', DSH_DESKTOP_UNSIGNED: '1' }, 'darwin', 'arm64')).toThrow(/requires a signed macOS build/u)
 })

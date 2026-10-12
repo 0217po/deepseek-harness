@@ -84,8 +84,12 @@ it('records debugging artifact paths only for an explicit CI selection without n
         PACKAGE_SKIP_NOTARIZATION: skip, PACKAGE_BUILD_VERSION: 'auto',
         GITHUB_RUN_NUMBER: '1', GITHUB_RUN_ATTEMPT: '1', GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: summary,
       } })
-    expect(run('false').status).toBe(1)
-    expect(run('yes').status).toBe(1)
+    const missingCredentials = run('false')
+    expect(missingCredentials.status).toBe(1)
+    expect(missingCredentials.stderr).toContain('macOS packaging requires APPLE_API_KEY')
+    const invalidSelection = run('yes')
+    expect(invalidSelection.status).toBe(1)
+    expect(invalidSelection.stderr).toContain('Invalid skip notarization selection')
     const debugging = run('true')
     expect(debugging.stderr).toBe('')
     expect(debugging.status).toBe(0)

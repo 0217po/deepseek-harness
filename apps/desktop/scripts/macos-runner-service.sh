@@ -23,7 +23,7 @@ case "$action" in
     service_dir="$runner_root/dsh-service"
     mkdir -p "$service_dir"
     cp "$source_dir/start-macos-packaging-runner.sh" "$service_dir/start.sh"
-    # runsvc.sh reloads .path before launching RunnerService.js.
+    # runsvc.sh reloads .path; replace the interactive PATH saved by registration.
     printf '%s\n' "$node_bin:/usr/bin:/bin:/usr/sbin:/sbin" > .path
     "$node_bin/node" --input-type=module - "$service_dir" "$runner_root" "$config_root" "$node_bin" <<'NODE'
 import { writeFileSync } from 'node:fs'

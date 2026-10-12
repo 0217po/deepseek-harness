@@ -19,6 +19,6 @@ for (const [name, value] of Object.entries(environment)) {
 }
 validateDesktopPackageEnvironment(environment, { platform: 'darwin', arch: 'arm64' }, { skipNotarization })
 if (!process.env.GITHUB_OUTPUT || !process.env.GITHUB_STEP_SUMMARY) throw new Error('Run this adapter from GitHub Actions')
-appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\nartifacts=${skipNotarization ? 'unnotarized-artifacts' : 'artifacts'}\nmode=${skipNotarization ? 'unnotarized-debug' : 'signed-notarized'}\n`)
+appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\nartifacts=${skipNotarization ? 'unnotarized-artifacts' : 'artifacts'}\nmode=${skipNotarization ? 'unnotarized-debug' : 'signed'}\n`)
 appendFileSync(process.env.GITHUB_STEP_SUMMARY, `macOS arm64 signed installer\n\nVersion: ${version}\n\nCommit: ${process.env.GITHUB_SHA}\n\nPreset: ${process.env.DSH_PACKAGING_PRESET}\n`)
 if (skipNotarization) appendFileSync(process.env.GITHUB_STEP_SUMMARY, '\nWARNING: signed but NOT notarized or stapled. Internal debugging only; Gatekeeper may block downloaded copies. Not qualified for distribution or update publishing.\n')

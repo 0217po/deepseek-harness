@@ -73,3 +73,14 @@ export function developmentRuntimeDirectory(
   hostPlatform?: NodeJS.Platform,
   hostArch?: string,
 ): string
+
+/**
+ * Select the output directory and filename suffix for one packaging mode.
+ * @param paths Target artifact directories.
+ * @param mode Validated packaging mode.
+ * @returns Matching artifact destination and filename marker.
+ */
+export function desktopArtifactOutput(
+  paths: Pick<DesktopTargetBuildPaths, 'artifacts' | 'unsignedArtifacts' | 'unnotarizedArtifacts'>,
+  mode: { unsigned: boolean, skipNotarization: boolean },
+): { directory: string, suffix: string }
