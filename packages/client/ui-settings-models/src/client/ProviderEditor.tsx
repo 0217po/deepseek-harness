@@ -23,10 +23,9 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type {
-  CredentialInfo, SettingsNamespaceView, SettingsPathOpView,
-} from '@deepseek-ai/dsh-api-remotes/client'
+import type { CredentialInfo, LlmNativeAuth, SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   DeepSeekModelsEditor, modelDrafts, validateDeepSeekModels,
 } from './DeepSeekModelsEditor.tsx'
@@ -69,6 +68,12 @@ export interface ProviderEditorProps {
   settingsPath: readonly string[]
   /** The Host operations this card writes and interrogates through. */
   operations: ModelsOperations
+  /** Endpoint the route uses when its profile sets no `baseURL`; absent when the adapter reports none. */
+  defaultBaseURL?: string
+  /** Authentication the route performs when its profile names no credential reference; absent when the adapter reports none. */
+  nativeAuth?: LlmNativeAuth
+  /** Redacted state of the profile's named credential reference, from the page snapshot. */
+  credential?: CredentialInfo
   /** Section copy. */
   t: (key: keyof typeof en) => string
   /** Disable writes (read-only settings provider). */
@@ -167,7 +172,6 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   const { namespace, schema, settingsPath, operations, t } = props
   const [draft, setDraft] = useState<Record<string, unknown>>(() => draftAt(schema, namespace, settingsPath))
   const [keyDraft, setKeyDraft] = useState('')
-  const [keyState, setKeyState] = useState<CredentialInfo | undefined>(undefined)
   const [busy, setBusy] = useState(false)
   const [listBusy, setListBusy] = useState(false)
   const { onBusyChange } = props
@@ -194,18 +198,6 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     () => layout === 'pi-ai' ? protocolChoices(namespace, schema) : [],
     [layout, namespace, schema],
   )
-
-  useEffect(() => {
-    let stale = false
-    setKeyState(undefined)
-    // The key state is a placeholder hint, not a precondition for editing: a
-    // refused describe leaves the card without the "already configured" hint.
-    void operations.describeCredential(keyRef).then((described) => {
-      if (stale) return
-      setKeyState(described)
-    })
-    return () => { stale = true }
-  }, [operations, keyRef])
 
   const stringAt = (source: unknown, key: string): string | undefined => {
     const value = schema.getPath(source, [key])
@@ -324,8 +316,6 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     return <p className={styles['error']}>{props.provider}: {props.t('settingsPathUnresolvable')}</p>
   }
 
-  const keyLocked = keyState?.writable === false
-
   /**
    * The catalog beneath the user layer: what the composition entry pinned, or
    * else the schema default that `resolve` would supply. The effective value
@@ -354,11 +344,37 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     const defaultContextWindow = schema.getPath(fallback, ['defaultContextWindow'])
     const defaultMaxTokens = schema.getPath(fallback, ['maxTokens'])
     const defaultInput = schema.getPath(fallback, ['defaultInput'])
-    const keyPlaceholder = keyLocked
-      ? t('keyEnvLocked')
-      : keyState?.configured === true && props.credentialRequired !== true
-        ? t('keyStored')
-        : family === 'pi-ai' ? t('keyPlaceholderNative') : t('keyPlaceholder')
+    // A named reference is the only credential the adapter reads for this
+    // route. Without one, a catalog route authenticates the way the directory
+    // reports, and a declared route sends no key at all.
+    const namedRef = stringAt(fallback, 'apiKeyEnv')
+    const nativeAuth = namedRef === undefined ? props.nativeAuth : undefined
+    // A derived reference cannot identify a native provider's active credential.
+    const source = namedRef === undefined || props.credential?.configured !== true
+      ? undefined
+      : props.credential.source
+    const keySource = source === 'file' ? t('keySourceFile')
+      : source === 'env' ? t('keySourceEnv')
+        : source === 'project-env' ? t('keySourceProjectEnv')
+          : source === 'user-env' ? t('keySourceUserEnv')
+            : undefined
+    // Display method-neutral references without changing the adapter's lookup.
+    const visibleRefs = (namedRef === undefined ? nativeAuth?.env ?? [] : [namedRef])
+      .filter(ref => !ref.toLowerCase().includes('oauth'))
+    const keyHint = visibleRefs[0]
+    const keyHelp = visibleRefs.length === 0
+      ? undefined
+      : t('keyHelp').replace('{env}', () => visibleRefs.join(' / '))
+    const authHelp = keyHelp === undefined ? null : (
+      <Tooltip label={keyHelp} side="right" delayMs={0} focusDelayMs={0} portal openOnClick>
+        <button type="button" className={styles['helpButton']} aria-label={t('authHelp')}>?</button>
+      </Tooltip>
+    )
+    // A provider with no native key authentication has no key for this field to store.
+    const keylessNativeAuth = nativeAuth?.env.length === 0 && nativeAuth.oauth
+    const keyPlaceholder = keyHint === undefined
+      ? t('keyPlaceholder')
+      : t('keyPlaceholderFallback').replace('{hint}', () => keyHint)
     /** What both family editors take: the rows, whose layer owns them, and the two writes. */
     const catalogProps = {
       models,
@@ -372,23 +388,29 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     }
     return (
       <>
-        <div className={styles['field']}>
-          <span className={styles['fieldLabel']}>{t('keyInput')}</span>
-          <input
-            className={styles['input']}
-            type="password"
-            autoComplete="new-password"
-            value={keyDraft}
-            placeholder={keyPlaceholder}
-            aria-label={t('keyInput')}
-            aria-invalid={shownKeyFailure !== undefined}
-            required={props.credentialRequired === true}
-            autoFocus={props.autoFocusCredential === true}
-            disabled={disabled || keyLocked}
-            onChange={(event) => { setKeyDraft(event.target.value) }}
-          />
-          {shownKeyFailure === undefined ? null : <p className={styles['error']}>{t(shownKeyFailure)}</p>}
-        </div>
+        {keylessNativeAuth
+          ? null
+          : <div className={styles['field']}>
+            <span className={styles['fieldLabel']}>
+              {t('keyInput')}
+              {authHelp}
+            </span>
+            <input
+              className={styles['input']}
+              type="password"
+              autoComplete="new-password"
+              value={keyDraft}
+              placeholder={keyPlaceholder}
+              aria-label={t('keyInput')}
+              aria-invalid={shownKeyFailure !== undefined}
+              required={props.credentialRequired === true}
+              autoFocus={props.autoFocusCredential === true}
+              disabled={disabled}
+              onChange={(event) => { setKeyDraft(event.target.value) }}
+            />
+            {keySource === undefined ? null : <span className={styles['advancedHint']}>{keySource}</span>}
+            {shownKeyFailure === undefined ? null : <p className={styles['error']}>{t(shownKeyFailure)}</p>}
+          </div>}
         {props.credentialOnly === true ? null : <details className={styles['customized']}>
           <summary className={styles['customizedSummary']}>{t('customized')}</summary>
           <div className={styles['customizedBody']}>
@@ -427,7 +449,10 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                 value={stringAt(draft, 'baseURL') ?? ''}
                 placeholder={family === 'deepseek'
                   ? t('deepSeekBaseUrl')
-                  : stringAt(fallback, 'baseURL') ?? t('baseUrlDefault')}
+                  : (() => {
+                    const baseURL = stringAt(fallback, 'baseURL') ?? props.defaultBaseURL
+                    return baseURL === undefined ? t('baseUrlDefault') : t('baseUrlPlaceholder').replace('{url}', () => baseURL)
+                  })()}
                 aria-describedby={family === 'deepseek' ? `${props.provider}-endpoint-hint` : undefined}
                 aria-label={t('baseUrl')}
                 disabled={disabled}

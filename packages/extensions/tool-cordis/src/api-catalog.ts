@@ -817,7 +817,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'credentials',
     summary: 'Abstract credential service over two key spaces that answer two questions.',
-    description: 'Abstract credential service over two key spaces that answer two questions.\n\nA CredentialRef answers "what is behind this environment-variable name", layered over the process environment, the provider-managed store, and `.env` files. One seam-wide rule binds that half: an empty stored value is absent everywhere — `resolve` skips it, `describe` reports it unconfigured — so a blank never masquerades as a configured secret.\n\nA CredentialKey answers "what credential does this plugin hold for this id". Nothing can layer here — an authorization grant has no environment to be read from — so presence of the record is the whole fact, and modifyRecord is the only write path because a correct write depends on the current value (a token refresh is read-decide-replace under one lock).',
+    description: 'Abstract credential service over two key spaces that answer two questions.\n\nA CredentialRef answers "what is behind this environment-variable name": the provider-managed store first, then ambient fallbacks such as the process environment and `.env` files. One seam-wide rule binds that half: an empty stored value is absent everywhere — `resolve` skips it, `describe` reports it unconfigured — so a blank never masquerades as a configured secret.\n\nA CredentialKey answers "what credential does this plugin hold for this id". Nothing can layer here — an authorization grant has no environment to be read from — so presence of the record is the whole fact, and modifyRecord is the only write path because a correct write depends on the current value (a token refresh is read-decide-replace under one lock).',
     methods: [
       {
         signature: 'abstract resolve(ref: CredentialRef): Promise<ResolvedCredential | undefined>',
@@ -833,12 +833,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'abstract set(ref: CredentialRef, value: string): Promise<void>',
-        description: 'Durably store one value in the provider-managed writable source. Rejects while a read-only source shadows the reference — the write would appear to succeed while resolution keeps returning the shadowing value — and rejects an empty value (use unset).',
+        description: 'Durably store one value in the provider-managed writable source. The stored value takes precedence over ambient fallbacks, and empty values are rejected (use unset).',
         parameters: [{ name: 'ref', description: 'the reference to store.' }, { name: 'value', description: 'the non-empty secret value.' }],
       },
       {
         signature: 'abstract unset(ref: CredentialRef): Promise<void>',
-        description: 'Remove one reference from the provider-managed writable source; removing an absent reference is a no-op. Rejects while a read-only source shadows the reference, like set.',
+        description: 'Remove one reference from the provider-managed writable source; removing an absent reference is a no-op. Ambient fallback layers may become effective again after removal.',
         parameters: [{ name: 'ref', description: 'the reference to remove.' }],
       },
       {
@@ -5626,11 +5626,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'InvocationDescriptor',
-    declaration: 'export interface InvocationDescriptor {\n    readonly id: string;\n    readonly service: string;\n    readonly namespace: string;\n    readonly method: string;\n    readonly implementation?: string;\n    readonly mode?: \'stream\';\n    readonly invocation: {\n        readonly kind: \'direct\';\n    } | {\n        readonly kind: \'context\';\n        readonly context: string;\n        readonly wire: string;\n        readonly codec: TypertCodec;\n    };\n    readonly scope?: {\n        readonly context: string;\n        readonly wire: string;\n    };\n    readonly parameters: readonly InvocationParameterDescriptor[];\n    readonly uplink?: {\n        readonly codec: TypertCodec;\n    };\n    readonly cancellation?: {\n        readonly parameter: \'signal\';\n    };\n    readonly result: TypertCodec;\n    readonly sourceLocation?: InvocationSourceLocation;\n}',
+    declaration: 'export interface InvocationDescriptor {\n    readonly id: string;\n    readonly service: string;\n    readonly namespace: string;\n    readonly method: string;\n    readonly implementation?: string;\n    readonly mode?: \'stream\';\n    readonly invocation: {\n        readonly kind: \'direct\';\n    } | {\n        readonly kind: \'context\';\n        readonly context: string;\n        readonly wire: string;\n        readonly codec: TypertCodec;\n    };\n    readonly scope?: {\n        readonly context: string;\n        readonly wire: string;\n    };\n    readonly parameters: readonly InvocationParameterDescriptor[];\n    readonly uplink?: {\n        readonly codec: TypertCodec;\n    };\n    readonly cancellation?: {\n        readonly parameter: \'signal\';\n    };\n    readonly result: TypertCodec;\n    readonly description?: string;\n    readonly sourceLocation?: InvocationSourceLocation;\n}',
   },
   {
     name: 'InvocationParameterDescriptor',
-    declaration: 'export interface InvocationParameterDescriptor {\n    readonly name: string;\n    readonly wire: string;\n    readonly source: \'json\' | \'lookup\';\n    readonly lookup?: string;\n    readonly codec: TypertCodec;\n    readonly acceptsUndefined?: true;\n}',
+    declaration: 'export interface InvocationParameterDescriptor {\n    readonly name: string;\n    readonly description?: string;\n    readonly wire: string;\n    readonly source: \'json\' | \'lookup\';\n    readonly lookup?: string;\n    readonly codec: TypertCodec;\n    readonly acceptsUndefined?: true;\n}',
   },
   {
     name: 'InvocationSourceLocation',
@@ -5806,7 +5806,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmConfigurableProvider',
-    declaration: 'export interface LlmConfigurableProvider {\n    provider: string;\n    displayName: string;\n    settingsNs: string;\n    settingsPath: readonly string[];\n    declared?: boolean;\n    error?: string;\n}',
+    declaration: 'export interface LlmConfigurableProvider {\n    provider: string;\n    displayName: string;\n    settingsNs: string;\n    settingsPath: readonly string[];\n    declared?: boolean;\n    defaultBaseURL?: string;\n    nativeAuth?: LlmNativeAuth;\n    error?: string;\n}',
   },
   {
     name: 'LlmDiscoveredModel',
@@ -5839,6 +5839,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'LlmModelReasoningInfo',
     declaration: 'export interface LlmModelReasoningInfo {\n    efforts: readonly LlmReasoningEffortInfo[];\n    defaultEffort?: ReasoningEffortId;\n}',
+  },
+  {
+    name: 'LlmNativeAuth',
+    declaration: 'export interface LlmNativeAuth {\n    env: readonly string[];\n    oauth: boolean;\n}',
   },
   {
     name: 'LlmProviderInfo',
@@ -7558,7 +7562,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentCapabilities',
-    declaration: 'export interface SubagentCapabilities {\n    readonly agentOptions: boolean;\n    readonly outputSchema: boolean;\n    readonly depthLimit: boolean;\n    readonly toolFilter: boolean;\n    readonly persona: boolean;\n}',
+    declaration: 'export interface SubagentCapabilities {\n    readonly agentOptions: boolean;\n    readonly agentPreset: boolean;\n    readonly outputSchema: boolean;\n    readonly depthLimit: boolean;\n}',
   },
   {
     name: 'SubagentCatalogEntry',
@@ -7634,7 +7638,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentStartRequest',
-    declaration: 'export interface SubagentStartRequest {\n    readonly cwd?: string;\n    readonly label?: string;\n    readonly prompt: ContentBlock[];\n    readonly parent: Agent;\n    readonly signal: AbortSignal;\n    readonly agentOptions?: AgentOptions;\n    readonly outputSchema?: ObjectJsonSchema;\n    readonly maxDepth?: number;\n    readonly toolFilter?: ToolRestriction;\n    readonly persona?: string;\n}',
+    declaration: 'export interface SubagentStartRequest {\n    readonly cwd?: string;\n    readonly agentPreset?: string;\n    readonly label?: string;\n    readonly prompt: ContentBlock[];\n    readonly parent: Agent;\n    readonly signal: AbortSignal;\n    readonly agentOptions?: AgentOptions;\n    readonly outputSchema?: ObjectJsonSchema;\n    readonly maxDepth?: number;\n}',
   },
   {
     name: 'SubagentStopReason',
@@ -8122,7 +8126,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TypertCodec',
-    declaration: 'export type TypertCodec = {\n    readonly mode: \'strict\';\n    readonly typeSymbol: string;\n    readonly create: () => TypertSchema;\n    readonly decode?: (value: unknown) => unknown;\n    readonly encode?: (value: unknown, writeBytes: (bytes: Uint8Array, path: readonly (string | number)[]) => null) => unknown;\n} | {\n    readonly mode: \'src-json\';\n};',
+    declaration: 'export type TypertCodec<Value = unknown> = TypertRemoteValue<Value> & {\n    readonly mode: \'strict\';\n    readonly typeSymbol: string;\n    readonly decode?: ((value: unknown) => unknown) | undefined;\n    readonly encode?: ((value: unknown, writeBytes: (bytes: Uint8Array, path: readonly (string | number)[]) => null) => unknown) | undefined;\n} | {\n    readonly mode: \'src-json\';\n};',
   },
   {
     name: 'TypertContribution',
@@ -8199,6 +8203,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TypertRemoteService',
     declaration: 'export abstract class TypertRemoteService<out T = never> extends Service<T> {\n    readonly typertRemote: TypertGatewayBinding<this>;\n}',
+  },
+  {
+    name: 'TypertRemoteValue',
+    declaration: 'export interface TypertRemoteValue<Value = unknown> {\n    readonly create: () => TypertSchema<Value>;\n    readonly description?: string | undefined;\n    readonly jsonSchema?: Readonly<Record<string, unknown>> | undefined;\n    readonly jsonSchemaError?: string | undefined;\n}',
   },
   {
     name: 'TypertSchema',

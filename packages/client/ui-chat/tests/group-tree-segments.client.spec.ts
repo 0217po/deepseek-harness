@@ -25,12 +25,13 @@ function members(segments: GroupTreeSegments, turns: readonly number[]): number[
 
 describe('Chat group tree', () => {
   it('orders positions from the outermost exchange inward', () => {
-    const at = (groupTree?: ChatGroupTree) => (['exchange', 'turn', 'process'] as const)
+    const at = (groupTree?: ChatGroupTree) => (['exchange', 'input', 'turn', 'process'] as const)
       .map(position => isAtOrOutside({ groupTree }, position))
-    expect(at('exchange')).toEqual([true, true, true])
-    expect(at('turn')).toEqual([false, true, true])
-    expect(at('process')).toEqual([false, false, true])
-    expect(at(undefined)).toEqual([false, false, false])
+    expect(at('exchange')).toEqual([true, true, true, true])
+    expect(at('input')).toEqual([false, true, true, true])
+    expect(at('turn')).toEqual([false, false, true, true])
+    expect(at('process')).toEqual([false, false, false, true])
+    expect(at(undefined)).toEqual([false, false, false, false])
   })
 
   it('starts the latest segment at the last opening Turn and reports only the Turns that moved', () => {
