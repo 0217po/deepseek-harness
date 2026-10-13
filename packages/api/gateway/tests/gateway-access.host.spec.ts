@@ -749,6 +749,35 @@ describe('Gateway forwarded events for non-owner Peers', () => {
     for (const events of streams) await events.return?.()
   })
 
+  it('discards the events buffered for a revoked non-owner Peer and keeps other streams', async () => {
+    const { ctx, hold } = await setup({ connection: true })
+    hold(shelf('s1'))
+    const push = eventSource(ctx)
+    const abort = new AbortController()
+    const open = async (peer: PeerScope): Promise<AsyncIterator<unknown>> =>
+      (await ctx.typertGateway.wireStream.open('$events', { args: {} }, (async function* () {})(), peer, abort.signal))[Symbol.asyncIterator]()
+    const revoked = ctx.connection.createPeer({ principal: GUEST })
+    const lagging = await open(revoked)
+    const other = await open(ctx.connection.createPeer({ principal: GUEST }))
+    const owner = await open(ctx.connection.browserPeer)
+    for (const events of [lagging, other, owner]) await events.next()
+    const resources = { 'test-shelf': (shelfId: unknown) => shelfId }
+    push({ event: 'fixture/shelf', args: ['s1'], resources })
+    push({ event: 'fixture/shelf', args: ['s1'], resources })
+    const frame = { done: false, value: { type: 'emit', event: 'fixture/shelf', args: ['s1'] } }
+    for (const events of [other, owner]) {
+      await expect(events.next()).resolves.toMatchObject(frame)
+      await expect(events.next()).resolves.toMatchObject(frame)
+    }
+    // Both frames were queued for the lagging stream before its Peer was revoked.
+    await revoked.dispose()
+    await expect(lagging.next()).resolves.toEqual({ done: true, value: undefined })
+    push({ event: 'fixture/shelf', args: ['s1'], resources })
+    for (const events of [other, owner]) await expect(events.next()).resolves.toMatchObject(frame)
+    abort.abort()
+    for (const events of [other, owner]) await events.return?.()
+  })
+
   it('contains a throwing policy to the non-owner deliveries it decides', async () => {
     const ctx = new Context()
     roots.push(ctx)

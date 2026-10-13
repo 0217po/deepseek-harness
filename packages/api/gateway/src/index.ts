@@ -1148,12 +1148,18 @@ class RemoteEventQueue {
     this.waiter?.()
   }
 
+  /**
+   * Yield buffered and later frames until the queue ends or `signal` aborts.
+   * An abort discards the frames still buffered, so a revoked Peer receives none of them.
+   * @param signal - Client generation lifetime.
+   * @returns the queued wire frames in push order.
+   */
   async *iterate(signal: AbortSignal): AsyncGenerator<RemoteEventWireFrame> {
     const abort = (): void => { this.end() }
     signal.addEventListener('abort', abort, { once: true })
     try {
       while (true) {
-        while (this.frames.size > 0) yield this.frames.popFront() as RemoteEventWireFrame
+        while (this.frames.size > 0 && !signal.aborted) yield this.frames.popFront() as RemoteEventWireFrame
         if (this.closed || signal.aborted) return
         await new Promise<void>((resolve) => { this.waiter = resolve })
         this.waiter = undefined

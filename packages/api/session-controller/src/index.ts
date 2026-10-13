@@ -279,14 +279,17 @@ export class SessionController extends TypertRemoteService {
   }
 
   /**
-   * Search visible Session content without resuming an Agent.
+   * Search visible Session content without resuming an Agent. A non-owner
+   * receives only the hits whose Session `allows()` admits; `hasMore`
+   * describes the bounded result before that filtering.
    * @param request - literal message-content query.
    * @param signal - cancellation for list and search reads.
    * @returns authorized bounded Session search results.
    */
   @Remote('search')
-  search(request: SessionSearchRequest, signal: AbortSignal): Promise<SessionSearchValue> {
-    return this.listState.search(request.query, signal)
+  async search(request: SessionSearchRequest, signal: AbortSignal): Promise<SessionSearchValue> {
+    const result = await this.listState.search(request.query, signal)
+    return { ...result, items: result.items.filter(item => this.ctx.remoteAccess.allows({ kind: 'session', id: item.sessionId })) }
   }
 
   /**

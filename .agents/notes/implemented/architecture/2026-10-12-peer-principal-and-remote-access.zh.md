@@ -212,7 +212,7 @@ export function RemoteScope<This extends object, Args extends unknown[], Result>
 |---|---|
 | 写法 | `@Remote({ name: 'page', resources: { session: (request) => request.address.kind === 'session' ? request.address.sessionId : request.address.childSessionId } })`；Context 方法写 `@RemoteScope('agent')`，由 Agent Context 的 `resource: 'session'` 得到会话资源，需要其他资源时写 `@RemoteScope('agent', { resources: { workspace: (request) => request.workspaceId } })`。多数方法不写 `resources`，由自动解析得到资源 |
 | 资源种类 | 资源种类由声明 id 类型的底层包合并：`session: TypertResource<SessionId>` 在 `@deepseek-ai/dsh-session/types`，`workspace: TypertResource<WorkspaceId>` 在 `@deepseek-ai/dsh-workspace/types`。session-controller 引用 commands 包，若在 session-controller 合并，commands 要引用 session-controller，形成 project reference 环。`global` 由 remote-access 内置，没有 id，不进 `TypertResourceMap`；typert 保留该名，`typert.resources.register('global', …)` 抛错 |
-| 默认字段与声明 | 拥有该种类的领域在 apply 中登记默认 wire 字段：session-controller 调用 `typert.resources.register('session', { field: 'sessionId' })`，workspace-controller 登记 `workspace` → `workspaceId`；同一种类重复登记即抛错。Agent 与 Session lookup 声明 `resource: 'session'`，agent 包的 Agent Context 声明 `resource: 'session'` |
+| 默认字段与声明 | 拥有该种类的领域在控制器构造时登记默认 wire 字段：`SessionController` 构造函数调用 `typert.resources.register('session', { field: 'sessionId' })`，`WorkspaceController` 构造函数登记 `workspace` → `workspaceId`；同一种类重复登记即抛错。Agent、Session 与 `workspaceFileScope` lookup 声明 `resource: 'session'`，agent 包的 Agent Context 声明 `resource: 'session'` |
 | 解析优先级 | 对每个资源种类依次取：① 该方法 `resources` 中该种类的读取函数；② 声明了该种类 `resource` 的每个 lookup 参数贡献其 wire 身份，省略的可选 lookup 参数不贡献；Context 方法的 Context 声明了该种类 `resource` 时，其 wire 身份同样贡献；③ 该种类的默认字段：命名参数中有同名顶层参数就读它，否则读第一个对象参数的同名字段。默认字段只表示一个身份，读到数组即为非法值 |
 | 参数来源 | 资源解析与 `decide()` 的 `args` 读取经 Typert 编译类型校验后的命名参数：每个 JSON 参数由其 codec 解码一次，类型未声明的对象字段被移除，分派复用该值，因此调用方无法用未声明字段改变资源；lookup 参数与 Context 身份取 wire 身份，此时不解析 lookup、不激活 Agent |
 | 解析结果 | 各种类的资源合在一起即本次调用访问的资源；一个都没有即 `[global]`；解析出资源时只用这些资源，不附加 `global` |
@@ -250,7 +250,7 @@ export function RemoteScope<This extends object, Args extends unknown[], Result>
 
 subagent 地址读取的是子会话转录，因此其资源是子会话。Client 在重连后会重新读取已知会话的 projections，其中包括 subagent 会话的父会话；没有该父会话授权的读者，其 projection 读取被拒。父会话的授权是否覆盖其 subagent 子会话由 policy 决定，即是否为子会话给出 binding；通用层不推导父资源。
 
-不需要非 owner 访问的方法不做任何声明，没有 role 列出它即被拒。subagent `prompt` 的请求字段为 `parentSessionId` / `childSessionId`，自动解析不到会话，解析为 `global`，因此不得放进任何 `global` 级 role；`session/search` 没有 role 列出，非 owner 不可达，因此不加过滤。`subagents/list` 不是 Remote 端点（`SubagentRuntime.list()` 未标 `@Remote`）。
+不需要非 owner 访问的方法不做任何声明，没有 role 列出它即被拒。subagent `prompt` 的请求字段为 `parentSessionId` / `childSessionId`，自动解析不到会话，解析为 `global`，因此不得放进任何 `global` 级 role；`session/search` 在方法内按会话逐项过滤命中。`subagents/list` 不是 Remote 端点（`SubagentRuntime.list()` 未标 `@Remote`）。
 
 #### role、binding 与 policy（`@deepseek-ai/dsh-api-remote-access`）
 
@@ -418,6 +418,7 @@ Gateway 自有端点：非 owner 可订阅 `$events`，但从不收到需要回�
 | 方法 | 过滤对象 |
 |---|---|
 | `session/list` | 会话行（`session` 资源） |
+| `session/search` | 搜索命中（`session` 资源） |
 | `session/control` | baseline 的 projections 与 projection 增量（`session` 资源） |
 | `workspace/follow` | baseline、`upsert` 帧与 `order` id 中的工作区（`workspace` 资源）、工作区内会话、archived / pinned 会话集合（`session` 资源）。流记录已下发的工作区；某个工作区在下一次变化或新顺序中已不被允许时，发送一个携带完整过滤后状态的 `replace` 增量帧而不是 `remove`，因为 Client 不会复活已移除的 id，访问恢复后该工作区经普通 `upsert` 重新出现。`remove` 帧表示删除，只发给收到过该工作区的调用方 |
 
@@ -636,7 +637,7 @@ GlobalStandardProps.useWorkspaceAccess: (workspaceId: WorkspaceId, action: Remot
 | 转发事件 | 非 owner 的 `$events` 流只在 `event:<name>` 于其资源上被授权时整条收到事件；未声明资源的事件按 `global` 判定；读取函数返回 `undefined` 的事件不送达非 owner，且不询问 `decide()`；owner 全部收到 | Gateway host spec（gateway-access） |
 | 首份快照 | `snapshotFor()` 返回 owner baseline 或该 principal 的 grant；remote-access 为渲染的每个 index 注入 owner baseline；Client 从注入的 baseline 起步并拒绝格式错误的快照 | remote-access host 与 client spec |
 | 类型推断 | `resources` 读取函数的参数类型从方法推断；lookup 位为 wire 类型；访问不存在的属性、参数多于方法参数与 `global` 键编译失败；binding 的资源种类与 role 不符编译失败 | typert-protocol spec、remote-access spec（类型测试） |
-| 列表过滤 | `session/list`、`session/control`、`workspace/follow` 对非 owner 只返回 `allows()` 为 true 的项；已下发工作区失去可见性时 `workspace/follow` 发送 `replace` 增量帧，访问恢复后该工作区重新出现；owner 结果不变 | session-controller / workspace-controller host spec |
+| 列表过滤 | `session/list`、`session/search`、`session/control`、`workspace/follow` 对非 owner 只返回 `allows()` 为 true 的项；已下发工作区失去可见性时 `workspace/follow` 发送 `replace` 增量帧，访问恢复后该工作区重新出现；owner 结果不变 | session-controller / workspace-controller host spec |
 | 访问快照 | 快照中的允许集合与 Host 对同一 principal、action、资源（不带参数）的判定一致；只含端点 action；没有放行 action 的资源不出 grant，放行集合变空时推送 `remove`；`invalidate()` 与 policy 注册、撤回后推送增量；被变化结束的等待不残留 abort 监听器；卸载服务即结束所有打开的快照流；owner 只收 `{ owner: true }` | remote-access host spec |
 | access hooks | `source()`、`useRemoteAccess`、`useAccess`、`useSessionAccess`、`useWorkspaceAccess` 与快照一致；会话资源上的 `useAccess` 读本会话答案；owner 为 true；没有快照或快照流失败的非 owner 为 false；hook 不发请求 | remote-access client spec、ui-session / ui-workspace client spec |
 | keyed hook 双参数 | 第二个参数为字符串时读取 `(key, member)` source；既有调用形式不变 | ui-renderer client spec |

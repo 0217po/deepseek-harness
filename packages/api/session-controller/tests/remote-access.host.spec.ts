@@ -1,8 +1,8 @@
 /**
  * Session Controller under non-owner callers: the Session resource kind it
  * registers, the Session readers of `session/page` and `session/follow`,
- * `session/list` and `session/control` called through a `global` role and
- * filtered per Session through `remoteAccess.allows()`, the caller recorded
+ * `session/list`, `session/search`, and `session/control` called through a
+ * `global` role and filtered per Session through `remoteAccess.allows()`, the caller recorded
  * on prompt sources, and `session/projections` admitted per Session through
  * the Gateway.
  */
@@ -16,9 +16,10 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { remoteMethods, type PeerId, type PeerScope, type Principal, type RemoteInvocation } from '@deepseek-ai/dsh-typert-protocol'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type SessionController from '../src/index.ts'
-import type { SessionControlFrame, SessionRequestId } from '../src/types.ts'
+import { ApiSessionList } from '../src/list.ts'
+import type { SessionControlFrame, SessionRequestId, SessionSearchValue } from '../src/types.ts'
 import { createSessionTestController } from './test-remote.ts'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
@@ -41,6 +42,14 @@ const READER: RemoteAccessRole<'session'> = {
 }
 const LIST_CALLS: RemoteAccessBinding = { role: LISTER, resource: { kind: 'global' } }
 const READS_SHARED: RemoteAccessBinding = { role: READER, resource: { kind: 'session', id: SHARED } }
+const SEARCH_CALLS: RemoteAccessBinding = {
+  role: { name: 'test:session-searcher', resource: 'global', actions: ['session/search'] },
+  resource: { kind: 'global' },
+}
+const SEARCHES_SHARED: RemoteAccessBinding = {
+  role: { name: 'test:session-search-reader', resource: 'session', actions: ['session/search'] },
+  resource: { kind: 'session', id: SHARED },
+}
 
 const owned = new Set<Context>()
 afterEach(async () => {
@@ -132,6 +141,22 @@ describe('Session Controller access', () => {
     })
     const owner = await as(OWNER, 'list').sessionController.list({}, new AbortController().signal)
     expect(owner.items.map(item => item.sessionId).sort()).toEqual([PRIVATE, SHARED].sort())
+  })
+
+  it('returns a non-owner only the session/search hits whose Session a Session role admits', async () => {
+    const { ctx, as } = await harness()
+    await ctx.plugin(TypertGatewayService)
+    guestPolicy(ctx, SEARCH_CALLS, SEARCHES_SHARED)
+    const hits: SessionSearchValue = {
+      items: [{ sessionId: PRIVATE, snippet: 'private hit' }, { sessionId: SHARED, snippet: 'shared hit' }],
+      hasMore: true,
+    }
+    vi.spyOn(ApiSessionList.prototype, 'search').mockResolvedValue(hits)
+    await expect(guestCall(ctx, 'search', { request: { query: 'hit' } })).resolves.toEqual({
+      items: [{ sessionId: SHARED, snippet: 'shared hit' }],
+      hasMore: true,
+    })
+    await expect(as(OWNER, 'search').sessionController.search({ query: 'hit' }, new AbortController().signal)).resolves.toEqual(hits)
   })
 
   it('filters session/control baselines and projection frames for a non-owner', async () => {
