@@ -8,8 +8,10 @@ import { readDesktopUploadCredentials } from './desktop-publish-config.ts'
 import { desktopPublishCos } from './desktop-publish-cos.ts'
 import { createDesktopPublicationRecord, withDesktopChannelLock } from './desktop-publish-record.ts'
 import { rollbackDesktopChannel } from './desktop-rollback.ts'
+import { desktopPublicationFailure } from './desktop-publication-failure.ts'
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename) {
+  let phase = 'rollback arguments and local publication verification'
   try {
     const { values } = parseArgs({ options: {
       record: { type: 'string' }, 'expected-version': { type: 'string' },
@@ -31,6 +33,7 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
       throw new Error('desktop rollback: successful publication record does not match the selected package')
     }
     const credentials = await readDesktopUploadCredentials(config)
+    phase = 'rollback channel lock and audit creation'
     await withDesktopChannelLock(join(dirname(root), 'publish-locks'), destination, async () => {
       const journal = await createDesktopPublicationRecord(join(dirname(root), 'upload-records'), {
         ...operation, actor: process.env.USER || process.env.USERNAME || 'unknown', operation: 'rollback', reason: values.reason!,
@@ -38,16 +41,20 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
       process.stdout.write(`desktop rollback: audit ${journal.directory}\n`)
       let complete = false
       try {
+        phase = 'historical object verification and channel restoration'
         const outcome = await rollbackDesktopChannel(plan, values['expected-version']!, values.execute!, {
           transport: desktopPublishCos(plan, credentials), record: event => journal.record(event),
           tag: async () => { throw new Error('desktop rollback never changes tags') },
         })
         process.stdout.write(`${JSON.stringify(outcome, null, 2)}\n`)
         complete = true
+      } catch (error) {
+        await journal.record({ type: 'failed', failure: desktopPublicationFailure(error, phase) })
+        throw error
       } finally { await journal.finish(complete ? (values.execute ? 'complete' : 'preview') : 'failed') }
     })
-  } catch {
-    process.stderr.write('Desktop publication stopped. Inspect the retained operation record and configuration before retrying; remote effects may be incomplete.\n')
+  } catch (error) {
+    process.stderr.write(`${JSON.stringify(desktopPublicationFailure(error, phase))}\n`)
     process.exitCode = 1
   }
 }

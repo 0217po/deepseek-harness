@@ -105,3 +105,10 @@ it('does not update the channel when readback cannot confirm a binary', async ()
   await expect(publishDesktopRelease(f.plan, f.operations)).rejects.toMatchObject({ code: 'verification-failed' })
   expect(f.events.some(event => event.type === 'feeds-complete')).toBe(false)
 })
+
+it('classifies corrupted remote channel metadata separately from an invalid local plan', async () => {
+  const f = fixture()
+  f.objects.set('feed/nightly.yml', observed('version: invalid\n'))
+  await expect(publishDesktopRelease(f.plan, f.operations)).rejects.toMatchObject({ code: 'verification-failed' })
+  expect(f.writes).toEqual([])
+})

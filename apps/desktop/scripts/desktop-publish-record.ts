@@ -1,7 +1,7 @@
 /** Machine-local channel exclusion and durable, credential-free publication records. */
 import { createHash } from 'node:crypto'
-import { appendFile, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { appendFile, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { basename, join } from 'node:path'
 import { z } from 'zod'
 import type { DesktopPublishEvent } from './desktop-publish.ts'
 
@@ -43,11 +43,18 @@ export async function createDesktopPublicationRecord(
   identity: { repository: string; runId: string; attempt: string; actor: string; destination: string; operation: 'publish' | 'rollback'; reason: string },
 ): Promise<DesktopPublicationRecord> {
   await mkdir(root, { recursive: true, mode: 0o700 })
-  const directory = await mkdtemp(join(root, `${identity.operation}-`))
+  const staging = await mkdtemp(join(root, '.initializing-'))
+  const directory = join(root, `${identity.operation}-${basename(staging).slice('.initializing-'.length)}`)
   const startedAt = new Date().toISOString()
-  await writeFile(join(directory, 'operation.json'), `${JSON.stringify({ ...identity,
-    startedAt }, null, 2)}\n`, { flag: 'wx', mode: 0o600, flush: true })
-  await writeFile(join(directory, 'events.jsonl'), '', { flag: 'wx', mode: 0o600 })
+  try {
+    await writeFile(join(staging, 'operation.json'), `${JSON.stringify({ ...identity,
+      startedAt }, null, 2)}\n`, { flag: 'wx', mode: 0o600, flush: true })
+    await writeFile(join(staging, 'events.jsonl'), '', { flag: 'wx', mode: 0o600, flush: true })
+    await rename(staging, directory)
+  } catch (error) {
+    await rm(staging, { recursive: true, force: true })
+    throw error
+  }
   return {
     directory,
     async record(event) {

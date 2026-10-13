@@ -19,7 +19,8 @@ export interface DesktopPublishTransport {
 }
 /** Credential-free, durably flushed publication event. */
 export interface DesktopPublishEvent {
-  readonly type: 'object-present' | 'put-intent' | 'put-verified' | 'feeds-complete' | 'tag-pending' | 'complete'
+  readonly type: 'object-present' | 'put-intent' | 'put-verified' | 'feeds-complete' | 'tag-pending' | 'complete' | 'failed'
+  readonly failure?: { readonly phase: string; readonly code: string; readonly message: string }
   readonly key?: string
   readonly before?: string | null
   readonly after?: string
@@ -59,10 +60,13 @@ function same(left: DesktopObjectDigest | null, right: DesktopObjectDigest | nul
   return left === null || right === null ? left === right : left.size === right.size && left.sha512 === right.sha512
 }
 
-function version(contents: string): string {
-  const parsed = z.object({ version: z.string() }).parse(load(contents))
-  if (valid(parsed.version) === null) throw new DesktopPublishError('invalid-plan', 'desktop publish: invalid channel version')
-  return parsed.version
+function version(contents: string, remote = false): string {
+  try {
+    const parsed = z.object({ version: z.string() }).parse(load(contents))
+    if (valid(parsed.version) !== null) return parsed.version
+  } catch (error) { /* Discard parser error details, which may include raw remote YAML. */ }
+  throw new DesktopPublishError(remote ? 'verification-failed' : 'invalid-plan',
+    `desktop publish: invalid ${remote ? 'remote' : 'planned'} channel version`)
 }
 
 /**
@@ -91,8 +95,8 @@ export async function publishDesktopRelease(plan: DesktopUploadPlan, operations:
     const remote = await operations.transport.read(feed.key, true)
     if (remote !== null) {
       if (remote.contents === undefined) throw new DesktopPublishError('verification-failed', 'desktop publish: channel bytes were not returned')
-      if (gt(version(remote.contents), plan.version)) throw new DesktopPublishError('superseded', 'desktop publish: a newer version already owns this channel')
-      if (version(remote.contents) === plan.version && !same(remote, await desktopArtifactDigest(feed))) {
+      if (gt(version(remote.contents, true), plan.version)) throw new DesktopPublishError('superseded', 'desktop publish: a newer version already owns this channel')
+      if (version(remote.contents, true) === plan.version && !same(remote, await desktopArtifactDigest(feed))) {
         throw new DesktopPublishError('conflict', 'desktop publish: same version has different channel metadata')
       }
     }

@@ -9,7 +9,8 @@ import { verifyRetainedDesktopSignatures } from './verify-retained-desktop.ts'
 import { createDesktopUploadPlan } from './desktop-upload-plan.ts'
 import { desktopPublishCos } from './desktop-publish-cos.ts'
 import { createDesktopPublicationRecord, wasDesktopAttemptPublished, withDesktopChannelLock } from './desktop-publish-record.ts'
-import { DesktopPublishError, publishDesktopRelease } from './desktop-publish.ts'
+import { publishDesktopRelease } from './desktop-publish.ts'
+import { desktopPublicationFailure } from './desktop-publication-failure.ts'
 import { publishDesktopTag } from './desktop-publish-tag.ts'
 
 const routeSchema = z.object({ runId: z.string(), attempt: z.string(), commit: z.string(), runnerName: z.string(),
@@ -86,6 +87,7 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
                   return { status: 'published-tag-pending' as const, cause }
                 }
               }
+              await journal.record({ type: 'complete' })
               return { status: 'complete' as const }
             })()
             : await publishDesktopRelease(plan, {
@@ -95,13 +97,20 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
           status = result.status
           if (env.GITHUB_STEP_SUMMARY) await appendFile(env.GITHUB_STEP_SUMMARY,
             `\nDesktop publication: **${status}**\n\n${plan.target} ${plan.version}\n\nSource: ${route.runId}, attempt ${route.attempt}\n`)
-          if (result.status === 'published-tag-pending') process.exitCode = 1
+          if (result.status === 'published-tag-pending') {
+            const failure = desktopPublicationFailure(result.cause, 'release tag creation')
+            await journal.record({ type: 'failed', failure })
+            process.stderr.write(`${JSON.stringify(failure)}\n`)
+            process.exitCode = 1
+          }
+        } catch (error) {
+          await journal.record({ type: 'failed', failure: desktopPublicationFailure(error, phase) })
+          throw error
         } finally { await journal.finish(status) }
       })
     }
   } catch (error) {
-    const code = error instanceof DesktopPublishError ? ` (${error.code})` : ''
-    process.stderr.write(`Desktop publication stopped during ${phase}${code}. Inspect the retained operation record and configuration before retrying; remote effects may be incomplete.\n`)
+    process.stderr.write(`${JSON.stringify(desktopPublicationFailure(error, phase))}\n`)
     process.exitCode = 1
   }
 }

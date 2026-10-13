@@ -35,6 +35,10 @@ export async function rollbackDesktopChannel(
   for (const feed of feeds) {
     const before = await operations.transport.read(feed.key, true)
     if (!before || before.contents === undefined || feed.contents === undefined) throw new Error('desktop rollback: channel YAML is unavailable')
+    if (equal(before, await desktopArtifactDigest(feed))) {
+      await operations.record({ type: 'object-present', key: feed.key })
+      continue
+    }
     const current = z.object({ version: z.string() }).parse(load(before.contents)).version
     if (current !== expectedVersion) throw new Error('desktop rollback: current version differs from the expected version')
     changes.push({ key: feed.key, before: before.contents, after: feed.contents, observed: before, artifact: feed })

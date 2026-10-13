@@ -12,7 +12,7 @@ const requestSchema = z.object({ source: z.object({
   runnerName: z.string(), target: z.enum(['mac-arm64', 'win-x64']), preset: z.enum(['test', 'production']),
   publishRequested: z.literal(true), qualification: z.enum(['signed', 'notarized']),
 }) })
-const jobsSchema = z.array(z.object({ runner_name: z.string().nullable(), conclusion: z.string().nullable(), labels: z.array(z.string()) }))
+const jobsSchema = z.array(z.object({ runner_name: z.string().nullable(), conclusion: z.string().nullable() }))
 const routesSchema = z.record(z.string(), z.object({ label: z.string().regex(/^dsh-[a-z0-9-]+$/u), target: z.enum(['mac-arm64', 'win-x64']) }))
 
 /** Validated values handed to the privileged publisher; no caller-selected shell fragments. */

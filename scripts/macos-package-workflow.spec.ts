@@ -15,6 +15,8 @@ const workflow = yaml.load(readFileSync(resolve(import.meta.dirname, '../.github
 
 it('confines signed Mac packaging to manual dispatch and a dedicated Apple Silicon runner', () => {
   expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
+  expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: { publish: { type: 'boolean', default: false },
+    test_release_id: { type: 'string', default: '', required: false } } })
   expect(workflow.permissions).toEqual({ contents: 'read' })
   expect(workflow.concurrency).toEqual({ group: 'macos-desktop-package', 'cancel-in-progress': false })
   expect(workflow.jobs.package!['runs-on']).toEqual(['self-hosted', 'macOS', 'ARM64', 'dsh-mac-package-trial'])

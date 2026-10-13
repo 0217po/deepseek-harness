@@ -3,7 +3,7 @@ import { valid } from 'semver'
 import { z } from 'zod'
 import { desktopReleaseTag } from './desktop-release-tag.ts'
 
-const refSchema = z.object({ object: z.object({ type: z.literal('commit'), sha: z.string().regex(/^[a-f0-9]{40}$/u) }) })
+const refSchema = z.object({ object: z.object({ type: z.string(), sha: z.string().regex(/^[a-f0-9]{40}$/u) }) })
 
 /**
  * Create a lightweight release tag, or verify that an existing tag names the same packaged commit.
@@ -29,6 +29,7 @@ export async function publishDesktopTag(
   const matches = async (response: Response) => {
     if (!response.ok) throw new Error(`desktop tag: cannot verify tag (HTTP ${response.status})`)
     const ref = refSchema.parse(await response.json())
+    if (ref.object.type !== 'commit') throw new Error('desktop tag: existing ref is not a lightweight commit tag; inspect it manually, refusing to replace it')
     if (ref.object.sha !== commit) throw new Error('desktop tag: existing tag points to another commit; refusing to move it')
   }
   const existing = await get()

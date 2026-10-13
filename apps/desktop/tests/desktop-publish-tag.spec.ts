@@ -51,3 +51,9 @@ it('rejects missing credentials and malformed inputs before any request', async 
   await expect(publishDesktopTag('owner/repo/other', '1.2.3', commit, 'fixture', http.request)).rejects.toThrow(/invalid/u)
   expect(http.calls).toHaveLength(0)
 })
+
+it('explains an existing annotated tag without replacing it', async () => {
+  const http = transport([{ status: 200, body: { object: { type: 'tag', sha: commit } } }])
+  await expect(publishDesktopTag('owner/repo', '1.2.3', commit, 'fixture-token', http.request)).rejects.toThrow(/not a lightweight commit tag/u)
+  expect(http.calls).toHaveLength(1)
+})

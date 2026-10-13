@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -63,5 +63,18 @@ it('recognizes feed completion even when the later tag failed', async () => {
     await journal.finish('published-tag-pending')
     expect(await wasDesktopAttemptPublished(root, identity)).toBe(true)
     expect(await wasDesktopAttemptPublished(root, { ...identity, attempt: '1' })).toBe(false)
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+it('ignores interrupted initialization before an audit directory becomes visible', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'desktop-init-'))
+  try {
+    await mkdir(join(root, '.initializing-interrupted'))
+    await writeFile(join(root, '.initializing-interrupted/operation.json'), '{')
+    const identity = { repository: 'owner/repo', runId: '1', attempt: '1', destination: 'bucket/mac' }
+    expect(await wasDesktopAttemptPublished(root, identity)).toBe(false)
+    const record = await createDesktopPublicationRecord(root, { ...identity, actor: 'fixture', operation: 'publish', reason: 'fixture' })
+    await record.record({ type: 'feeds-complete' })
+    expect(await wasDesktopAttemptPublished(root, identity)).toBe(true)
   } finally { await rm(root, { recursive: true, force: true }) }
 })

@@ -13,6 +13,7 @@ const sourceSchema = z.strictObject({
   attempt: positiveId,
   commit: z.string().regex(/^[a-f0-9]{40}$/u),
   runnerName: z.string().min(1),
+  // Storage accepts every Desktop target; CI routing separately limits currently provisioned platforms.
   target: z.enum(['mac-arm64', 'mac-x64', 'win-x64']),
   preset: z.enum(['test', 'production']),
   productVersion: z.string().min(1),
