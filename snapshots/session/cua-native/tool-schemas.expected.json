@@ -316,6 +316,7 @@
                         "maximum": 9007199254740991
                       },
                       "useSystemPointer": {
+                        "description": "Move the visible system cursor for native hover tracking; requires the target to be unobscured in the foreground app. Default false sends window-directed movement.",
                         "type": "boolean"
                       }
                     },
@@ -351,6 +352,7 @@
                         "minimum": 0
                       },
                       "useSystemPointer": {
+                        "description": "Move the visible system cursor for native hover tracking; requires the target to be unobscured in the foreground app. Default false sends window-directed movement.",
                         "type": "boolean"
                       }
                     },

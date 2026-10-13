@@ -21,6 +21,7 @@ def main():
     parser.add_argument("--helper", type=Path, help="Existing native helper executable for this run")
     parser.add_argument('--electron', type=Path, help='Existing Electron executable; no download is attempted')
     parser.add_argument('--artifacts', type=Path, help='Save fixture-only PNG and private protocol transcript')
+    parser.add_argument("--hover-only", action="store_true", help="Exercise hover independently of text input")
     args = parser.parse_args()
     repo = ROOT.parents[3]
     executable = args.electron or repo / 'apps/desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'
@@ -95,23 +96,24 @@ def main():
                             raise AssertionError(description + ': ' + json.dumps(actual))
                         time.sleep(0.025)
 
-                call('click', {**owner, 'snapshotId': state['snapshotId'], 'elementIndex': buttons[0]['index']})
-                wait_state(lambda actual: actual['clicks'] == 1 and actual['lastClickTrusted'] is True,
-                           'Native AX press did not produce one trusted DOM click')
-                state = observe()
-                assert 'Clicks: 1' in state['tree'], state['tree']
-                _, fields = targets(state)
-                field = fields[0]['bounds']
                 window = next(window for window in state['windows'] if window['windowId'] == window_id)
-                call('click', {**owner, 'windowId': window_id, 'snapshotId': state['snapshotId'],
-                               'x': field[0] + field[2] / 2 - window['bounds']['x'],
-                               'y': field[1] + field[3] / 2 - window['bounds']['y']})
-                call('typeText', {**owner, 'text': 'Electron 中文 🧪'})
-                wait_state(lambda actual: actual['text'] == 'Electron 中文 🧪' and actual['lastInputTrusted'] is True,
-                           'Chromium did not receive complete trusted Unicode input')
-                call('pressKey', {**owner, 'key': 'a', 'modifiers': ['command']})
-                call('typeText', {**owner, 'text': '第二次 Electron'})
-                wait_state(lambda actual: actual['text'] == '第二次 Electron', 'Chromium Command+A did not replace the field')
+                if not args.hover_only:
+                    call('click', {**owner, 'snapshotId': state['snapshotId'], 'elementIndex': buttons[0]['index']})
+                    wait_state(lambda actual: actual['clicks'] == 1 and actual['lastClickTrusted'] is True,
+                               'Native AX press did not produce one trusted DOM click')
+                    state = observe()
+                    assert 'Clicks: 1' in state['tree'], state['tree']
+                    _, fields = targets(state)
+                    field = fields[0]['bounds']
+                    call('click', {**owner, 'windowId': window_id, 'snapshotId': state['snapshotId'],
+                                   'x': field[0] + field[2] / 2 - window['bounds']['x'],
+                                   'y': field[1] + field[3] / 2 - window['bounds']['y']})
+                    call('typeText', {**owner, 'text': 'Electron 中文 🧪'})
+                    wait_state(lambda actual: actual['text'] == 'Electron 中文 🧪' and actual['lastInputTrusted'] is True,
+                               'Chromium did not receive complete trusted Unicode input')
+                    call('pressKey', {**owner, 'key': 'a', 'modifiers': ['command']})
+                    call('typeText', {**owner, 'text': '第二次 Electron'})
+                    wait_state(lambda actual: actual['text'] == '第二次 Electron', 'Chromium Command+A did not replace the field')
                 image = call('screenshot', {**owner, 'windowId': window_id})
                 png = base64.b64decode(image['data'], validate=True)
                 assert png.startswith(b'\x89PNG\r\n\x1a\n')
@@ -151,7 +153,8 @@ def main():
                 call('hover', {**owner, 'windowId': window_id, 'x': 10, 'y': 40})
                 wait_state(lambda actual: not actual['popupOpen'], 'Leaving the hover region did not close it')
                 helper.eof()
-                print(f"PASS: Electron {runtime['electron']} native AX readiness, trusted DOM click, Unicode input, Command+A replacement, PNG capture, delayed hover across observations, popup entry/click/exit")
+                print(f"PASS: Electron {runtime['electron']} delayed hover across observations, popup entry/click/exit, invalid targets"
+                      + (" (text input omitted)" if args.hover_only else ", trusted DOM click, Unicode input, Command+A replacement, PNG capture"))
             except Exception:
                 diagnostics.flush()
                 diagnostics.seek(0)

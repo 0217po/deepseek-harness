@@ -91,7 +91,6 @@ def main():
     parser.add_argument("--helper", type=Path, help="Existing native helper executable for this run")
     parser.add_argument("--artifacts", type=Path, help="Save fixture screenshots and private JSON protocol transcript")
     parser.add_argument("--panels-only", action="store_true", help="Exercise system file panels without unrelated pointer gestures")
-    parser.add_argument("--pointer-only", action="store_true", help="Exercise window input without the system file-panel scenario")
     parser.add_argument("--hover-only", action="store_true", help="Exercise native hover without keyboard or file-panel scenarios")
     args = parser.parse_args()
     artifacts = args.artifacts
@@ -193,7 +192,7 @@ def main():
                 call("click", hover_target)
                 wait_state(lambda actual: actual["hoverClicks"] == 1, "Native hover control did not activate")
                 call("hover", {**owner, "windowId": primary["windowId"], "x": 10, "y": 40, "useSystemPointer": True})
-                state = wait_state(lambda actual: not actual["hoverVisible"], "AppKit tracking area did not exit")
+                wait_state(lambda actual: not actual["hoverVisible"], "AppKit tracking area did not exit")
 
             if args.hover_only:
                 check_hover()
@@ -257,15 +256,14 @@ def main():
             call("screenshot", {**owner, "windowId": secondary["windowId"]}, "WINDOW_UNAVAILABLE")
             call("click", button_target(second, "Increment secondary"), "STALE_SNAPSHOT")
 
-            if not args.pointer_only:
-                check_file_panel(call, owner, primary_params, primary, directory, wait_state, button_target)
+            check_file_panel(call, owner, primary_params, primary, directory, wait_state, button_target)
             state = json.loads(state_path.read_text())
             assert {key: state[key] for key in expected_pointer_counts} == expected_pointer_counts, state
             stop(fixture)
             call("listWindows", owner, "APP_UNAVAILABLE")
             call("listWindows", owner, "STALE_APP")
             helper.eof()
-            print("PASS: capability preflight, two-window snapshots, scoped invalidation, AX readback, Unicode input, single scroll/right-click/drag dispatch, image dimensions, native hover, stale app cleanup, EOF" + (" (file panel omitted)" if args.pointer_only else ", system file panel"))
+            print("PASS: capability preflight, two-window snapshots, scoped invalidation, AX readback, Unicode input, single scroll/right-click/drag dispatch, image dimensions, native hover, stale app cleanup, EOF", system file panel")
         finally:
             def save_artifacts():
                 if artifacts is not None:
