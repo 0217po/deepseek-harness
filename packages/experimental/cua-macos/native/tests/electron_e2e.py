@@ -53,6 +53,8 @@ def main():
                 assert permission == {'accessibility': True, 'screenRecording': True}, permission
                 app = call('getApp', {'selector': str(fixture.pid)})
                 owner = {'appHandle': app['appHandle']}
+                if args.hover_only:
+                    call('activate', owner)
                 deadline = time.monotonic() + 15
                 while True:
                     windows = call('listWindows', owner)
@@ -157,7 +159,6 @@ def main():
                     call('hover', {**owner, 'windowId': window_id, 'x': 10, 'y': 40, **hover_options})
                     wait_state(lambda actual: not actual['popupOpen'], 'Leaving the hover region did not close it')
                 if args.hover_only:
-                    call('activate', owner)
                     hover_sequence(True)
                 hover_sequence(False)
                 helper.eof()
