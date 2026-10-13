@@ -37,8 +37,10 @@ export interface UserTextWorkloadTiming {
   /** Characters inside credential ranges, whose masks the matcher builds. */
   readonly maskedCharacters: number
   readonly baseMs: number
+  /** Mean process CPU time per evaluation in the fastest baseline sample. */
+  readonly baseCpuMs: number
   readonly withSecretMs: number
-  /** Process CPU time over the fastest with-credential sample. */
+  /** Mean process CPU time per evaluation in the fastest with-credential sample. */
   readonly withSecretCpuMs: number
   readonly ratio: number
   /** All measured pairs in execution order, excluding warm-up. */
@@ -80,7 +82,7 @@ const FACTS: Readonly<Partial<UserTextFacts>> = { sessionLabels: ['会话一'], 
 const KIB = 1024
 /** Exercise each workload's code paths before measuring sub-millisecond baseline evaluations. */
 const WARMUP_PAIRS = 10
-/** Single-document baselines take less than a millisecond; a fixed batch limits clock and scheduling noise. */
+/** Batch every single-document workload to limit noise in its shortest evaluation intervals. */
 const SINGLE_DOCUMENT_EVALUATIONS = 20
 const PROSE = '帮我看看这个函数为什么慢，顺便把 README 也更新一下。The quick brown fox jumps over the lazy dog, 1234 times. '
 const CODE = 'const value = await fetch(`https://api.example.com/v1/items?id=${id}`); if (!value.ok) throw new Error("bad: " + value.status);\n'
@@ -185,80 +187,84 @@ interface Sample {
   readonly maskedCharacters: number
 }
 
+interface SamplePair {
+  readonly base: Sample
+  readonly secret: Sample
+}
+
 /** Rules for one sample; a fresh credential matcher per sample carries no state from an earlier sample. */
 type RuleSet = () => readonly UserTextRule[]
 const withoutSecret: RuleSet = () => BASE_RULES
 const withSecret: RuleSet = () => [...BASE_RULES, createSecretRule()]
 
-function registryWith(rules: RuleSet): { readonly registry: UserTextRegistry; readonly scope: Context } {
-  const scope = new Context()
-  const registry = new UserTextRegistry(scope)
-  for (const rule of rules()) registry.register(rule)
-  return { registry, scope }
-}
-
 /**
- * Evaluate every text once as a fresh document, as a newly rendered message does.
+ * Evaluate fresh documents; await registry disposal outside the measured interval before returning.
  * @returns elapsed and CPU milliseconds, credential nodes produced, and their characters.
  */
-function evaluateAll(rules: RuleSet, texts: readonly string[]): Sample {
-  const { registry, scope } = registryWith(rules)
-  let secrets = 0
-  let maskedCharacters = 0
-  const cpuStart = process.cpuUsage()
-  const start = performance.now()
-  for (const text of texts) {
-    for (const node of registry.createEvaluator()({ text, facts: FACTS })) {
-      if (node.id !== 'secret') continue
-      secrets++
-      maskedCharacters += node.end - node.start
+async function evaluateAll(rules: RuleSet, texts: readonly string[]): Promise<Sample> {
+  const scope = new Context()
+  try {
+    const registry = new UserTextRegistry(scope)
+    for (const rule of rules()) registry.register(rule)
+    let secrets = 0
+    let maskedCharacters = 0
+    const cpuStart = process.cpuUsage()
+    const start = performance.now()
+    for (const text of texts) {
+      for (const node of registry.createEvaluator()({ text, facts: FACTS })) {
+        if (node.id !== 'secret') continue
+        secrets++
+        maskedCharacters += node.end - node.start
+      }
     }
+    const ms = performance.now() - start
+    const cpu = process.cpuUsage(cpuStart)
+    return { ms, cpuMs: (cpu.user + cpu.system) / 1_000, secrets, maskedCharacters }
+  } finally {
+    await scope.fiber.dispose()
   }
-  const ms = performance.now() - start
-  const cpu = process.cpuUsage(cpuStart)
-  void scope.fiber.dispose()
-  return { ms, cpuMs: (cpu.user + cpu.system) / 1_000, secrets, maskedCharacters }
 }
 
-function sample(rules: RuleSet, texts: readonly string[], evaluations: number): Sample {
-  const first = evaluateAll(rules, texts)
+async function sample(rules: RuleSet, texts: readonly string[], evaluations: number): Promise<Sample> {
+  const first = await evaluateAll(rules, texts)
   let ms = first.ms
   let cpuMs = first.cpuMs
   for (let index = 1; index < evaluations; index++) {
-    const next = evaluateAll(rules, texts)
+    const next = await evaluateAll(rules, texts)
     ms += next.ms
     cpuMs += next.cpuMs
   }
   return { ...first, ms: ms / evaluations, cpuMs: cpuMs / evaluations }
 }
 
-function evaluatePair(texts: readonly string[], index: number, evaluations: number): { readonly base: Sample; readonly secret: Sample } {
+async function evaluatePair(texts: readonly string[], index: number, evaluations: number): Promise<SamplePair> {
   if (index % 2 === 0) {
-    const base = sample(withoutSecret, texts, evaluations)
-    return { base, secret: sample(withSecret, texts, evaluations) }
+    const base = await sample(withoutSecret, texts, evaluations)
+    return { base, secret: await sample(withSecret, texts, evaluations) }
   }
-  const secret = sample(withSecret, texts, evaluations)
-  return { base: sample(withoutSecret, texts, evaluations), secret }
+  const secret = await sample(withSecret, texts, evaluations)
+  return { base: await sample(withoutSecret, texts, evaluations), secret }
 }
 
-function measure(texts: readonly string[], attempts: number, evaluations: number): {
-  readonly base: Sample; readonly secret: Sample; readonly samples: readonly UserTextTimingPair[]
-} {
-  for (let warm = 0; warm < WARMUP_PAIRS; warm++) evaluatePair(texts, warm, evaluations)
-  let best = evaluatePair(texts, 0, evaluations)
-  const samples: UserTextTimingPair[] = []
+async function measure(texts: readonly string[], attempts: number, evaluations: number): Promise<SamplePair & {
+  readonly samples: readonly UserTextTimingPair[]
+}> {
+  for (let warm = 0; warm < WARMUP_PAIRS; warm++) await evaluatePair(texts, warm, evaluations)
+  const pairs: SamplePair[] = []
   for (let attempt = 0; attempt < attempts; attempt++) {
-    const pair = attempt === 0 ? best : evaluatePair(texts, attempt, evaluations)
-    samples.push({
+    pairs.push(await evaluatePair(texts, attempt, evaluations))
+  }
+  const best = pairs.reduce((min, pair) => ({
+    base: pair.base.ms < min.base.ms ? pair.base : min.base,
+    secret: pair.secret.ms < min.secret.ms ? pair.secret : min.secret,
+  }))
+  return {
+    ...best,
+    samples: pairs.map(pair => ({
       baseMs: pair.base.ms, baseCpuMs: pair.base.cpuMs,
       withSecretMs: pair.secret.ms, withSecretCpuMs: pair.secret.cpuMs,
-    })
-    best = {
-      base: pair.base.ms < best.base.ms ? pair.base : best.base,
-      secret: pair.secret.ms < best.secret.ms ? pair.secret : best.secret,
-    }
+    })),
   }
-  return { ...best, samples }
 }
 
 declare const gc: (() => void) | undefined
@@ -356,29 +362,28 @@ async function allocations(): Promise<UserTextAllocationReport> {
   return { workloads: results }
 }
 
-function timings(attempts: number): UserTextTimeReport {
-  return {
-    warmupPairs: WARMUP_PAIRS,
-    attempts,
-    workloads: workloads().map(({ id, group, texts }) => {
-      const evaluationsPerSample = texts.length === 1 ? SINGLE_DOCUMENT_EVALUATIONS : 1
-      const { base, secret, samples } = measure(texts, attempts, evaluationsPerSample)
-      return {
-        id,
-        group,
-        documents: texts.length,
-        characters: texts.reduce((sum, text) => sum + text.length, 0),
-        evaluationsPerSample,
-        secrets: secret.secrets,
-        maskedCharacters: secret.maskedCharacters,
-        baseMs: base.ms,
-        withSecretMs: secret.ms,
-        withSecretCpuMs: secret.cpuMs,
-        ratio: secret.ms / base.ms,
-        samples,
-      }
-    }),
+async function timings(attempts: number): Promise<UserTextTimeReport> {
+  const results: UserTextWorkloadTiming[] = []
+  for (const { id, group, texts } of workloads()) {
+    const evaluationsPerSample = texts.length === 1 ? SINGLE_DOCUMENT_EVALUATIONS : 1
+    const { base, secret, samples } = await measure(texts, attempts, evaluationsPerSample)
+    results.push({
+      id,
+      group,
+      documents: texts.length,
+      characters: texts.reduce((sum, text) => sum + text.length, 0),
+      evaluationsPerSample,
+      secrets: secret.secrets,
+      maskedCharacters: secret.maskedCharacters,
+      baseMs: base.ms,
+      baseCpuMs: base.cpuMs,
+      withSecretMs: secret.ms,
+      withSecretCpuMs: secret.cpuMs,
+      ratio: secret.ms / base.ms,
+      samples,
+    })
   }
+  return { warmupPairs: WARMUP_PAIRS, attempts, workloads: results }
 }
 
 assertBuiltBenchmarkRuntime(import.meta.url, {
@@ -387,4 +392,4 @@ assertBuiltBenchmarkRuntime(import.meta.url, {
 })
 const [mode, count] = process.argv.slice(2)
 if (mode !== 'time' && mode !== 'allocation') throw new Error('usage: user-text.worker.js time <attempts> | allocation')
-console.log(JSON.stringify(mode === 'time' ? timings(positiveInteger(count, 'attempts')) : await allocations()))
+console.log(JSON.stringify(mode === 'time' ? await timings(positiveInteger(count, 'attempts')) : await allocations()))

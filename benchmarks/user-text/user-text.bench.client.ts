@@ -103,7 +103,10 @@ describe('sent user text with the credential matcher', () => {
     return found
   }
   const record = (benchmark: BenchmarkCase, measured: UserTextWorkloadTiming, budgetMs: number): void => {
-    recordTimings(benchmark, { withSecretMs: { ms: measured.withSecretMs, cpuMs: measured.withSecretCpuMs } }, { withSecretMs: budgetMs })
+    recordTimings({
+      ...benchmark,
+      measures: `${benchmark.measures} Minimum of ${ATTEMPTS} per-sample means of ${measured.evaluationsPerSample} fresh evaluations after warm-up.`,
+    }, { withSecretMs: { ms: measured.withSecretMs, cpuMs: measured.withSecretCpuMs } }, { withSecretMs: budgetMs })
   }
 
   it.each(Object.entries(UNMATCHED_EXPECTED))('evaluates %s without credentials within its budget and ratio', (id, expected) => {
