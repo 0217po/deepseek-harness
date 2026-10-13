@@ -219,6 +219,8 @@ describe('flow motion', () => {
     motion.collapse(parent, vi.fn())
     motion.collapse(sibling, vi.fn())
     motion.reveal(opening)
+    // A fresh reveal has not grown yet when the batch measures it.
+    Object.defineProperty(opening, 'offsetHeight', { value: 0, configurable: true })
     await Promise.resolve()
     expect(calls.begin).toHaveBeenCalledTimes(1)
     expect(calls.begin.mock.calls[0]?.[0].map(box => [box.element, box.height, box.closing])).toEqual([
@@ -390,6 +392,42 @@ describe('flow motion', () => {
     expectCleared(gone)
     expect(calls.begin.mock.calls[0]?.[0].map(box => [box.element, box.height])).toEqual([[moving, 120]])
     vi.advanceTimersByTime(400)
+  })
+
+  it('counts only the remaining growth of a reveal a batch takes over mid-transition', async () => {
+    vi.useFakeTimers()
+    const opening = rowWithHeight(120)
+    motion.reveal(opening)
+    await Promise.resolve()
+    // The reveal ran alone on its own transition and reached 45px before a closing row starts a batch.
+    Object.defineProperty(opening, 'offsetHeight', { value: 45, configurable: true })
+    const calls = batchDriver()
+    const closing = rowWithHeight(80)
+    motion.collapse(closing, vi.fn())
+    await Promise.resolve()
+    expect(calls.begin.mock.calls[0]?.[0].map(box => [box.element, box.height, box.closing])).toEqual([
+      [opening, 75, false], [closing, 80, true],
+    ])
+    expect(opening.style.height).toBe('45px')
+    vi.advanceTimersByTime(400)
+  })
+
+  it('holds a row revealed during a batch and starts its own transition when no batch follows', async () => {
+    vi.useFakeTimers()
+    batchDriver()
+    const closing = rowWithHeight(180)
+    motion.collapse(closing, vi.fn())
+    await Promise.resolve()
+    vi.advanceTimersByTime(32)
+    const opening = rowWithHeight(40)
+    motion.reveal(opening)
+    expect(opening.style.transition).toBe('none')
+    expect(opening.style.height).toBe('0px')
+    vi.advanceTimersByTime(200)
+    expect(opening.style.transition).toContain('height')
+    expect(opening.style.height).toBe('40px')
+    vi.runAllTimers()
+    expectCleared(opening)
   })
 
   it('reports reader cancellation to the driver and lets a newer request resume the target', async () => {

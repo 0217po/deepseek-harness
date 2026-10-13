@@ -99,15 +99,34 @@ export function hiddenOrCollapsing(element: HTMLElement): boolean {
   return element.hasAttribute('hidden') || element.dataset.chatMotion === 'collapse'
 }
 
+/**
+ * Opacity of a revealing box at batch progress, continuing from the share its own transition reached.
+ * @param box - revealing box.
+ * @param progress - shared eased progress from zero to one.
+ * @returns opacity from zero to one.
+ */
+function revealedShare(box: OwnedBox, progress: number): number {
+  const start = box.height === 0 ? 0 : box.fromHeight / box.height
+  return start + (1 - start) * progress
+}
+
 /** A box this viewport owns until it finishes or is cancelled. */
 interface OwnedBox {
   readonly element: HTMLElement
-  /** Measured when the box starts, and again when a batch takes over a closing box. */
+  /**
+   * Full size: a closing box shrinks from it, a revealing box grows to it. A batch re-measures a closing
+   * box's current size when it takes the box over.
+   */
   height: number
   marginTop: number
+  /** Size a revealing box had already reached on its own transition when a batch took it over. */
+  fromHeight: number
+  fromMarginTop: number
   readonly closing: boolean
-  /** The box closed while a batch ran; it keeps its size without a CSS transition until the next batch. */
-  readonly held: boolean
+  /** The box changed while a batch ran; it waits without a CSS transition until the next batch. */
+  held: boolean
+  /** Start a held revealing box's own transition when no batch will drive it. */
+  release(): void
   /** Stop the box's own transition and fallback timer before a batch drives it. */
   take(): void
   finish(): void
@@ -149,13 +168,21 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
   }
 
   function runBatch(current: InputFoldDriver): void {
-    // A closing box continues from its current size: its own transition may have moved it, and a held box
-    // may now sit inside a row that finished closing.
+    // Every member continues from the size it has now, so the driver's measured layout and its change
+    // amounts describe the same boxes: a closing box may have moved on its own transition or sit inside a
+    // row that finished closing, and a revealing box may have grown part of the way on its own transition.
     for (const box of [...boxes.values()]) {
-      if (!box.closing || !batchMember(box)) continue
-      box.height = box.element.offsetHeight
-      box.marginTop = Number.parseFloat(getComputedStyle(box.element).marginTop) || 0
-      if (box.height === 0 && box.marginTop === 0) box.finish()
+      if (!batchMember(box)) continue
+      const height = box.element.offsetHeight
+      const marginTop = Number.parseFloat(getComputedStyle(box.element).marginTop) || 0
+      if (!box.closing) {
+        box.fromHeight = Math.min(height, box.height)
+        box.fromMarginTop = Math.min(marginTop, box.marginTop)
+        continue
+      }
+      box.height = height
+      box.marginTop = marginTop
+      if (height === 0 && marginTop === 0) box.finish()
     }
     const owned = [...boxes.values()]
     const members = owned.filter(batchMember)
@@ -163,14 +190,19 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
     if (!members.some(box => box.closing)) return
     batch = true
     cancelled = false
-    const travelling = current.begin(members)
+    const travelling = current.begin(members.map(box => box.closing ? box : {
+      element: box.element,
+      height: box.height - box.fromHeight,
+      marginTop: box.marginTop - box.fromMarginTop,
+      closing: false,
+    }))
     batchCleanup = () => { current.finish(true) }
     for (const box of owned) box.take()
     for (const box of members) {
       box.element.style.transition = 'none'
-      box.element.style.height = `${box.closing ? box.height : 0}px`
-      box.element.style.marginTop = `${box.closing ? box.marginTop : 0}px`
-      box.element.style.opacity = box.closing ? '1' : '0'
+      box.element.style.height = `${box.closing ? box.height : box.fromHeight}px`
+      box.element.style.marginTop = `${box.closing ? box.marginTop : box.fromMarginTop}px`
+      box.element.style.opacity = box.closing ? '1' : String(revealedShare(box, 0))
     }
     const memberSet = new Set(members)
     const settledTravel = new Set<HTMLElement>()
@@ -205,8 +237,8 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
         settling = false
       }
       if (folding === 0) notifyIdle()
-      // Rows that closed while this batch ran wait in place; the next batch starts at once.
-      else if ([...boxes.values()].some(box => box.held)) flushBatch()
+      // Rows that changed while this batch ran wait in place; the next flush drives or releases them.
+      if ([...boxes.values()].some(box => box.held)) flushBatch()
     }
     cancelEmptyBatch = () => {
       if (members.some(box => box.closing && boxes.get(box.element) === box)) return
@@ -224,11 +256,15 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
       freezeTravelling()
       for (const box of members) {
         if (boxes.get(box.element) !== box) continue
-        const remaining = box.closing ? 1 - progress : progress
-        box.element.style.height = `${box.height * remaining}px`
-        box.element.style.marginTop = `${box.marginTop * remaining}px`
-        box.element.style.opacity = !box.closing ? String(progress)
-          : travelling.has(box.element) ? '1' : String(Math.max(0, 1 - elapsed / FADE_OUT_MS))
+        if (box.closing) {
+          box.element.style.height = `${box.height * (1 - progress)}px`
+          box.element.style.marginTop = `${box.marginTop * (1 - progress)}px`
+          box.element.style.opacity = travelling.has(box.element) ? '1' : String(Math.max(0, 1 - elapsed / FADE_OUT_MS))
+        } else {
+          box.element.style.height = `${box.fromHeight + (box.height - box.fromHeight) * progress}px`
+          box.element.style.marginTop = `${box.fromMarginTop + (box.marginTop - box.fromMarginTop) * progress}px`
+          box.element.style.opacity = String(revealedShare(box, progress))
+        }
       }
       displacement = current.frame(progress, cancelled)
       let removedBefore = 0
@@ -238,7 +274,7 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
           // Transforming the closing box changes its pixels, not its flow contribution.
           if (!travelling.has(box.element)) box.element.style.translate = `0 ${displacement + removedBefore}px`
           removedBefore += (box.height + box.marginTop) * progress
-        } else removedBefore -= (box.height + box.marginTop) * progress
+        } else removedBefore -= (box.height - box.fromHeight + box.marginTop - box.fromMarginTop) * progress
       }
       if (linear < 1) {
         frameRequest = requestAnimationFrame(tick)
@@ -260,14 +296,18 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
 
   function flushBatch(): void {
     batchScheduled = false
-    // Rows that start closing during a batch are held until it settles, which starts the next batch.
-    if (batch || ![...boxes.values()].some(box => box.closing)) return
-    const current = driver()
-    if (current !== null) runBatch(current)
-    else {
-      const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
-      // Held rows have no transition of their own, so without a driver they finish at once.
-      for (const box of [...boxes.values()]) if (reduced || box.held) box.finish()
+    // Rows that change during a batch are held until it settles, which flushes again.
+    if (batch) return
+    const current = [...boxes.values()].some(box => box.closing) ? driver() : null
+    if (current !== null) {
+      runBatch(current)
+      return
+    }
+    const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+    // Without a batch, a held closing row finishes at once and a held revealing row starts its own transition.
+    for (const box of [...boxes.values()]) {
+      if (reduced || (box.held && box.closing)) box.finish()
+      else if (box.held) box.release()
     }
   }
 
@@ -369,7 +409,8 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
     }
     if (!held) element.addEventListener('transitionend', onEnd)
     running.set(element, cancel)
-    boxes.set(element, { element, height, marginTop, closing: true, held, finish,
+    boxes.set(element, { element, height, marginTop, fromHeight: height, fromMarginTop: marginTop, closing: true, held, finish,
+      release: () => {},
       take: () => { element.removeEventListener('transitionend', onEnd); clearTimeout(timer) } })
   }
 
@@ -386,12 +427,6 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
     style.opacity = '0'
     style.height = '0px'
     style.marginTop = '0px'
-    void element.offsetHeight
-    style.transition = `height ${CLOSE_MS}ms ${EASING} ${CLOSE_DELAY_MS}ms, margin-top ${CLOSE_MS}ms ${EASING} ${CLOSE_DELAY_MS}ms, `
-      + `opacity ${CLOSE_MS}ms ${EASING} ${CLOSE_DELAY_MS}ms`
-    style.height = `${height}px`
-    style.marginTop = `${marginTop}px`
-    style.opacity = '1'
     const finish = (): void => {
       if (running.get(element) !== finish) return
       clearMotion(element, onEnd, timer)
@@ -399,11 +434,28 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
     const onEnd = (event: TransitionEvent): void => {
       if (event.target === element && event.propertyName === 'height') finish()
     }
-    const timer = setTimeout(finish, CLOSE_DELAY_MS + CLOSE_MS + SETTLE_SLACK_MS)
-    element.addEventListener('transitionend', onEnd)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const startTransition = (): void => {
+      void element.offsetHeight
+      style.transition = `height ${CLOSE_MS}ms ${EASING} ${CLOSE_DELAY_MS}ms, margin-top ${CLOSE_MS}ms ${EASING} ${CLOSE_DELAY_MS}ms, `
+        + `opacity ${CLOSE_MS}ms ${EASING} ${CLOSE_DELAY_MS}ms`
+      style.height = `${height}px`
+      style.marginTop = `${marginTop}px`
+      style.opacity = '1'
+      timer = setTimeout(finish, CLOSE_DELAY_MS + CLOSE_MS + SETTLE_SLACK_MS)
+      element.addEventListener('transitionend', onEnd)
+    }
+    // A running batch owns the scrollport; a row revealed now waits at zero size until the next flush.
+    const held = batch
+    if (!held) startTransition()
     running.set(element, finish)
-    boxes.set(element, { element, height, marginTop, closing: false, held: false, finish,
-      take: () => { element.removeEventListener('transitionend', onEnd); clearTimeout(timer) } })
+    const box: OwnedBox = { element, height, marginTop, fromHeight: 0, fromMarginTop: 0, closing: false, held, finish,
+      release: () => {
+        box.held = false
+        startTransition()
+      },
+      take: () => { element.removeEventListener('transitionend', onEnd); clearTimeout(timer) } }
+    boxes.set(element, box)
   }
 
   function clear(): void {
