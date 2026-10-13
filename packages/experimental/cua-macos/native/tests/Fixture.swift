@@ -7,6 +7,22 @@ final class DragPad: NSView {
     var rightDownCount = 0
     var rightUpCount = 0
     var lastPoint = NSPoint.zero
+    var hoverClicks = 0
+    lazy var hoverButton: NSButton = {
+        let button = NSButton(title: "Use native hover details", target: self, action: #selector(useHover))
+        button.frame = NSRect(x: 120, y: 40, width: 220, height: 32)
+        button.isHidden = true
+        addSubview(button)
+        return button
+    }()
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas { removeTrackingArea(area) }
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.activeAlways, .mouseEnteredAndExited, .inVisibleRect], owner: self))
+    }
+    override func mouseEntered(with event: NSEvent) { hoverButton.isHidden = false; changed?() }
+    override func mouseExited(with event: NSEvent) { hoverButton.isHidden = true; changed?() }
+    @objc func useHover() { hoverClicks += 1; changed?() }
     override var isFlipped: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func mouseDown(with event: NSEvent) { lastPoint = convert(event.locationInWindow, from: nil); dragDownCount += 1; changed?() }
@@ -54,6 +70,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         window.title = "DSH CUA primary fixture"
         window.isReleasedWhenClosed = false
         window.animationBehavior = .none
+        window.acceptsMouseMovedEvents = true
         // Keep fixture geometry stable when Stage Manager switches application sets.
         window.collectionBehavior = [.canJoinAllApplications, .stationary]
         let content = window.contentView!
@@ -132,6 +149,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         let state: [String: Any] = ["count": count, "secondaryCount": secondaryCount, "text": field.stringValue, "selectedFile": selectedFile,
             "rowCount": rowCount, "primaryWindowId": window.windowNumber,
             "dragDownCount": dragPad.dragDownCount, "dragCount": dragPad.dragCount, "dragPoint": [dragPad.lastPoint.x, dragPad.lastPoint.y],
+            "hoverVisible": !dragPad.hoverButton.isHidden, "hoverClicks": dragPad.hoverClicks,
             "rightDownCount": dragPad.rightDownCount, "rightUpCount": dragPad.rightUpCount,
             "scrollEventCount": scroll.eventCount, "scrollY": scroll.contentView.bounds.origin.y, "dragBounds": windowPoints(dragPad), "scrollBounds": windowPoints(scroll),
             "primaryWindowSize": [window.frame.width, window.frame.height],

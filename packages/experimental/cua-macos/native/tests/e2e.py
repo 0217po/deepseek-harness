@@ -91,6 +91,7 @@ def main():
     parser.add_argument("--helper", type=Path, help="Existing native helper executable for this run")
     parser.add_argument("--artifacts", type=Path, help="Save fixture screenshots and private JSON protocol transcript")
     parser.add_argument("--panels-only", action="store_true", help="Exercise system file panels without unrelated pointer gestures")
+    parser.add_argument("--pointer-only", action="store_true", help="Exercise window input without the system file-panel scenario")
     args = parser.parse_args()
     artifacts = args.artifacts
     if artifacts is not None:
@@ -199,6 +200,18 @@ def main():
             call("typeText", {**owner, "text": "第二次 CUA"})
             call("pressKey", {**owner, "key": "tab"})
             state = wait_state(lambda state: state["text"] == "第二次 CUA", "Command+A replacement or key dispatch was not received")
+            x, y, width, height = state["dragBounds"]
+            call("hover", {**owner, "windowId": primary["windowId"], "x": x + 20, "y": y + 20})
+            wait_state(lambda actual: actual["hoverVisible"], "AppKit tracking area did not reveal hover controls")
+            hover_state = call("getState", primary_params)
+            capture(primary, "02-native-hover.png")
+            assert json.loads(state_path.read_text())["hoverVisible"], "Observation dismissed native hover controls"
+            hover_target = button_target(hover_state, "Use native hover details")
+            call("hover", hover_target)
+            call("click", hover_target)
+            wait_state(lambda actual: actual["hoverClicks"] == 1, "Native hover control did not activate")
+            call("hover", {**owner, "windowId": primary["windowId"], "x": 10, "y": 40})
+            state = wait_state(lambda actual: not actual["hoverVisible"], "AppKit tracking area did not exit")
             expected_pointer_counts = {key: state[key] + 1 for key in
                                        ["scrollEventCount", "rightDownCount", "rightUpCount", "dragDownCount", "dragCount"]}
             x, y, width, height = state["scrollBounds"]
@@ -232,14 +245,15 @@ def main():
             call("screenshot", {**owner, "windowId": secondary["windowId"]}, "WINDOW_UNAVAILABLE")
             call("click", button_target(second, "Increment secondary"), "STALE_SNAPSHOT")
 
-            check_file_panel(call, owner, primary_params, primary, directory, wait_state, button_target)
+            if not args.pointer_only:
+                check_file_panel(call, owner, primary_params, primary, directory, wait_state, button_target)
             state = json.loads(state_path.read_text())
             assert {key: state[key] for key in expected_pointer_counts} == expected_pointer_counts, state
             stop(fixture)
             call("listWindows", owner, "APP_UNAVAILABLE")
             call("listWindows", owner, "STALE_APP")
             helper.eof()
-            print("PASS: capability preflight, two-window snapshots, scoped invalidation, AX readback, Unicode input, single scroll/right-click/drag dispatch, image dimensions, system file panel, stale app cleanup, EOF")
+            print("PASS: capability preflight, two-window snapshots, scoped invalidation, AX readback, Unicode input, single scroll/right-click/drag dispatch, image dimensions, native hover, stale app cleanup, EOF" + (" (file panel omitted)" if args.pointer_only else ", system file panel"))
         finally:
             def save_artifacts():
                 if artifacts is not None:
