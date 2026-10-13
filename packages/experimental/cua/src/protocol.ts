@@ -9,6 +9,7 @@ const point = z.number().nonnegative()
 const app = { appHandle: z.string().min(1) }
 const pointer = { mouseButton: z.enum(['left', 'right', 'middle']).optional(),
   modifiers: z.array(z.enum(['command', 'control', 'option', 'shift', 'fn'])).optional() }
+const hover = { useSystemPointer: z.boolean().optional().describe('Move the visible system cursor for native hover tracking; requires the target to be unobscured in the foreground app. Default false sends window-directed movement.') }
 const window = { ...app, windowId: id }
 const snapshot = { ...app, snapshotId: z.string().min(1), elementIndex: z.number().int().nonnegative() }
 const coordinate = { ...window, snapshotId: z.string().min(1).optional(), x: point, y: point }
@@ -36,8 +37,8 @@ export const Request = z.discriminatedUnion('method', [
     details: z.boolean().optional().describe('Include identifiers, global-point bounds and complete action names.'),
   }),
   z.object({ method: z.literal('hover'), params: z.union([
-    z.object({ ...snapshot, useSystemPointer: z.boolean().optional() }).strict(),
-    z.object({ ...coordinate, useSystemPointer: z.boolean().optional() }).strict(),
+    z.object({ ...snapshot, ...hover }).strict(),
+    z.object({ ...coordinate, ...hover }).strict(),
   ]) }).strict(),
   z.object({ method: z.literal('click'), params: z.union([
     z.object({ ...snapshot, ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).optional() }).strict(),

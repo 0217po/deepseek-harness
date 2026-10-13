@@ -92,6 +92,7 @@ def main():
     parser.add_argument("--artifacts", type=Path, help="Save fixture screenshots and private JSON protocol transcript")
     parser.add_argument("--panels-only", action="store_true", help="Exercise system file panels without unrelated pointer gestures")
     parser.add_argument("--pointer-only", action="store_true", help="Exercise window input without the system file-panel scenario")
+    parser.add_argument("--hover-only", action="store_true", help="Exercise native hover without keyboard or file-panel scenarios")
     args = parser.parse_args()
     artifacts = args.artifacts
     if artifacts is not None:
@@ -179,6 +180,27 @@ def main():
                     (artifacts / name).write_bytes(pixels)
                 return result
 
+            def check_hover():
+                call("activate", owner)
+                x, y, width, height = json.loads(state_path.read_text())["dragBounds"]
+                call("hover", {**owner, "windowId": primary["windowId"], "x": x + 20, "y": y + 20, "useSystemPointer": True})
+                wait_state(lambda actual: actual["hoverVisible"], "AppKit tracking area did not reveal hover controls")
+                hover_state = call("getState", primary_params)
+                capture(primary, "02-native-hover.png")
+                assert json.loads(state_path.read_text())["hoverVisible"], "Observation dismissed native hover controls"
+                hover_target = button_target(hover_state, "Use native hover details")
+                call("hover", {**hover_target, "useSystemPointer": True})
+                call("click", hover_target)
+                wait_state(lambda actual: actual["hoverClicks"] == 1, "Native hover control did not activate")
+                call("hover", {**owner, "windowId": primary["windowId"], "x": 10, "y": 40, "useSystemPointer": True})
+                state = wait_state(lambda actual: not actual["hoverVisible"], "AppKit tracking area did not exit")
+
+            if args.hover_only:
+                check_hover()
+                helper.eof()
+                print("PASS: native AppKit tracking-area entry, AX and screenshot preservation, hover-control interaction and exit")
+                return
+
             if args.panels_only:
                 check_file_panel(call, owner, primary_params, primary, directory, wait_state, button_target)
                 helper.eof()
@@ -200,19 +222,8 @@ def main():
             call("typeText", {**owner, "text": "第二次 CUA"})
             call("pressKey", {**owner, "key": "tab"})
             state = wait_state(lambda state: state["text"] == "第二次 CUA", "Command+A replacement or key dispatch was not received")
-            call("activate", owner)
-            x, y, width, height = state["dragBounds"]
-            call("hover", {**owner, "windowId": primary["windowId"], "x": x + 20, "y": y + 20, "useSystemPointer": True})
-            wait_state(lambda actual: actual["hoverVisible"], "AppKit tracking area did not reveal hover controls")
-            hover_state = call("getState", primary_params)
-            capture(primary, "02-native-hover.png")
-            assert json.loads(state_path.read_text())["hoverVisible"], "Observation dismissed native hover controls"
-            hover_target = button_target(hover_state, "Use native hover details")
-            call("hover", {**hover_target, "useSystemPointer": True})
-            call("click", hover_target)
-            wait_state(lambda actual: actual["hoverClicks"] == 1, "Native hover control did not activate")
-            call("hover", {**owner, "windowId": primary["windowId"], "x": 10, "y": 40, "useSystemPointer": True})
-            state = wait_state(lambda actual: not actual["hoverVisible"], "AppKit tracking area did not exit")
+            check_hover()
+            state = json.loads(state_path.read_text())
             expected_pointer_counts = {key: state[key] + 1 for key in
                                        ["scrollEventCount", "rightDownCount", "rightUpCount", "dragDownCount", "dragCount"]}
             x, y, width, height = state["scrollBounds"]
