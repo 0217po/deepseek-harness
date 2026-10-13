@@ -31,6 +31,7 @@
     "native/LICENSE.cua-driver",
     "native/upstream.json",
     "native/README.md",
+    "native/README.zh.md",
     "native/protocol.schema.json",
     "lib/types/**/*.d.ts"
   ],
