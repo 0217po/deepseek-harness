@@ -133,7 +133,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
     callId: ToolCallId('programmatic-window'), name: 'cua', arguments: { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: 7 } },
   })
   expect(direct.isError).toBe(false)
-  expect(direct.value).toMatchObject({ structuredContent: { mimeType: 'image/png', data: png } })
+  expect(direct.value).toMatchObject({ mimeType: 'image/png', data: png })
   expect(context.computerUse.providerName).toBe('dsh-cua')
   for (const [callId, activationRequested, beforePid, beforeWindowId] of [
     ['activate-first', true, 42, 99], ['activate-repeat', false, 9, 7],
@@ -143,13 +143,13 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
       arguments: { method: 'activate', params: { appHandle: 'fixture-app' } },
     })
     expect(activated.isError).toBe(false)
-    expect(activated.value).toMatchObject({ structuredContent: {
+    expect(activated.value).toMatchObject({
       dispatched: true, verified: false, foreground: {
         requestId: callId, operation: 'activate', targetPid: 9, targetWindowId: null, activationRequested, raiseRequested: false,
         before: { frontPid: beforePid, focusedWindowId: 7, frontWindowId: beforeWindowId, frontWindowPid: beforePid },
         after: { frontPid: 9, focusedWindowId: 7, frontWindowId: 7, frontWindowPid: 9 },
       },
-    } })
+    })
     expect(JSON.stringify(activated.content)).toContain(callId)
   }
   const directCalls = (await readEvents()).filter(event => event.event === 'call').slice(-3)
@@ -160,7 +160,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
     const result = await context.tools.execute({ agent: owner, signal: new AbortController().signal,
       callId: ToolCallId(`retained-object-${++objectCall}`), name: 'cua', arguments: operation })
     if (result.isError) throw new Error(JSON.stringify(result.content))
-    return z.object({ structuredContent: z.json() }).parse(result.value).structuredContent
+    return z.json().parse(result.value)
   })
   const retainedApp = await objectApi(agent).getApp('test.fixture')
   const retainedWindow = await retainedApp.getWindow(7)

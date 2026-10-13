@@ -1,4 +1,4 @@
-/** Valid large PNG admission through Loader, MCP projection, disk attachments and a real Node PTC process. */
+/** Valid large PNG admission through Loader, Harness tool rendering, disk attachments and a real Node PTC process. */
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -27,7 +27,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 import sharp from 'sharp'
-import { expect, it, onTestFinished } from 'vitest'
+import { expect, it, onTestFinished, vi } from 'vitest'
 import * as NativeProvider from '../src/index.ts'
 import { installNativeFixture, startFixtureHost } from './native-fixture.ts'
 
@@ -101,9 +101,8 @@ it.skipIf(process.platform === 'win32')('delivers a valid PNG larger than 4 MiB 
       this.requests.push(options)
       if (this.requests.length === 1) {
         const code = 'const app = await tools.cua({ method: "getApp", params: { selector: "9" } }); '
-          + 'const result = await tools.cua({ method: "screenshot", params: { appHandle: app.structuredContent.appHandle, windowId: 7 } }); '
-          + 'const image = result.content.find(block => block.type === "image"); '
-          + 'return { mimeType: image.mimeType, encodedLength: image.data.length };'
+          + 'const result = await tools.cua({ method: "screenshot", params: { appHandle: app.appHandle, windowId: 7 } }); '
+          + 'return { mimeType: result.mimeType, encodedLength: result.data.length };'
         const call = { type: 'tool-call' as const, id: ToolCallId('large-image-ptc'), name: 'run_code',
           arguments: JSON.stringify({ code, description: 'Inspect the generated large screenshot' }),
         }
@@ -129,6 +128,7 @@ it.skipIf(process.platform === 'win32')('delivers a valid PNG larger than 4 MiB 
       yield { type: 'finish', reason: { kind: 'stop' } }
     }
   }
+  const saveImages = vi.spyOn(context.attachments, 'saveImages')
   const model = new VisionModel()
   context.llm.registerAdapter(['large-image-fixture'], model)
   const handle = await context.agents.create({ sessionId: SessionId('large-image-ptc'), meta: { cwd: root },
@@ -143,6 +143,7 @@ it.skipIf(process.platform === 'win32')('delivers a valid PNG larger than 4 MiB 
   await idle.promise
   stop()
 
+  expect(saveImages).toHaveBeenCalledTimes(1)
   expect(model.requests).toHaveLength(2)
   expect(model.requests[0]?.tools?.map(tool => tool.name)).toEqual(['run_code'])
   const messages = handle.agent.session.deriveMessages()

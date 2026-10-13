@@ -122,7 +122,7 @@ it.each(['Allow for this task', 'Deny'])('obtains %s before a stopped applicatio
   const result = await pending
   expect(result.isError).toBe(choice === 'Deny')
   expect(native.request.mock.calls.map(call => call[0])).toEqual(choice === 'Deny' ? ['getApp'] : ['getApp', 'launchApp'])
-  if (choice !== 'Deny') expect(result.value).toMatchObject({ structuredContent: { appHandle: 'pending-app', pid: 17 } })
+  if (choice !== 'Deny') expect(result.value).toMatchObject({ appHandle: 'pending-app', pid: 17 })
 })
 
 it('rejects a launch result that changes the approved handle', async () => {
@@ -349,8 +349,8 @@ it('keeps native element diagnostics out of model-visible state and structured t
   native.request.mockResolvedValue({ ...visible, elements: [{ index: 0, role: 'AXButton', bounds: [10, 20, 30, 40] }] })
   const result = await f.execute('getState', { appHandle: 'app-one' })
   expect(result.isError).toBe(false)
-  expect(result.value).toMatchObject({ structuredContent: visible })
-  expect(result.value).not.toHaveProperty('structuredContent.elements')
+  expect(result.value).toMatchObject(visible)
+  expect(result.value).not.toHaveProperty('elements')
   const content = result.content.find(block => block.type === 'text')
   if (content?.type !== 'text') throw new Error('State text was not projected')
   expect(JSON.parse(content.text)).toEqual(visible)
@@ -375,7 +375,53 @@ it('preserves screenshot coordinates and image attachments on every host', async
   if (image?.type !== 'image') throw new Error('Screenshot attachment was not admitted')
   const stored = await f.ctx.attachments.readImage(image.attachment)
   expect(Buffer.from(stored.data).toString('base64')).toBe(data)
-  expect(result.value).toMatchObject({ structuredContent: { ...metadata, mimeType: 'image/png', data } })
+  expect(result.value).toMatchObject({ ...metadata, mimeType: 'image/png', data })
+})
+
+it('refuses screenshot capture when no attachment store is mounted', async () => {
+  const f = await setup({ provider: 'image-fixture', model: 'vision' })
+  await selectApplication(f)
+  native.request.mockClear()
+  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+  expect(result.isError).toBe(true)
+  expect(JSON.stringify(result.content)).toContain('require an attachment store')
+  expect(native.request).not.toHaveBeenCalled()
+})
+
+it.each(['unresolved', 'unknown', 'text-only', 'provider-error'] as const)(
+  'refuses screenshot capture and storage for a %s model route', async (route) => {
+    const f = await setup(route === 'unresolved' ? undefined : { provider: 'image-fixture', model: 'vision' })
+    await selectApplication(f)
+    const root = await mkdtemp(join(tmpdir(), 'dsh-cua-image-route-'))
+    onTestFinished(async () => { await f.ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
+    await f.ctx.plugin(LocalAttachmentStore, { dshHome: root })
+    const saved = vi.spyOn(f.ctx.attachments, 'saveImages')
+    const resolve = vi.spyOn(f.ctx.llm, 'resolveModelInfo')
+    if (route === 'provider-error') resolve.mockRejectedValue(new Error('model lookup failed'))
+    else resolve.mockResolvedValue({ provider: 'image-fixture', id: 'vision', name: 'Vision',
+      ...route === 'text-only' ? { inputModalities: ['text'] } : {},
+    })
+    native.request.mockClear()
+    const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result.content)).toContain(route === 'unresolved' ? 'model route could not be resolved'
+      : route === 'provider-error' ? 'model lookup failed' : 'declare image input')
+    expect(native.request).not.toHaveBeenCalled()
+    expect(saved).not.toHaveBeenCalled()
+  },
+)
+
+it('returns an image-admission failure without emitting a successful screenshot', async () => {
+  const f = await setup({ provider: 'image-fixture', model: 'vision' })
+  await selectApplication(f)
+  f.ctx.llm.registerAdapter(['image-fixture'], new ImageAdapter())
+  const root = await mkdtemp(join(tmpdir(), 'dsh-cua-image-invalid-'))
+  onTestFinished(async () => { await f.ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
+  await f.ctx.plugin(LocalAttachmentStore, { dshHome: root })
+  native.request.mockResolvedValue({ ...imageMetadata, mimeType: 'image/png', data: 'AQ==' })
+  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+  expect(result.isError).toBe(true)
+  expect(result.content.some(block => block.type === 'image')).toBe(false)
 })
 
 it.each([

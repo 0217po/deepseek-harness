@@ -31,6 +31,8 @@ Use App methods for a single-window task. `getApp` reads initial accessibility s
 
 Observation methods emit and return their result. Use `void await app.getAXState()` for one visible copy, or use `emit:false` and print the returned text once. Screenshots return PNG bytes and enter the attachment pipeline once; `emit:false` only suppresses the object sink.
 
+`tools.cua` returns native operation values directly. Screenshot values retain the PNG Base64 and add a durable `attachment` reference for the tool renderer; model content contains coordinate metadata and one image, without the encoded bytes. Before capture, the tool requires an attachment store and a resolved model route declaring image input. Admission and storage failures reject the call. The object bridge returns PNG bytes without uploading or emitting the same image again.
+
 Application consent precedes launch, observation, capture, and input. Task access belongs to the selected instance; saved grants require platform-verified executable identity. Revocation closes affected Agent connections, so their old objects require fresh selection. No input is replayed after cancellation, timeout, or reconnect.
 
 Actions return `dispatched:true, verified:false`; read fresh state to verify the result. Coordinate actions require a successful observation of the target window. Resizing rejects old coordinates with `WINDOW_CHANGED`; movement alone preserves window-local coordinates.

@@ -6,12 +6,15 @@ import type { Context, Volatile } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/brand'
-import { createMcpToolDefinition } from '@deepseek-ai/dsh-mcp-client'
+import { admitEncodedImages } from '@deepseek-ai/dsh-attachment/admission'
+import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
 import { NativeClient, NativeError, type NativeClientConfig, type NativeChannelFactory } from './native-client.ts'
 import { ApplicationAuthorizationResult, ApplicationAccess } from './application-access.ts'
 import type { CuaApplicationGrant, CuaApplicationId } from './application-types.ts'
-import type { CuaAppHandle } from './types.ts'
+import type { CuaAppHandle, CuaOperation } from './types.ts'
 import { AppResult, Request, ScreenshotResult, StateResult } from './protocol.ts'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
@@ -94,9 +97,35 @@ function executionAgent(execution: Readonly<ToolExecution>): Agent {
 }
 
 interface CuaExecution extends ToolExecution {
+  agent: Agent
   nativeClient: NativeClient
 }
 
+
+type ScreenshotValue = z.infer<typeof ScreenshotResult> & { attachment: ImageAttachmentRef }
+
+/** Native values stay available to programs; only metadata and the stored image enter model content. */
+function renderResult(args: unknown, value: JsonValue): ContentBlock[] {
+  if ((args as CuaOperation).method !== 'screenshot') return [{ type: 'text', text: JSON.stringify(value) }]
+  const { data: _data, mimeType: _mimeType, attachment, ...metadata } = value as ScreenshotValue
+  return [{ type: 'text', text: JSON.stringify(metadata) }, { type: 'image', attachment }]
+}
+
+/** Resolve the exact calling model and attachment store before requesting a screenshot. */
+async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>): Promise<AttachmentStore> {
+  const attachments = ctx.get('attachments')
+  if (!attachments) throw new Error('CUA screenshots require an attachment store')
+  const agent = execution.agent
+  const routed = agent.session.requestHeader()?.config
+  const provider = routed?.provider ?? agent.options.provider
+  const model = routed?.model ?? agent.options.model
+  const llm = ctx.get('llm')
+  if (provider === undefined || model === undefined || llm === undefined) throw new Error('CUA screenshot model route could not be resolved')
+  const info = await llm.resolveModelInfo(provider, model, execution.signal)
+  execution.signal.throwIfAborted()
+  if (!info.inputModalities?.includes('image')) throw new Error(`CUA screenshots require model "${model}" to declare image input`)
+  return attachments
+}
 
 /** Prepared platform executable, transport, and platform-specific operating instructions. */
 export interface CuaBackend {
@@ -139,7 +168,6 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
   const pending = new Map<Promise<unknown>, Agent>()
   const ownerCleanups = new Map<Agent, { close: () => Promise<void>; release: () => Promise<void>; signal: AbortSignal }>()
   const closedOwners = new WeakSet<Agent>()
-  const projectionExecutions = new WeakMap<Readonly<ToolExecution>, CuaExecution>()
   function ownerFor(agent: Agent) {
     if (closedOwners.has(agent) || ctx.agents.get(agent.id) !== agent) throw new Error('dsh-cua agent has been disposed')
     const existing = ownerCleanups.get(agent)
@@ -178,53 +206,51 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       for (const result of [...await permissions, ...results, ...releases]) if (result.status === 'rejected') errors.push(result.reason)
       if (errors.length > 0) throw new AggregateError(errors, 'dsh-cua helper cleanup failed')
     }
-    const definition = createMcpToolDefinition(ctx, {
-      name: 'cua', rawName: 'cua',
-      description: backend.description,
-      inputSchema: { ...z.record(z.string(), z.json()).parse(z.toJSONSchema(Request)), type: 'object' },
-      async call(args, execution) {
-        // The owning execute callback admits the request before entering this private MCP adapter.
-        const { method, params: parsedParams } = args as z.infer<typeof Request>
-        const params = z.record(z.string(), z.json()).parse(parsedParams)
-        const agent = executionAgent(execution)
-        const signal = execution.signal
+    const callNative = async ({ method, params: parsedParams }: CuaOperation, execution: Readonly<CuaExecution>) => {
+      const params = z.record(z.string(), z.json()).parse(parsedParams)
+      const agent = execution.agent
+      const signal = execution.signal
+      signal.throwIfAborted()
+      const client = execution.nativeClient
+      const nativeParams = method === 'findApps'
+        ? { ...params, maxAppMatches: config.maxAppMatches }
+        : method === 'paste'
+          ? { ...params, maxClipboardBytes: config.maxClipboardBytes, maxElements: config.maxElements, maxDepth: config.maxDepth }
+          : method === 'getState'
+            ? { ...params, maxElements: config.maxElements, maxDepth: config.maxDepth }
+            : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
+              : params
+      const requestNative = () => client.request(method, nativeParams, signal, execution.callId)
+      if (method === 'screenshot') {
+        const attachments = await screenshotStore(ctx, execution)
+        const screenshot = ScreenshotResult.parse(await requestNative())
         signal.throwIfAborted()
-        const client = (execution as Readonly<CuaExecution>).nativeClient
-        const nativeParams = method === 'findApps'
-          ? { ...params, maxAppMatches: config.maxAppMatches }
-          : method === 'paste'
-            ? { ...params, maxClipboardBytes: config.maxClipboardBytes, maxElements: config.maxElements, maxDepth: config.maxDepth }
-            : method === 'getState'
-              ? { ...params, maxElements: config.maxElements, maxDepth: config.maxDepth }
-              : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
-                : params
-        const requestNative = () => client.request(method, nativeParams, signal, execution.callId)
-        const result = method === 'paste'
-          ? await withFileLock(join(tmpdir(), 'dsh-cua-system-clipboard'), requestNative, { waitMs: config.timeoutMs, signal })
-          : await requestNative()
-        if (method === 'getApp') {
-          const prepared = AppResult.extend({ pid: AppResult.shape.pid.nullable() }).parse(result)
-          const { authorization } = z.object({ authorization: ApplicationAuthorizationResult }).parse(result)
-          await access.select(agent, client, prepared.appHandle, authorization, signal)
-          signal.throwIfAborted()
-          const selected = prepared.pid === null
-            ? AppResult.parse(await access.run(client, prepared.appHandle, signal,
-              signal => client.request('launchApp', { appHandle: prepared.appHandle }, signal, execution.callId)))
-            : AppResult.parse(prepared)
-          if (selected.appHandle !== prepared.appHandle) throw new NativeError('NATIVE_PROTOCOL', 'Launched application has another handle')
-          return { content: [{ type: 'text', text: JSON.stringify(selected) }], structuredContent: selected }
-        }
+        const refs = await admitEncodedImages(attachments, [{ data: screenshot.data, mediaType: screenshot.mimeType }])
         signal.throwIfAborted()
-        if (method === 'screenshot') {
-          const { data, mimeType, ...metadata } = ScreenshotResult.parse(result)
-          return { content: [{ type: 'text', text: JSON.stringify(metadata) }, { type: 'image', mimeType, data }], structuredContent: result }
-        }
-        const visible = method === 'getState' ? StateResult.parse(result) : result
-        return { content: [{ type: 'text', text: JSON.stringify(visible) }], structuredContent: visible }
-      },
-    })
+        return { ...screenshot, attachment: refs[0] as ImageAttachmentRef }
+      }
+      const result = method === 'paste'
+        ? await withFileLock(join(tmpdir(), 'dsh-cua-system-clipboard'), requestNative, { waitMs: config.timeoutMs, signal })
+        : await requestNative()
+      if (method === 'getApp') {
+        const prepared = AppResult.extend({ pid: AppResult.shape.pid.nullable() }).parse(result)
+        const { authorization } = z.object({ authorization: ApplicationAuthorizationResult }).parse(result)
+        await access.select(agent, client, prepared.appHandle, authorization, signal)
+        signal.throwIfAborted()
+        const selected = prepared.pid === null
+          ? AppResult.parse(await access.run(client, prepared.appHandle, signal,
+            signal => client.request('launchApp', { appHandle: prepared.appHandle }, signal, execution.callId)))
+          : AppResult.parse(prepared)
+        if (selected.appHandle !== prepared.appHandle) throw new NativeError('NATIVE_PROTOCOL', 'Launched application has another handle')
+        return selected
+      }
+      signal.throwIfAborted()
+      return method === 'getState' ? StateResult.parse(result) : result
+    }
     yield ctx.tools.register({
-      ...definition,
+      name: 'cua', description: backend.description,
+      parameters: { ...z.record(z.string(), z.json()).parse(z.toJSONSchema(Request)), type: 'object' },
+      output: { schema: {}, render: renderResult },
       async execute(args, execution) {
         const request = Request.parse(args)
         const agent = executionAgent(execution)
@@ -247,9 +273,8 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
           }
           const nativeClient = client
           const dispatch = async (signal: AbortSignal) => {
-            const scoped = { ...execution, signal, nativeClient }
-            projectionExecutions.set(execution, scoped)
-            const result = await definition.execute(request, scoped)
+            const scoped = { ...execution, agent, signal, nativeClient }
+            const result = await callNative(request, scoped)
             signal.throwIfAborted()
             return result
           }
@@ -260,17 +285,9 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         pending.set(operation, agent)
         try {
           return await operation
-        } catch (error) {
-          projectionExecutions.delete(execution)
-          throw error
         } finally {
           pending.delete(operation)
         }
-      },
-      projectContent(execution, result) {
-        const scoped = projectionExecutions.get(execution)
-        projectionExecutions.delete(execution)
-        return scoped === undefined ? undefined : definition.projectContent?.(scoped, result)
       },
     })
     yield ctx.systemPrompt.section({

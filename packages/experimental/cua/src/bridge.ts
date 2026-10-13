@@ -13,23 +13,7 @@ export type CuaToolBinding = (operation: CuaOperation) => Promise<JsonValue>
  * @returns Application objects retaining tool approval, logging and image delivery. Rejected calls propagate without retries.
  */
 export function connectCua(getTool: () => CuaToolBinding, onText?: (text: string) => void | Promise<void>): CuaApi {
-  return createCuaApi(async (operation) => {
-    const result = await getTool()(operation)
-    if (result === null || typeof result !== 'object' || Array.isArray(result)) {
-      throw new Error('CUA tool result requires structuredContent')
-    }
-    if (result.isError === true) {
-      const details = Array.isArray(result.content) ? result.content.flatMap((block) => {
-        if (block === null || typeof block !== 'object' || Array.isArray(block)) return []
-        return block.type === 'text' && typeof block.text === 'string' ? [block.text] : []
-      }).join('\n') : ''
-      throw new Error(details || 'CUA tool operation failed')
-    }
-    if (!Object.hasOwn(result, 'structuredContent') || result.structuredContent === undefined) {
-      throw new Error('CUA tool result requires structuredContent')
-    }
-    return result.structuredContent
-  }, {
+  return createCuaApi(operation => getTool()(operation), {
     text: value => onText?.(value),
     // The standard tools.cua result already carries the screenshot attachment.
     image: () => {},

@@ -22,11 +22,15 @@ The operation schema owns shared data declarations. Host-only limits and launch 
 
 Clipboard paste is distinct from Unicode key input: Return and Tab key events can trigger actions instead of inserting clipboard content. Pasteboard access runs on the AppKit main actor and retains promised data until a reader requests it. AX command completion alone does not establish that the application has fetched the data. Restoration checks ownership before replacing contents; the caller still verifies the application result.
 
+CUA registers its own Harness tool and returns native operation values directly. Screenshot capture requires a resolved image-capable model and the shared attachment service. The tool admits each screenshot once and renders its durable image reference; the object bridge returns PNG bytes without another upload or image emission.
+
 ## Alternatives considered
 
 Depending on the complete upstream driver would simplify upgrades but does not meet the requirement for locally owned implementation. Copying browser and other platform code would add unsupported scope. The JSON operation protocol allows another native implementation without changing object consumers.
 
 A CUA-specific persistent evaluator duplicates execution lifecycle policy and prevents independent iteration on PTC. Requiring callers to manage raw app and snapshot tokens alone loses reusable object semantics. The facade and small tool adapter provide those semantics while leaving the evaluator outside this package.
+
+Reusing the MCP result adapter would impose MCP envelopes and wire validation on native CUA operations. Direct Harness tool output and shared attachment admission provide the needed logging and images without a second protocol.
 
 ## Consequences
 

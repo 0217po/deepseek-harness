@@ -30,9 +30,6 @@
       "path": "../../subprocess/subprocess"
     },
     {
-      "path": "../../mcp/mcp-client"
-    },
-    {
       "path": "../../util/values"
     },
     {
@@ -52,6 +49,12 @@
     },
     {
       "path": "../../../vendor/loader"
+    },
+    {
+      "path": "../../attachment/attachment"
+    },
+    {
+      "path": "../../llm/llm"
     }
   ]
 }
