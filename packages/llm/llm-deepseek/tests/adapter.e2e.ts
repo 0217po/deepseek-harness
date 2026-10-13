@@ -32,7 +32,7 @@ afterEach(async () => {
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
 })
-async function boot(models?: Messages.Options['models'], baseURL = Protocol.PUBLIC_BASE_URL) {
+async function boot(models?: Messages.Options['models']) {
   const home = await mkdtemp(join(tmpdir(), 'dsh-messages-e2e-'))
   cleanups.push(() => rm(home, { recursive: true, force: true }))
   vi.stubEnv('DSH_HOME', home)
@@ -40,7 +40,7 @@ async function boot(models?: Messages.Options['models'], baseURL = Protocol.PUBL
   cleanups.push(() => ctx.fiber.dispose())
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(Messages, {
-    baseURL,
+    baseURL: Protocol.PUBLIC_BASE_URL,
     maxTokens: 4096,
     ...models === undefined ? {} : { models },
   })
@@ -240,7 +240,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('DeepSeek Messages real API', () 
   })
 
   it('continues saved Responses tool history with an empty trailing text item', async () => {
-    const ctx = await boot(undefined, process.env.DEEPSEEK_BASE_URL ?? Protocol.PUBLIC_BASE_URL)
+    const ctx = await boot()
     const calls = [0, 1, 2].map(index => ({
       type: 'tool-call' as const, id: ToolCallId(`call_${index}|item_${index}`), name: 'lookup_value', arguments: '{"key":"secret"}',
     }))
