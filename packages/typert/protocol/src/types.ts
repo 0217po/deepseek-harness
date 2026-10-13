@@ -383,13 +383,31 @@ export interface InvocationDescriptor {
 export type PeerId = Branded<'PeerId'>
 
 /**
- * One Peer's session on this Host. Connection owns it: `ctx` is the Cordis
+ * Merge-extensible caller identities. Each driver declares its own entry.
+ * Every entry is a JSON value with a unique literal `kind`, carries no
+ * credential, and is safe to persist in a Session log.
+ */
+export interface PrincipalMap {
+  /** The local user who owns this Host. */
+  owner: { readonly kind: 'owner' }
+}
+
+/** One caller identity; the authorization layer reads only this. */
+export type Principal = PrincipalMap[keyof PrincipalMap]
+
+/**
+ * One Peer's session on this Host. Its creator owns it: `ctx` is the Cordis
  * scope that owns connection-lifetime registrations and is disposed with the
- * Peer. Who the Peer is and what it may do are not recorded here.
+ * Peer, and `principal` is the caller identity fixed when the Peer was created.
  */
 export interface PeerScope {
   readonly id: PeerId
+  /** Connection-lifetime registrations; disposed with the Peer. */
   readonly ctx: Context
+  /** Caller identity fixed at creation by in-process Host code; no wire field can set it. */
+  readonly principal: Principal
+  /** Aborted once the Peer is disposed; Remote streams that speak for the Peer end with it. */
+  readonly signal: AbortSignal
   /**
    * Tear down every registration made through `ctx`.
    * @returns settles once the scope has quiesced; racing calls share one completion.
@@ -418,7 +436,7 @@ export interface RemoteInvocation {
   }
   /** Cordis service key of the receiving Service. */
   readonly service: string
-  /** Peer the call speaks for; an in-process carrier speaks for the operator. */
+  /** Peer the call speaks for; every carrier names it explicitly. */
   readonly peer: PeerScope
   /** Carrier cancellation: Client cancel, socket close, or an uplink failure. */
   readonly signal: AbortSignal

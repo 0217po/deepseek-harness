@@ -7,10 +7,9 @@
 
 import { randomUUID } from 'node:crypto'
 import { Context, Service, symbols } from '@deepseek-ai/cordis'
-import {
-  OperatorPeer,
-  type ConnectionRpcAttachment,
-  type ConnectionRpcHandler,
+import type {
+  ConnectionRpcAttachment,
+  ConnectionRpcHandler,
 } from '@deepseek-ai/dsh-client-connection'
 import { Deque } from '@deepseek-ai/dsh-deque'
 import type { WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver'
@@ -213,7 +212,6 @@ export class TypertGatewayService extends Service implements TypertGateway {
   }
 
   private srcClaims: ReadonlySet<string> | undefined
-  private inProcessOperator: PeerScope | undefined
   private remoteEvents: RegisteredRemoteEventSource | undefined
   private readonly remoteEventClients = new Map<RemoteEventClientId, RemoteEventClient>()
   private readonly pendingRemoteEvents = new Map<RemoteEventId, PendingRemoteEvent>()
@@ -430,6 +428,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
   ): Promise<ConnectionRpcResult> {
     if (endpoint === REMOTE_EVENT_RESULT_ENDPOINT) {
       try {
+        assertPeerLive(peer, endpoint)
         const result = parseRemoteEventResultPayload(payload)
         const client = this.remoteEventClients.get(result.clientId)
         if (client === undefined) {
@@ -448,7 +447,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
     endpoint: string,
     payload: unknown,
     uplink: AsyncIterable<unknown>,
-    peer: PeerScope | undefined,
+    peer: PeerScope,
     signal: AbortSignal,
     control: AbortController,
     uplinkWindow?: RemoteInvocation['uplinkWindow'],
@@ -456,27 +455,16 @@ export class TypertGatewayService extends Service implements TypertGateway {
     if (endpoint === REMOTE_EVENT_STREAM_ENDPOINT) {
       // A Gateway-owned stream reads no uplink: releasing it now keeps its items out of the bounded inbox.
       releaseUplink(uplink)
-      return this.openRemoteEvents(payload, signal)
+      assertPeerLive(peer, endpoint)
+      return this.openRemoteEvents(payload, signal, peer)
     }
     return this.openStream({ ...remoteRequest(endpoint, payload, signal, peer), uplink, uplinkWindow }, control)
-  }
-
-  /**
-   * The Peer an in-process carrier speaks for when it names none: the
-   * operator's Peer when Connection is mounted, otherwise an operator scope the
-   * Gateway owns for its own lifetime.
-   * @returns the operator Peer.
-   */
-  private operatorPeer(): PeerScope {
-    const connection = this.ctx.get('connection')
-    if (connection !== undefined) return connection.operator
-    this.inProcessOperator ??= new OperatorPeer(this.ctx)
-    return this.inProcessOperator
   }
 
   private async *openRemoteEvents(
     payload: unknown,
     signal: AbortSignal,
+    peer: PeerScope,
   ): AsyncGenerator<
     RemoteEventEmitFrame | RemoteEventInvocationFrame | RemoteEventCancellationFrame
     | RemoteEventReadyFrame
@@ -502,7 +490,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
         'forwarded Remote event source is unavailable',
       )
     }
-    const lifetime = AbortSignal.any([signal, registration.lifetime.signal])
+    const lifetime = AbortSignal.any([signal, registration.lifetime.signal, peer.signal])
     let clientId = randomUUID() as RemoteEventClientId
     while (this.remoteEventClients.has(clientId)) clientId = randomUUID() as RemoteEventClientId
     const client: RemoteEventClient = {
@@ -703,6 +691,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
     control: AbortController,
   ): Promise<PreparedInvocation> {
     const endpoint = endpointOf(request.namespace, request.method)
+    assertPeerLive(request.peer, endpoint)
     const descriptor = this.resolveDescriptor(request.namespace, request.method, endpoint)
     assertExactArguments(request.args, descriptor, endpoint)
     const receiverContext = await this.resolveReceiverContext(descriptor, request.args, endpoint)
@@ -717,11 +706,11 @@ export class TypertGatewayService extends Service implements TypertGateway {
     validateBinding(receiver, descriptor.service, descriptor.namespace, endpoint)
     const args = await Promise.all(descriptor.parameters.map(parameter =>
       this.resolveParameter(parameter, request.args, endpoint)))
-    const signal = methodSignal(request, control)
+    const signal = methodSignal(request, control, descriptor.mode === 'stream')
     const invocation = new GatewayInvocation(
       { namespace: request.namespace, method: request.method, args: request.args },
       descriptor.service,
-      request.peer ?? this.operatorPeer(),
+      request.peer,
       signal,
       {
         source: request.uplink ?? EMPTY_ASYNC_ITERABLE,
@@ -1131,8 +1120,10 @@ function remoteRequest(
   endpoint: string,
   payload: unknown,
   signal: AbortSignal,
-  peer?: PeerScope,
+  peer: PeerScope,
 ): InvokeRemoteRequest {
+  // A disposed Peer is refused whatever it sent.
+  assertPeerLive(peer, endpoint)
   const segments = endpoint.split('/')
   if (segments.length !== 2 || segments[0] === '' || segments[1] === '') {
     throw new Error(`invalid Remote endpoint ${JSON.stringify(endpoint)}`)
@@ -1146,20 +1137,34 @@ function remoteRequest(
     || !isPlainObject(payload.args)) {
     throw new Error('Remote payload must contain exactly one plain-object args field')
   }
-  return { namespace, method, args: payload.args, signal, ...(peer === undefined ? {} : { peer }) }
+  return { namespace, method, args: payload.args, signal, peer }
 }
 
 /**
  * The signal a method observes. A carrier that supplies an uplink fails the
  * stream through `control` when an item is rejected, so that invocation joins
- * `control` with the carrier signal; every other invocation keeps the carrier
- * signal's identity.
+ * `control` with the carrier signal; a stream also ends with its Peer. Every
+ * other invocation keeps the carrier signal's identity.
  */
-function methodSignal(request: InvokeRemoteRequest, control: AbortController): AbortSignal {
+function methodSignal(request: InvokeRemoteRequest, control: AbortController, stream: boolean): AbortSignal {
   const carrier = request.signal
-  if (request.uplink === undefined) return carrier ?? NEVER_ABORTED_SIGNAL
-  if (carrier === undefined || carrier === control.signal) return control.signal
-  return AbortSignal.any([carrier, control.signal])
+  if (request.uplink === undefined && !stream) return carrier ?? NEVER_ABORTED_SIGNAL
+  const joined = carrier === undefined || carrier === control.signal ? [control.signal] : [carrier, control.signal]
+  // `AbortSignal.any` leaves each source only a weak reference to the joined signal,
+  // so per-stream joins on a Host-lifetime Peer signal accumulate nothing.
+  return AbortSignal.any(stream ? [...joined, request.peer.signal] : joined)
+}
+
+/**
+ * Refuse a call whose Peer has been disposed.
+ * @param peer - Peer the call speaks for.
+ * @param endpoint - endpoint named in the failure.
+ * @throws {@link TypertGatewayError} `gateway/peer-disposed` once the Peer is disposed.
+ */
+function assertPeerLive(peer: PeerScope, endpoint: string): void {
+  if (peer.signal.aborted) {
+    throw new TypertGatewayError('gateway/peer-disposed', endpoint, 'the calling Peer has been disposed')
+  }
 }
 
 function isIterable(value: unknown): value is Iterable<unknown> | AsyncIterable<unknown> {

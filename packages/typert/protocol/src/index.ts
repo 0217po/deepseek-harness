@@ -13,6 +13,7 @@ export { TYPERT_OWNED_VALUE, isTypertOwnedValue, typertOwnedValue } from './owne
 export type { TypertOwnedValue } from './owned-value.ts'
 export { isRemoteJsonValue, isRemoteUplinkItem } from './json-value.ts'
 export { createTypertRemoteInfo, isTypertRemoteMethod } from './remote-info.ts'
+export { principalOf } from './principal.ts'
 
 const TYPERT_REMOTE_SEGMENT_PATTERN = /^[A-Za-z0-9_$.-]+$/
 
@@ -31,6 +32,8 @@ export type {
   InvocationSourceLocation,
   PeerId,
   PeerScope,
+  Principal,
+  PrincipalMap,
   RemoteDecoded,
   RemoteErrorCode,
   RemoteErrorDetailsMap,
