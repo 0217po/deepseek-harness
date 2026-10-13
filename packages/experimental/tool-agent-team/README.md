@@ -138,8 +138,6 @@ With the same provider/model, shared system policy, and tool schemas, a fork ret
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **One-shot child tool visibility** — in-process one-shot children receive their subagent descriptor after publication. Team installation can therefore mistake them for Leads and expose Team policy and tools. Calls are rejected once the descriptor identifies them as non-members. Correcting installation timing is deferred.
-
 These limits describe what the policy and tools cannot guarantee for a team. They are current package constraints, not a comparison with other collaboration surfaces.
 
 - **Prompt policy is coordination, not confinement** — it cannot stop Bash or external processes from writing overlapping files.

@@ -138,8 +138,6 @@ provider／model、共享 system 策略和工具 schema 相同时，fork 保留�
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **一次性子代理工具可见性**——进程内一次性子代理在发布后才获得 subagent descriptor。Team 安装因此可能将它们误认作 Lead 并暴露 Team 策略和工具。descriptor 将它们识别为非成员后，调用会被拒绝。安装时序修复留待以后处理。
-
 这些限制说明策略与工具无法为一支团队保证什么。它们是当前包约束，不是与其他协作方式的对比。
 
 - **提示词策略只负责协调，不负责 confinement**——它无法阻止 Bash 或外部进程写入重叠文件。
