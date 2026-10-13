@@ -1,7 +1,8 @@
 /**
  * Fold transitions owned by one Chat viewport. Every batch containing a closing row moves its boxes and
- * the scrollport on one frame clock; a batch that only reveals rows uses CSS transitions. Motion is
- * opt-in under `[data-chat-motion]`, respects reduced motion, and clears temporary styles.
+ * the scrollport on one frame clock; a batch that only reveals rows, or a viewport without a reading
+ * policy, uses CSS transitions. Motion is opt-in under `[data-chat-motion]`, respects reduced motion,
+ * and clears temporary styles.
  */
 import { useCallback, useLayoutEffect, useRef, type RefObject } from 'react'
 import { useSearchableHidden, type HiddenTransition } from './searchable-hidden.ts'
@@ -37,19 +38,21 @@ export interface InputFoldDriver {
   /**
    * Capture geometry and choose the landing before the frame clock changes the boxes.
    * @param boxes - non-nested boxes whose layout changes on this clock.
-   * @returns closing boxes that scroll with the content and stay opaque; the rest fade in place.
+   * @returns closing boxes that scroll with the content and stay opaque; the rest fade in place. The driver
+   * may add boxes while the batch runs, when a newer tail request takes it over.
    */
   begin(boxes: readonly InputFoldBox[]): ReadonlySet<HTMLElement>
   /**
    * Reserve scroll range before box writes.
    * @param progress - shared eased progress from zero to one.
-   * @param cancelled - a reading gesture stopped the automatic target.
+   * @param cancelled - a reading gesture stopped a tail landing's automatic target; a landing that keeps
+   * the reader's content still continues and includes the reader's own movement.
    */
   prepare(progress: number, cancelled: boolean): void
   /**
    * Apply viewport geometry after box writes.
    * @param progress - shared eased progress from zero to one.
-   * @param cancelled - a reading gesture stopped the automatic target.
+   * @param cancelled - a reading gesture stopped a tail landing's automatic target.
    * @returns actual scrollTop displacement from the batch start, for closing-content visual compensation.
    */
   frame(progress: number, cancelled: boolean): number
@@ -71,7 +74,7 @@ export interface FlowMotion extends FlowMotionRows {
   cancelInput(): void
   /** Restore the running batch's automatic target after a newer request takes it over. */
   resumeInput(): void
-  /** @returns whether a fold batch currently owns layout and scrolling. */
+  /** @returns whether a fold batch runs, or one is scheduled for this commit's closing rows. */
   inputActive(): boolean
   /** Cancel owned animations and pending work when the viewport detaches. */
   clear(): void
@@ -123,7 +126,7 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
   }
 
   function resumeInput(): void {
-    cancelled = false
+    if (batch) cancelled = false
   }
 
   function runBatch(current: InputFoldDriver): void {
@@ -142,14 +145,24 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
       box.element.style.marginTop = `${box.closing ? box.marginTop : 0}px`
       box.element.style.opacity = box.closing ? '1' : '0'
     }
+    const memberSet = new Set(members)
+    const settledTravel = new Set<HTMLElement>()
     // A travelling box clips its content as it shrinks, so nested closing rows keep their size until it ends.
-    for (const box of owned) {
-      if (members.includes(box) || ![...travelling].some(element => element.contains(box.element))) continue
-      box.element.style.transition = 'none'
-      box.element.style.height = `${box.height}px`
-      box.element.style.marginTop = `${box.marginTop}px`
-      box.element.style.opacity = '1'
+    const freezeTravelling = (): void => {
+      for (const element of travelling) {
+        if (settledTravel.has(element)) continue
+        settledTravel.add(element)
+        element.style.translate = ''
+        for (const box of owned) {
+          if (memberSet.has(box) || !element.contains(box.element)) continue
+          box.element.style.transition = 'none'
+          box.element.style.height = `${box.height}px`
+          box.element.style.marginTop = `${box.marginTop}px`
+          box.element.style.opacity = '1'
+        }
+      }
     }
+    freezeTravelling()
     const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
     let started: number | undefined
     let displacement = 0
@@ -179,6 +192,7 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
       const linear = Math.min(1, Math.max(0, (elapsed - CLOSE_DELAY_MS) / CLOSE_MS))
       const progress = linear * linear * (3 - 2 * linear)
       current.prepare(progress, cancelled)
+      freezeTravelling()
       for (const box of members) {
         if (boxes.get(box.element) !== box) continue
         const remaining = box.closing ? 1 - progress : progress
@@ -368,7 +382,8 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
   }
 
   return {
-    collapse, reveal, cancelMotion, foldActive, onFoldIdle, cancelInput, resumeInput, inputActive: () => batch, clear,
+    collapse, reveal, cancelMotion, foldActive, onFoldIdle, cancelInput, resumeInput, clear,
+    inputActive: () => batch || (batchScheduled && [...boxes.values()].some(box => box.closing)),
   }
 }
 

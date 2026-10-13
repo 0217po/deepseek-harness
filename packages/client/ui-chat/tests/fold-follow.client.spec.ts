@@ -25,6 +25,16 @@ let frameClock = 0
 let nextFrame = 0
 
 /** Run queued animation frames until the batch stops requesting more. */
+/** Run a fixed number of queued animation frames. */
+function runFrameCount(count: number): void {
+  for (let index = 0; index < count && frames.size > 0; index++) {
+    const pending = [...frames.values()]
+    frames.clear()
+    frameClock += 16
+    for (const callback of pending) callback(frameClock)
+  }
+}
+
 function runFrames(): void {
   for (let guard = 0; frames.size > 0 && guard < 100; guard++) {
     const pending = [...frames.values()]
@@ -139,6 +149,17 @@ it('lands a following reader at the tail and lets content growth consume the roo
   h.reading.onResize()
   expect(h.list.scrollTop).toBe(720)
   expect(h.follow.animating).toBe(false)
+})
+
+it('adds a reader\'s own scrolling during the fold to the position it keeps still', async () => {
+  const h = fixture({ earlier: 100, later: 500, top: 2_000, following: false })
+  h.viewport.motion.collapse(h.row, () => { h.row.hidden = true; h.grow(600) })
+  await Promise.resolve()
+  runFrameCount(6)
+  h.list.scrollTop -= 50
+  runFrames()
+  expect(h.list.scrollTop).toBe(150)
+  expect(h.reading.followingTail).toBe(false)
 })
 
 it('keeps a reader below folding rows on the same content without room or follow', async () => {

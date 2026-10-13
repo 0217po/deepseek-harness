@@ -2,7 +2,7 @@
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import type { ChatScrollPosition } from '../contract/slots.ts'
 import type { ChatSnapshot } from '../contract/snapshot.ts'
-import { createFlowMotion, type InputFoldDriver } from './flow-motion.ts'
+import { createFlowMotion, type InputFoldBox, type InputFoldDriver } from './flow-motion.ts'
 import { scrollMetrics, ScrollFollow, type ViewportMetrics } from './use-scroll-follow.ts'
 export type { ViewportMetrics } from './use-scroll-follow.ts'
 
@@ -179,7 +179,8 @@ export class ChatViewport {
    * @returns whether a fold owns the tail movement.
    */
   followInputFold(follow: ScrollFollow): boolean {
-    if (this.elements === null || !this.motion.foldActive()) return false
+    // Rows still closing on CSS transitions after a batch have no batch to consume the request.
+    if (this.elements === null || this.reader === null || !this.motion.inputActive()) return false
     this.interruptFollow(follow)
     this.tailRequested = true
     this.retarget?.()
@@ -209,6 +210,9 @@ export class ChatViewport {
     let previousProgress = 0
     let segmentProgress = 0
     let segmentTop = 0
+    let written = 0
+    const closing: InputFoldBox[] = []
+    const travelling = new Set<HTMLElement>()
     // A visible row outside the batch measures spacing that snaps when the batch starts and ends.
     let reference: HTMLElement | null = null
     let referenceTop = 0
@@ -251,6 +255,7 @@ export class ChatViewport {
             removed += amount
             above += Math.max(0, Math.min(amount, viewportTop - top))
             if (top >= viewportTop) below.push(box.element)
+            closing.push(box)
           } else {
             growth += amount
             if (top < viewportTop) above -= amount
@@ -265,6 +270,7 @@ export class ChatViewport {
         }
         base = Math.max(0, start - above)
         segmentTop = start
+        written = start
         previousColumnHeight = elements.column.offsetHeight
         aim()
         // This reserve only prevents an intermediate clamp; the final frame installs the exact deficit.
@@ -277,12 +283,28 @@ export class ChatViewport {
           this.motion.resumeInput()
           aim()
           restart()
+          if (target <= segmentTop) return
+          for (const box of closing) {
+            // A box fading in place carries a visual translate; its layout position excludes it.
+            const shift = Number.parseFloat(box.element.style.translate.split(' ')[1] ?? '') || 0
+            if (box.element.getBoundingClientRect().top - shift - box.marginTop >= viewportTop) travelling.add(box.element)
+          }
         }
         // Scrolling forward past closing rows shows them shrinking; faded rows would leave their space empty.
-        return new Set(tail && target > start ? below : [])
+        if (tail && target > start) for (const element of below) travelling.add(element)
+        return travelling
       },
       prepare: (progress, cancelled) => {
         if (this.elements !== elements) return
+        if (!tail) {
+          // Reader scrolling between frames moves the reading position the batch keeps still.
+          const drift = elements.scroller.scrollTop - written
+          if (Math.abs(drift) > 0.5) {
+            base = Math.max(0, base + drift)
+            segmentTop += drift
+            aim()
+          }
+        }
         const added = elements.column.offsetHeight - previousColumnHeight
         if (added !== 0) {
           initialHeight += added
@@ -298,7 +320,7 @@ export class ChatViewport {
         const top = position(progress, cancelled)
         elements.scroller.scrollTop = top
         this.setSpacer(room(top, progress, cancelled))
-        const written = elements.scroller.scrollTop
+        written = elements.scroller.scrollTop
         // Earlier frames keep the reference still; only its final position is compared at finish.
         if (reference !== null && progress === 1) referenceTop = screenTop(reference)
         if (automatic(cancelled)) this.observation = { top: written, landing: null }

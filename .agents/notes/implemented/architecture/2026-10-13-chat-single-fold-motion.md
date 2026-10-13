@@ -21,7 +21,7 @@ When "When to Collapse Work Details" is "On next message", the previous exchange
 | Send from a subagent child's composer in the right Sidebar | No (the composer skipped `beginSubmission`) | Whole viewport blank | Whole viewport blank |
 | Human send after parent messages woke several child Turns | No | Whole viewport blank (about 6000 px of room) | — |
 
-Notice-woken Turns no longer fold anything ([group-tree positions and exchanges](2026-10-11-chat-group-tree-exchanges.md)); that note lists human input from another tab as a remaining issue, and the table above is that issue's full scope. The data comes from [fold-blank-matrix.e2e.ts](../../../../apps/web/tests/fold-blank-matrix.e2e.ts).
+Notice-woken Turns no longer fold anything ([group-tree positions and exchanges](2026-10-11-chat-group-tree-exchanges.md)); the table above covers the human input that still folded through the generic path. The data comes from [fold-blank-matrix.e2e.ts](../../../../apps/web/tests/fold-blank-matrix.e2e.ts).
 
 Subagent children showed no local echo because, when echoes were introduced, `subagents.prompt` carried no request id, so an echo could not be matched with the message the child recorded. Subagent control later moved to Remote, and the Host now records `SubagentPromptRequest.requestId` as the child message's `source.rpcId`; the client's `Session.prompt` still minted a separate id.
 
@@ -53,10 +53,10 @@ Let `start` be the scrollTop when the batch begins, `above` the height of closin
 
 - Both landings install only the exact deficit as room: `max(0, target + viewport height − folded height)`.
 - Content never slides back down: content already above the viewport top does not return. When the retained body and the new message cannot fill the viewport, the deficit remains as room until new content fills it.
-- Own input during a running batch starts a new segment from the current position toward the tail; it takes over even when a reading gesture cancelled the automatic target.
-- A reading gesture cancels the tail landing's automatic target and keeps the reader's position.
+- Own input during a running batch starts a new segment from the current position toward the tail; it takes over even when a reading gesture cancelled the automatic target. A tail request counts only while a batch runs or is scheduled; rows still closing on CSS transitions after a batch leave own input to ordinary following.
+- A reading gesture cancels a tail landing's automatic target and keeps the reader's position. During a reader-content-still landing, the reader's own scrolling between frames moves the position the batch keeps still.
 - For the reader-content-still landing, the driver takes the first visible top-level row outside the batch as a reference, found by binary search over the ordered top-level rows. Neighbouring spacing changes instantly when the batch begins and when closing rows commit their hidden state; the driver measures the reference's displacement at those two points and offsets scrollTop by it.
-- When a tail landing scrolls forward past closing rows that start below the viewport top, those rows stay opaque, scroll with the content, and clip while they shrink; nested closing rows keep their size until the batch ends. Other closing rows fade in place. Scrolling forward therefore never crosses space that is already transparent but not yet closed.
+- When a tail landing scrolls forward past closing rows that start below the viewport top, those rows stay opaque, scroll with the content, and clip while they shrink; nested closing rows keep their size until the batch ends. Other closing rows fade in place. A newer tail request that takes over a running batch adds the closing rows still below the viewport top. Scrolling forward therefore never crosses space that is already transparent but not yet closed.
 
 ### Own input
 

@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page, Route } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import { ToolCallId, createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ReplayEntry } from '@deepseek-ai/dsh-llm-replay'
@@ -122,7 +122,8 @@ const CASES: readonly Case[] = [
   { ...SIDE, id: 'side/composer/previous-turn', reader: PREVIOUS_TURN },
   { ...SIDE, id: 'side/queued/bottom', origin: 'queued', reader: AT_BOTTOM },
   { ...SIDE, id: 'side/queued/mid-body', origin: 'queued', reader: LIVE_MID_BODY, landing: 'reader' },
-  { ...SIDE, id: 'side/parent-message/mid-body', origin: 'parent-message', reader: SEEDED_MID_BODY, landing: 'reader' },
+  // Control: a parent message is a notice, which opens no exchange and folds nothing.
+  { ...SIDE, id: 'side/parent-message/no-fold-control', origin: 'parent-message', reader: SEEDED_MID_BODY, landing: 'reader' },
   { ...SIDE, id: 'side/big-exchange/bottom', origin: 'big-exchange', reader: AT_BOTTOM },
 ]
 
@@ -136,6 +137,8 @@ interface Geometry {
   /** Empty height between the last visible row and the composer. */
   readonly tailGap: number
   readonly following: boolean
+  /** A row was closing on this sample. */
+  readonly collapsing: boolean
 }
 
 /** Installed into each measured page before load; reads one scrollport's blank-area geometry. */
@@ -174,6 +177,7 @@ function installMeasure(): void {
       top: host.scrollTop, floor: Math.max(0, host.scrollHeight - host.clientHeight), spacer,
       maxGap, gapAt, tailGap: composerTop - cursor,
       following: host.querySelector('[data-chat-following-tail]') !== null,
+      collapsing: host.querySelector('[data-chat-motion="collapse"]') !== null,
     }
   }
 }
@@ -604,15 +608,23 @@ async function run(world: World, scenario: Case): Promise<RunResult> {
       const disposeFailure = scenario.origin === 'error'
         ? scaffold.ctx.on('system-prompt/assemble', async () => { throw new Error('FOLDMX_TURN_FAILED') })
         : () => undefined
+      // A subagent child's composer sends through the subagent continuation route.
+      const promptRoute = scenario.surface === 'side' ? '**/api/subagents/prompt' : '**/api/session/prompt'
       const promptGate = Promise.withResolvers<undefined>()
-      const holdPrompt = async (route: Route): Promise<void> => { await promptGate.promise; await route.continue() }
-      await page.route('**/api/session/prompt', holdPrompt)
+      const promptHeld = Promise.withResolvers<undefined>()
+      const holdPrompt = async (route: Route): Promise<void> => {
+        promptHeld.resolve(undefined)
+        await promptGate.promise
+        await route.continue()
+      }
+      await page.route(promptRoute, holdPrompt)
       const ended = turnEnded(scaffold, target)
       try {
         await expandSeededSteps(page, root, scenario)
         await placeReader(page, root, scenario.reader)
         await begin()
         await send(world, NEXT_INPUT)
+        await promptHeld.promise
         await page.locator(`${root} [data-submission-echo]`).waitFor()
         afterFold = await folded()
         promptGate.resolve(undefined)
@@ -620,7 +632,7 @@ async function run(world: World, scenario: Case): Promise<RunResult> {
       } finally {
         promptGate.resolve(undefined)
         disposeFailure()
-        await page.unroute('**/api/session/prompt', holdPrompt)
+        await page.unroute(promptRoute, holdPrompt)
       }
       break
     }
@@ -725,7 +737,6 @@ describe.skipIf(MODE === 'record')('web e2e: blank area after next-message foldi
 
   beforeAll(async () => {
     browser = await chromium.launch()
-    await mkdir(EVIDENCE, { recursive: true })
   })
 
   afterAll(async () => {
@@ -747,8 +758,17 @@ describe.skipIf(MODE === 'record')('web e2e: blank area after next-message foldi
           framesOverLimit: transient.length, frames: samples.length,
           peakSpacer: Math.round(Math.max(0, ...samples.map(sample => sample.spacer))),
         }
-        await writeFile(join(EVIDENCE, `${sessionKey(scenario)}.json`), JSON.stringify({ scenario, ...summary, samples }, null, 2))
-        console.log(`FOLDMX ${JSON.stringify(summary)}`)
+        const evidence = async (): Promise<void> => {
+          await mkdir(EVIDENCE, { recursive: true })
+          await writeFile(join(EVIDENCE, `${sessionKey(scenario)}.json`), JSON.stringify({ scenario, ...summary, samples }, null, 2))
+          console.log(`FOLDMX ${JSON.stringify(summary)}`)
+        }
+        // Per-frame evidence is written for failures, or for every case with FOLDMX_EVIDENCE=1.
+        if (process.env.FOLDMX_EVIDENCE === '1') await evidence()
+        else onTestFailed(evidence)
+        if (scenario.origin === 'parent-message') {
+          expect.soft(samples.some(sample => sample.collapsing), 'a notice folds nothing').toBe(false)
+        }
         if (scenario.roomUntilReply !== true) {
           expect.soft(afterFold.maxGap, 'blank after the fold settles').toBeLessThanOrEqual(BLANK_LIMIT)
           expect.soft(transient.length, 'animation frames showing a blank').toBeLessThanOrEqual(TRANSIENT_FRAMES)
