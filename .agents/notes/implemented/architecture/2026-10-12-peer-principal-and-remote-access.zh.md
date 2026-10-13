@@ -213,9 +213,10 @@ export function RemoteScope<This extends object, Args extends unknown[], Result>
 | 写法 | `@Remote({ name: 'page', resources: { session: (request) => request.address.kind === 'session' ? request.address.sessionId : request.address.childSessionId } })`；Context 方法写 `@RemoteScope('agent')`，由 Agent Context 的 `resource: 'session'` 得到会话资源，需要其他资源时写 `@RemoteScope('agent', { resources: { workspace: (request) => request.workspaceId } })`。多数方法不写 `resources`，由自动解析得到资源 |
 | 资源种类 | 资源种类由声明 id 类型的底层包合并：`session: TypertResource<SessionId>` 在 `@deepseek-ai/dsh-session/types`，`workspace: TypertResource<WorkspaceId>` 在 `@deepseek-ai/dsh-workspace/types`。session-controller 引用 commands 包，若在 session-controller 合并，commands 要引用 session-controller，形成 project reference 环。`global` 由 remote-access 内置，没有 id，不进 `TypertResourceMap`；typert 保留该名，`typert.resources.register('global', …)` 抛错 |
 | 默认字段与声明 | 拥有该种类的领域在 apply 中登记默认 wire 字段：session-controller 调用 `typert.resources.register('session', { field: 'sessionId' })`，workspace-controller 登记 `workspace` → `workspaceId`；同一种类重复登记即抛错。Agent 与 Session lookup 声明 `resource: 'session'`，agent 包的 Agent Context 声明 `resource: 'session'` |
-| 解析优先级 | 对每个资源种类依次取：① 该方法 `resources` 中该种类的读取函数；② 声明了该种类 `resource` 的每个 lookup 参数贡献其 wire 身份，省略的可选 lookup 参数不贡献；Context 方法的 Context 声明了该种类 `resource` 时，其 wire 身份同样贡献；③ 该种类的默认字段：命名 wire 参数中有同名顶层参数就读它，否则读第一个对象参数的同名字段。默认字段只表示一个身份，读到数组即为非法值 |
+| 解析优先级 | 对每个资源种类依次取：① 该方法 `resources` 中该种类的读取函数；② 声明了该种类 `resource` 的每个 lookup 参数贡献其 wire 身份，省略的可选 lookup 参数不贡献；Context 方法的 Context 声明了该种类 `resource` 时，其 wire 身份同样贡献；③ 该种类的默认字段：命名参数中有同名顶层参数就读它，否则读第一个对象参数的同名字段。默认字段只表示一个身份，读到数组即为非法值 |
+| 参数来源 | 资源解析与 `decide()` 的 `args` 读取经 Typert 编译类型校验后的命名参数：每个 JSON 参数由其 codec 解码一次，类型未声明的对象字段被移除，分派复用该值，因此调用方无法用未声明字段改变资源；lookup 参数与 Context 身份取 wire 身份，此时不解析 lookup、不激活 Agent |
 | 解析结果 | 各种类的资源合在一起即本次调用访问的资源；一个都没有即 `[global]`；解析出资源时只用这些资源，不附加 `global` |
-| 读取函数 | 以方法的位置参数调用：按描述符把命名 wire 参数映射回方法参数顺序（未解码 JSON，lookup 位为 wire 身份，取消参数位为调用的 signal）；返回一个 id、id 数组（每个都须被允许）或 `undefined`（该种类无资源） |
+| 读取函数 | 以方法的位置参数调用：按描述符把命名参数映射回方法参数顺序（JSON 位为校验后的值，lookup 位为 wire 身份，取消参数位为调用的 signal）；返回一个 id、id 数组（每个都须被允许）或 `undefined`（该种类无资源） |
 | 非法值 | 读取函数抛错或返回空数组，或读到的值（含 Context 的 wire 身份）不是非空字符串即资源非法：Gateway 不询问 `decide()`，直接以 `remote-access/denied`（reason `resource-invalid`）拒绝调用 |
 | 完整性 | `resources` 与自动解析必须覆盖方法访问的全部资源。一个资源都没解析出的调用落到 `global`，只有 `global` 级 role 能放行，因而默认被拒；只解析出部分资源时，其余资源不受检查，持有已解析资源授权的 principal 可越权访问它们，由方法作者负责避免 |
 | 类型推断 | `@Remote` 与 `@RemoteScope` 读取函数的参数类型从被装饰方法自动推断：工厂参数用 `NoInfer`，`Args` 只从返回的装饰器推断；lookup 参数按 `TypertLookupMap` 映射为 wire 类型（首个参数为 `agent: Agent` 的方法，其读取函数的第一个参数为 `SessionId`）。访问不存在的属性、参数多于方法参数与 `global` 键均为编译错误 |
@@ -291,7 +292,7 @@ export interface RemoteAccessRequest<P extends Principal> {
   readonly action: RemoteAccessAction
   /** Allow only when the action is allowed on every listed resource. */
   readonly resources: readonly RemoteAccessResource[]
-  /** Named wire arguments of a concrete call, undecoded; absent for events, snapshots, and list filtering. */
+  /** Named arguments of a concrete call, validated against their Typert-compiled types with lookup parameters as wire identities; absent for events, snapshots, and list filtering. */
   readonly args?: Readonly<Record<string, unknown>>
 }
 
@@ -386,12 +387,12 @@ const childPrompt = child => ({ action, args }) =>
 | 步 | 动作 | 失败结果 |
 |---|---|---|
 | 1 | 准入得到 Peer：网络路径由 Connection `admit()` 给出（`browserPeer`）；进程内路径由调用方传入。Gateway 在读取 wire payload 之前检查 `peer.signal` | 网络准入失败返回 HTTP 401 / 403（不进入 Gateway）；Peer 已 dispose：`gateway/peer-disposed` |
-| 2 | 解析端点并做参数字段集校验（`resolveDescriptor`、`assertExactArguments`） | `gateway/invocation-unavailable`、`gateway/ambiguous-endpoint`、`gateway/definition-unavailable`；字段多余或缺失：`gateway/arguments-invalid` |
+| 2 | 解析端点并做参数字段集校验（`resolveDescriptor`、`assertExactArguments`），再按 Typert 编译类型校验 JSON 参数，每个参数解码一次 | `gateway/invocation-unavailable`、`gateway/ambiguous-endpoint`、`gateway/definition-unavailable`；字段多余或缺失：`gateway/arguments-invalid`；JSON 参数校验失败：`gateway/input-invalid`（owner 与非 owner 相同，先于访问检查） |
 | 3 | owner 直通：`principal.kind === 'owner'` 时直接进入第 5 步 | — |
-| 4 | 非 owner：Gateway 解析资源（`resources` 读取函数、其次 lookup 参数与 Context 声明的 `resource`、再次默认字段；Context 身份直接从 args 读取，不解析 Context），再询问 `remoteAccess.decide({ principal, action: endpoint, resources, args })`；资源非法时不询问 `decide()`，直接以 `resource-invalid` 拒绝；`deny` 结论变为抛出的错误 | `remote-access/denied`，details `{ action, reason }` |
-| 5 | 分派：`resolveReceiverContext`（可能激活 Agent）、参数解码、调用方法 | 既有错误码不变，如 `gateway/lookup-not-found`、`gateway/context-not-found`、`gateway/input-invalid`、`gateway/service-unavailable`、`gateway/method-unavailable` 与业务错误 |
+| 4 | 非 owner：Gateway 从第 2 步校验后的参数解析资源（`resources` 读取函数、其次 lookup 参数与 Context 声明的 `resource`、再次默认字段；lookup 与 Context 身份取 wire 身份，不解析 lookup 与 Context），再以校验后的参数为 `args` 询问 `remoteAccess.decide({ principal, action: endpoint, resources, args })`；资源非法时不询问 `decide()`，直接以 `resource-invalid` 拒绝；`deny` 结论变为抛出的错误 | `remote-access/denied`，details `{ action, reason }` |
+| 5 | 分派：`resolveReceiverContext`（可能激活 Agent）、lookup 解析（JSON 参数复用第 2 步的值）、调用方法 | 既有错误码不变，如 `gateway/lookup-not-found`、`gateway/context-not-found`、`gateway/input-invalid`、`gateway/service-unavailable`、`gateway/method-unavailable` 与业务错误 |
 
-鉴权（第 3–4 步）位于 lookup 与参数解码之前，未授权调用不会激活会话或产生其他副作用。Gateway 新增的错误码只有 `gateway/peer-disposed`；拒绝码 `remote-access/denied` 由 remote-access 声明。
+鉴权（第 3–4 步）位于 lookup 与 Context 解析之前，未授权调用不会激活会话或产生其他副作用。Gateway 新增的错误码只有 `gateway/peer-disposed`；拒绝码 `remote-access/denied` 由 remote-access 声明。
 
 Gateway 自有端点：非 owner 可订阅 `$events`，但从不收到需要回答的 waterfall 帧；`$events/result` 对非 owner 以既有的 `gateway/invocation-unavailable` 拒绝；两者都做第 1 步的检查。
 
@@ -630,7 +631,7 @@ GlobalStandardProps.useWorkspaceAccess: (workspaceId: WorkspaceId, action: Remot
 | 鉴权顺序 | owner 调用任何方法照常分派且不读取 policy；没有 role 列出的方法对非 owner 以 `remote-access/denied`（`no-allow`）拒绝；访问检查早于 lookup，被拒调用不激活会话 | Gateway host spec |
 | policy 注册 | 每个非 owner principal kind 一个 policy，重复注册抛错；disposer 撤回后该 kind 以 `no-allow` 拒绝；随 fiber 撤回 | remote-access host spec |
 | 判定 | 每个资源都需要匹配的 binding（AND）；role 不含该 action、资源不相等或 condition 拒绝都不放行；拒绝原因按 condition > `explain` > `no-allow` 取；`explain` 不改变结论；condition 在调用时收到 args，在快照与列表过滤时不收；`bindings()`、condition 或 `explain()` 抛错以 `policy-failed` 拒绝，每个 policy 在两次 `invalidate()` 之间只记录一次日志，事件路径上 owner 流与共享事件源照常；`remoteAccess/follow` 对任何 principal 放行 | remote-access host spec、Gateway host spec |
-| 资源解析 | 默认字段（顶层或首个对象参数）得到对应资源；声明了该种类 `resource` 的 lookup 参数得到其 wire 身份；Context 方法从 args 中的 Agent Context 身份得到其 session 资源且不激活 Agent，另可经 `resources` 声明其他资源；`resources` 读取函数覆盖该种类，数组为多个资源，`undefined` 为无；都没有为 `[global]`；抛错、空数组或非非空字符串（含 Context 身份）为非法，Gateway 以 `resource-invalid` 拒绝且不询问 `decide()`；未声明 `resource` 的 Context 按普通规则解析 | Gateway host spec（gateway-access） |
+| 资源解析 | 默认字段（顶层或首个对象参数）得到对应资源；声明了该种类 `resource` 的 lookup 参数得到其 wire 身份；Context 方法从 args 中的 Agent Context 身份得到其 session 资源且不激活 Agent，另可经 `resources` 声明其他资源；`resources` 读取函数覆盖该种类，数组为多个资源，`undefined` 为无；都没有为 `[global]`；抛错、空数组或非非空字符串（含 Context 身份）为非法，Gateway 以 `resource-invalid` 拒绝且不询问 `decide()`；未声明 `resource` 的 Context 按普通规则解析；资源与 `args` 读取校验后的参数，未声明的嵌套字段不改变资源、condition 也读不到它，JSON 参数校验失败在访问检查前返回 `gateway/input-invalid` | Gateway host spec（gateway-access） |
 | 资源注册表 | `typert.resources` 每个种类登记一个默认字段，拒绝重复登记与 `global`，并随 fiber 撤回；配置的 lookup resolver 保留 provider 的 `resource`；Host Context adapter 保留其 `resource` | typert-registry spec |
 | 转发事件 | 非 owner 的 `$events` 流只在 `event:<name>` 于其资源上被授权时整条收到事件；未声明资源的事件按 `global` 判定；读取函数返回 `undefined` 的事件不送达非 owner，且不询问 `decide()`；owner 全部收到 | Gateway host spec（gateway-access） |
 | 首份快照 | `snapshotFor()` 返回 owner baseline 或该 principal 的 grant；remote-access 为渲染的每个 index 注入 owner baseline；Client 从注入的 baseline 起步并拒绝格式错误的快照 | remote-access host 与 client spec |

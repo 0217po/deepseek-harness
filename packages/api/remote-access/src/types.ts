@@ -43,9 +43,11 @@ export type RemoteAccessDecision =
 /**
  * Refines one binding for one action on its resource. Called synchronously,
  * only for a binding whose resource matches and whose role lists the action.
- * @param request - the action, the binding's resource, and the named wire
- *   arguments of a concrete call; `args` is absent for events, snapshots, and
- *   list filtering, where the condition answers for the action alone.
+ * @param request - the action, the binding's resource, and the named
+ *   arguments of a concrete call, validated against their Typert-compiled
+ *   types with lookup parameters as wire identities; `args` is absent for
+ *   events, snapshots, and list filtering, where the condition answers for
+ *   the action alone.
  * @returns allow, or deny with the reason a refused call reports.
  */
 export type RemoteAccessCondition<K extends RemoteAccessResourceKind> = (request: {
@@ -73,7 +75,7 @@ export interface RemoteAccessRequest<P extends Principal> {
    * names none; allowed only when the action is allowed on every listed resource.
    */
   readonly resources: readonly RemoteAccessResource[]
-  /** Named wire arguments of a concrete call, undecoded; absent for events, snapshots, and list filtering. */
+  /** Named arguments of a concrete call, validated against their Typert-compiled types with lookup parameters as wire identities; absent for events, snapshots, and list filtering. */
   readonly args?: Readonly<Record<string, unknown>>
 }
 

@@ -1,7 +1,7 @@
 /**
  * Resource resolution for non-owner access decisions: the resources one call
- * or one forwarded event touches, read from undecoded wire values before any
- * lookup or Context resolves them.
+ * or one forwarded event touches, read from Typert-validated arguments before
+ * any lookup or Context resolves them.
  * @module @deepseek-ai/dsh-api-gateway/src/access
  */
 
@@ -23,12 +23,14 @@ type ResourceIds = readonly unknown[] | 'invalid'
  * whose provider declares the kind contributes its wire resource id, and so
  * does the Context identity of a Context method whose Host adapter declares
  * the kind; otherwise the kind's default field registered in
- * `typert.resources` is read from a top-level wire argument or, failing
- * that, from the first object argument.
+ * `typert.resources` is read from a top-level argument or, failing that,
+ * from the first object argument.
  * @param typert - registry holding default fields, lookup providers, and Host Context adapters.
  * @param readers - the method's `resources` readers, or `undefined` when it declares none.
  * @param descriptor - receiver, parameter order, lookups, and cancellation slot of the method.
- * @param args - named wire arguments, already matched to the descriptor's field set.
+ * @param args - named arguments matched to the descriptor's field set: JSON
+ *   arguments as their Typert codecs validated them, lookup and Context
+ *   identities as wire values.
  * @param signal - value placed in the cancellation slot of the positional arguments.
  * @returns the touched resources, the global resource alone when none;
  *   `undefined` when the resources are invalid: a reader throws or returns
@@ -133,7 +135,7 @@ function read(reader: TypertResourceReader, args: readonly unknown[], absent: Re
   try {
     value = reader(...args)
   } catch {
-    // A reader over unvalidated wire JSON fails on a malformed call; the call is refused.
+    // Any reader error means it cannot name its resources, so they are invalid.
     return 'invalid'
   }
   if (value === undefined) return absent
@@ -152,7 +154,7 @@ function collect(resources: RemoteAccessResource[], kind: string, ids: ResourceI
   return true
 }
 
-/** The default field: a top-level wire field, else that field of the first object argument. */
+/** The default field: a top-level argument, else that field of the first object argument. */
 function defaultFieldId(
   descriptor: Pick<InvocationDescriptor, 'parameters'>,
   args: Readonly<Record<string, unknown>>,

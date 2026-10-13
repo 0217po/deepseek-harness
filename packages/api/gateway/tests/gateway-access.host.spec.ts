@@ -4,6 +4,7 @@ import { apply as applyConnection, inject as connectionInject } from '@deepseek-
 import RemoteAccessService, {
   type RemoteAccessAction,
   type RemoteAccessBinding,
+  type RemoteAccessCondition,
   type RemoteAccessResource,
   type RemoteAccessResourceKind,
   type RemoteAccessRole,
@@ -61,7 +62,7 @@ const desk = (id: string) => ({ kind: 'test-desk', id }) as const
 const FIXTURE_ACTIONS: readonly RemoteAccessAction[] = [
   'accessFixture/open', 'accessFixture/read', 'accessFixture/byAgent', 'accessFixture/byLookup',
   'accessFixture/byLookupAndOption', 'accessFixture/byList', 'accessFixture/scoped', 'accessFixture/scopedOnDesk',
-  'accessFixture/scopedByReader', 'absentAccess/read', 'event:fixture/notice', 'event:fixture/shelf',
+  'accessFixture/scopedByReader', 'accessFixture/annotate', 'absentAccess/read', 'event:fixture/notice', 'event:fixture/shelf',
 ]
 
 function role<K extends RemoteAccessResourceKind>(resource: K): RemoteAccessRole<K> {
@@ -84,6 +85,7 @@ function on(resource: RemoteAccessResource): RemoteAccessBinding {
 
 class AccessFixture extends TypertRemoteService {
   readonly principals: Principal[] = []
+  readonly requests: unknown[] = []
   release: PromiseWithResolvers<void> = Promise.withResolvers()
 
   constructor(ctx: Context) {
@@ -121,6 +123,12 @@ class AccessFixture extends TypertRemoteService {
   @Remote({ resources: { 'test-shelf': shelfIds => shelfIds } })
   byList(shelfIds: readonly string[]): string {
     void shelfIds
+    return this.seen()
+  }
+
+  @Remote
+  annotate(request: { readonly title: string }): string {
+    this.requests.push(request)
     return this.seen()
   }
 
@@ -218,6 +226,29 @@ function registerScope(ctx: Context, resource: 'test-shelf' | undefined, resolve
     resolve,
   })
   return resolve
+}
+
+function strictCodec(name: string, create: () => z.ZodType): InvocationParameterDescriptor['codec'] {
+  return { mode: 'strict', typeSymbol: `@fixture/access#${name}`, create }
+}
+
+/** Give each listed fixture method a strict descriptor with these parameters. */
+function registerStrict(ctx: Context, methods: Readonly<Record<string, readonly InvocationParameterDescriptor[]>>): void {
+  ctx.typert.register({
+    package: '@fixture/gateway-access-strict',
+    face: 'host',
+    schemas: [],
+    model: { services: [], events: [], objects: [] },
+    invocations: Object.entries(methods).map(([method, parameters]) => ({
+      id: `@fixture/gateway-access-strict#accessFixture/${method}`,
+      service: 'accessFixture',
+      namespace: 'accessFixture',
+      method,
+      invocation: { kind: 'direct' },
+      parameters,
+      result: { mode: 'strict', typeSymbol: '@fixture/access#Result', create: () => z.string() },
+    })),
+  })
 }
 
 describe('Gateway access checks', () => {
@@ -385,6 +416,94 @@ describe('Gateway access checks', () => {
     }), guest)
     expect(await payloadSibling.json()).toMatchObject({ result: { ok: false } })
     expect(fixture.principals).toEqual([GUEST])
+  })
+})
+
+describe('Gateway access checks on Typert-validated arguments', () => {
+  const titleRequest = (create: () => z.ZodType = () => z.object({ title: z.string() })): InvocationParameterDescriptor =>
+    ({ name: 'request', wire: 'request', source: 'json', codec: strictCodec('TitleRequest', create) })
+
+  it('resolves resources from the decoded arguments, so an undeclared nested field names no resource', async () => {
+    const { ctx, fixture, hold } = await setup()
+    const create = vi.fn(() => z.object({ title: z.string() }))
+    registerStrict(ctx, {
+      annotate: [titleRequest(create)],
+      read: [{ name: 'request', wire: 'request', source: 'json', codec: strictCodec('ShelfRequest', () => z.object({ shelfId: z.string() })) }],
+    })
+    const decide = vi.spyOn(RemoteAccessService.prototype, 'decide')
+    const guest = peerFor(ctx, GUEST)
+    hold(shelf('s1'))
+    await expect(call(ctx, guest, 'annotate', { request: { title: 't', shelfId: 's1' } })).rejects.toMatchObject({
+      code: 'remote-access/denied', details: { action: 'accessFixture/annotate', reason: 'no-allow' },
+    })
+    await expect(call(ctx, guest, 'read', { request: { shelfId: 's1', principal: OWNER } })).resolves.toBe('test-guest')
+    hold(GLOBAL)
+    await expect(call(ctx, guest, 'annotate', { request: { title: 't', shelfId: 's1' } })).resolves.toBe('test-guest')
+    expect(decide.mock.calls.map(([request]) => request)).toEqual([
+      { principal: GUEST, action: 'accessFixture/annotate', resources: [GLOBAL], args: { request: { title: 't' } } },
+      { principal: GUEST, action: 'accessFixture/read', resources: [shelf('s1')], args: { request: { shelfId: 's1' } } },
+      { principal: GUEST, action: 'accessFixture/annotate', resources: [GLOBAL], args: { request: { title: 't' } } },
+    ])
+    // Dispatch receives the value the access check read, decoded once per call.
+    expect(fixture.requests).toEqual([{ title: 't' }])
+    expect(create).toHaveBeenCalledTimes(2)
+  })
+
+  it('hands a condition the decoded arguments, so it cannot read an undeclared field', async () => {
+    const { ctx, bindings } = await setup()
+    registerStrict(ctx, { annotate: [titleRequest()] })
+    const seen: unknown[] = []
+    const condition: RemoteAccessCondition<'global'> = ({ args }) => {
+      seen.push(args)
+      return { kind: 'allow' }
+    }
+    bindings.mockImplementation(() => [{ role: role('global'), resource: GLOBAL, condition }])
+    await expect(call(ctx, peerFor(ctx, GUEST), 'annotate', { request: { title: 't', readOnly: false } })).resolves.toBe('test-guest')
+    expect(seen).toEqual([{ request: { title: 't' } }])
+  })
+
+  it('passes readers the decoded arguments and lookup wire identities, resolving no lookup for a refused call', async () => {
+    const { ctx, hold } = await setup()
+    const resolve = vi.fn((id: string) => ({ id }))
+    ctx.typert.lookups.register('gatewayAccessAgent', {
+      parameter: 'agent',
+      wire: 'agentId',
+      resource: 'test-desk',
+      hostTypeSymbol: '@fixture/access#Agent',
+      wireTypeSymbol: '@fixture/access#AgentId',
+      resolve,
+    })
+    registerStrict(ctx, {
+      byLookupAndOption: [
+        { name: 'agent', wire: 'agentId', source: 'lookup', lookup: 'gatewayAccessAgent', codec: strictCodec('AgentId', () => z.string()) },
+        { name: 'request', wire: 'request', source: 'json', codec: strictCodec('DeskRequest', () => z.object({ deskId: z.string() })) },
+      ],
+    })
+    const decisions = recordDecisions()
+    const guest = peerFor(ctx, GUEST)
+    const args = { agentId: 'a2', request: { deskId: 'd9', shelfId: 's9' } }
+    hold(shelf('s9'), desk('a2'))
+    await expect(call(ctx, guest, 'byLookupAndOption', args)).rejects.toMatchObject({ details: { reason: 'no-allow' } })
+    expect(resolve).not.toHaveBeenCalled()
+    hold(desk('a2'), desk('d9'))
+    await expect(call(ctx, guest, 'byLookupAndOption', args)).resolves.toBe('a2:test-guest')
+    expect(resolve).toHaveBeenCalledExactlyOnceWith('a2')
+    // The undeclared `shelfId` names no `test-shelf` resource.
+    expect(decisions().map(({ resources }) => resources)).toEqual([[desk('a2'), desk('d9')], [desk('a2'), desk('d9')]])
+  })
+
+  it('refuses arguments their codec rejects with gateway/input-invalid before the access check', async () => {
+    const { ctx, fixture, bindings } = await setup()
+    registerStrict(ctx, { annotate: [titleRequest()] })
+    const decide = vi.spyOn(RemoteAccessService.prototype, 'decide')
+    for (const peer of [peerFor(ctx, GUEST), ownerPeer(ctx)]) {
+      await expect(call(ctx, peer, 'annotate', { request: { title: 7, shelfId: 's1' } })).rejects.toMatchObject({
+        code: 'gateway/input-invalid', details: { endpoint: 'accessFixture/annotate', field: 'request' },
+      })
+    }
+    expect(decide).not.toHaveBeenCalled()
+    expect(bindings).not.toHaveBeenCalled()
+    expect(fixture.requests).toEqual([])
   })
 })
 

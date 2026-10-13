@@ -742,6 +742,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
     assertPeerLive(request.peer, endpoint)
     const descriptor = this.resolveDescriptor(request.namespace, request.method, endpoint)
     assertExactArguments(request.args, descriptor, endpoint)
+    const validated = validateArguments(descriptor, request.args, endpoint)
     // Access precedes lookup resolution, so a refused call activates nothing.
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- other packages merge non-owner kinds into PrincipalMap.
     if (request.peer.principal.kind !== 'owner') {
@@ -749,7 +750,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
         this.ctx.typert,
         this.resourceReaders(descriptor),
         descriptor,
-        request.args,
+        validated,
         request.signal ?? NEVER_ABORTED_SIGNAL,
       )
       const decision: RemoteAccessDecision = resources === undefined
@@ -758,7 +759,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
           principal: request.peer.principal,
           action: `${descriptor.namespace}/${descriptor.method}`,
           resources,
-          args: request.args,
+          args: validated,
         })
       if (decision.kind === 'deny') {
         throw new RemoteError('remote-access/denied', `remote access: ${endpoint}: access denied (${decision.reason})`, {
@@ -767,7 +768,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
         })
       }
     }
-    const receiverContext = await this.resolveReceiverContext(descriptor, request.args, endpoint)
+    const receiverContext = await this.resolveReceiverContext(descriptor, validated, endpoint)
     const receiver: unknown = receiverContext.get(descriptor.service)
     if (!isObject(receiver)) {
       throw new TypertGatewayError(
@@ -778,7 +779,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
     }
     validateBinding(receiver, descriptor.service, descriptor.namespace, endpoint)
     const args = await Promise.all(descriptor.parameters.map(parameter =>
-      this.resolveParameter(parameter, request.args, endpoint)))
+      this.resolveParameter(parameter, validated, endpoint)))
     const signal = methodSignal(request, control, descriptor.mode === 'stream')
     const invocation = new GatewayInvocation(
       { namespace: request.namespace, method: request.method, args: request.args },
@@ -1007,13 +1008,10 @@ export class TypertGatewayService extends Service implements TypertGateway {
     args: Readonly<Record<string, unknown>>,
     endpoint: string,
   ): Promise<unknown> {
-    // An absent field reached assertExactArguments' allowance, so this parameter
-    // takes undefined; a present-but-undefined field is not JSON-safe input and
-    // still fails decode. Lookup ids are never omissible, so absence here only
-    // ever belongs to a json parameter.
+    // Lookup ids are never omissible, so an absent field belongs to a json parameter that takes undefined.
     if (!Object.hasOwn(args, parameter.wire)) return undefined
+    if (parameter.source === 'json') return args[parameter.wire]
     const value = decode(parameter.codec, args[parameter.wire], endpoint, parameter.wire)
-    if (parameter.source === 'json') return value
     const key = parameter.lookup
     /* v8 ignore next -- registry validation rejects strict descriptors without a key, and SRC derivation always supplies one. */
     if (key === undefined) {
@@ -1584,6 +1582,28 @@ function assertExactArguments(
   if (missing.length > 0) clauses.push(`missing ${missing.map(key => JSON.stringify(key)).join(', ')}`)
   if (extra.length > 0) clauses.push(`unexpected ${extra.map(key => JSON.stringify(String(key))).join(', ')}`)
   throw new TypertGatewayError('gateway/arguments-invalid', endpoint, `args fields do not match the descriptor: ${clauses.join('; ')}`)
+}
+
+/**
+ * Decode every present JSON argument once through its parameter codec; a
+ * Typert codec drops object fields its compiled type does not declare. Lookup
+ * and Context identities keep their wire values; dispatch decodes and resolves
+ * them only after the access check. An absent field stays absent; a present
+ * `undefined` is not JSON-safe and fails decoding.
+ */
+function validateArguments(
+  descriptor: InvocationDescriptor,
+  args: Readonly<Record<string, unknown>>,
+  endpoint: string,
+): Readonly<Record<string, unknown>> {
+  const entries: [string, unknown][] = []
+  if (descriptor.invocation.kind === 'context') entries.push([descriptor.invocation.wire, args[descriptor.invocation.wire]])
+  for (const parameter of descriptor.parameters) {
+    if (!Object.hasOwn(args, parameter.wire)) continue
+    const value = args[parameter.wire]
+    entries.push([parameter.wire, parameter.source === 'json' ? decode(parameter.codec, value, endpoint, parameter.wire) : value])
+  }
+  return Object.fromEntries(entries)
 }
 
 function decode(
