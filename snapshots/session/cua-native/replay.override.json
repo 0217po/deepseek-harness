@@ -375,72 +375,6 @@
         "index": 0,
         "block": {
           "type": "tool-call",
-          "id": "cua-hover-enter",
-          "name": "cua",
-          "arguments": "{\"method\":\"hover\",\"params\":{\"appHandle\":\"fixture-app\",\"snapshotId\":\"fixture-snapshot-2\",\"elementIndex\":0}}"
-        }
-      },
-      {
-        "type": "usage",
-        "usage": {
-          "inputTokens": 3,
-          "outputTokens": 3
-        }
-      },
-      {
-        "type": "finish",
-        "reason": {
-          "kind": "tool-calls"
-        }
-      }
-    ]
-  },
-  {
-    "kind": "chunks",
-    "chunks": [
-      {
-        "type": "block-start",
-        "index": 0,
-        "blockType": "tool-call"
-      },
-      {
-        "type": "block-end",
-        "index": 0,
-        "block": {
-          "type": "tool-call",
-          "id": "cua-hover-capture",
-          "name": "cua",
-          "arguments": "{\"method\":\"screenshot\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7}}"
-        }
-      },
-      {
-        "type": "usage",
-        "usage": {
-          "inputTokens": 3,
-          "outputTokens": 3
-        }
-      },
-      {
-        "type": "finish",
-        "reason": {
-          "kind": "tool-calls"
-        }
-      }
-    ]
-  },
-  {
-    "kind": "chunks",
-    "chunks": [
-      {
-        "type": "block-start",
-        "index": 0,
-        "blockType": "tool-call"
-      },
-      {
-        "type": "block-end",
-        "index": 0,
-        "block": {
-          "type": "tool-call",
           "id": "cua-native-show",
           "name": "cua",
           "arguments": "{\"method\":\"show\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7}}"
@@ -1167,6 +1101,237 @@
         "index": 0,
         "block": {
           "type": "tool-call",
+          "id": "cua-hover-enter",
+          "name": "cua",
+          "arguments": "{\"method\":\"hover\",\"params\":{\"appHandle\":\"fixture-app\",\"snapshotId\":\"fixture-snapshot-9\",\"elementIndex\":0}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-hover-observe",
+          "name": "cua",
+          "arguments": "{\"method\":\"getState\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-hover-capture",
+          "name": "cua",
+          "arguments": "{\"method\":\"screenshot\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-hover-popup",
+          "name": "cua",
+          "arguments": "{\"method\":\"hover\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"x\":20,\"y\":40}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-hover-click",
+          "name": "cua",
+          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"snapshotId\":\"fixture-snapshot-10\",\"x\":20,\"y\":40}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-hover-exit",
+          "name": "cua",
+          "arguments": "{\"method\":\"hover\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"x\":0,\"y\":40}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-hover-verify",
+          "name": "cua",
+          "arguments": "{\"method\":\"getState\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
           "id": "cua-debug-arm",
           "name": "cua",
           "arguments": "{\"method\":\"pressKey\",\"params\":{\"appHandle\":\"fixture-app\",\"key\":\"F12\"}}"
@@ -1233,7 +1398,7 @@
         "index": 0,
         "block": {
           "type": "text",
-          "text": "Observed Count: 3. Geometry conflicts rejected capture and coordinate gestures; the advertised AX button action remained available. No automatic activation or input retry was requested."
+          "text": "Observed Count: 4 after hovering, observing and clicking the revealed control. Moving away dismissed the hover information. Geometry conflicts rejected capture and coordinate gestures; the advertised AX button action remained available. No automatic activation or input retry was requested."
         }
       },
       {

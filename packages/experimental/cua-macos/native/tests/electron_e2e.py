@@ -124,6 +124,9 @@ def main():
                 trigger = next(element for element in state['elements'] if element['role'] == 'AXButton' and
                                'Reveal hover details' in (element.get('title') or element.get('description') or ''))
                 baseline = json.loads(state_path.read_text())['pointerDowns']
+                call('hover', {**owner, 'windowId': window_id, 'x': -1, 'y': 0}, 'INVALID_ARGUMENT')
+                call('hover', {**owner, 'windowId': window_id, 'x': 100000, 'y': 0}, 'INVALID_ARGUMENT')
+                call('hover', {**owner, 'snapshotId': state['snapshotId'], 'elementIndex': trigger['index'], 'x': 0}, 'INVALID_ARGUMENT')
                 call('hover', {**owner, 'snapshotId': state['snapshotId'], 'elementIndex': trigger['index']})
                 actual = wait_state(lambda actual: actual['popupOpen'], 'Hover did not reveal delayed information')
                 assert actual['pointerDowns'] == baseline and actual['lastMove'] == {'buttons': 0, 'trusted': True}, actual
