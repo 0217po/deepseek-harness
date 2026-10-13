@@ -865,11 +865,11 @@ describe('PluginManagerPage', () => {
       const team = '@deepseek-ai/dsh-experimental-agent-team-profile'
       renderTab(
         { packages: [
-          pkg({ name: '@deepseek-ai/dsh-experimental-badge-skill-bundle', official: true }),
+          pkg({ name: '@deepseek-ai/dsh-experimental-badge-skill-bundle', official: true, enabled: false }),
           pkg({ name: '@deepseek-ai/dsh-experimental-agent-team-profile', installed: false, optional: true, removable: false, enabled: false }),
-          pkg({ name: '@deepseek-ai/dsh-subagent-claude-code', official: true, availability: 'missing', installed: false }),
-          pkg({ name: '@deepseek-ai/dsh-subagent-codex', official: true }),
-          pkg({ name: '@deepseek-ai/dsh-experimental-tool-worktree', official: true }),
+          pkg({ name: '@deepseek-ai/dsh-subagent-claude-code', official: true, availability: 'missing', installed: false, enabled: false }),
+          pkg({ name: '@deepseek-ai/dsh-subagent-codex', official: true, enabled: false }),
+          pkg({ name: '@deepseek-ai/dsh-experimental-tool-worktree', official: true, enabled: false }),
           pkg({ name: '@acme/new-official', official: true }),
           pkg(),
         ] },
@@ -919,7 +919,7 @@ describe('PluginManagerPage', () => {
 
     it('returns from package details to the secondary page and retains it across React remounts', () => {
       const name = '@deepseek-ai/dsh-experimental-terminal-bundle'
-      const b = renderTab({ packages: [pkg({ name, official: true })] })
+      const b = renderTab({ packages: [pkg({ name, official: true, enabled: false })] })
       fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
       expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
       fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', name) }))
@@ -933,19 +933,44 @@ describe('PluginManagerPage', () => {
       expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeNull()
     })
 
-    it('keeps toggled plugins in their group and position', () => {
-      const names = ['@deepseek-ai/dsh-experimental-cot-translation-bundle', '@deepseek-ai/dsh-experimental-terminal-bundle'] as const
-      const packages = names.map(name => pkg({ name, official: true, enabled: false }))
-      const b = renderTab({ packages })
+    it('pins a bundle the profile picks onto the main list, in its full-list place', () => {
+      const team = '@deepseek-ai/dsh-experimental-agent-team-profile'
+      const first = '@deepseek-ai/dsh-experimental-tool-worktree'
+      const second = '@deepseek-ai/dsh-experimental-cot-translation-bundle'
+      const entry = (name: string, enabled: boolean): PackageView => pkg({ name, official: true, enabled })
+      const b = renderTab({ packages: [entry(second, true), entry(team, true), entry(first, false)] })
+      const cards = (group: 'extensions' | 'more'): (string | null)[] => {
+        const list = document.querySelector(`[data-plugin-group="${group}"]`) as HTMLElement
+        return within(list).getAllByRole('listitem').map(card => card.getAttribute('data-plugin-package'))
+      }
+      expect(cards('extensions')).toEqual([team, second])
       fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
-      const group = document.querySelector('[data-plugin-group="more"]') as HTMLElement
-      const cards = () => within(group).getAllByRole('listitem').map(card => card.getAttribute('data-plugin-package'))
-      expect(cards()).toEqual(names)
-      fireEvent.click(within(group).getByRole('switch', { name: en.enableToggle.replace('{name}', names[1]) }))
-      expect(b.actions.setEnabled).toHaveBeenCalledWith(names[1], true)
-      b.set({ packages: packages.map((entry, index) => ({ ...entry, enabled: index === 1 })) })
-      expect(cards()).toEqual(names)
+      expect(cards('more')).toEqual([team, first, second])
+      fireEvent.click(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', first) }))
+      expect(b.actions.setEnabled).toHaveBeenCalledWith(first, true)
+      b.set({ packages: [entry(second, true), entry(team, true), entry(first, true)] })
+      expect(cards('more')).toEqual([team, first, second])
+      fireEvent.click(screen.getByRole('button', { name: en.backToList }))
+      expect(cards('extensions')).toEqual([team, first, second])
+      fireEvent.click(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', first) }))
+      expect(b.actions.setEnabled).toHaveBeenCalledWith(first, false)
+      b.set({ packages: [entry(second, true), entry(team, true), entry(first, false)] })
+      expect(cards('extensions')).toEqual([team, second])
+      fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
+      expect(cards('more')).toEqual([team, first, second])
+    })
+
+    it('returns a held-back bundle opened outside the lists to the list that shows it', () => {
+      const name = '@deepseek-ai/dsh-experimental-terminal-bundle'
+      const b = renderTab({ packages: [pkg({ name, official: true, enabled: false })] })
+      act(() => { b.navigation.actions.setView({ kind: 'package', name }) })
+      expect(document.querySelector(`[data-plugin-detail="${name}"]`)).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: en.backToPackage.replace('{name}', en.moreTitle) }))
       expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
+      b.set({ packages: [pkg({ name, official: true, enabled: true })] })
+      act(() => { b.navigation.actions.setView({ kind: 'package', name }) })
+      fireEvent.click(screen.getByRole('button', { name: en.backToList }))
+      expect(screen.getByRole('heading', { name: en.title, level: 1 })).toBeTruthy()
     })
 
     it('starts on the main list when the navigation store is recreated', () => {
@@ -1914,8 +1939,8 @@ describe('PluginManagerPage', () => {
     Object.defineProperty(Element.prototype, 'scrollIntoView', { value: scrollIntoView, configurable: true })
     try {
       const { actions, set } = renderTab({ packages: [
-        pkg({ name, official: true }),
-        pkg({ name: '@deepseek-ai/dsh-subagent-codex', official: true }),
+        pkg({ name, official: true, enabled: false }),
+        pkg({ name: '@deepseek-ai/dsh-subagent-codex', official: true, enabled: false }),
       ] })
       expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeNull()
       set({ highlight: name })
@@ -1932,7 +1957,7 @@ describe('PluginManagerPage', () => {
       expect(screen.getByRole('heading', { name: en.title, level: 1 })).toBeTruthy()
       expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeNull()
       expect(scrollIntoView).toHaveBeenCalledTimes(1)
-      set({ packages: [pkg({ name, official: true })] })
+      set({ packages: [pkg({ name, official: true, enabled: false })] })
       act(() => { vi.advanceTimersByTime(799) })
       expect(actions.clearHighlight).not.toHaveBeenCalled()
       act(() => { vi.advanceTimersByTime(1) })
