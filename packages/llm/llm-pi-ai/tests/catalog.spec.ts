@@ -1302,7 +1302,8 @@ describe('configurable-provider directory', () => {
 
   it('lists a route a stored profile names as a catalog route, not a declared one', async () => {
     // `declared` answers catalog membership, so a profile stored against a
-    // route pi-ai ships is not mislabelled as one this deployment invented.
+    // route pi-ai ships is not mislabelled as one this deployment invented,
+    // and it keeps the catalog's endpoint and OAuth-only native auth.
     const ctx = await harness({ providers: { 'openai-codex': { apiKeyEnv: KEY_ENV } } })
 
     expect(ctx.llm.listConfigurableProviders()).toContainEqual({
@@ -1311,6 +1312,8 @@ describe('configurable-provider directory', () => {
       settingsNs: 'llm-pi-ai',
       settingsPath: ['providers', 'openai-codex'],
       declared: false,
+      defaultBaseURL: 'https://chatgpt.com/backend-api',
+      nativeAuth: { env: [], oauth: true },
     })
   })
 })

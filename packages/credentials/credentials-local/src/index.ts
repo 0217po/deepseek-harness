@@ -1,20 +1,19 @@
 /**
  * File-backed credentials provider over `$DSH_HOME/.credentials.yaml`, layered
- * against the environment by how much each layer is trusted:
+ * over the environment in this precedence order:
  *
  * ```text
- * inherited process environment      (read-only, wins)
- * > $DSH_HOME/.credentials.yaml      (provider-managed, writable)
- * > <invocation cwd>/.env            (read-only fallback)
- * > $DSH_HOME/.env                   (read-only fallback)
+ * $DSH_HOME/.credentials.yaml        (provider-managed, written by set/unset)
+ * > inherited process environment    (fallback; this provider never writes it)
+ * > <invocation cwd>/.env            (fallback; this provider never writes it)
+ * > $DSH_HOME/.env                   (fallback; this provider never writes it)
  * ```
  *
- * The inherited environment wins because `DEEPSEEK_API_KEY=… dsh`, a CI
- * secret, or a container `-e` is this run's explicit intent; it cannot be
- * edited from inside, so it must be *visibly* read-only rather than silently
- * shadow writes. Everything below it loses to the managed store, so a key the
- * Models page writes takes effect immediately even when an older key sits in
- * the user's `.env`.
+ * The managed store wins because a credential the user explicitly saved in
+ * the product must take effect consistently for every provider. The launch
+ * environment, CI secrets included, applies only while the file stores no
+ * value for the reference. See
+ * `.agents/notes/implemented/architecture/2026-10-09-stored-credential-precedence.md`.
  *
  * The invoking project may supply a key, because the product trusts the
  * project it is launched in. It ranks below the managed store, so a key stored
@@ -618,24 +617,21 @@ export class LocalCredentialProvider extends CredentialProvider {
   }
 
   override resolve(ref: CredentialRef): Promise<ResolvedCredential | undefined> {
-    const inherited = this.inherited(ref)
-    if (inherited !== undefined) return Promise.resolve({ value: inherited, source: 'env' })
     const stored = this.values.get(ref)
     if (stored !== undefined) return Promise.resolve({ value: stored, source: 'file' })
+    const inherited = this.inherited(ref)
+    if (inherited !== undefined) return Promise.resolve({ value: inherited, source: 'env' })
     const fallback = this.dotenvFallback(ref)
     if (fallback !== undefined) return Promise.resolve({ value: fallback.value, source: fallback.source })
     return Promise.resolve(undefined)
   }
 
   override describe(ref: CredentialRef): Promise<CredentialInfo> {
-    // Only the inherited environment is unwritable: it is the one layer this
-    // process cannot edit. A user `.env` value is writable in the sense that
-    // matters — storing a key replaces it as the effective one.
-    if (this.inherited(ref) !== undefined) {
-      return Promise.resolve({ configured: true, source: 'env', writable: false })
-    }
     const stored = this.values.get(ref)
     if (stored !== undefined) return Promise.resolve({ configured: true, source: 'file', writable: true })
+    // Every reference is writable: a set writes the managed file, which
+    // outranks every fallback, and an unset exposes the fallback again.
+    if (this.inherited(ref) !== undefined) return Promise.resolve({ configured: true, source: 'env', writable: true })
     const fallback = this.dotenvFallback(ref)
     if (fallback !== undefined) return Promise.resolve({ configured: true, source: fallback.source, writable: true })
     return Promise.resolve({ configured: false, writable: true })
@@ -740,19 +736,16 @@ export class LocalCredentialProvider extends CredentialProvider {
     void this.enqueue(() => this.refresh())
   }
 
-  /** Queue one line edit; entry checks reject early, the queue re-judges them at run time. */
+  /** Queue one line edit; disposal is checked on entry and again when the queued edit runs. */
   private async write(ref: CredentialRef, value: string | undefined): Promise<void> {
     const verb = value === undefined ? 'unset' : 'set'
     if (this.isClosed()) {
       throw new Error(`credentials-local is disposed: cannot ${verb} "${ref}"`)
     }
-    this.assertUnshadowed(ref, verb)
     return this.enqueue(async () => {
       if (this.isClosed()) {
         throw new Error(`credentials-local was disposed before the queued "${ref}" ${verb} ran`)
       }
-      // Re-judged at run time: the environment may have changed while queued.
-      this.assertUnshadowed(ref, verb)
       // The writer lock's exclusive create needs the parent to exist; 0700
       // because the harness home holds user-private data.
       await mkdir(dirname(this.spec.filename), { recursive: true, mode: 0o700 })
@@ -775,20 +768,6 @@ export class LocalCredentialProvider extends CredentialProvider {
         this.notifyUpdated(ref)
       }, { waitMs: DOCUMENT_LOCK_WAIT_MS })
     })
-  }
-
-  /**
-   * Reject a write the inherited environment would shadow into apparent
-   * no-effect. Only that layer can shadow a write: everything else this
-   * provider resolves ranks below the document being written.
-   */
-  private assertUnshadowed(ref: CredentialRef, verb: 'set' | 'unset'): void {
-    if (this.inherited(ref) !== undefined) {
-      throw new Error(
-        `credentials-local: "${ref}" is supplied read-only by the launching environment, so ${verb} would be`
-        + ' shadowed; unset it in the shell you start dsh from instead',
-      )
-    }
   }
 
   /**
