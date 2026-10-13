@@ -22,7 +22,7 @@ export interface CuaObservationSink {
   text(value: string): void | Promise<void>
   /**
    * Emit an image.
-   * @param data - PNG bytes.
+   * @param data - encoded screenshot bytes.
    */
   image(data: Uint8Array): void | Promise<void>
 }
@@ -72,7 +72,7 @@ export type CuaPasteOptions = Pick<CuaParameters<'paste'>, 'format'>
 export type CuaSelectTextOptions = Pick<CuaParameters<'selectText'>, 'prefix' | 'suffix' | 'selectionType'>
 /** Positive deltas reveal content above/left; each axis is an integer from -10 to 10. */
 export type CuaScrollOptions = Pick<CuaParameters<'scroll'>, 'x' | 'y' | 'deltaLinesX' | 'deltaLinesY'> & CuaCoordinateOptions
-/** An observed AX tree and independently captured PNG; capture is not atomic. */
+/** An observed AX tree and independently captured image; capture is not atomic. */
 export interface CuaObservation { state: string; screenshot: Uint8Array }
 /**
  * App-wide or explicitly scoped window observations and actions.
