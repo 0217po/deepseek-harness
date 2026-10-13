@@ -189,7 +189,9 @@ function createApplicationState(socket, record, application, captureBroker, conn
         data: readFileSync(new URL(customScreenshot.file, import.meta.url)).toString('base64') }
       : { windowId: params.windowId, mimeType: 'image/png', data: png, pixelWidth: 1, pixelHeight: 1, bounds, coordinateSpace: 'window-points' }
     if (method === 'click' || method === 'setValue' || method === 'hover') {
-      const observed = [...snapshots.values()].find(snapshot => snapshot.snapshotId === params.snapshotId)
+      const observed = params.snapshotId === undefined && params.elementIndex === undefined
+        ? snapshots.get(params.windowId) ?? snapshots.get(null)
+        : [...snapshots.values()].find(snapshot => snapshot.snapshotId === params.snapshotId)
       if (!observed) refuse('STALE_SNAPSHOT', 'Read fresh state before acting')
       if (params.windowId !== undefined && observed.windowId !== null && observed.windowId !== params.windowId) refuse('STALE_SNAPSHOT', 'Snapshot belongs to another window')
       if (observed.axless && params.elementIndex !== undefined) refuse('INVALID_ARGUMENT', 'Element index is absent from the selected snapshot')

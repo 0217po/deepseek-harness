@@ -266,7 +266,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       if (method === 'getCapabilities') return { ...z.record(z.string(), z.json()).parse(result), coordinateSpace: 'screenshot-pixels' }
       if (method === 'getState') {
         const state = StateResult.parse(result)
-        execution.coordinates.observe(state.appHandle, state.windows)
+        execution.coordinates.observe(state.appHandle, state.windows, state.windowId ?? undefined)
         return state
       }
       if (method === 'listWindows') execution.coordinates.observe(parsedParams.appHandle as CuaAppHandle, WindowsResult.parse(result))

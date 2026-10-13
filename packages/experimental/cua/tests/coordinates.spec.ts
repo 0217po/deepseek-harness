@@ -73,3 +73,14 @@ it('keeps different application/window mappings independent and leaves element a
   const request = Request.parse({ method: 'hover', params: { appHandle: handle, snapshotId: 's', elementIndex: 2 } })
   expect(coordinates.parameters(request)).toEqual(request.params)
 })
+
+it('keeps other windows mapped during scoped observations and only removes the scoped closed window', () => {
+  const coordinates = new CuaCoordinates()
+  coordinates.screenshot(handle, 7, window().bounds, { width: 1280, height: 960 })
+  coordinates.observe(handle, [{ ...window(), windowId: 8 }], 8)
+  expect(coordinates.parameters(call('click', { x: 640, y: 480 }))).toMatchObject({ x: 320, y: 240 })
+  coordinates.observe(handle, [], 8)
+  expect(coordinates.parameters(call('click', { x: 640, y: 480 }))).toMatchObject({ x: 320, y: 240 })
+  coordinates.observe(handle, [], 7)
+  expect(() => coordinates.parameters(call('click', { x: 0, y: 0 }))).toThrow('STALE_SNAPSHOT')
+})

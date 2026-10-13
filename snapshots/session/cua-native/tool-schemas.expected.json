@@ -346,6 +346,11 @@
                       "y": {
                         "type": "number",
                         "minimum": 0
+                      },
+                      "relative": {
+                        "description": "Omitted or false uses pixels in the latest screenshot returned by this tool.",
+                        "type": "boolean",
+                        "const": false
                       }
                     },
                     "required": [
@@ -353,6 +358,47 @@
                       "windowId",
                       "x",
                       "y"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "appHandle": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "windowId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 4294967295
+                      },
+                      "snapshotId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "x": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000
+                      },
+                      "y": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000
+                      },
+                      "relative": {
+                        "type": "boolean",
+                        "const": true,
+                        "description": "Use integer thousandths of the window width and height, from 0 to 1000."
+                      }
+                    },
+                    "required": [
+                      "appHandle",
+                      "windowId",
+                      "x",
+                      "y",
+                      "relative"
                     ],
                     "additionalProperties": false
                   }
@@ -455,6 +501,11 @@
                         "type": "number",
                         "minimum": 0
                       },
+                      "relative": {
+                        "description": "Omitted or false uses pixels in the latest screenshot returned by this tool.",
+                        "type": "boolean",
+                        "const": false
+                      },
                       "mouseButton": {
                         "type": "string",
                         "enum": [
@@ -494,6 +545,80 @@
                       "windowId",
                       "x",
                       "y"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "appHandle": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "windowId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 4294967295
+                      },
+                      "snapshotId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "x": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000
+                      },
+                      "y": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000
+                      },
+                      "relative": {
+                        "type": "boolean",
+                        "const": true,
+                        "description": "Use integer thousandths of the window width and height, from 0 to 1000."
+                      },
+                      "mouseButton": {
+                        "type": "string",
+                        "enum": [
+                          "left",
+                          "right",
+                          "middle"
+                        ]
+                      },
+                      "modifiers": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "command",
+                            "control",
+                            "option",
+                            "shift",
+                            "fn"
+                          ]
+                        }
+                      },
+                      "clickCount": {
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "const": 1
+                          },
+                          {
+                            "type": "number",
+                            "const": 2
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "appHandle",
+                      "windowId",
+                      "x",
+                      "y",
+                      "relative"
                     ],
                     "additionalProperties": false
                   }
@@ -770,49 +895,111 @@
                 "const": "scroll"
               },
               "params": {
-                "type": "object",
-                "properties": {
-                  "appHandle": {
-                    "type": "string",
-                    "minLength": 1
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "appHandle": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "windowId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 4294967295
+                      },
+                      "snapshotId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "x": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "y": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "relative": {
+                        "description": "Omitted or false uses pixels in the latest screenshot returned by this tool.",
+                        "type": "boolean",
+                        "const": false
+                      },
+                      "deltaLinesX": {
+                        "type": "integer",
+                        "minimum": -10,
+                        "maximum": 10
+                      },
+                      "deltaLinesY": {
+                        "type": "integer",
+                        "minimum": -10,
+                        "maximum": 10
+                      }
+                    },
+                    "required": [
+                      "appHandle",
+                      "windowId",
+                      "x",
+                      "y",
+                      "deltaLinesX",
+                      "deltaLinesY"
+                    ],
+                    "additionalProperties": false
                   },
-                  "windowId": {
-                    "type": "integer",
-                    "exclusiveMinimum": 0,
-                    "maximum": 4294967295
-                  },
-                  "snapshotId": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "x": {
-                    "type": "number",
-                    "minimum": 0
-                  },
-                  "y": {
-                    "type": "number",
-                    "minimum": 0
-                  },
-                  "deltaLinesX": {
-                    "type": "integer",
-                    "minimum": -10,
-                    "maximum": 10
-                  },
-                  "deltaLinesY": {
-                    "type": "integer",
-                    "minimum": -10,
-                    "maximum": 10
+                  {
+                    "type": "object",
+                    "properties": {
+                      "appHandle": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "windowId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 4294967295
+                      },
+                      "snapshotId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "x": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000
+                      },
+                      "y": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000
+                      },
+                      "relative": {
+                        "type": "boolean",
+                        "const": true,
+                        "description": "Use integer thousandths of the window width and height, from 0 to 1000."
+                      },
+                      "deltaLinesX": {
+                        "type": "integer",
+                        "minimum": -10,
+                        "maximum": 10
+                      },
+                      "deltaLinesY": {
+                        "type": "integer",
+                        "minimum": -10,
+                        "maximum": 10
+                      }
+                    },
+                    "required": [
+                      "appHandle",
+                      "windowId",
+                      "x",
+                      "y",
+                      "relative",
+                      "deltaLinesX",
+                      "deltaLinesY"
+                    ],
+                    "additionalProperties": false
                   }
-                },
-                "required": [
-                  "appHandle",
-                  "windowId",
-                  "x",
-                  "y",
-                  "deltaLinesX",
-                  "deltaLinesY"
-                ],
-                "additionalProperties": false
+                ]
               }
             },
             "required": [
@@ -829,68 +1016,149 @@
                 "const": "drag"
               },
               "params": {
-                "type": "object",
-                "properties": {
-                  "appHandle": {
-                    "type": "string",
-                    "minLength": 1
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "appHandle": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "windowId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 4294967295
+                      },
+                      "mouseButton": {
+                        "type": "string",
+                        "enum": [
+                          "left",
+                          "right",
+                          "middle"
+                        ]
+                      },
+                      "modifiers": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "command",
+                            "control",
+                            "option",
+                            "shift",
+                            "fn"
+                          ]
+                        }
+                      },
+                      "snapshotId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "relative": {
+                        "type": "boolean",
+                        "const": false
+                      },
+                      "fromX": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "fromY": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "toX": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "toY": {
+                        "type": "number",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "appHandle",
+                      "windowId",
+                      "fromX",
+                      "fromY",
+                      "toX",
+                      "toY"
+                    ],
+                    "additionalProperties": false
                   },
-                  "windowId": {
-                    "type": "integer",
-                    "exclusiveMinimum": 0,
-                    "maximum": 4294967295
-                  },
-                  "mouseButton": {
-                    "type": "string",
-                    "enum": [
-                      "left",
-                      "right",
-                      "middle"
-                    ]
-                  },
-                  "modifiers": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "enum": [
-                        "command",
-                        "control",
-                        "option",
-                        "shift",
-                        "fn"
-                      ]
-                    }
-                  },
-                  "snapshotId": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "fromX": {
-                    "type": "number",
-                    "minimum": 0
-                  },
-                  "fromY": {
-                    "type": "number",
-                    "minimum": 0
-                  },
-                  "toX": {
-                    "type": "number",
-                    "minimum": 0
-                  },
-                  "toY": {
-                    "type": "number",
-                    "minimum": 0
+                  {
+                    "type": "object",
+                    "properties": {
+                      "appHandle": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "windowId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 4294967295
+                      },
+                      "mouseButton": {
+                        "type": "string",
+                        "enum": [
+                          "left",
+                          "right",
+                          "middle"
+                        ]
+                      },
+                      "modifiers": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "command",
+                            "control",
+                            "option",
+                            "shift",
+                            "fn"
+                          ]
+                        }
+                      },
+                      "snapshotId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "relative": {
+                        "type": "boolean",
+                        "const": true
+                      },
+                      "fromX": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000
+                      },
+                      "fromY": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000
+                      },
+                      "toX": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000
+                      },
+                      "toY": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000
+                      }
+                    },
+                    "required": [
+                      "appHandle",
+                      "windowId",
+                      "relative",
+                      "fromX",
+                      "fromY",
+                      "toX",
+                      "toY"
+                    ],
+                    "additionalProperties": false
                   }
-                },
-                "required": [
-                  "appHandle",
-                  "windowId",
-                  "fromX",
-                  "fromY",
-                  "toX",
-                  "toY"
-                ],
-                "additionalProperties": false
+                ]
               }
             },
             "required": [

@@ -17,11 +17,13 @@ export class CuaCoordinates {
   /**
    * Invalidate screenshot mappings when a window closes or changes size.
    * @param appHandle - native application selection.
-   * @param windows - fresh complete window inventory for this application.
+   * @param windows - freshly observed windows.
+   * @param windowId - selected window for a scoped observation; omission means a complete application inventory.
    */
-  observe(appHandle: CuaAppHandle, windows: readonly CuaWindowInfo[]): void {
+  observe(appHandle: CuaAppHandle, windows: readonly CuaWindowInfo[], windowId?: number): void {
     const previous = this.applications.get(appHandle)
-    const current = new Map<number, Frame>()
+    const current = new Map<number, Frame>(windowId === undefined ? [] : previous)
+    if (windowId !== undefined && !windows.some(window => window.windowId === windowId)) current.delete(windowId)
     for (const window of windows) {
       const { width, height } = window.bounds
       const old = previous?.get(window.windowId)
