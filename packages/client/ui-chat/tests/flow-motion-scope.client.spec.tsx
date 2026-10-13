@@ -21,7 +21,7 @@ function viewport() {
   document.body.append(list)
   const owner = new ChatViewport()
   owner.attach(list, column)
-  const unbind = owner.bindReader({ follow: new ScrollFollow(false, 25), landedAtTail: vi.fn() })
+  const unbind = owner.bindReader({ follow: new ScrollFollow(false, 25), landedAtTail: vi.fn(), pending: () => false })
   return { list, row, spacer, owner, dispose: () => { unbind(); owner.detach(); list.remove() } }
 }
 

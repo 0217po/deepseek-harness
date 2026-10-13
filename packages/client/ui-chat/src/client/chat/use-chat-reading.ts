@@ -107,6 +107,7 @@ export class ChatReading {
         this.cancelPending()
         this.commit(landing, true, this.viewport.latestTurn)
       },
+      pending: () => this.pending,
     })
   }
 

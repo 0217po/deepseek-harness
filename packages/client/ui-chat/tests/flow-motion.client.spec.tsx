@@ -313,6 +313,20 @@ describe('flow motion', () => {
     expect(motion.inputActive()).toBe(false)
   })
 
+  it('does not report a batch when every closing row sits inside an ancestor that closes on its own', async () => {
+    const calls = batchDriver()
+    const parent = rowWithHeight(180)
+    // The ancestor's motion is not owned by this batch, so its descendants cannot start one.
+    parent.dataset.chatMotion = 'collapse'
+    const child = rowWithHeight(60, parent)
+    motion.collapse(child, vi.fn())
+    expect(motion.inputActive()).toBe(false)
+    await Promise.resolve()
+    expect(calls.begin).not.toHaveBeenCalled()
+    motion.cancelMotion(child)
+    delete parent.dataset.chatMotion
+  })
+
   it('reports reader cancellation to the driver and lets a newer request resume the target', async () => {
     vi.useFakeTimers()
     const calls = batchDriver()

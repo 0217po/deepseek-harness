@@ -24,7 +24,6 @@ const frames = new Map<number, FrameRequestCallback>()
 let frameClock = 0
 let nextFrame = 0
 
-/** Run queued animation frames until the batch stops requesting more. */
 /** Run a fixed number of queued animation frames. */
 function runFrameCount(count: number): void {
   for (let index = 0; index < count && frames.size > 0; index++) {
@@ -35,6 +34,7 @@ function runFrameCount(count: number): void {
   }
 }
 
+/** Run queued animation frames until the batch stops requesting more. */
 function runFrames(): void {
   for (let guard = 0; frames.size > 0 && guard < 100; guard++) {
     const pending = [...frames.values()]
@@ -160,6 +160,18 @@ it('adds a reader\'s own scrolling during the fold to the position it keeps stil
   runFrames()
   expect(h.list.scrollTop).toBe(150)
   expect(h.reading.followingTail).toBe(false)
+})
+
+it('keeps the reader landing while reader movement awaits sampling', async () => {
+  const h = fixture({ earlier: 100, later: 500, top: 2_000, following: true })
+  h.list.dispatchEvent(new Event('wheel'))
+  h.scroll(1_990)
+  expect(h.reading.pending).toBe(true)
+  h.viewport.motion.collapse(h.row, () => { h.row.hidden = true; h.grow(600) })
+  await Promise.resolve()
+  runFrames()
+  expect(h.list.scrollTop).toBe(190)
+  vi.advanceTimersByTime(500)
 })
 
 it('keeps a reader below folding rows on the same content without room or follow', async () => {

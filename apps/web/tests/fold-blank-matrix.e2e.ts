@@ -20,6 +20,7 @@ import {
   SESSION_FORMAT_VERSION, SessionId, SessionLogOffset, SessionSeq, type SessionEvent, type SessionHeader,
 } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
+import { sessionFixtureName } from '@deepseek-ai/dsh-session-snapshot'
 import { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import { createChatScrollFixture, type ChatScrollFixture } from './chat-scroll-fixture.ts'
 import { launchWebScaffold, parseSeedFixture, seedSession, watchConsole, webSnapshotMode, type WebScaffold } from './scaffold.ts'
@@ -40,8 +41,8 @@ const LIVE_STEPS = 6
 const STEER_STEPS = 3
 const BLANK_LIMIT = 120
 /**
- * A closing row fading in place can expose its emptied space for one frame before it finishes
- * shrinking; a longer blank is a defect.
+ * Frames whose layout gap may exceed {@link BLANK_LIMIT}. The gap counts rows by their boxes, so a
+ * closing row that has faded but not finished shrinking still covers its space.
  */
 const TRANSIENT_FRAMES = 1
 const EVIDENCE = fileURLToPath(new URL('../../../.artifacts/screenshots/fold-blank-matrix/', import.meta.url))
@@ -115,7 +116,8 @@ const CASES: readonly Case[] = [
   { ...MAIN, id: 'main/other-tab/previous-turn', origin: 'other-tab', reader: PREVIOUS_TURN, landing: 'reader' },
   { ...MAIN, id: 'main/queued/bottom', origin: 'queued', reader: AT_BOTTOM },
   { ...MAIN, id: 'main/queued/mid-body', origin: 'queued', reader: LIVE_MID_BODY, landing: 'reader' },
-  { ...MAIN, id: 'main/steer/bottom', origin: 'steer', reader: AT_BOTTOM },
+  // Control: steering joins the running Turn, which opens no exchange and folds nothing.
+  { ...MAIN, id: 'main/steer/no-fold-control', origin: 'steer', reader: AT_BOTTOM },
   { ...MAIN, id: 'main/composer/standard/mid-body', reader: SEEDED_MID_BODY, mode: 'Standard' },
   { ...MAIN, id: 'main/composer/completion/mid-body', reader: SEEDED_MID_BODY, timing: 'On completion' },
   { ...SIDE, id: 'side/composer/bottom', reader: AT_BOTTOM },
@@ -281,14 +283,15 @@ function replayFor(scenario: Case): ReplayEntry[] {
     case 'composer':
     case 'other-tab':
       return [replyEntry('FOLDMX_REPLY')]
-    case 'error':
-      return []
     case 'queued':
       return [...liveLongTurn('FOLDMX_LIVE'), replyEntry('FOLDMX_REPLY')]
     case 'steer':
       return [...liveLongTurn('FOLDMX_LIVE').slice(0, STEER_STEPS), replyEntry('FOLDMX_STEERED')]
     case 'parent-message':
       return [replyEntry('FOLDMX_PARENT_REPLY')]
+    case 'error':
+      // The Turn fails before its model call; launchScaffold mounts only the provider catalog.
+      return []
     case 'big-exchange':
       return [...liveLongTurn('FOLDMX_WAKE_A'), ...liveLongTurn('FOLDMX_WAKE_B'), replyEntry('FOLDMX_REPLY')]
   }
@@ -538,15 +541,43 @@ async function createChild(scaffold: WebScaffold, parentId: SessionId, scenario:
 }
 
 async function openWorld(browser: Browser, scenario: Case, replayDir: string): Promise<World> {
+  const scaffold = await launchScaffold(scenario, replayDir)
+  let page: Page | undefined
+  try {
+    page = await newEnglishPage(browser, 900)
+    return await prepareWorld(browser, scenario, scaffold, page)
+  } catch (error) {
+    const failures: unknown[] = [error]
+    if (page !== undefined) await page.context().close().catch((cleanupError: unknown) => failures.push(cleanupError))
+    await scaffold.close().catch((cleanupError: unknown) => failures.push(cleanupError))
+    if (failures.length === 1) throw error
+    throw new AggregateError(failures, `${scenario.id}: world setup failed and cleanup was incomplete`)
+  }
+}
+
+/**
+ * Launch the scaffold with the case's replay script. A Turn that fails before its model call consumes
+ * no script, so that case mounts only the provider catalog from a header-only fixture.
+ */
+async function launchScaffold(scenario: Case, replayDir: string): Promise<WebScaffold> {
+  if (scenario.origin === 'error') {
+    const header = seededFixture(scenario.id, scenario.bodyParagraphs).log.split('\n')[0] ?? ''
+    const fixture = join(replayDir, sessionFixtureName(0, SESSION_FORMAT_VERSION))
+    await writeFile(fixture, `${header}\n`)
+    return launchWebScaffold({ replayFixture: fixture, replayProvidersOnly: true })
+  }
   await writeFile(join(replayDir, 'replay.override.json'), JSON.stringify(replayFor(scenario)))
-  const scaffold = await launchWebScaffold({
+  return launchWebScaffold({
     replayFixture: join(replayDir, 'override-only.jsonl'),
     replayOverride: join(replayDir, 'replay.override.json'),
     paceMs: 16,
     replayContextWindow: 10_000_000,
   })
+}
+
+/** Seed the case's Sessions, open the surface, and choose the display preferences. */
+async function prepareWorld(browser: Browser, scenario: Case, scaffold: WebScaffold, page: Page): Promise<World> {
   await writeFile(join(scaffold.workspaceCwd, READ_FILE), 'fold matrix notes\n')
-  const page = await newEnglishPage(browser, 900)
   const tripwire = watchConsole(page)
   await page.addInitScript(installMeasure)
   await page.setViewportSize(scenario.surface === 'main' ? { width: 1280, height: 720 } : { width: 1680, height: 900 })
@@ -810,14 +841,14 @@ describe.skipIf(MODE === 'record')('web e2e: blank area after next-message foldi
         // Per-frame evidence is written for failures, or for every case with FOLDMX_EVIDENCE=1.
         if (process.env.FOLDMX_EVIDENCE === '1') await evidence()
         else onTestFailed(evidence)
-        if (scenario.origin === 'parent-message') {
-          expect.soft(samples.some(sample => sample.collapsing), 'a notice folds nothing').toBe(false)
+        if (scenario.origin === 'parent-message' || scenario.origin === 'steer') {
+          expect.soft(samples.some(sample => sample.collapsing), 'a control case folds nothing').toBe(false)
         }
         if (scenario.roomUntilReply !== true) {
-          expect.soft(afterFold.maxGap, 'blank after the fold settles').toBeLessThanOrEqual(BLANK_LIMIT)
-          expect.soft(transient.length, 'animation frames showing a blank').toBeLessThanOrEqual(TRANSIENT_FRAMES)
+          expect.soft(afterFold.maxGap, 'layout gap after the fold settles').toBeLessThanOrEqual(BLANK_LIMIT)
+          expect.soft(transient.length, 'animation frames with a layout gap').toBeLessThanOrEqual(TRANSIENT_FRAMES)
         }
-        expect.soft(afterTurn.maxGap, 'blank after the Turn settles').toBeLessThanOrEqual(BLANK_LIMIT)
+        expect.soft(afterTurn.maxGap, 'layout gap after the Turn settles').toBeLessThanOrEqual(BLANK_LIMIT)
         if (scenario.landing === 'tail') {
           expect.soft(afterFold.floor - afterFold.top, 'distance from the floor after the fold').toBeLessThanOrEqual(1)
           expect.soft(afterTurn.floor - afterTurn.top, 'distance from the floor after the Turn').toBeLessThanOrEqual(1)
@@ -829,9 +860,13 @@ describe.skipIf(MODE === 'record')('web e2e: blank area after next-message foldi
         }
         expect.soft(world.tripwire.pageErrors).toEqual([])
       } finally {
-        await world?.page.context().close().catch(() => undefined)
-        await world?.scaffold.close().catch((error: unknown) => { console.log(`FOLDMX close ${scenario.id}: ${String(error)}`) })
-        await rm(replayDir, { recursive: true, force: true })
+        // Scaffold close also asserts that every replay entry was consumed; its failures fail the case.
+        const failures: unknown[] = []
+        await world?.page.context().close().catch((error: unknown) => failures.push(error))
+        await world?.scaffold.close().catch((error: unknown) => failures.push(error))
+        await rm(replayDir, { recursive: true, force: true }).catch((error: unknown) => failures.push(error))
+        if (failures.length === 1) throw failures[0]
+        if (failures.length > 1) throw new AggregateError(failures, `${scenario.id}: cleanup failed`)
       }
     })
   }

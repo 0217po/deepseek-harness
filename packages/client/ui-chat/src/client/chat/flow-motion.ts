@@ -129,9 +129,14 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
     if (batch) cancelled = false
   }
 
+  /** Rows inside a closing ancestor change with it and never join a batch on their own. */
+  function batchMember(box: InputFoldBox): boolean {
+    return box.element.parentElement?.closest('[data-chat-motion="collapse"]') === null
+  }
+
   function runBatch(current: InputFoldDriver): void {
     const owned = [...boxes.values()]
-    const members = owned.filter(box => box.element.parentElement?.closest('[data-chat-motion="collapse"]') === null)
+    const members = owned.filter(batchMember)
       .sort((left, right) => left.element.compareDocumentPosition(right.element) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1)
     if (!members.some(box => box.closing)) return
     batch = true
@@ -383,7 +388,7 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
 
   return {
     collapse, reveal, cancelMotion, foldActive, onFoldIdle, cancelInput, resumeInput, clear,
-    inputActive: () => batch || (batchScheduled && [...boxes.values()].some(box => box.closing)),
+    inputActive: () => batch || (batchScheduled && [...boxes.values()].some(box => box.closing && batchMember(box))),
   }
 }
 

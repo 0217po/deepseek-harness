@@ -43,6 +43,8 @@ export interface FoldReader {
   readonly follow: ScrollFollow
   /** @param landing - the actual geometry after a batch landed at the tail. */
   readonly landedAtTail: (landing: ViewportLanding) => void
+  /** @returns whether reader movement awaits sampling; until then follow intent is undecided. */
+  readonly pending: () => boolean
 }
 
 interface PagingPosition {
@@ -116,6 +118,8 @@ export class ChatViewport {
     this.observer = null
     this.elements = null
     this.events = null
+    this.tailRequested = false
+    this.retarget = null
     this.turns = []
     this.observation = { top: 0, landing: null }
   }
@@ -240,7 +244,8 @@ export class ChatViewport {
     )
     return {
       begin: (boxes) => {
-        tail = this.tailRequested || follow.active
+        // Own input lands at the tail; otherwise an unsampled reading movement outranks follow intent.
+        tail = this.tailRequested || (follow.active && !reader.pending())
         this.tailRequested = false
         viewportTop = elements.scroller.getBoundingClientRect().top
         start = elements.scroller.scrollTop
@@ -302,6 +307,8 @@ export class ChatViewport {
           if (Math.abs(drift) > 0.5) {
             base = Math.max(0, base + drift)
             segmentTop += drift
+            // The reference moves on screen with the reader's scroll; only layout changes are corrected.
+            referenceTop -= drift
             aim()
           }
         }
