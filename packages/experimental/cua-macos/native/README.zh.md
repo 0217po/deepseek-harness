@@ -97,7 +97,7 @@ AppKit 在主事件循环上运行。阻塞式 AX 和输入使用每条连接的
 <a id="verification"></a>
 ## 验证
 
-使用 `python3 packages/experimental/cua-macos/native/tests/test_swift.py` 通过选定 Apple 工具链的 Swift Testing 框架和运行时路径执行离线单元检查；使用 `python3 packages/experimental/cua-macos/native/tests/protocol_e2e.py` 检查 JSONL 接纳、有序回复和 EOF 退出，不执行桌面操作。所有 Python 原生检查接受 `--helper` 以选择单独构建的对比二进制。
+使用 `python3 packages/experimental/cua-macos/native/tests/test_swift.py` 通过选定 Apple 工具链的 Swift Testing 框架和运行时路径执行离线单元检查；使用 `python3 packages/experimental/cua-macos/native/tests/protocol_e2e.py` 检查 JSONL 接纳、有序回复和 EOF 退出，不执行桌面操作。应用与协议端到端检查接受 `--helper` 以选择单独构建的对比二进制。
 
 运行 `python3 packages/experimental/cua-macos/native/tests/shared_helper_e2e.py --helper /absolute/helper`，通过测试自建的 AppKit fixture 核实并发启动、共享服务 PID、独立句柄、同一应用交接、请求级截图期限、连接清理和信号退出。需要已有辅助功能和屏幕录制权限。`--without-desktop` 将检查限定为协议与进程生命期。
 

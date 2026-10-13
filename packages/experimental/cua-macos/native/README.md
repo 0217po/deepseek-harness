@@ -97,7 +97,7 @@ Request modifier arrays accept command/control/option/shift/fn. The object API n
 <a id="verification"></a>
 ## Verification
 
-Use `python3 packages/experimental/cua-macos/native/tests/test_swift.py` for offline unit checks with the selected Apple toolchain’s Swift Testing framework/runtime paths and `python3 packages/experimental/cua-macos/native/tests/protocol_e2e.py` for JSONL admission, ordered replies and EOF shutdown without desktop operations. All Python native checks accept `--helper` to select a separately built comparison binary.
+Use `python3 packages/experimental/cua-macos/native/tests/test_swift.py` for offline unit checks with the selected Apple toolchain’s Swift Testing framework/runtime paths and `python3 packages/experimental/cua-macos/native/tests/protocol_e2e.py` for JSONL admission, ordered replies and EOF shutdown without desktop operations. Application and protocol e2e checks accept `--helper` to select a separately built comparison binary.
 
 Run `python3 packages/experimental/cua-macos/native/tests/shared_helper_e2e.py --helper /absolute/helper` to verify concurrent startup, a shared service PID, independent handles, same-application handoff, request-local screenshot deadlines, connection cleanup and signal shutdown with an owned AppKit fixture. Existing Accessibility and Screen Recording grants are required. `--without-desktop` limits the check to protocol and process lifetime.
 
