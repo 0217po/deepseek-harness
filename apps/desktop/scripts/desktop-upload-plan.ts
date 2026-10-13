@@ -63,6 +63,8 @@ export interface DesktopUploadPlanOptions {
   readonly repositoryRoot?: string
   readonly appRoot?: string
   readonly artifactsRoot?: string
+  /** Original product version from a verified retained build; absent reads the checkout manifests. */
+  readonly packagedProductVersion?: string
 }
 
 interface UpdateFileInfo {
@@ -188,8 +190,8 @@ export async function createDesktopUploadPlan(
   const repositoryRoot = options.repositoryRoot ?? REPOSITORY_ROOT
   const appRoot = options.appRoot ?? APP_ROOT
   const artifactsRoot = options.artifactsRoot ?? desktopTargetBuildPaths(targetName).artifacts
-  const dshVersion = await manifestVersion(join(repositoryRoot, 'package.json'), 'dsh package')
-  const desktopVersion = await manifestVersion(join(appRoot, 'package.json'), 'desktop package')
+  const dshVersion = options.packagedProductVersion ?? await manifestVersion(join(repositoryRoot, 'package.json'), 'dsh package')
+  const desktopVersion = options.packagedProductVersion ?? await manifestVersion(join(appRoot, 'package.json'), 'desktop package')
   if (dshVersion !== desktopVersion) {
     throw new Error(`desktop upload: desktop version ${desktopVersion} does not match current dsh version ${dshVersion}`)
   }

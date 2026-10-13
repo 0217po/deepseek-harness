@@ -1,10 +1,9 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { relative, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import yaml from 'js-yaml'
 import { expect, it } from 'vitest'
-import { desktopTargetBuildPaths } from '../apps/desktop/scripts/desktop-build-paths.mjs'
 
 const root = resolve(import.meta.dirname, '..')
 const workflow = yaml.load(readFileSync(resolve(root, '.github/workflows/windows-package.yml'), 'utf8')) as {
@@ -63,7 +62,7 @@ it('routes manual packaging to the dedicated runner with explicit preset and sig
   expect(job['runs-on']).toBe('dsh-win-package-trial')
   expect(workflow.concurrency).toEqual({ group: 'windows-desktop-package', 'cancel-in-progress': false })
   expect(workflow.permissions).toEqual({ contents: 'read' })
-  expect(Object.keys(workflow.on.workflow_dispatch!.inputs).sort()).toEqual(['build_version', 'preset', 'signing'])
+  expect(Object.keys(workflow.on.workflow_dispatch!.inputs).sort()).toEqual(['build_version', 'preset', 'publish', 'signing', 'test_release_id'])
   expect(workflow.on.workflow_dispatch!.inputs.signing!.default).toBe('unsigned')
   expect(workflow.on.workflow_dispatch!.inputs.build_version!.description).toContain('prefix must match checkout')
   expect(job.env.DSH_PACKAGING_PRESET).toBe('${{ inputs.preset }}')
@@ -91,11 +90,11 @@ it('validates before building and passes the same mode and version to checks and
 
 it('retains failure diagnostics and uploads only the selected successful installer', () => {
   const uploads = job.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))
-  expect(uploads).toHaveLength(3)
+  expect(uploads).toHaveLength(4)
   expect(uploads[0]!.if).toBe("always() && steps.checkout.outcome == 'success'")
   expect(uploads[0]!.with).toMatchObject({ path: 'apps/desktop/.desktop-build/packaging-runs/', 'include-hidden-files': true })
-  for (const [mode, directory] of [['unsigned', desktopTargetBuildPaths('win-x64').unsignedArtifacts], ['signed', desktopTargetBuildPaths('win-x64').artifacts]]) {
+  for (const mode of ['unsigned', 'signed']) {
     const upload = uploads.find(step => step.if === `success() && inputs.signing == '${mode}'`)!
-    expect(upload.with).toMatchObject({ path: `${relative(root, directory!).replaceAll('\\', '/')}/*.exe`, 'if-no-files-found': 'error' })
+    expect(upload.with).toMatchObject({ path: '${{ steps.retained.outputs.directory }}/*', 'if-no-files-found': 'error' })
   }
 })

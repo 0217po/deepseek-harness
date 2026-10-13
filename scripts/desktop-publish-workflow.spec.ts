@@ -1,0 +1,35 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import yaml from 'js-yaml'
+import { expect, it } from 'vitest'
+
+const workflow = yaml.load(readFileSync(resolve(import.meta.dirname, '../.github/workflows/desktop-publish.yml'), 'utf8')) as {
+  on: Record<string, unknown>
+  permissions: Record<string, string>
+  jobs: Record<string, {
+    if?: string
+    environment?: string
+    'runs-on': string | string[]
+    steps: Array<{ id?: string; if?: string; uses?: string; run?: string; env?: Record<string, string>; with?: Record<string, unknown> }>
+  }>
+}
+
+it('routes only completed package requests and gates production secrets with the production Environment', () => {
+  expect(workflow.on).toEqual({ workflow_run: {
+    workflows: ['Package Desktop · macOS', 'Package Desktop · Windows'], types: ['completed'],
+  } })
+  expect(workflow.permissions).toEqual({ contents: 'read', actions: 'read' })
+  expect(workflow.jobs.route?.if).toBe("github.event.workflow_run.conclusion == 'success'")
+  const publish = workflow.jobs.publish!
+  expect(publish.if).toBe("needs.route.outputs.publish == 'true'")
+  expect(publish['runs-on']).toEqual(['self-hosted', '${{ needs.route.outputs.runner }}'])
+  expect(publish.environment).toBe("${{ needs.route.outputs.preset == 'production' && 'desktop-production' || 'desktop-test' }}")
+  const ids = publish.steps.map(step => step.id)
+  expect(ids.indexOf('check')).toBeLessThan(ids.indexOf('key'))
+  expect(ids.indexOf('key')).toBeLessThan(ids.indexOf('app'))
+  expect(ids.indexOf('app')).toBeLessThan(ids.indexOf('publish'))
+  for (const id of ['key', 'app']) expect(publish.steps.find(step => step.id === id)?.if)
+    .toBe("needs.route.outputs.preset == 'production'")
+  expect(publish.steps.find(step => step.id === 'app')?.with).toMatchObject({ 'permission-contents': 'write' })
+  expect(publish.steps.find(step => step.id === 'publish')?.env?.DESKTOP_TAG_TOKEN).toBe('${{ steps.app.outputs.token }}')
+})

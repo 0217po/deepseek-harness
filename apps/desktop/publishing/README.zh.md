@@ -19,6 +19,8 @@ description: "将完整 Desktop 安装包与更新清单发布到选定下载服
 - [上传凭据](#credentials)
 - [上传审计与恢复](#audit-and-recovery)
 
+自托管留存构建使用 [CI 发布工作流](ci/README.zh.md)，在原机器保留安装包并支持恢复发布。
+
 <a id="prerequisites"></a>
 
 ## 发布前提

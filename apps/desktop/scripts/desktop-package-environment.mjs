@@ -35,6 +35,7 @@ export function localMacOSPackageEnvironment(environment = process.env) {
 
 /**
  * Read a machine preset when selected, otherwise the target's required dotenv; no ambient release fallback.
+ * PACKAGE_TEST_RELEASE_ID overrides the test preset only; blank retains its configured ID.
  * @param {'win32' | 'darwin'} platform Target platform.
  * @param {NodeJS.ProcessEnv} environment Parent environment, retained only for unrelated build tools.
  * @param {string} appRoot Desktop application directory; relative credential paths resolve here.
@@ -66,6 +67,12 @@ export function loadDesktopPackageEnvironment(platform, environment = process.en
           ? /^DSH_DESKTOP_WINDOWS_(?:CER_FILE|SIGNTOOL|KEY_CONTAINER|TOKEN_PIN)$/u.test(name)
           : MACOS_SETTING.test(name) && !publicPlatformSetting.test(name)))
     }
+  }
+  const releaseId = environment.PACKAGE_TEST_RELEASE_ID?.trim()
+  if (releaseId) {
+    if (preset !== 'test') throw new Error('desktop package: test release ID override requires the test preset')
+    if (!/^[a-f0-9]{32}$/u.test(releaseId)) throw new Error('desktop package: test release ID must contain 32 lowercase hexadecimal characters')
+    settings.DOWNLOAD_TEST_RELEASE_ID = releaseId
   }
   return {
     ...Object.fromEntries(Object.entries(environment).filter(([name]) => !AMBIENT_RELEASE_SETTING.test(name))),

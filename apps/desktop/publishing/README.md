@@ -19,6 +19,8 @@ Publish completed Desktop installers and update feeds to the selected download s
 - [Upload credentials](#credentials)
 - [Upload audit and recovery](#audit-and-recovery)
 
+For retained self-hosted builds, use the [CI publication workflow](ci/README.md), which keeps installers on their original machine and supports resumable publication.
+
 <a id="prerequisites"></a>
 
 ## Publication prerequisites

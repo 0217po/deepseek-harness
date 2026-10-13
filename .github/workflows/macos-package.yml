@@ -14,6 +14,16 @@ on:
         type: boolean
         default: false
         required: true
+      publish:
+        description: 'Publish successful signed packages and update the feed; production requires approval'
+        type: boolean
+        default: false
+        required: true
+      test_release_id:
+        description: '测试环境的前缀，用于隔离外部用户访问，留空使用默认配置；测试连续升级时需使用相同值；建议定期轮换默认值。'
+        type: string
+        default: ''
+        required: false
       build_version:
         description: 'Version: auto recommended; explicit version must match the checkout product prefix'
         type: string
@@ -38,6 +48,8 @@ jobs:
       PACKAGE_SKIP_NOTARIZATION: ${{ inputs.skip_notarization }}
       DSH_TELEMETRY_DISABLED: '1'
       DSH_PACKAGING_PRESET: ${{ inputs.preset }}
+      PACKAGE_PUBLISH: ${{ inputs.publish }}
+      PACKAGE_TEST_RELEASE_ID: ${{ inputs.test_release_id }}
     steps:
       - uses: actions/checkout@v7.0.1
         id: checkout
@@ -71,6 +83,11 @@ jobs:
           args=()
           if [[ "$PACKAGE_SKIP_NOTARIZATION" = true ]]; then args+=(--skip-notarization); fi
           pnpm run package:desktop:mac:arm64 --build-version "$PACKAGE_VERSION" "${args[@]}"
+      - name: Retain complete package outside the checkout
+        id: retained
+        env:
+          PACKAGE_VERSION: ${{ steps.settings.outputs.version }}
+        run: node --import tsx apps/desktop/scripts/retain-desktop-ci.ts
       - name: Retain packaging diagnostics
         if: always() && steps.checkout.outcome == 'success'
         uses: actions/upload-artifact@v7.0.1
@@ -86,8 +103,14 @@ jobs:
         with:
           name: macos-arm64-${{ steps.settings.outputs.mode }}-${{ steps.settings.outputs.version }}-${{ github.run_id }}-${{ github.run_attempt }}
           include-hidden-files: true
-          path: |
-            apps/desktop/.desktop-build/targets/mac-arm64/${{ steps.settings.outputs.artifacts }}/*.dmg
-            apps/desktop/.desktop-build/targets/mac-arm64/${{ steps.settings.outputs.artifacts }}/*.zip
+          path: ${{ steps.retained.outputs.directory }}/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain publication request
+        if: success() && inputs.publish
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: desktop-publish-request-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.retained.outputs.directory }}/manifest.json
           if-no-files-found: error
           retention-days: 14

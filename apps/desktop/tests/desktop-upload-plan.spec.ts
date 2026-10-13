@@ -292,6 +292,20 @@ describe('desktop upload plan', () => {
     })).rejects.toThrow(/completion record.*test/u)
   })
 
+  it('validates retained builds against their original product version after the checkout advances', async () => {
+    const paths = await fixture('mac-arm64', '1.2.3')
+    await writeFile(join(paths.repositoryRoot, 'package.json'), '{"version":"2.0.0"}\n')
+    await writeFile(join(paths.appRoot, 'package.json'), '{"version":"2.0.0"}\n')
+    await expect(createDesktopUploadPlan('mac-arm64', paths)).rejects.toThrow(/completion record/u)
+    const plan = await createDesktopUploadPlan('mac-arm64', { ...paths, packagedProductVersion: '1.2.3' })
+    expect(plan.version).toBe('1.2.3')
+    await expect(createDesktopUploadPlan('mac-arm64', { ...paths, packagedProductVersion: '1.2.4' }))
+      .rejects.toThrow(/completion record/u)
+    await writeFile(join(paths.artifactsRoot, 'deepseek-harness-1.2.3-mac-arm64.zip'), 'tampered')
+    await expect(createDesktopUploadPlan('mac-arm64', { ...paths, packagedProductVersion: '1.2.3' }))
+      .rejects.toThrow(/size.*metadata/u)
+  })
+
   it('rejects stale architecture metadata and modified updater bytes', async () => {
     const paths = await fixture('mac-arm64')
     const metadataPath = join(paths.artifactsRoot, 'nightly-mac.yml')
