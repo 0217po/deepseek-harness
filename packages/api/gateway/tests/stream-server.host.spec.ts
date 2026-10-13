@@ -618,6 +618,7 @@ async function fixturePeer(): Promise<PeerScope> {
     id: 'fixture-peer' as PeerId,
     ctx: fiber.ctx,
     principal: { kind: 'owner' },
+    interactions: 'answer',
     signal: new AbortController().signal,
     dispose: async () => { await fiber.dispose() },
   }
