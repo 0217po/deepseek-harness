@@ -30,5 +30,9 @@
     "text": 14,
     "code": 11,
     "terminal": 13
-  }
+  },
+  "referenceOrder": [
+    "Increase font size",
+    "Decrease font size"
+  ]
 }

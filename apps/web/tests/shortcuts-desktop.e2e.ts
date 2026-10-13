@@ -183,8 +183,7 @@ it.each([
         const afterReload = await readFontSizes()
         await composer.focus()
         await stepFontSizes(`${primary}+Minus`, defaults)
-        await compareOrRefreshGolden(join(expected, 'font-sizes.expected.md'),
-          `# Font sizes\n\n${JSON.stringify({ initial, afterEqual, afterPlus, afterMinus, afterReload, restored: await readFontSizes() }, null, 2)}`, mode)
+        const restored = await readFontSizes()
         const dialog = page.getByRole('dialog', { name: 'Keyboard shortcuts', exact: true })
         const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
         const automaticFocusStyle = () => page.evaluate(() => {
@@ -241,6 +240,12 @@ it.each([
         expect(await dialog.isVisible()).toBe(false)
         await openReference()
         await dialog.waitFor()
+        const referenceOrder = await dialog.getByRole('listitem').evaluateAll(rows => rows
+          .map(row => row.querySelector(':scope > span')?.textContent)
+          .filter(label => label === 'Increase font size' || label === 'Decrease font size'))
+        expect(referenceOrder).toEqual(['Increase font size', 'Decrease font size'])
+        await compareOrRefreshGolden(join(expected, 'font-sizes.expected.md'),
+          `# Font sizes\n\n${JSON.stringify({ initial, afterEqual, afterPlus, afterMinus, afterReload, restored, referenceOrder }, null, 2)}`, mode)
         expect(await dialog.getByRole('searchbox').evaluate(node => node === document.activeElement)).toBe(true)
         expect(await automaticFocusStyle()).toEqual(noFocusRing)
         const referenceShadow = await dialog.evaluate(node => getComputedStyle(node).boxShadow)

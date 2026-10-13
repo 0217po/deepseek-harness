@@ -11,6 +11,7 @@
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
+import type { NormalizedBinding } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 // Type-only: the ctx.configForms Context merge. Cross-plugin collaboration
 // goes through the service, never a value import (client bundle purity gate).
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -499,10 +500,15 @@ function installFontSizeShortcuts(ctx: ClientContext, adjust: (delta: 1 | -1) =>
   ctx.inject(['shortcuts', 'locale'], (scope) => {
     if (scope.shortcuts.runtime !== 'desktop') return
     const t = scope.locale.bind(SETTINGS_NS)
-    for (const [direction, code] of [['increase', 'Equal'], ['decrease', 'Minus']] as const) {
+    const combinations: { binding: NormalizedBinding; delta: 1 | -1 }[] = []
+    // Fixed bindings drive both reservation and matching.
+    for (const [direction, code, delta] of [['increase', 'Equal', 1], ['decrease', 'Minus', -1]] as const) {
       const binding = { code, modifiers: ['primary'] as const }
       const bindings = direction === 'increase'
         ? [binding, { code, modifiers: ['primary', 'shift'] as const }] as const : [binding] as const
+      for (const candidate of bindings) {
+        combinations.push({ binding: scope.shortcuts.describeBinding(candidate).binding as NormalizedBinding, delta })
+      }
       scope.effect(() => scope.shortcuts.registerFixed({
         id: `fontSize.${direction}` as ShortcutCommandId, label: () => t(`fontSize.text.${direction}`),
         keys: scope.shortcuts.describeBinding(binding).keys,
@@ -512,11 +518,12 @@ function installFontSizeShortcuts(ctx: ClientContext, adjust: (delta: 1 | -1) =>
     scope.effect(() => scope.shortcuts.observeFixedInput((input) => {
       if (input.type === 'reset') return
       const { gesture, context } = input
-      if (gesture.composing || gesture.defaultPrevented || gesture.repeat || context.region === 'terminal'
-        || gesture.alt || (scope.shortcuts.platform === 'macos' ? !gesture.meta || gesture.control : !gesture.control || gesture.meta)
-        || (gesture.code !== 'Equal' && gesture.code !== 'Minus') || (gesture.code === 'Minus' && gesture.shift)) return
+      if (gesture.composing || gesture.defaultPrevented || gesture.repeat || context.region === 'terminal') return
+      const matched = combinations.find(({ binding }) => binding.code === gesture.code
+        && (['control', 'alt', 'shift', 'meta'] as const).every(modifier => gesture[modifier] === binding.modifiers.includes(modifier)))
+      if (matched === undefined) return
       input.consume()
-      adjust(gesture.code === 'Equal' ? 1 : -1)
+      adjust(matched.delta)
     }), 'ui-theme: font size input')
   })
 }
