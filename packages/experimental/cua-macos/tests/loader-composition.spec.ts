@@ -120,7 +120,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   expect(Buffer.from(stored.data).toString('base64')).toBe(png)
   expect(JSON.stringify(model.requests.at(-1)?.messages)).toContain(JSON.stringify(image.attachment))
   expect(JSON.stringify(toolMessages)).not.toContain(png)
-  expect(JSON.stringify(toolMessages.at(-1))).toContain('window-points')
+  expect(JSON.stringify(toolMessages.at(-1))).toContain('screenshot-pixels')
   const events = await readEvents()
   expect(events.filter(event => event.event === 'start')).toHaveLength(1)
   expect(events.filter(event => event.event === 'call').map(event => event.method)).toEqual(calls.map(call => call.method))
