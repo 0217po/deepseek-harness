@@ -1,4 +1,4 @@
-name: Windows installer
+name: Package Desktop · Windows
 
 on:
   workflow_dispatch:

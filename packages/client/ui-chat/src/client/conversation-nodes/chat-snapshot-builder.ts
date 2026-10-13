@@ -11,7 +11,7 @@ import type {
   ChatLocationNodeIndex, ChatNodeProcessSource, ChatNodeSource, ChatNodeStore, ChatSnapshot,
   ChatTurnNavigationIndex, ChatTurnProcessPresentation, LegacyConversationSlice, TurnNavigationItem,
 } from '../contract/snapshot.ts'
-import { TURN_PROCESS_INDEPENDENT_KINDS } from '../contract/turn-process.ts'
+import { isAtOrOutside } from '../contract/group-tree.ts'
 import { locationCoordinates } from './common.ts'
 import { sessionRecallLabels, skillInvocationName } from './event-projection.ts'
 import { GroupTreeSegments } from './group-tree-segments.ts'
@@ -457,7 +457,7 @@ function turnProcessPresentations(
     if (location.kind !== 'turn' && location.kind !== 'step') continue
     const current: TurnProcessPresentation = presentations.get(location.turn.turn) ?? {}
     const controlAnchor = current.control?.data.controlAnchorSeq
-    if ((node.kind === 'user' || node.kind === 'turn-trigger' || node.kind === 'steering')
+    if (isAtOrOutside(node, 'input')
       && controlAnchor !== undefined
       && (controlAnchor === location.turn.start?.seq || node.anchorSeq < controlAnchor)) {
       presentations.set(location.turn.turn, {
@@ -466,7 +466,7 @@ function turnProcessPresentations(
       })
       continue
     }
-    if (TURN_PROCESS_INDEPENDENT_KINDS.has(node.kind)) continue
+    if (isAtOrOutside(node, 'turn')) continue
     presentations.set(location.turn.turn, {
       ...current,
       earliestProcessAnchor: Math.min(current.earliestProcessAnchor ?? node.anchorSeq, node.anchorSeq),
@@ -497,7 +497,7 @@ function presentationPosition(
   const openingInputAnchor = presentation.openingInputAnchor
   if (openingInputAnchor !== undefined
     && node.anchorSeq < openingInputAnchor
-    && !TURN_PROCESS_INDEPENDENT_KINDS.has(node.kind)) {
+    && !isAtOrOutside(node, 'turn')) {
     return { anchor: openingInputAnchor, rank: 2, originalAnchor: node.anchorSeq }
   }
   if (presentation.control !== undefined && node.key === presentation.control.key) {
@@ -1148,6 +1148,7 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
         || previous.kind !== node.kind
         || previous.anchorSeq !== node.anchorSeq
         || previous.visibility !== node.visibility
+        || previous.groupTree !== node.groupTree
         || locationIdentity(previous.location) !== locationIdentity(node.location)
       structural ||= nodeStructural
       if (!nodeStructural) contentOnly.push(node)

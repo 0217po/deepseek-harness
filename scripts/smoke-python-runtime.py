@@ -11,6 +11,7 @@ import json
 import os
 import queue
 import re
+import runpy
 import secrets
 import shutil
 import subprocess
@@ -127,6 +128,11 @@ MINIMAL_SNAPSHOT_DIRECTORY = (
 if IS_WINDOWS:
     MINIMAL_SNAPSHOT_DIRECTORY /= "win-x64"
 MINIMAL_SNAPSHOT_FILENAMES = ("model-visible.json",)
+AUTHORING_SNAPSHOT_DIRECTORY = (
+    Path(__file__).resolve().parent / "snapshots" / "python-sdk-single-exe" / "authoring"
+)
+if IS_WINDOWS:
+    AUTHORING_SNAPSHOT_DIRECTORY /= "win-x64"
 IN_HISTORY_SNAPSHOT_DIRECTORY = (
     Path(__file__).resolve().parent / "snapshots" / "python-sdk-single-exe" / "minimal-in-history"
 )
@@ -924,8 +930,10 @@ def _smoke_sdk_authoring_cached(base_url: str, executable: Path, update_snapshot
             requests = MockModelHandler.requests[first:]
             assert len(requests) == 2, requests
             prompt = json.dumps(requests[0], ensure_ascii=False)
-            for name in ("office-docx", "office-pptx", "office-xlsx"):
+            assert ("- `office`:" in prompt) == (mode != "disabled"), mode
+            for name in ("office-docx", "office-pptx", "office-xlsx", "office-render", "office-recalculate", "office-export-pdf"):
                 assert (name in prompt) == (mode != "disabled"), (mode, name)
+            assert "render --input" not in prompt and "libreofficeKit" not in prompt, mode
             assert ("CUSTOM_OFFICE_DOCX" in prompt) == (mode == "replacement"), mode
             tool_result = next(block for message in requests[1]["messages"]
                                for block in message.get("content", [])
@@ -941,27 +949,33 @@ def _smoke_sdk_authoring_cached(base_url: str, executable: Path, update_snapshot
                 subprocess.run([
                     str(python), "-I", "-B", str(Path(__file__).parent / "primary-runtime/smoke.py"),
                     json.dumps(manifest["pythonPackages"]), manifest["python"],
-                    str(resources / "office-skills/scripts/check_office.py"),
                 ], check=True, timeout=120,
                     env={name: value for name, value in os.environ.items()
                          if not re.search(r"KEY|SECRET|TOKEN|PASSWORD", name, re.I)})
                 schema = next(tool for tool in requests[0]["tools"] if tool.get("name") == "load_workspace_dependencies")
-                visible = {"tool": schema, "result": {**dependencies, "python": "{{python}}", "pythonPackages": "{{site-packages}}",
+                catalogs = [message_text(message.get("content", [])) for message in requests[0]["messages"]
+                            if "<available_skills>" in message_text(message.get("content", []))]
+                assert len(catalogs) == 1, catalogs
+                for actual, token in snapshot_directory_replacements(root, "{{cwd}}"):
+                    catalogs = [catalog.replace(actual, token) for catalog in catalogs]
+                visible = {"tool": schema, "catalogs": catalogs, "result": {**dependencies, "python": "{{python}}", "pythonPackages": "{{site-packages}}",
                            **{name: "{{" + name + "}}" for name in ("node", "nodePackages", "pnpm")}}}
                 compare_snapshot_files(
                     {"model-visible.json": json.dumps(visible, indent=2, ensure_ascii=False) + "\n"},
-                    update_snapshots, Path(__file__).parent / "snapshots/python-sdk-single-exe/authoring",
+                    update_snapshots, AUTHORING_SNAPSHOT_DIRECTORY,
                     ("model-visible.json",),
                 )
     print("smoke-python-runtime: bundled Python, default skills, replacement and disabled skills passed")
 
 
 def smoke_sdk_office(executable: Path) -> None:
-    """Relocate the wheel payload and convert a real DOCX with the target platform engine."""
+    """Exercise the relocated profile's bundled Office API and shell commands."""
     from deepseek_harness import DeepSeekHarness
 
-    with tempfile.TemporaryDirectory(prefix="dsh-sdk-office-") as temporary:
-        root = Path(temporary).resolve()
+    checks_path = Path(__file__).resolve().parent / "fixtures/office-render.py"
+    checks = runpy.run_path(checks_path)
+    artifacts = os.environ.get("DSH_OFFICE_TEST_ARTIFACTS")
+    with checks["workspace"](None if artifacts is None else Path(artifacts), prefix="dsh-sdk-office-") as root:
         relocated = root / executable.name
         stem = executable.name.removesuffix(".exe")
         resources = executable.with_name(stem.removeprefix("deepseek-harness-sdk-runtime-"))
@@ -987,11 +1001,18 @@ def smoke_sdk_office(executable: Path) -> None:
             raise AssertionError(f"Office sidecar must contain only {expected_backend}: {engines}")
         plugin = root / "office.mjs"
         shutil.copy2(Path(__file__).resolve().parent / "fixtures/python-sdk-office.mjs", plugin)
-        document = root / "document.docx"
-        with zipfile.ZipFile(document, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-            archive.writestr("[Content_Types].xml", '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>')
-            archive.writestr("_rels/.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>')
-            archive.writestr("word/document.xml", '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Python Office wheel</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:body></w:document>')
+        documents = checks["copy_documents"](root)
+        document = documents["docx"]
+
+        environment = {key: value for key, value in os.environ.items()
+                       if not key.startswith("DSH_") and not any(part in key.upper() for part in ("KEY", "SECRET", "TOKEN", "PASSWORD"))}
+        environment.update(PATH="")
+        node = office / "node/bin" / ("node.exe" if native.startswith("win32-") else "node")
+        cli = adapter.parent / "lib/cli.js"
+        checks["render_cli"](
+            [str(node), str(cli)], documents, root, expected_backend, environment,
+            check_content=False,
+        )
 
         mode = expected_backend
         output = root / f"{mode}.pdf"
@@ -1001,7 +1022,8 @@ def smoke_sdk_office(executable: Path) -> None:
             "id": "python-sdk-office-smoke",
             "inject": ["skills"],
             "name": plugin.as_uri(),
-            "config": {"input": str(document), "output": str(output), "result": str(result_path)},
+            "config": {"input": str(document), "output": str(output), "result": str(result_path),
+                       "imageInput": str(documents["pptx"]), "imageOutput": str(root / "node-pptx")},
         }]}]))
         with DeepSeekHarness(
             provider="deepseek-official",
@@ -1013,9 +1035,9 @@ def smoke_sdk_office(executable: Path) -> None:
             api_key="sk-keyless-smoke",
             base_url="http://127.0.0.1:9",
             env={"DSH_PERMISSION_MODE": "danger-full-access", "DSH_TELEMETRY_DISABLED": "1", "DSH_RESOURCE_CACHE": str(root / "cache")},
-            # The startup plugin awaits a converter with a 120-second deadline before JSON-RPC is ready.
-            initialize_timeout_seconds=180,
-            request_timeout_seconds=180,
+            # Startup performs three serial Office operations with 120-second engine deadlines.
+            initialize_timeout_seconds=480,
+            request_timeout_seconds=480,
         ):
             pass
         result = json.loads(result_path.read_text())
@@ -1023,6 +1045,7 @@ def smoke_sdk_office(executable: Path) -> None:
             raise AssertionError(f"Office conversion did not use {expected_backend}: {result}")
         if not result["moduleUrl"].startswith(office.as_uri() + "/"):
             raise AssertionError(f"Office module was not loaded from the downloaded sidecar: {result}")
+        checks["check_render_manifest"](result["images"], expected_backend)
         pdf = output.read_bytes()
         if len(pdf) < 100 or not pdf.startswith(b"%PDF-"):
             raise AssertionError(f"Office conversion produced an invalid PDF at {output}")
@@ -1039,7 +1062,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 from deepseek_harness.office import convert, render_images, recalculate
 root = Path(sys.argv[1])
-assert convert(root / 'document.docx', root / 'python.pdf').backend == sys.argv[2]
+assert convert(root / 'color-blocks.docx', root / 'python.pdf').backend == sys.argv[2]
 rendered = render_images(root / 'python.pdf', root / 'images', pages=[1])
 assert rendered.images and rendered.images[0].path.read_bytes().startswith(b'\\x89PNG')
 recalculate(root / 'input.xlsx', root / 'calculated.xlsx')
@@ -1646,6 +1669,19 @@ def smoke_sdk_snapshot_mode(
             )
 
         assert result.final_response == SNAPSHOT_FINAL_TEXT, (result.final_response, harness.client._runtime_diagnostics())
+        jobs = [event for event in result.events if event.get("type") in ("job/registered", "job/settled")]
+        assert [event["type"] for event in jobs] == ["job/registered", "job/settled"], jobs
+        registered, settled = (event["data"] for event in jobs)
+        assert registered["jobId"] == settled["jobId"]
+        assert registered["startedAt"] == settled["startedAt"] <= settled["finishedAt"]
+        assert settled["producerReported"] is True and settled["status"] == "completed"
+        root_call_id = "advanced-code" if mode == "ptc" else "advanced-native"
+        call_id = root_call_id + ":ptc:1" if mode == "ptc" else root_call_id
+        assert registered["toolCall"] == {"callId": call_id, "rootCallId": root_call_id}
+        subscribed_jobs = [notification.payload["event"] for notification in result.notifications
+                           if notification.method == "session.event"
+                           and notification.payload.get("event", {}).get("type") in ("job/registered", "job/settled")]
+        assert subscribed_jobs == jobs
         offloads = [event for event in result.events if event.get("type") == "image/offload"]
         if len(offloads) != 1 or "surfaceOp" in offloads[0]:
             raise AssertionError(f"advanced snapshot expected one standalone image offload: {offloads}")
@@ -1689,6 +1725,8 @@ def smoke_sdk_snapshot_mode(
                 raise AssertionError("first advanced child log has no direct-subagent result")
             if "WORKFLOW_CHILD_OK" not in render_jsonl(logs[child_ids[1]]):
                 raise AssertionError("second advanced child log has no workflow-subagent result")
+
+        assert [event for event in logs[SNAPSHOT_SESSION_ID] if event.get("type") in ("job/registered", "job/settled")] == jobs
 
         files = build_snapshot_files(result, logs, child_ids, root)
         compare_snapshot_files(
@@ -2676,6 +2714,14 @@ def normalize_snapshot_value(
     if not isinstance(value, dict):
         return value
 
+    if value.get("type") in ("job/registered", "job/settled"):
+        data = value.get("data")
+        job_id = data.get("jobId") if isinstance(data, dict) else None
+        if (isinstance(job_id, str) and not re.fullmatch(r"\{\{id:[1-9]\d*\}\}", job_id)
+                and not any(actual == job_id for actual, _ in replacements)):
+            index = 1 + sum(token.startswith("{{id:") for _, token in replacements)
+            replacements.append((job_id, "{{id:" + str(index) + "}}"))
+
     normalized = {
         key: normalize_snapshot_value(item, replacements)
         for key, item in value.items()
@@ -2686,6 +2732,12 @@ def normalize_snapshot_value(
         data = normalized.get("data")
         if isinstance(data, dict) and "childCreatedAt" in data:
             data["childCreatedAt"] = 0
+    if normalized.get("type") in ("job/registered", "job/settled"):
+        data = normalized.get("data")
+        if isinstance(data, dict):
+            for field in ("startedAt", "finishedAt"):
+                if field in data:
+                    data[field] = 0
     if "seq" in normalized and "time" in normalized:
         normalized["time"] = 0
     if normalized.get("type") in ("assistant/message", "assistant/attempt"):

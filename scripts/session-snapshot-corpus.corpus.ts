@@ -209,7 +209,7 @@ it('keeps V3 replay input plus bounded declared historical migration coverage', 
   const summary = assertSnapshotCorpusPolicy(inventory)
   expect(summary.baselineRoles).toBeGreaterThan(0)
   expect(summary).toMatchObject({
-    retainedRoles: 11,
-    retainedScenarios: 8,
+    retainedRoles: 13,
+    retainedScenarios: 10,
   })
 })
