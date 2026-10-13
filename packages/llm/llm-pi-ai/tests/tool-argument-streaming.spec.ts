@@ -42,7 +42,7 @@ async function collect(events: AsyncIterable<AssistantMessageEvent>): Promise<{ 
 const context = normalizeContext({ messages: [{ role: 'user', content: 'hi', timestamp: 0 }] })
 
 describe('streamed tool-call arguments (patched pi-ai)', () => {
-  it('omits an empty Responses message after parallel tool calls before assembly', async () => {
+  it('preserves an empty Responses message after parallel tool calls with its replay metadata', async () => {
     const calls = [0, 1, 2].map(index => ({ type: 'function_call', call_id: `call_${index}`, id: `item_${index}`, name: 'read', arguments: '{}' }))
     const empty = { type: 'message', id: 'message_empty', role: 'assistant', content: [{ type: 'output_text', text: '', annotations: [] }] }
     const server = await mockServer([{ events: [
@@ -59,8 +59,14 @@ describe('streamed tool-call arguments (patched pi-ai)', () => {
     for await (const chunk of toStreamChunks(streamResponses(model('openai-responses', server.url), context, { apiKey: 'test-key' }))) {
       assembler.push(chunk)
     }
-    expect(assembler.blocks()).toEqual(calls.map(call => ({ type: 'tool-call', id: `${call.call_id}|${call.id}`, name: 'read', arguments: '{}' })))
-    expect(assembler.replayState?.blocks).toEqual(calls.map(() => ({ type: 'tool-call' })))
+    expect(assembler.blocks()).toEqual([
+      ...calls.map(call => ({ type: 'tool-call', id: `${call.call_id}|${call.id}`, name: 'read', arguments: '{}' })),
+      { type: 'text', text: '' },
+    ])
+    expect(assembler.replayState?.blocks).toEqual([
+      ...calls.map(() => ({ type: 'tool-call' })),
+      { type: 'text', textSignature: JSON.stringify({ v: 1, id: 'message_empty' }) },
+    ])
     expect(assembler.finish).toEqual({ kind: 'tool-calls' })
     expect(server.requests).toHaveLength(1)
   })
