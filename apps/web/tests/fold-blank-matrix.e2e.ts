@@ -36,6 +36,8 @@ const MODE = webSnapshotMode()
 const SEEDED_TURNS = 8
 const SEEDED_STEPS = 6
 const LIVE_STEPS = 6
+/** Live Steps the steered Turn replays before the steering message is delivered. */
+const STEER_STEPS = 3
 const BLANK_LIMIT = 120
 /**
  * A closing row fading in place can expose its emptied space for one frame before it finishes
@@ -284,7 +286,7 @@ function replayFor(scenario: Case): ReplayEntry[] {
     case 'queued':
       return [...liveLongTurn('FOLDMX_LIVE'), replyEntry('FOLDMX_REPLY')]
     case 'steer':
-      return [...liveLongTurn('FOLDMX_LIVE').slice(0, 3), replyEntry('FOLDMX_STEERED')]
+      return [...liveLongTurn('FOLDMX_LIVE').slice(0, STEER_STEPS), replyEntry('FOLDMX_STEERED')]
     case 'parent-message':
       return [replyEntry('FOLDMX_PARENT_REPLY')]
     case 'big-exchange':
@@ -292,24 +294,26 @@ function replayFor(scenario: Case): ReplayEntry[] {
   }
 }
 
-async function stableScroll(page: Page, root: string): Promise<void> {
-  await page.evaluate(async (selector) => {
+async function stableScroll(page: Page, root: string, timeoutMs = 20_000): Promise<void> {
+  await page.evaluate(async ([selector, limit]) => {
     const host = document.querySelector<HTMLElement>(selector)
     if (host === null) throw new Error(`scrollport is absent: ${selector}`)
     let previous = host.scrollTop
-    let stableSince = performance.now()
-    await new Promise<void>((resolveStable) => {
+    const started = performance.now()
+    let stableSince = started
+    await new Promise<void>((resolveStable, reject) => {
       const check = (): void => {
         const now = performance.now()
         const moving = host.querySelector('[data-chat-motion="collapse"], [data-chat-motion="reveal"]') !== null
         if (Math.abs(host.scrollTop - previous) > 0.25 || moving) stableSince = now
         previous = host.scrollTop
         if (now - stableSince >= 300) resolveStable()
+        else if (now - started >= limit) reject(new Error(`scroll did not settle within ${String(limit)}ms: top ${String(host.scrollTop)}, motion ${String(moving)}`))
         else requestAnimationFrame(check)
       }
       requestAnimationFrame(check)
     })
-  }, root)
+  }, [root, timeoutMs] as const)
 }
 
 function measure(page: Page, root: string): Promise<Geometry> {
@@ -425,25 +429,61 @@ async function expandSeededSteps(page: Page, root: string, scenario: Case): Prom
   await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur() })
 }
 
-/** Hold the finish of one future model call; calls are counted from installation. */
-function holdFinishOf(scaffold: WebScaffold, callIndex: number): { readonly reached: Promise<void>; release(): void; dispose(): void } {
+/** Model-call barrier for one live Turn. */
+interface FinishHold {
+  /** Resolves when the held call streams its finish; rejects after the timeout. */
+  reached(timeoutMs: number): Promise<void>
+  release(): void
+  dispose(): void
+  /** Model calls observed since installation and the target Session's latest event types. */
+  describe(): string
+}
+
+/**
+ * Hold the finish of the first model call for `session` whose streamed text contains `marker`.
+ * The call is identified by its replayed content, so auxiliary or reordered calls cannot shift the barrier.
+ */
+function holdFinishOf(scaffold: WebScaffold, session: SessionId, marker: string): FinishHold {
   const gate = Promise.withResolvers<undefined>()
   const reached = Promise.withResolvers<undefined>()
-  let calls = 0
-  const dispose = scaffold.ctx.on('llm/stream', async function* (_options, next) {
-    const index = calls++
+  const calls: string[] = []
+  let held = false
+  const dispose = scaffold.ctx.on('llm/stream', async function* (options, next) {
+    const index = calls.length
+    calls.push(`#${String(index)} ${options.sessionId ?? 'no-session'}/${options.purpose ?? 'turn'}`)
+    let matched = false
     for await (const chunk of next()) {
-      if (index === callIndex && chunk.type === 'finish') {
-        reached.resolve(undefined)
-        await gate.promise
+      if (chunk.type === 'block-end' && chunk.block.type === 'text' && chunk.block.text.includes(marker)) matched = true
+      if (chunk.type === 'finish') {
+        calls[index] = `${calls[index] ?? ''} finish=${chunk.reason.kind}${matched ? ` ${marker}` : ''}`
+        if (!held && matched && options.sessionId === session) {
+          held = true
+          reached.resolve(undefined)
+          await gate.promise
+        }
       }
       yield chunk
     }
   })
+  const describe = (): string => {
+    const events = scaffold.ctx.agents.get(session)?.session.snapshotEvents() ?? []
+    return `model calls: [${calls.join('; ')}]; ${session} event tail: ${events.slice(-12).map(event => event.type).join(', ')}`
+  }
   return {
-    reached: reached.promise.then(() => undefined),
+    reached: async (timeoutMs) => {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const expired = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => { reject(new Error(`no model call streamed ${marker} within ${String(timeoutMs)}ms`)) }, timeoutMs)
+      })
+      try {
+        await Promise.race([reached.promise, expired])
+      } finally {
+        clearTimeout(timer)
+      }
+    },
     release: () => { gate.resolve(undefined) },
     dispose: () => { gate.resolve(undefined); dispose() },
+    describe,
   }
 }
 
@@ -655,13 +695,15 @@ async function run(world: World, scenario: Case): Promise<RunResult> {
     }
     case 'queued':
     case 'steer': {
-      const steps = scenario.origin === 'queued' ? LIVE_STEPS : 2
-      const gate = holdFinishOf(scaffold, steps)
+      // Queued: hold the long final body. Steer: hold the last replayed Step so the steering message lands in this Turn.
+      const gate = holdFinishOf(scaffold, target, scenario.origin === 'queued' ? 'FOLDMX_LIVE_BODY' : `FOLDMX_LIVE_STEP_${String(STEER_STEPS)}`)
+      const first = turnEnded(scaffold, target, scenario.origin === 'queued' ? 2 : 1)
+      // A failed earlier step reports itself; the success path still awaits and rethrows this rejection.
+      first.catch(() => undefined)
       try {
-        const first = turnEnded(scaffold, target, scenario.origin === 'queued' ? 2 : 1)
         await toBottom(page, root)
         await send(world, 'FOLDMX_START_LIVE_TURN')
-        await gate.reached
+        await gate.reached(60_000)
         await stableScroll(page, root)
         if (scenario.origin === 'queued' && scenario.reader.kind === 'marker') {
           await page.locator(root).getByText('FOLDMX_LIVE_BODY', { exact: false }).last().waitFor()
@@ -681,6 +723,8 @@ async function run(world: World, scenario: Case): Promise<RunResult> {
           .first().waitFor({ timeout: 30_000 })
         afterFold = await folded()
         await first
+      } catch (error) {
+        throw new Error(`${scenario.id}: ${error instanceof Error ? error.message : String(error)}\n${gate.describe()}`, { cause: error })
       } finally {
         gate.dispose()
       }
@@ -789,7 +833,7 @@ describe.skipIf(MODE === 'record')('web e2e: blank area after next-message foldi
         await world?.scaffold.close().catch((error: unknown) => { console.log(`FOLDMX close ${scenario.id}: ${String(error)}`) })
         await rm(replayDir, { recursive: true, force: true })
       }
-    }, 240_000)
+    })
   }
 })
 
