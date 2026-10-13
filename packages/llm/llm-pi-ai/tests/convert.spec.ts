@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment'
 import type { AttachmentStore, ImageAttachmentRef, ImageRequestTarget, RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
-import { createToolResultMessage, createUserMessage, ToolCallId, CONTEXT_WINDOW_EXCEEDED_CODE, EMPTY_RESPONSE_CODE, createMessage } from '@deepseek-ai/dsh-llm'
+import { BlockAssembler, createToolResultMessage, createUserMessage, ToolCallId, CONTEXT_WINDOW_EXCEEDED_CODE, EMPTY_RESPONSE_CODE, createMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { AssistantMessage, AssistantMessageEvent, Usage } from '@earendil-works/pi-ai'
 import { transformMessages } from '@earendil-works/pi-ai/api/transform-messages'
@@ -737,13 +737,15 @@ describe('toStreamChunks', () => {
     const chunks = await collect(toStreamChunks(feed(
       { type: 'start', partial: assistant() },
       { type: 'text_start', contentIndex: 0, partial: assistant() },
-      { type: 'text_delta', contentIndex: 0, delta: 'hi', partial: assistant() },
+      { type: 'text_delta', contentIndex: 0, delta: 'h', partial: assistant() },
+      { type: 'text_delta', contentIndex: 0, delta: 'i', partial: assistant() },
       { type: 'text_end', contentIndex: 0, content: 'hi', partial: assistant() },
       { type: 'done', reason: 'stop', message: done },
     )))
     expect(chunks).toEqual([
       { type: 'block-start', index: 0, blockType: 'text' },
-      { type: 'text-delta', index: 0, text: 'hi' },
+      { type: 'text-delta', index: 0, text: 'h' },
+      { type: 'text-delta', index: 0, text: 'i' },
       { type: 'block-end', index: 0, block: { type: 'text', text: 'hi' } },
       { type: 'usage', usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } },
       {
@@ -761,6 +763,77 @@ describe('toStreamChunks', () => {
           blocks: [{ type: 'text' }],
         },
       },
+    ])
+  })
+
+  it.each(['', ' ', 'finished'])('settles a final text item %j beside tool calls with aligned replay metadata', async (text) => {
+    const tool = { type: 'toolCall' as const, id: 'call|item', name: 'read', arguments: {} }
+    const native = assistant({ api: 'openai-responses', stopReason: 'toolUse', content: [
+      tool, { type: 'text', text, textSignature: 'message-id' },
+    ] })
+    const chunks = await collect(toStreamChunks(feed(
+      { type: 'toolcall_start', contentIndex: 0, partial: native },
+      { type: 'toolcall_end', contentIndex: 0, toolCall: tool, partial: native },
+      { type: 'text_start', contentIndex: 1, partial: native },
+      { type: 'text_delta', contentIndex: 1, delta: '', partial: native },
+      { type: 'text_end', contentIndex: 1, content: text, partial: native },
+      { type: 'done', reason: 'toolUse', message: native },
+    )))
+    const assembler = new BlockAssembler()
+    for (const chunk of chunks) assembler.push(chunk)
+    expect(assembler.blocks()).toEqual([
+      { type: 'tool-call', id: tool.id, name: tool.name, arguments: '{}' },
+      ...text.length === 0 ? [] : [{ type: 'text', text }],
+    ])
+    expect(assembler.replayState?.blocks).toEqual([
+      { type: 'tool-call' }, ...text.length === 0 ? [] : [{ type: 'text', textSignature: 'message-id' }],
+    ])
+    expect(chunks.filter(chunk => 'index' in chunk && chunk.index === 1)).toHaveLength(text.length === 0 ? 0 : 2)
+    expect(native.content).toHaveLength(2)
+  })
+
+  it('keeps replay aligned if a provider replaces streamed text with an empty final item', async () => {
+    const native = assistant({ content: [{ type: 'text', text: '', textSignature: 'final-id' }] })
+    const assembler = new BlockAssembler()
+    for await (const chunk of toStreamChunks(feed(
+      { type: 'text_start', contentIndex: 0, partial: native },
+      { type: 'text_delta', contentIndex: 0, delta: 'draft', partial: native },
+      { type: 'text_end', contentIndex: 0, content: '', partial: native },
+      { type: 'done', reason: 'stop', message: native },
+    ))) assembler.push(chunk)
+    expect(assembler.blocks()).toEqual([{ type: 'text', text: '' }])
+    expect(assembler.replayState?.blocks).toEqual([{ type: 'text', textSignature: 'final-id' }])
+  })
+
+  it('reports an empty response when the only text item has no content', async () => {
+    const native = assistant({ content: [{ type: 'text', text: '' }] })
+    const chunks = await collect(toStreamChunks(feed(
+      { type: 'text_start', contentIndex: 0, partial: native },
+      { type: 'text_end', contentIndex: 0, content: '', partial: native },
+      { type: 'done', reason: 'stop', message: native },
+    )))
+    expect(chunks).toHaveLength(2)
+    expect(chunks.at(-1)).toMatchObject({ type: 'finish', reason: { kind: 'error', failure: { code: EMPTY_RESPONSE_CODE } }, replayState: { blocks: [] } })
+  })
+
+  it('aligns replay signatures when deferred text starts after an interleaved thinking block', async () => {
+    const native = assistant({ content: [
+      { type: 'text', text: 'answer', textSignature: 'text-id' },
+      { type: 'thinking', thinking: 'reason', thinkingSignature: 'thinking-id' },
+    ] })
+    const chunks = await collect(toStreamChunks(feed(
+      { type: 'text_start', contentIndex: 0, partial: native },
+      { type: 'thinking_start', contentIndex: 1, partial: native },
+      { type: 'thinking_end', contentIndex: 1, content: 'reason', partial: native },
+      { type: 'text_delta', contentIndex: 0, delta: 'answer', partial: native },
+      { type: 'text_end', contentIndex: 0, content: 'answer', partial: native },
+      { type: 'done', reason: 'stop', message: native },
+    )))
+    const assembler = new BlockAssembler()
+    for (const chunk of chunks) assembler.push(chunk)
+    expect(assembler.blocks()).toEqual([{ type: 'reasoning', text: 'reason' }, { type: 'text', text: 'answer' }])
+    expect(assembler.replayState?.blocks).toEqual([
+      { type: 'reasoning', thinkingSignature: 'thinking-id' }, { type: 'text', textSignature: 'text-id' },
     ])
   })
 

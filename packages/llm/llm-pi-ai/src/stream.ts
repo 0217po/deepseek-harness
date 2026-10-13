@@ -128,7 +128,8 @@ export function mapStopReason(message: AssistantMessage, contextWindow?: number)
 }
 
 /**
- * Translate the pi-ai event stream into StreamChunks. pi-ai never throws
+ * Translate the pi-ai event stream into StreamChunks, omitting text items that
+ * never emit content. Replay metadata follows the emitted block order. pi-ai never throws
  * mid-stream — failures arrive as `error` events, which become error/aborted
  * `finish` chunks (the harness protocol's other error-delivery style).
  * @param events - one assistant turn's pi-ai event stream.
@@ -145,8 +146,8 @@ export async function* toStreamChunks(
   callerSignal?: AbortSignal,
   requestedModel?: string,
 ): AsyncGenerator<StreamChunk> {
-  // pi-ai contentIndex ↔ our block index map 1:1 (both count blocks from 0
-  // in stream order), but we track ids per index for tool calls.
+  // Keep provider indices; deferred text starts can leave gaps or change arrival order.
+  const started = new Set<number>()
   const toolIds = new Map<number, { id: string; name: string }>()
 
   for await (const event of events) {
@@ -154,15 +155,25 @@ export async function* toStreamChunks(
       case 'start':
         break
       case 'text_start':
-        yield { type: 'block-start', index: event.contentIndex, blockType: 'text' }
         break
       case 'text_delta':
+        if (event.delta.length === 0) break
+        if (!started.has(event.contentIndex)) {
+          started.add(event.contentIndex)
+          yield { type: 'block-start', index: event.contentIndex, blockType: 'text' }
+        }
         yield { type: 'text-delta', index: event.contentIndex, text: event.delta }
         break
       case 'text_end':
+        if (!started.has(event.contentIndex)) {
+          if (event.content.length === 0) break
+          started.add(event.contentIndex)
+          yield { type: 'block-start', index: event.contentIndex, blockType: 'text' }
+        }
         yield { type: 'block-end', index: event.contentIndex, block: { type: 'text', text: event.content } }
         break
       case 'thinking_start':
+        started.add(event.contentIndex)
         yield { type: 'block-start', index: event.contentIndex, blockType: 'reasoning' }
         break
       case 'thinking_delta':
@@ -172,6 +183,7 @@ export async function* toStreamChunks(
         yield { type: 'block-end', index: event.contentIndex, block: { type: 'reasoning', text: event.content } }
         break
       case 'toolcall_start': {
+        started.add(event.contentIndex)
         // The id/name live on the partial's content at this index.
         const partial = event.partial.content[event.contentIndex]
         const id = partial?.type === 'toolCall' ? partial.id : ''
@@ -205,14 +217,23 @@ export async function* toStreamChunks(
           },
         }
         break
-      case 'done':
+      case 'done': {
+        const indices = new Set([...started, ...event.message.content.keys()])
+        const message = {
+          ...event.message,
+          content: [...indices].flatMap((index) => {
+            const block = event.message.content[index]
+            return block === undefined || (block.type === 'text' && block.text.length === 0 && !started.has(index)) ? [] : [block]
+          }),
+        }
         yield { type: 'usage', usage: mapUsage(event.message.usage) }
         yield {
           type: 'finish',
-          reason: mapStopReason(event.message, contextWindow),
-          replayState: toPiReplayState(event.message, requestedModel),
+          reason: mapStopReason(message, contextWindow),
+          replayState: toPiReplayState(message, requestedModel),
         }
         return
+      }
       case 'error':
         // In-stream error delivery (pi-ai's style) → error finish chunk
         // (the harness's other sanctioned error path besides throwing).
