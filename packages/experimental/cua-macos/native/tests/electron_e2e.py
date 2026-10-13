@@ -122,36 +122,44 @@ def main():
                 if args.artifacts:
                     (args.artifacts / 'electron-input.png').write_bytes(png)
                     (args.artifacts / 'fixture-state.json').write_text(state_path.read_text())
-                state = observe()
-                trigger = next(element for element in state['elements'] if element['role'] == 'AXButton' and
-                               'Reveal hover details' in (element.get('title') or element.get('description') or ''))
-                baseline = json.loads(state_path.read_text())['pointerDowns']
-                call('hover', {**owner, 'windowId': window_id, 'x': -1, 'y': 0}, 'INVALID_ARGUMENT')
-                call('hover', {**owner, 'windowId': window_id, 'x': 100000, 'y': 0}, 'INVALID_ARGUMENT')
-                call('hover', {**owner, 'snapshotId': state['snapshotId'], 'elementIndex': trigger['index'], 'x': 0}, 'INVALID_ARGUMENT')
-                call('hover', {**owner, 'snapshotId': state['snapshotId'], 'elementIndex': trigger['index']})
-                actual = wait_state(lambda actual: actual['popupOpen'], 'Hover did not reveal delayed information')
-                assert actual['pointerDowns'] == baseline and actual['lastMove'] == {'buttons': 0, 'trusted': True}, actual
-                state = observe()
-                assert 'Hover information' in state['tree'], state['tree']
-                image = call('screenshot', {**owner, 'windowId': window_id})
-                assert json.loads(state_path.read_text())['popupOpen'], 'Observation dismissed the popup'
-                if args.artifacts:
-                    (args.artifacts / 'electron-hover.png').write_bytes(base64.b64decode(image['data']))
-                action = next(element for element in state['elements'] if element['role'] == 'AXButton' and
-                              'Use hover details' in (element.get('title') or element.get('description') or ''))
-                bounds = action['bounds']
-                target = {**owner, 'windowId': window_id,
-                          'x': bounds[0] + bounds[2] / 2 - window['bounds']['x'],
-                          'y': bounds[1] + bounds[3] / 2 - window['bounds']['y']}
-                call('hover', target)
-                state = observe()
-                assert 'Hover information' in state['tree'], 'Moving into the popup dismissed it'
-                call('click', target)
-                actual = wait_state(lambda actual: actual['popupClicks'] == 1, 'Popup action did not receive its click')
-                assert actual['popupOpen'] and actual['pointerDowns'] == baseline + 1 and actual['popupClickTrusted'], actual
-                call('hover', {**owner, 'windowId': window_id, 'x': 10, 'y': 40})
-                wait_state(lambda actual: not actual['popupOpen'], 'Leaving the hover region did not close it')
+                def hover_sequence(use_system_pointer):
+                    state = observe()
+                    trigger = next(element for element in state['elements'] if element['role'] == 'AXButton' and
+                                   'Reveal hover details' in (element.get('title') or element.get('description') or ''))
+                    before = json.loads(state_path.read_text())
+                    baseline = before['pointerDowns']
+                    expected_clicks = before['popupClicks'] + 1
+                    hover_options = {'useSystemPointer': use_system_pointer}
+                    call('hover', {**owner, 'windowId': window_id, 'x': -1, 'y': 0}, 'INVALID_ARGUMENT')
+                    call('hover', {**owner, 'windowId': window_id, 'x': 100000, 'y': 0}, 'INVALID_ARGUMENT')
+                    call('hover', {**owner, 'snapshotId': state['snapshotId'], 'elementIndex': trigger['index'], 'x': 0}, 'INVALID_ARGUMENT')
+                    call('hover', {**owner, 'snapshotId': state['snapshotId'], 'elementIndex': trigger['index'], **hover_options})
+                    actual = wait_state(lambda actual: actual['popupOpen'], 'Hover did not reveal delayed information')
+                    assert actual['pointerDowns'] == baseline and actual['lastMove'] == {'buttons': 0, 'trusted': True}, actual
+                    state = observe()
+                    assert 'Hover information' in state['tree'], state['tree']
+                    image = call('screenshot', {**owner, 'windowId': window_id})
+                    assert json.loads(state_path.read_text())['popupOpen'], 'Observation dismissed the popup'
+                    if args.artifacts:
+                        (args.artifacts / 'electron-hover.png').write_bytes(base64.b64decode(image['data']))
+                    action = next(element for element in state['elements'] if element['role'] == 'AXButton' and
+                                  'Use hover details' in (element.get('title') or element.get('description') or ''))
+                    bounds = action['bounds']
+                    target = {**owner, 'windowId': window_id,
+                              'x': bounds[0] + bounds[2] / 2 - window['bounds']['x'],
+                              'y': bounds[1] + bounds[3] / 2 - window['bounds']['y']}
+                    call('hover', {**target, **hover_options})
+                    state = observe()
+                    assert 'Hover information' in state['tree'], 'Moving into the popup dismissed it'
+                    call('click', target)
+                    actual = wait_state(lambda actual: actual['popupClicks'] == expected_clicks, 'Popup action did not receive its click')
+                    assert actual['popupOpen'] and actual['pointerDowns'] == baseline + 1 and actual['popupClickTrusted'], actual
+                    call('hover', {**owner, 'windowId': window_id, 'x': 10, 'y': 40, **hover_options})
+                    wait_state(lambda actual: not actual['popupOpen'], 'Leaving the hover region did not close it')
+                if args.hover_only:
+                    call('activate', owner)
+                    hover_sequence(True)
+                hover_sequence(False)
                 helper.eof()
                 print(f"PASS: Electron {runtime['electron']} delayed hover across observations, popup entry/click/exit, invalid targets"
                       + (" (text input omitted)" if args.hover_only else ", trusted DOM click, Unicode input, Command+A replacement, PNG capture"))
