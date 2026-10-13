@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { Context } from '@deepseek-ai/cordis'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { PluginEntryId, PluginInstallRequestId } from '@deepseek-ai/dsh-api-remotes/client'
-import { bindSnapshotSelector, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, bindSnapshotSelector, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ConfigForm, ConfigFormSnapshot, SettingsMirrorSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -139,6 +139,7 @@ function renderTab(
     useSessionStatus: unusedStandardHook,
     useSessionRetainInfo: unusedStandardHook,
     useResource: unusedStandardHook,
+    ...allowAllAccess,
   }
   const navigation = createNavigationStore().create()
   const props: PluginManagerPageProps = {
