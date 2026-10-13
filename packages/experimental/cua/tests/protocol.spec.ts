@@ -49,7 +49,7 @@ it.each([
   { appHandle: 'app', windowId: 23, x: 1, y: 2 },
 ])('accepts a hover target %j without button input', (params) => {
   expect(Request.parse({ method: 'hover', params })).toEqual({ method: 'hover', params })
-  for (const extra of [{ mouseButton: 'left' }, { clickCount: 1 }, { modifiers: ['shift'] }]) {
+  for (const extra of [{ mouseButton: 'left' }, { clickCount: 1 }, { modifiers: ['shift'] }, { useSystemPointer: 'yes' }]) {
     expect(Request.safeParse({ method: 'hover', params: { ...params, ...extra } }).success).toBe(false)
   }
 })

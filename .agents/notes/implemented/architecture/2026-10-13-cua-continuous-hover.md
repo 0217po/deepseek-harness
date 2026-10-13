@@ -10,7 +10,7 @@ Hover interactions span movement, delayed content, observation and input inside 
 
 ## Decision
 
-App and Window expose `hover` for an observed AX element or window-local point. It sends unpressed movement, including over disabled controls. Completion, AX reads and screenshots do not restore a previous pointer position. Successive calls can visit intermediate points before entering a popup. Clicks deliver button events at their target without an off-window priming click.
+App and Window expose `hover` for an observed AX element or window-local point. It sends unpressed movement, including over disabled controls. Completion, AX reads and screenshots do not restore a previous pointer position. Successive calls can visit intermediate points before entering a popup. Clicks deliver button events at their target without an off-window priming click. Background movement reaches Chromium hover. Native AppKit tracking can require the explicit `useSystemPointer` option, which moves the visible cursor only after checking the foreground app and unobscured target window. It never activates or raises the app implicitly. Other input or window changes can race that check.
 
 The [shared helper](2026-10-09-cua-shared-native-helper.md) serializes complete individual operations. It grants no application ownership across calls. Earlier arrival, a retained app object and Session lifetime do not establish task priority. Waiting for the model does not reserve the application. Explicit task coordination determines any required execution order.
 

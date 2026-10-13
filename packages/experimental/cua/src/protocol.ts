@@ -36,7 +36,8 @@ export const Request = z.discriminatedUnion('method', [
     details: z.boolean().optional().describe('Include identifiers, global-point bounds and complete action names.'),
   }),
   z.object({ method: z.literal('hover'), params: z.union([
-    z.object(snapshot).strict(), z.object(coordinate).strict(),
+    z.object({ ...snapshot, useSystemPointer: z.boolean().optional() }).strict(),
+    z.object({ ...coordinate, useSystemPointer: z.boolean().optional() }).strict(),
   ]) }).strict(),
   z.object({ method: z.literal('click'), params: z.union([
     z.object({ ...snapshot, ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).optional() }).strict(),

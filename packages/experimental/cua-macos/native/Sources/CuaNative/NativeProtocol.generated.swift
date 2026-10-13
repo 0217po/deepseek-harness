@@ -9,7 +9,7 @@ enum NativeProtocol {
         "getApp": ["selector"],
         "getCapabilities": [],
         "getState": ["appHandle", "details", "includeMenus", "maxDepth", "maxElements", "windowId"],
-        "hover": ["appHandle", "elementIndex", "snapshotId", "windowId", "x", "y"],
+        "hover": ["appHandle", "elementIndex", "snapshotId", "useSystemPointer", "windowId", "x", "y"],
         "launchApp": ["appHandle"],
         "listApps": [],
         "listWindows": ["appHandle"],

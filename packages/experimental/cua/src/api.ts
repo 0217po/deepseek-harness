@@ -93,10 +93,11 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
         const state = await result.getAXState(options)
         return { state, screenshot: await result.getScreenshot(options) }
       },
-      async hover(target) {
-        if (typeof target === 'number') return action('hover', { ...snapshotParams(), elementIndex: target })
+      async hover(target, options) {
+        const pointer = options?.useSystemPointer === undefined ? {} : { useSystemPointer: options.useSystemPointer }
+        if (typeof target === 'number') return action('hover', { ...snapshotParams(), ...pointer, elementIndex: target })
         const [x, y] = target
-        return action('hover', { ...snapshotParams(), windowId: windowId(), x, y })
+        return action('hover', { ...snapshotParams(), ...pointer, windowId: windowId(), x, y })
       },
       async click(target, options) {
         const mouseButton = options?.mouseButton ?? 'left'

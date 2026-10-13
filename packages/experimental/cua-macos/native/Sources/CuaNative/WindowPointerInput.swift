@@ -29,7 +29,7 @@ final class WindowPointerInput {
     }
 
     /// Send unpressed movement without restoring the prior point or reserving the application.
-    func hover(in route: WindowRoute, at point: WindowPoint) throws {
+    func hover(in route: WindowRoute, at point: WindowPoint, useSystemPointer: Bool = false) throws {
         try checkCancellation()
         try Self.validate(point, in: route)
         let event = try mouseEvent(
@@ -37,8 +37,24 @@ final class WindowPointerInput {
             type: .mouseMoved, button: .left, clickState: 0, subtype: 3, group: Self.clickGroup()
         )
         try checkCancellation()
-        poster.post(event, to: route.owner.pid)
+        if useSystemPointer {
+            try Self.requireSystemPointerTarget(route, at: point, frontPID: NativePlatform.frontPID(), windows: NativePlatform.windows(allLayers: true))
+            event.post(tap: .cghidEventTap)
+        } else {
+            poster.post(event, to: route.owner.pid)
+        }
         try checkCancellation()
+    }
+
+    /// System movement requires the selected foreground window to be first at the destination point.
+    static func requireSystemPointerTarget(_ route: WindowRoute, at point: WindowPoint, frontPID: Int32?, windows: [WindowInfo]) throws {
+        let screen = screenPoint(point, in: route)
+        let hit = windows.first { window in
+            window.isOnScreen && CGRect(x: window.bounds.x, y: window.bounds.y, width: window.bounds.width, height: window.bounds.height).contains(screen)
+        }
+        guard frontPID == route.owner.pid, hit?.pid == route.owner.pid, hit?.windowID == route.windowID else {
+            throw NativeFailure(code: "FOREGROUND_REQUIRED", message: "System-pointer hover requires the selected window to be unobscured at the target point in the foreground application. Activate or raise it explicitly, then observe again")
+        }
     }
 
     /// Post one or two left clicks, or one right/middle click, with a shared window-routing group.

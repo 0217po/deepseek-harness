@@ -102,9 +102,10 @@ export interface CuaSurface {
    * Returning and subsequent observations do not restore the previous pointer position.
    * Other input and application changes can interrupt hover; observe before continuing.
    * @param target - Current AX index, including disabled controls, or window-local [x,y].
+   * @param options - useSystemPointer moves the visible cursor for native tracking; requires an unobscured foreground target.
    * @returns Dispatch evidence; the application's hover delay and resulting UI are not verified.
    */
-  hover(target: number | readonly [number, number]): Promise<CuaActionResult>
+  hover(target: number | readonly [number, number], options?: { useSystemPointer?: boolean }): Promise<CuaActionResult>
   /**
    * Click a current AX index or window point.
    * @param target - index or [x,y].
