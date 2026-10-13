@@ -584,8 +584,9 @@ async function bootEmptyPreview(origin: string, browser: Browser): Promise<void>
     // has no host routes — the controller publishes an empty list and the
     // header renders no button, which is that surface's designed degradation.
     expect([...failedResponses].sort()).toEqual(['/open-in-app/apps', '/plugins/events'])
+    // The worker recomposes configuration but exposes no Node module caches for code replacement.
     expect(consoleErrors.filter(line => !line.includes('Failed to load resource: the server responded with a status of 404')))
-      .toEqual([])
+      .toEqual(['hmr: restart required: module-comparison'])
   } catch (error) {
     await saveFailureShot(page, 'preview-boot-empty')
     throw pageErrors.length === 0

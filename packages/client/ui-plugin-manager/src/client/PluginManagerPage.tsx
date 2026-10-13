@@ -29,7 +29,7 @@ import {
   type InstallInputError, type InstallState, type InstallSubject, type PackageRow, type PackageView,
   type PluginManagerFace, type RegistryChoice,
 } from './manager-store.ts'
-import { managementText, noticeText, packageText, registryText, rowText, type Translate } from './presentation.ts'
+import { managementText, noticeText, packageText, registryText, restartText, rowText, type Translate } from './presentation.ts'
 import type { PluginPackageRef, PluginRowRef, PluginsSubject } from './slot-contract.ts'
 import type { ConfigPageForm } from './slot-contract.ts'
 import css from './PluginManagerPage.module.css'
@@ -506,7 +506,8 @@ function DetailTop({ crumbLabel, crumbText, onBack, icon, actions }: {
 
 function updateAvailable(pkg: PackageView): boolean {
   const target = pkg.installTarget
-  if (!pkg.installed || pkg.availability === 'installation' || target === undefined) return false
+  // An update removes the installed package first, so a package that cannot be removed offers none.
+  if (!pkg.installed || !pkg.removable || pkg.availability === 'installation' || target === undefined) return false
   return pkg.version !== target.version
     || ((target.spec.startsWith('link:') || pkg.source?.startsWith('link:') === true) && pkg.source !== target.spec)
 }
@@ -1309,7 +1310,7 @@ function InstallDialog({
             ? <p className={css.result} role="status">{t('installDoneNothing')}</p>
             : null}
           {phase === 'done' && install.restartRequired
-            ? <p className={css.resultWarn} role="status">{t('installDoneRestart')}</p>
+            ? <p className={css.resultWarn} role="status">{restartText('installDoneRestart', install.restartReason, t)}</p>
             : null}
           {phase === 'done' && subject?.kind === 'registry' && subject.name !== undefined && subject.version !== undefined
             && install.installedVersion !== null && install.installedVersion !== subject.version

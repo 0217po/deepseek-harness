@@ -89,6 +89,7 @@
     "tests/inspector-source-build.e2e.ts",
     "tests/plugin-install-cancel.e2e.ts",
     "tests/plugin-install-approve.e2e.ts",
+    "tests/plugin-hmr-lifecycle.e2e.ts",
     "tests/plugin-install-registry.e2e.ts",
     "tests/plugin-install-github.e2e.ts",
     "tests/client-plugin-live.e2e.ts",
