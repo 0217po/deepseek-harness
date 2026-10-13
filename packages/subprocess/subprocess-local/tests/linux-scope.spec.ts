@@ -130,7 +130,7 @@ function launch(
   })
   const spawnSync = vi.fn(() => ({ status: 0, stdout: '', stderr: '' }))
   const systemctlQuery = overrides.systemctlQuery ?? query
-  const result = launchLinuxScope(request, { TARGET: 'yes' }, {
+  const result = launchLinuxScope(request, { TARGET: 'yes' }, ['--expand-environment=no'], {
     spawn: overrides.spawn ?? spawn as never,
     spawnSync: overrides.spawnSync ?? spawnSync as never,
     ...systemctlQuery === undefined ? {} : { systemctlQuery },
@@ -168,7 +168,7 @@ describe('Linux native capability selection', () => {
     expect(signalLinuxDirectProcess(123, () => { throw new Error('signal failed') })).toBe(true)
   })
 
-  it('rechecks bootstrap and literal transient-scope support', () => {
+  it('runs the bootstrap and literal transient-scope checks on every call', () => {
     const spawnSync = vi.fn(() => ({ status: 0, error: undefined }))
     const runnerAvailable = vi.fn(() => true)
     const loadLinuxExecve = vi.fn(() => vi.fn() as never)
@@ -180,21 +180,21 @@ describe('Linux native capability selection', () => {
       systemdRun: '/bin/systemd-run',
       systemctl: '/bin/systemctl',
     }
-    expect(probeLinuxNative(inputs)).toBe(true)
-    expect(probeLinuxNative(inputs)).toBe(true)
+    expect(probeLinuxNative(inputs)).toEqual(['--expand-environment=no'])
+    expect(probeLinuxNative(inputs)).toEqual(['--expand-environment=no'])
     expect(runnerAvailable).toHaveBeenCalledTimes(2)
     expect(loadLinuxExecve).toHaveBeenCalledTimes(2)
     expect(spawnSync).toHaveBeenCalledTimes(2)
-    expect(probeLinuxBootstrap({
-      ...inputs,
-      loadLinuxExecve: () => { throw new Error('libc execve missing') },
-    })).toBe(false)
+    const missingExecve = { ...inputs, loadLinuxExecve: () => { throw new Error('libc execve missing') } }
+    expect(probeLinuxBootstrap(missingExecve)).toBe(false)
+    expect(probeLinuxNative(missingExecve)).toBeUndefined()
+    expect(spawnSync).toHaveBeenCalledTimes(2)
   })
 
   it('reports each failed dynamic prerequisite without executing a target', () => {
     expect(probeLinuxScope({
       spawnSync: vi.fn(() => ({ status: null, error: new Error('missing') })) as never,
-    })).toBe(false)
+    })).toBeUndefined()
     expect(probeLinuxBootstrap({
       loadLinuxExecve: () => vi.fn() as never,
       runnerInvocation: ['/missing'],
@@ -208,7 +208,7 @@ describe('Linux native capability selection', () => {
 
   it('uses the default command adapters and runner resolution', () => {
     childProcessMocks.spawnSync.mockReturnValue({ status: 0, error: undefined })
-    expect(probeLinuxScope()).toBe(true)
+    expect(probeLinuxScope()).toEqual(['--expand-environment=no'])
     expect(childProcessMocks.spawnSync).toHaveBeenCalledOnce()
     expect(probeLinuxBootstrap({ loadLinuxExecve: () => vi.fn() as never })).toBe(true)
     expect(probeLinuxBootstrap({
@@ -223,9 +223,24 @@ describe('Linux native capability selection', () => {
       _args: readonly string[],
       _options: unknown,
     ) => ({ status: 0, error: undefined }))
-    expect(probeLinuxScope({ spawnSync: spawnSync as never })).toBe(true)
+    expect(probeLinuxScope({ spawnSync: spawnSync as never })).toEqual(['--expand-environment=no'])
     const scopeOptions = spawnSync.mock.calls[0]?.[2] as { env: NodeJS.ProcessEnv }
     expect(scopeOptions.env).toMatchObject({ LC_ALL: 'C', SYSTEMD_LOG_TARGET: 'null' })
+  })
+
+  it('drops the expansion opt-out only for a systemd-run that rejects it', () => {
+    const rejected = { status: 1, stderr: "systemd-run: unrecognized option '--expand-environment=no'\n" }
+    const unavailable = { status: 1, stderr: 'Failed to create bus connection: No such file or directory\n' }
+    const legacy = vi.fn().mockReturnValueOnce(rejected).mockReturnValueOnce({ status: 0, stderr: '' })
+    expect(probeLinuxScope({ spawnSync: legacy as never })).toEqual([])
+    expect(legacy.mock.calls[0]?.[1]).toContain('--expand-environment=no')
+    expect(legacy.mock.calls[1]?.[1]).not.toContain('--expand-environment=no')
+    expect(probeLinuxScope({
+      spawnSync: vi.fn().mockReturnValueOnce(rejected).mockReturnValueOnce(unavailable) as never,
+    })).toBeUndefined()
+    const current = vi.fn(() => unavailable)
+    expect(probeLinuxScope({ spawnSync: current as never })).toBeUndefined()
+    expect(current).toHaveBeenCalledOnce()
   })
 })
 
@@ -265,7 +280,7 @@ describe('Linux scope establishment and quiescence', () => {
     result.owner.signal('SIGTERM')
     expect(processKill).toHaveBeenCalledWith(321, 'SIGTERM')
     expect(spawnSync).toHaveBeenCalledWith('/bin/systemctl', expect.arrayContaining([
-      'kill', '--kill-whom=all', '--signal=SIGTERM',
+      'kill', '--kill-who=all', '--signal=SIGTERM',
     ]), expect.anything())
     const direct = expect(result.direct).resolves.toEqual({ exitCode: null, signal: 'SIGTERM' })
     child.exit(null, 'SIGTERM')
@@ -782,7 +797,7 @@ describe('Linux scope establishment and quiescence', () => {
     launched.child.exit(null, 'SIGKILL')
     await expect(launched.result.owner.waitForExit()).resolves.toBeUndefined()
     expect(spawnSync.mock.calls.map(call => call[1])).toEqual([
-      ['--user', 'kill', '--kill-whom=all', '--signal=SIGKILL', expect.stringMatching(/\.scope$/u)],
+      ['--user', 'kill', '--kill-who=all', '--signal=SIGKILL', expect.stringMatching(/\.scope$/u)],
       ['--user', 'stop', expect.stringMatching(/\.scope$/u)],
     ])
     launched.result.owner.cleanup?.()
@@ -949,7 +964,7 @@ describe('Linux PTY bootstrap reuse', () => {
   } as const
 
   it.each(['SIGTERM', 'SIGKILL'] as const)('preserves %s before bootstrap consumption and joins the empty scope', async (signal) => {
-    const scope = prepareLinuxTerminalScope(terminalSpec, { TARGET: 'yes' }, {
+    const scope = prepareLinuxTerminalScope(terminalSpec, { TARGET: 'yes' }, ['--expand-environment=no'], {
       spawnSync: vi.fn(() => missingUnit()) as never,
       systemctlQuery: async () => missingUnit(),
     })
@@ -970,7 +985,7 @@ describe('Linux PTY bootstrap reuse', () => {
   })
 
   it('uses the same request/bootstrap, preserves argv, and cleans after owner settlement', async () => {
-    const scope = prepareLinuxTerminalScope(terminalSpec, { TARGET: 'yes' }, {
+    const scope = prepareLinuxTerminalScope(terminalSpec, { TARGET: 'yes' }, [], {
       systemdRun: '/bin/systemd-run',
       systemctl: '/bin/systemctl',
       runnerInvocation: ['/usr/bin/node', '/runner.js'],
@@ -979,7 +994,10 @@ describe('Linux PTY bootstrap reuse', () => {
     })
     const requestPath = scope.env[SUBPROCESS_RUNNER_ENV]
     if (requestPath === undefined) throw new Error('missing PTY request')
-    expect(scope.args.slice(-3)).toEqual(['--', 'bash', '--noprofile'])
+    expect(scope.args).toEqual([
+      '--user', '--scope', '--quiet', '--collect', expect.stringMatching(/^--unit=dsh-terminal-/u),
+      '--', '/usr/bin/node', '/runner.js', '--', 'bash', '--noprofile',
+    ])
     expect(consumeLinuxLaunchRequest(requestPath)).toEqual({ cwd: '/target', env: { TARGET: 'yes' } })
     const owner = scope.bindOwner({ running: () => false, signal: vi.fn(() => true), settled: Promise.resolve() })
     await expect(owner.waitForExit()).resolves.toBeUndefined()
@@ -989,7 +1007,7 @@ describe('Linux PTY bootstrap reuse', () => {
   })
 
   it('surfaces PTY pre-exec errors instead of launcher outcomes', () => {
-    const scope = prepareLinuxTerminalScope(terminalSpec, { TARGET: 'yes' })
+    const scope = prepareLinuxTerminalScope(terminalSpec, { TARGET: 'yes' }, ['--expand-environment=no'])
     const requestPath = scope.env[SUBPROCESS_RUNNER_ENV]
     if (requestPath === undefined) throw new Error('missing PTY request')
     const files = linuxLaunchFilesFromLocator(requestPath)
@@ -1002,7 +1020,7 @@ describe('Linux PTY bootstrap reuse', () => {
   })
 
   it('uses default owner dependencies and rejects an unconsumed request', () => {
-    const scope = prepareLinuxTerminalScope(terminalSpec, { TARGET: 'yes' })
+    const scope = prepareLinuxTerminalScope(terminalSpec, { TARGET: 'yes' }, ['--expand-environment=no'])
     const requestPath = scope.env[SUBPROCESS_RUNNER_ENV]
     if (requestPath === undefined) throw new Error('missing PTY request')
     directories.push(linuxLaunchFilesFromLocator(requestPath).directory)
@@ -1018,13 +1036,16 @@ describe('Linux ordinary launch adapters', () => {
   it('uses the default launch dependencies without changing the target request', async () => {
     const child = new FakeChild()
     childProcessMocks.spawn.mockReturnValue(child)
-    const result = launchLinuxScope(spec(), { TARGET: 'yes' })
+    const result = launchLinuxScope(spec(), { TARGET: 'yes' }, ['--expand-environment=no'])
     const call = childProcessMocks.spawn.mock.calls[0]
     const options = call?.[2] as { env?: NodeJS.ProcessEnv } | undefined
     const requestPath = options?.env?.[SUBPROCESS_RUNNER_ENV]
     if (requestPath === undefined) throw new Error('launch did not publish a request locator')
     directories.push(linuxLaunchFilesFromLocator(requestPath).directory)
     expect(call?.[0]).toBe('systemd-run')
+    expect((call?.[1] as string[] | undefined)?.slice(0, 5)).toEqual([
+      '--user', '--scope', '--quiet', '--collect', '--expand-environment=no',
+    ])
     expect(consumeLinuxLaunchRequest(requestPath)).toEqual({ cwd: '/target', env: { TARGET: 'yes' } })
     child.exit(0, null)
     await expect(result.direct).resolves.toEqual({ exitCode: 0, signal: null })
@@ -1034,7 +1055,7 @@ describe('Linux ordinary launch adapters', () => {
   it('removes the private launch directory when spawn throws synchronously', () => {
     const spawnError = new Error('synchronous spawn failure')
     let requestPath: string | undefined
-    expect(() => launchLinuxScope(spec(), { TARGET: 'yes' }, {
+    expect(() => launchLinuxScope(spec(), { TARGET: 'yes' }, ['--expand-environment=no'], {
       runnerInvocation: ['/usr/bin/node', '/runner.js'],
       spawn: vi.fn((_command: string, _args: readonly string[], options: { env?: NodeJS.ProcessEnv }) => {
         requestPath = options.env?.[SUBPROCESS_RUNNER_ENV]
@@ -1048,7 +1069,7 @@ describe('Linux ordinary launch adapters', () => {
 
 it('observes native task counts independently from process-tree membership', () => {
   const terminalSpec = { argv: ['/bin/bash', '-i'], cwd: process.cwd(), rows: 24, cols: 80, terminalType: 'xterm-256color', graceMs: 100 }
-  const scope = prepareLinuxTerminalScope(terminalSpec, {}, { spawnSync: childProcessMocks.spawnSync })
+  const scope = prepareLinuxTerminalScope(terminalSpec, {}, ['--expand-environment=no'], { spawnSync: childProcessMocks.spawnSync })
   const owner = scope.bindOwner({ running: () => true, signal: () => true, settled: Promise.resolve() })
   try {
     for (const tasks of [1, 2, 0]) {

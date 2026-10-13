@@ -466,7 +466,7 @@ describe('LocalSubprocessRuntime', () => {
     }))
     vi.doMock('../src/linux-scope.ts', async importOriginal => ({
       ...await importOriginal<typeof import('../src/linux-scope.ts')>(),
-      probeLinuxNative: () => false,
+      probeLinuxNative: () => undefined,
     }))
     try {
       const { default: IsolatedLocalSubprocessRuntime } = await import('../src/index.ts')
@@ -593,7 +593,7 @@ describe('LocalSubprocessRuntime', () => {
       resolveOutcome: (outcome: unknown) => outcome,
       cleanup: vi.fn(),
     }))
-    const probeLinuxNative = vi.fn(() => true)
+    const probeLinuxNative = vi.fn(() => ['--expand-environment=no'])
     const inspector = {
       foregroundPgid: () => undefined,
       isStdinWaiting: () => false,
@@ -640,6 +640,7 @@ describe('LocalSubprocessRuntime', () => {
       expect(prepareLinuxTerminalScope).toHaveBeenCalledWith(
         expect.objectContaining({ argv: ['shell', '--literal'] }),
         expect.objectContaining({ PWD: targetCwd, TERM: 'dumb', TARGET_VALUE: 'preserved' }),
+        ['--expand-environment=no'],
       )
       expect(nodePtySpawn).toHaveBeenCalledWith(
         '/usr/bin/systemd-run',
@@ -714,7 +715,7 @@ describe('LocalSubprocessRuntime', () => {
       signalLinuxDirectProcess,
       launchLinuxScope: vi.fn(),
       prepareLinuxTerminalScope,
-      probeLinuxNative: () => true,
+      probeLinuxNative: () => ['--expand-environment=no'],
     }))
     let fiber: { dispose(): Promise<void> } | undefined
     try {
@@ -884,7 +885,7 @@ describe('LocalSubprocessRuntime', () => {
     const windowsLaunch = { kind: 'windows' }
     const launchLinuxScope = vi.fn(() => linuxLaunch)
     const launchWindowsJob = vi.fn(() => windowsLaunch)
-    const probeLinuxNative = vi.fn(() => true)
+    const probeLinuxNative = vi.fn((): string[] => [])
     const probeWindowsJob = vi.fn(() => true)
     const prepareManagedProcessBinding = vi.fn(() => ({ spillDir: '/tmp/dsh-test-spill' }))
     const handles = [true, false, false].map((failFirstWait) => {
@@ -943,6 +944,7 @@ describe('LocalSubprocessRuntime', () => {
       await new Promise(resolve => setImmediate(resolve))
       expect(probeLinuxNative).toHaveBeenCalledOnce()
       expect(launchLinuxScope).toHaveBeenCalledTimes(2)
+      expect(launchLinuxScope).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), [])
 
       const windowsContext = new Context()
       const windowsFiber = await windowsContext.plugin(IsolatedLocalSubprocessRuntime)
@@ -972,7 +974,7 @@ describe('LocalSubprocessRuntime', () => {
   })
 
   it('keeps a failed Linux native probe for the provider lifetime and rechecks the Windows Job', async () => {
-    const probeLinuxNative = vi.fn(() => false)
+    const probeLinuxNative = vi.fn(() => undefined)
     const probeWindowsJob = vi.fn()
       .mockReturnValueOnce(false)
       .mockReturnValueOnce(true)

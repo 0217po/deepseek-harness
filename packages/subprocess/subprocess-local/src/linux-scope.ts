@@ -52,6 +52,14 @@ interface SystemctlResult {
 const SYSTEMCTL_TIMEOUT_MS = 5_000
 const SCOPE_INITIAL_POLL_INTERVAL_MS = 50
 const MISSING_UNIT = /\bunit\b[^\r\n]*(?:could not be found|not found|not loaded)/iu
+const LITERAL_ARGV_OPTION = '--expand-environment=no'
+// systemd-run before v254 rejects the option; its scope mode passes argv to execvpe unexpanded.
+const LITERAL_ARGV_OPTION_REJECTED = /unrecognized option\b.*expand-environment/u
+// The spelling before systemctl v252 and an unambiguous prefix of the later `--kill-whom`.
+const KILL_ALL_MEMBERS = '--kill-who=all'
+
+/** systemd-run options that keep target argv literal; empty where scope mode never expands argv. */
+export type LiteralArgvOptions = readonly string[]
 
 function managerEnvironment(): NodeJS.ProcessEnv {
   const environment = childEnv({ LC_ALL: 'C' })
@@ -108,36 +116,46 @@ export function probeLinuxBootstrap(internals: LinuxScopeInternals = {}): boolea
 /**
  * Confirm current literal-argv transient-scope support before selecting native launch.
  * @param internals - optional systemd command seams used by tests.
- * @returns whether the current user manager supports the required scope invocation.
+ * @returns the options that keep target argv literal, or undefined when the user manager cannot create the scope.
  */
-export function probeLinuxScope(internals: LinuxScopeInternals = {}): boolean {
-  const unitBase = unitStem('dsh-subprocess-probe')
-  const result = (internals.spawnSync ?? spawnSync)(internals.systemdRun ?? 'systemd-run', [
-    '--user',
-    '--scope',
-    '--quiet',
-    '--collect',
-    '--expand-environment=no',
-    `--unit=${unitBase}`,
-    '--',
-    internals.systemctl ?? 'systemctl',
-    '--user',
-    'show',
-    `${unitBase}.scope`,
-    '--property=ActiveState',
-    '--value',
-  ], { env: quietSystemdEnvironment(), stdio: 'ignore', timeout: SYSTEMCTL_TIMEOUT_MS })
-  return result.error === undefined && result.status === 0
+export function probeLinuxScope(internals: LinuxScopeInternals = {}): LiteralArgvOptions | undefined {
+  const attempt = (literalArgv: LiteralArgvOptions): { created: boolean; stderr: string } => {
+    const unitBase = unitStem('dsh-subprocess-probe')
+    const result = (internals.spawnSync ?? spawnSync)(internals.systemdRun ?? 'systemd-run', [
+      '--user',
+      '--scope',
+      '--quiet',
+      '--collect',
+      ...literalArgv,
+      `--unit=${unitBase}`,
+      '--',
+      internals.systemctl ?? 'systemctl',
+      '--user',
+      'show',
+      `${unitBase}.scope`,
+      '--property=ActiveState',
+      '--value',
+    ], {
+      encoding: 'utf8',
+      env: quietSystemdEnvironment(),
+      stdio: ['ignore', 'ignore', 'pipe'],
+      timeout: SYSTEMCTL_TIMEOUT_MS,
+    })
+    return { created: result.error === undefined && result.status === 0, stderr: result.stderr }
+  }
+  const current = attempt([LITERAL_ARGV_OPTION])
+  if (current.created) return [LITERAL_ARGV_OPTION]
+  if (!LITERAL_ARGV_OPTION_REJECTED.test(current.stderr)) return undefined
+  return attempt([]).created ? [] : undefined
 }
 
 /**
- * Check every Linux native prerequisite; the provider keeps the first verdict for its lifetime.
+ * Check every Linux native prerequisite on each call.
  * @param internals - optional native capability seams used by tests.
- * @returns whether the Linux native containment path is currently available.
+ * @returns the literal-argv scope options when Linux native containment is available, otherwise undefined.
  */
-export function probeLinuxNative(internals: LinuxScopeInternals = {}): boolean {
-  return probeLinuxBootstrap(internals)
-    && probeLinuxScope(internals)
+export function probeLinuxNative(internals: LinuxScopeInternals = {}): LiteralArgvOptions | undefined {
+  return probeLinuxBootstrap(internals) ? probeLinuxScope(internals) : undefined
 }
 
 interface DirectRange {
@@ -204,7 +222,7 @@ class SystemdScopeOwner implements BoundProcessOwner {
     const result = this.runSync(this.systemctl, [
       '--user',
       'kill',
-      '--kill-whom=all',
+      KILL_ALL_MEMBERS,
       `--signal=${signal}`,
       this.unit,
     ], { encoding: 'utf8', env: managerEnvironment(), timeout: SYSTEMCTL_TIMEOUT_MS })
@@ -240,7 +258,7 @@ class SystemdScopeOwner implements BoundProcessOwner {
       this.runSync(this.systemctl, [
         '--user',
         'kill',
-        '--kill-whom=all',
+        KILL_ALL_MEMBERS,
         '--signal=SIGKILL',
         this.unit,
       ], { env: managerEnvironment(), stdio: 'ignore', timeout: SYSTEMCTL_TIMEOUT_MS })
@@ -422,13 +440,18 @@ class SystemdScopeOwner implements BoundProcessOwner {
   }
 }
 
-function scopeArgs(unitBase: string, invocation: RunnerInvocation, argv: readonly string[]): string[] {
+function scopeArgs(
+  unitBase: string,
+  literalArgv: LiteralArgvOptions,
+  invocation: RunnerInvocation,
+  argv: readonly string[],
+): string[] {
   return [
     '--user',
     '--scope',
     '--quiet',
     '--collect',
-    '--expand-environment=no',
+    ...literalArgv,
     `--unit=${unitBase}`,
     '--',
     ...invocation,
@@ -506,12 +529,14 @@ export interface LinuxTerminalScopeLaunch {
  * Prepare one Linux PTY scope using the same launch request and bootstrap core.
  * @param spec - terminal target request.
  * @param targetEnv - validated complete target environment.
+ * @param literalArgv - options from the provider's positive scope probe.
  * @param internals - optional runner and systemd seams used by tests.
  * @returns invocation and ownership callbacks; requested termination preserves the observed signal even before bootstrap consumption.
  */
 export function prepareLinuxTerminalScope(
   spec: SubprocessTerminalSpawnSpec,
   targetEnv: Record<string, string>,
+  literalArgv: LiteralArgvOptions,
   internals: LinuxScopeInternals = {},
 ): LinuxTerminalScopeLaunch {
   const invocation = internals.runnerInvocation ?? spawnRunnerInvocation()
@@ -520,7 +545,7 @@ export function prepareLinuxTerminalScope(
   const unitBase = unitStem('dsh-terminal')
   return {
     command: internals.systemdRun ?? 'systemd-run',
-    args: scopeArgs(unitBase, invocation, spec.argv),
+    args: scopeArgs(unitBase, literalArgv, invocation, spec.argv),
     cwd: process.cwd(),
     env: runnerEnvironment(files.requestPath, invocation),
     bindOwner: direct => new SystemdScopeOwner(
@@ -541,12 +566,14 @@ export function prepareLinuxTerminalScope(
  * Launch one ordinary target inside a transient user scope.
  * @param spec - ordinary target request.
  * @param targetEnv - validated complete target environment.
+ * @param literalArgv - options from the provider's positive scope probe.
  * @param internals - optional runner and systemd seams used by tests.
  * @returns streams, result, and scope owner; requested termination preserves the observed signal even before bootstrap consumption.
  */
 export function launchLinuxScope(
   spec: SubprocessSpawnSpec,
   targetEnv: Record<string, string>,
+  literalArgv: LiteralArgvOptions,
   internals: LinuxScopeInternals = {},
 ): ManagedProcessLaunch {
   const invocation = internals.runnerInvocation ?? spawnRunnerInvocation()
@@ -560,6 +587,7 @@ export function launchLinuxScope(
   try {
     child = (internals.spawn ?? spawn)(internals.systemdRun ?? 'systemd-run', scopeArgs(
       unitBase,
+      literalArgv,
       invocation,
       spec.argv,
     ), {
