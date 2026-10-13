@@ -6,20 +6,21 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-fs'
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { errorChain, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { errorChain, ReasoningEffortId, type MessageSource } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-client-file-upload'
 import { canOpenNativePath, nativeFileManager, nativeFileApplications, openNativeFileApplication, openNativeAssociatedPath, revealNativePath } from '@deepseek-ai/dsh-native-command'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionInspection } from '@deepseek-ai/dsh-session-persistence'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-session-query'
-import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { Remote, RemoteError, TypertRemoteService, principalOf } from '@deepseek-ai/dsh-typert-protocol'
+import { canonicalClientTimeZone } from '@deepseek-ai/dsh-util-time'
 import {
   ApiSessionAgentController,
   inspectApiSession,
   type ApiSessionAgentResult,
 } from './agent.ts'
-import { SessionCommandController } from './commands.ts'
+import { SessionCommandController, hasPromptContent } from './commands.ts'
 import { SessionControlController } from './control.ts'
 import { SessionHistoryController } from './history.ts'
 import { SessionFileReferences } from './file-references.ts'
@@ -439,9 +440,30 @@ export class SessionController extends TypertRemoteService {
    * @returns acknowledgement that the Agent accepted the prompt.
    */
   @Remote('prompt')
-  prompt(request: SessionPromptRequest, signal: AbortSignal): Promise<SessionPromptValue> {
+  async prompt(request: SessionPromptRequest, signal: AbortSignal): Promise<SessionPromptValue> {
     signal.throwIfAborted()
-    return this.commands.prompt(request)
+    if (!hasPromptContent(request.content)) {
+      throw new RemoteError('gateway/bad-request', 'prompt content must include non-whitespace text or an attachment', {})
+    }
+    const clientTimeZone = request.clientTimeZone === undefined
+      ? undefined
+      : canonicalClientTimeZone(request.clientTimeZone)
+    if (request.clientTimeZone !== undefined && clientTimeZone === undefined) {
+      throw new RemoteError(
+        'session/invalid-time-zone',
+        'clientTimeZone must be UTC or a valid IANA Area/Location name',
+        { value: request.clientTimeZone },
+      )
+    }
+    // The caller is recorded only when it is not the owner, so owner messages keep their exact source.
+    const principal = principalOf(this.ctx.invocation)
+    const source: MessageSource = {
+      kind: 'user',
+      rpcId: request.requestId,
+      ...(clientTimeZone === undefined ? {} : { clientTimeZone }),
+      ...(principal === undefined ? {} : { principal }),
+    }
+    return this.commands.prompt(request, source)
   }
 
   /**
