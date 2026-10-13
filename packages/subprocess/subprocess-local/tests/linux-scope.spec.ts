@@ -7,7 +7,6 @@ import {
   launchLinuxScope,
   prepareLinuxTerminalScope,
   probeLinuxBootstrap,
-  probeLinuxManager,
   probeLinuxNative,
   probeLinuxScope,
   signalLinuxDirectProcess,
@@ -210,8 +209,7 @@ describe('Linux native capability selection', () => {
   it('uses the default command adapters and runner resolution', () => {
     childProcessMocks.spawnSync.mockReturnValue({ status: 0, error: undefined })
     expect(probeLinuxScope()).toBe(true)
-    expect(probeLinuxManager()).toBe(true)
-    expect(childProcessMocks.spawnSync).toHaveBeenCalledTimes(2)
+    expect(childProcessMocks.spawnSync).toHaveBeenCalledOnce()
     expect(probeLinuxBootstrap({ loadLinuxExecve: () => vi.fn() as never })).toBe(true)
     expect(probeLinuxBootstrap({
       runnerInvocation: [process.execPath],
@@ -219,26 +217,15 @@ describe('Linux native capability selection', () => {
     })).toBe(process.platform !== 'win32')
   })
 
-  it('keeps quieting on the transient-scope probe but preserves manager diagnostics', () => {
+  it('quiets systemd logging on the transient-scope probe', () => {
     const spawnSync = vi.fn((
       _command: string,
       _args: readonly string[],
       _options: unknown,
     ) => ({ status: 0, error: undefined }))
     expect(probeLinuxScope({ spawnSync: spawnSync as never })).toBe(true)
-    expect(probeLinuxManager({ spawnSync: spawnSync as never })).toBe(true)
     const scopeOptions = spawnSync.mock.calls[0]?.[2] as { env: NodeJS.ProcessEnv }
-    const managerOptions = spawnSync.mock.calls[1]?.[2] as { env: NodeJS.ProcessEnv }
     expect(scopeOptions.env).toMatchObject({ LC_ALL: 'C', SYSTEMD_LOG_TARGET: 'null' })
-    expect(managerOptions.env).toMatchObject({ LC_ALL: 'C' })
-    expect(managerOptions.env).not.toHaveProperty('SYSTEMD_LOG_TARGET')
-
-    expect(probeLinuxManager({
-      spawnSync: vi.fn(() => ({ status: 1, error: undefined })) as never,
-    })).toBe(false)
-    expect(probeLinuxManager({
-      spawnSync: vi.fn(() => ({ status: null, error: new Error('missing') })) as never,
-    })).toBe(false)
   })
 })
 

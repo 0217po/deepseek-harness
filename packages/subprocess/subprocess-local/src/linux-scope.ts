@@ -131,22 +131,7 @@ export function probeLinuxScope(internals: LinuxScopeInternals = {}): boolean {
 }
 
 /**
- * Confirm that the current user manager remains reachable after a positive deep probe.
- * @param internals - optional systemctl seam used by tests.
- * @returns whether one lightweight manager query succeeds.
- */
-export function probeLinuxManager(internals: LinuxScopeInternals = {}): boolean {
-  const result = (internals.spawnSync ?? spawnSync)(internals.systemctl ?? 'systemctl', [
-    '--user',
-    'show',
-    '--property=Version',
-    '--value',
-  ], { env: managerEnvironment(), stdio: 'ignore', timeout: SYSTEMCTL_TIMEOUT_MS })
-  return result.error === undefined && result.status === 0
-}
-
-/**
- * Re-check every Linux native prerequisite for one eligible spawn.
+ * Check every Linux native prerequisite; the provider keeps the first verdict for its lifetime.
  * @param internals - optional native capability seams used by tests.
  * @returns whether the Linux native containment path is currently available.
  */

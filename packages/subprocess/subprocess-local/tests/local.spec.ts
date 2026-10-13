@@ -594,7 +594,6 @@ describe('LocalSubprocessRuntime', () => {
       cleanup: vi.fn(),
     }))
     const probeLinuxNative = vi.fn(() => true)
-    const probeLinuxManager = vi.fn(() => true)
     const inspector = {
       foregroundPgid: () => undefined,
       isStdinWaiting: () => false,
@@ -615,7 +614,6 @@ describe('LocalSubprocessRuntime', () => {
       signalLinuxDirectProcess,
       launchLinuxScope: vi.fn(),
       prepareLinuxTerminalScope,
-      probeLinuxManager,
       probeLinuxNative,
     }))
     let fiber: { dispose(): Promise<void> } | undefined
@@ -716,7 +714,6 @@ describe('LocalSubprocessRuntime', () => {
       signalLinuxDirectProcess,
       launchLinuxScope: vi.fn(),
       prepareLinuxTerminalScope,
-      probeLinuxManager: () => true,
       probeLinuxNative: () => true,
     }))
     let fiber: { dispose(): Promise<void> } | undefined
@@ -882,13 +879,12 @@ describe('LocalSubprocessRuntime', () => {
     }
   })
 
-  it('rechecks native prerequisites for every eligible spawn and prepares storage before launch', async () => {
+  it('probes Linux native support once, rechecks the Windows Job per spawn, and prepares storage before launch', async () => {
     const linuxLaunch = { kind: 'linux' }
     const windowsLaunch = { kind: 'windows' }
     const launchLinuxScope = vi.fn(() => linuxLaunch)
     const launchWindowsJob = vi.fn(() => windowsLaunch)
     const probeLinuxNative = vi.fn(() => true)
-    const probeLinuxManager = vi.fn(() => true)
     const probeWindowsJob = vi.fn(() => true)
     const prepareManagedProcessBinding = vi.fn(() => ({ spillDir: '/tmp/dsh-test-spill' }))
     const handles = [true, false, false].map((failFirstWait) => {
@@ -918,7 +914,6 @@ describe('LocalSubprocessRuntime', () => {
       signalLinuxDirectProcess,
       launchLinuxScope,
       prepareLinuxTerminalScope: vi.fn(),
-      probeLinuxManager,
       probeLinuxNative,
     }))
     vi.doMock('../src/windows-job.ts', () => ({ launchWindowsJob, probeWindowsJob }))
@@ -947,7 +942,6 @@ describe('LocalSubprocessRuntime', () => {
       await linuxRuntime.spawn(spec('true')).done
       await new Promise(resolve => setImmediate(resolve))
       expect(probeLinuxNative).toHaveBeenCalledOnce()
-      expect(probeLinuxManager).toHaveBeenCalledTimes(2)
       expect(launchLinuxScope).toHaveBeenCalledTimes(2)
 
       const windowsContext = new Context()
@@ -977,15 +971,8 @@ describe('LocalSubprocessRuntime', () => {
     }
   })
 
-  it('retries failed Linux deep probes, caches the first success, and rechecks the manager', async () => {
-    const probeLinuxNative = vi.fn()
-      .mockReturnValueOnce(false)
-      .mockReturnValueOnce(false)
-      .mockReturnValueOnce(false)
-      .mockReturnValueOnce(true)
-    const probeLinuxManager = vi.fn()
-      .mockReturnValueOnce(false)
-      .mockReturnValueOnce(true)
+  it('keeps a failed Linux native probe for the provider lifetime and rechecks the Windows Job', async () => {
+    const probeLinuxNative = vi.fn(() => false)
     const probeWindowsJob = vi.fn()
       .mockReturnValueOnce(false)
       .mockReturnValueOnce(true)
@@ -997,7 +984,6 @@ describe('LocalSubprocessRuntime', () => {
       signalLinuxDirectProcess,
       launchLinuxScope: vi.fn(),
       prepareLinuxTerminalScope: vi.fn(),
-      probeLinuxManager,
       probeLinuxNative,
     }))
     vi.doMock('../src/windows-job.ts', () => ({ launchWindowsJob: vi.fn(), probeWindowsJob }))
@@ -1015,13 +1001,9 @@ describe('LocalSubprocessRuntime', () => {
       }).selectContainmentMode.bind(linuxRuntime)
 
       expect(linuxSelect('ordinary')).toBe('fallback')
+      expect(linuxSelect('terminal')).toBe('fallback')
       expect(linuxSelect('ordinary')).toBe('fallback')
-      expect(linuxSelect('ordinary')).toBe('fallback')
-      expect(linuxSelect('ordinary')).toBe('linux-scope')
-      expect(linuxSelect('ordinary')).toBe('fallback')
-      expect(linuxSelect('ordinary')).toBe('linux-scope')
-      expect(probeLinuxNative).toHaveBeenCalledTimes(4)
-      expect(probeLinuxManager).toHaveBeenCalledTimes(2)
+      expect(probeLinuxNative).toHaveBeenCalledOnce()
 
       const windowsContext = new Context()
       vi.spyOn(windowsContext.logger, 'warn').mockImplementation(() => {})
