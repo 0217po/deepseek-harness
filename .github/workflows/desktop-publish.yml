@@ -46,9 +46,6 @@ jobs:
     env:
       DESKTOP_PUBLISH_ROUTE: ${{ needs.route.outputs.route }}
       DSH_TELEMETRY_DISABLED: '1'
-    defaults:
-      run:
-        shell: bash
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -73,15 +70,8 @@ jobs:
         id: key
         env:
           APP_KEY_FILE: ${{ steps.check.outputs.app-key-file }}
-        run: |
-          node --input-type=module <<'NODE'
-          import { readFileSync, appendFileSync } from 'node:fs';
-          import { randomUUID } from 'node:crypto';
-          const key = readFileSync(process.env.APP_KEY_FILE, 'utf8');
-          console.log('::add-mask::' + key.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A'));
-          const delimiter = randomUUID();
-          appendFileSync(process.env.GITHUB_OUTPUT, `private-key<<${delimiter}\n${key}\n${delimiter}\n`);
-          NODE
+        working-directory: desktop-publisher
+        run: node apps/desktop/scripts/read-desktop-app-key.mjs
       - name: Create short-lived tag token
         if: needs.route.outputs.preset == 'production'
         id: app

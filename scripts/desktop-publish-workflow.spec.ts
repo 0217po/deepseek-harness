@@ -7,6 +7,7 @@ const workflow = yaml.load(readFileSync(resolve(import.meta.dirname, '../.github
   on: Record<string, unknown>
   permissions: Record<string, string>
   jobs: Record<string, {
+    defaults?: unknown
     if?: string
     environment?: string
     'runs-on': string | string[]
@@ -21,6 +22,8 @@ it('routes only completed package requests and gates production secrets with the
   expect(workflow.permissions).toEqual({ contents: 'read', actions: 'read' })
   expect(workflow.jobs.route?.if).toBe("github.event.workflow_run.conclusion == 'success'")
   const publish = workflow.jobs.publish!
+  expect(publish.defaults).toBeUndefined()
+  expect(publish.steps.find(step => step.id === 'key')?.run).toBe('node apps/desktop/scripts/read-desktop-app-key.mjs')
   expect(publish.if).toBe("needs.route.outputs.publish == 'true'")
   expect(publish['runs-on']).toEqual(['self-hosted', '${{ needs.route.outputs.runner }}'])
   expect(publish.environment).toBe("${{ needs.route.outputs.preset == 'production' && 'desktop-production' || 'desktop-test' }}")
