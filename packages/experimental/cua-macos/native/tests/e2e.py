@@ -217,7 +217,10 @@ def main():
                     def cycle_overlay(mode):
                         state = call("getState", primary_params)
                         call("click", button_target(state, "Cycle input overlay"))
-                        return wait_state(lambda actual: actual["overlayMode"] == mode, "Overlay mode did not change")
+                        return wait_state(lambda actual: actual["overlayMode"] == mode
+                                          and actual["overlayOnScreen"] == (mode != 0)
+                                          and actual["hoverHitWindow"] == (actual["overlayWindowId"] if mode == 2 else primary["windowId"]),
+                                          "Overlay input routing did not settle")
                     cycle_overlay(1)
                     target = {**owner, "windowId": primary["windowId"], "x": x + 20, "y": y + 20}
                     hover(target)

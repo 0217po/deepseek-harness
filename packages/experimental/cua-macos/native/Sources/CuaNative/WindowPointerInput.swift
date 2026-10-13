@@ -53,7 +53,7 @@ final class WindowPointerInput {
     /// Input-transparent windows do not obscure a target; AppKit owns mouse hit testing.
     static func requireSystemPointerTarget(_ route: WindowRoute, frontPID: Int32?, hitWindowID: Int) throws {
         guard frontPID == route.owner.pid, hitWindowID == Int(route.windowID) else {
-            throw NativeFailure(code: "FOREGROUND_REQUIRED", message: "System-pointer hover requires the selected window to be unobscured at the target point in the foreground application. Activate or raise it explicitly, then observe again")
+            throw NativeFailure(code: "FOREGROUND_REQUIRED", message: "System-pointer hover requires foreground PID \(route.owner.pid) and mouse-hit window \(route.windowID); observed foreground PID \(frontPID.map(String.init) ?? "unknown") and mouse-hit window \(hitWindowID). Activate or raise the target explicitly, then observe again")
         }
     }
 

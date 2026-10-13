@@ -164,11 +164,12 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     @objc func cycleOverlay() {
         overlayMode = (overlayMode + 1) % 3
         if overlayMode == 0 {
-            inputOverlay?.close(); inputOverlay = nil
+            inputOverlay?.orderOut(nil)
         } else {
             if inputOverlay == nil {
                 let panel = NSPanel(contentRect: window.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
                 panel.isReleasedWhenClosed = false
+                panel.animationBehavior = .none
                 panel.level = .floating
                 panel.isOpaque = false
                 panel.backgroundColor = NSColor.systemYellow.withAlphaComponent(0.15)
@@ -201,12 +202,19 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         return [rect.minX, window.frame.height - rect.maxY, rect.width, rect.height]
     }
     func persist() {
+        let hoverPoint = window.convertPoint(toScreen: dragPad.convert(NSPoint(x: 20, y: 20), to: nil))
+        let hoverHitWindow = NSWindow.windowNumber(at: hoverPoint, belowWindowWithWindowNumber: 0)
+        let overlayID = inputOverlay?.windowNumber ?? 0
+        let overlayRows = overlayID > 0
+            ? CGWindowListCopyWindowInfo(.optionIncludingWindow, CGWindowID(overlayID)) as? [[String: Any]] : nil
+        let overlayOnScreen = overlayRows?.contains { ($0[kCGWindowIsOnscreen as String] as? Bool) == true } ?? false
         let state: [String: Any] = ["count": count, "secondaryCount": secondaryCount, "text": field.stringValue, "selectedFile": selectedFile,
             "rowCount": rowCount, "primaryWindowId": window.windowNumber,
             "dragDownCount": dragPad.dragDownCount, "dragCount": dragPad.dragCount, "dragPoint": [dragPad.lastPoint.x, dragPad.lastPoint.y],
             "hoverVisible": !dragPad.hoverButton.isHidden, "hoverClicks": dragPad.hoverClicks,
             "cursorSamples": cursorSamples, "cursorChanges": cursorChanges,
             "overlayMode": overlayMode, "overlayWindowId": inputOverlay?.windowNumber ?? 0,
+            "overlayOnScreen": overlayOnScreen, "hoverHitWindow": hoverHitWindow,
             "rightDownCount": dragPad.rightDownCount, "rightUpCount": dragPad.rightUpCount,
             "scrollEventCount": scroll.eventCount, "scrollY": scroll.contentView.bounds.origin.y, "dragBounds": windowPoints(dragPad), "scrollBounds": windowPoints(scroll),
             "primaryWindowSize": [window.frame.width, window.frame.height],
