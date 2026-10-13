@@ -15,6 +15,7 @@ async function fixture() {
   const source: DesktopRetainedSource = {
     repository: 'owner/repository', runId: '100', attempt: '1', commit: 'a'.repeat(40), runnerName: 'windows-runner',
     target: 'win-x64', preset: 'test', productVersion: '1.0.0', version: '1.0.0', testReleaseId: 'b'.repeat(32),
+    workflowCommit: 'a'.repeat(40), sourceRef: 'master', channel: 'nightly',
     publishRequested: true, qualification: 'signed',
   }
   return { root: join(root, 'releases'), file, source }

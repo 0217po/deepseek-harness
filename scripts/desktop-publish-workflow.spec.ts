@@ -8,6 +8,8 @@ const workflow = yaml.load(readFileSync(resolve(import.meta.dirname, '../.github
   permissions: Record<string, string>
   jobs: Record<string, {
     defaults?: unknown
+    needs?: string | string[]
+    env?: Record<string, string>
     if?: string
     environment?: string
     'runs-on': string | string[]
@@ -35,4 +37,15 @@ it('routes only completed package requests and gates production secrets with the
     .toBe("needs.route.outputs.preset == 'production'")
   expect(publish.steps.find(step => step.id === 'app')?.with).toMatchObject({ 'permission-contents': 'write' })
   expect(publish.steps.find(step => step.id === 'publish')?.env?.DESKTOP_TAG_TOKEN).toBe('${{ steps.app.outputs.token }}')
+})
+
+
+it('prepares an approval digest without an Environment and binds the approved job to it', () => {
+  const prepare = workflow.jobs.prepare!
+  const publish = workflow.jobs.publish!
+  expect(prepare.environment).toBeUndefined()
+  expect(prepare.steps.find(step => step.id === 'check')?.run).toContain('--check')
+  expect(prepare.steps.some(step => step.id === 'key' || step.id === 'app')).toBe(false)
+  expect(publish.needs).toEqual(['route', 'prepare'])
+  expect(publish.env?.DESKTOP_APPROVED_PACKAGE).toBe('${{ needs.prepare.outputs.approval }}')
 })

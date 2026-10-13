@@ -35,12 +35,21 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
     const jobs = z.object({ jobs: z.array(z.unknown()) }).parse(api(`${base}/attempts/${attempt}/jobs?per_page=100`))
     const route = resolveDesktopPublishRoute(repository, api(`${base}/attempts/${attempt}`),
       request, jobs.jobs, JSON.parse(env.DESKTOP_PUBLISH_RUNNERS || '{}'))
-    if (route.preset === 'production') {
+    const source = z.object({ sha: z.string() }).parse(api(`repos/${repository}/commits/${route.commit}`))
+    if (source.sha !== route.commit) throw new Error('desktop publish: source commit not found')
+    if (route.sourceRef === 'master') {
+      const comparison = z.object({ status: z.string() }).parse(api(`repos/${repository}/compare/${route.commit}...master`))
+      if (!['ahead', 'identical'].includes(comparison.status)) throw new Error('desktop publish: source is not on master')
+    } else {
+      const tagged = z.object({ sha: z.string() }).parse(api(`repos/${repository}/commits/${route.sourceRef}`))
+      if (tagged.sha !== route.commit) throw new Error('desktop publish: source tag changed')
+    }
+    {
       const environment = z.object({ protection_rules: z.array(z.object({ type: z.string(),
         reviewers: z.array(z.unknown()).optional() })) })
-        .parse(api(`repos/${repository}/environments/desktop-production`))
+        .parse(api(`repos/${repository}/environments/desktop-${route.preset}`))
       if (!environment.protection_rules.some(rule => rule.type === 'required_reviewers' && (rule.reviewers?.length ?? 0) > 0)) {
-        throw new Error('desktop publish: desktop-production requires configured reviewers')
+        throw new Error(`desktop publish: desktop-${route.preset} requires configured reviewers`)
       }
     }
     await appendFile(env.GITHUB_OUTPUT, `publish=true\nroute=${JSON.stringify(route)}\nrunner=${route.runnerLabel}\npreset=${route.preset}\n`)

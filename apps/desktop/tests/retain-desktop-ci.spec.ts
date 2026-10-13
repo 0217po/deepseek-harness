@@ -24,7 +24,7 @@ it.each(['mac-arm64', 'win-x64'] as const)('retains the complete %s release with
   await Promise.all(names.map(name => writeFile(join(artifacts, name), 'fixture')))
   const env = {
     DSH_PACKAGING_CONFIG_DIR: config, DSH_PACKAGING_PRESET: 'test', DSH_DESKTOP_TARGET_PLATFORM: target === 'win-x64' ? 'win32' : 'darwin',
-    DSH_DESKTOP_TARGET_ARCH: target === 'win-x64' ? 'x64' : 'arm64', PACKAGE_VERSION: '1.0.0', PACKAGE_PUBLISH: 'true',
+    DSH_DESKTOP_TARGET_ARCH: target === 'win-x64' ? 'x64' : 'arm64', PACKAGE_SOURCE_REF: 'master', PACKAGE_SOURCE_SHA: 'b'.repeat(40), PACKAGE_VERSION: '1.0.0', PACKAGE_PUBLISH: 'true',
     PACKAGE_SIGNING: 'signed', PACKAGE_SKIP_NOTARIZATION: 'false', GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '2',
     GITHUB_REPOSITORY: 'owner/repository', GITHUB_SHA: 'b'.repeat(40), RUNNER_NAME: 'dedicated',
   }

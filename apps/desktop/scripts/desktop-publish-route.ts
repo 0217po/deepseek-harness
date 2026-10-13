@@ -8,7 +8,9 @@ const runSchema = z.object({
   repository: z.object({ full_name: z.string() }),
 })
 const requestSchema = z.object({ source: z.object({
-  repository: z.string(), runId: z.string(), attempt: z.string(), commit: z.string(),
+  repository: z.string(), runId: z.string(), attempt: z.string(), commit: z.string().regex(/^[a-f0-9]{40}$/u),
+  workflowCommit: z.string(), sourceRef: z.string().regex(/^(?:master|dsh-v[0-9][0-9A-Za-z.-]*)$/u),
+  channel: z.enum(['nightly', 'latest']),
   runnerName: z.string(), target: z.enum(['mac-arm64', 'win-x64']), preset: z.enum(['test', 'production']),
   publishRequested: z.literal(true), qualification: z.enum(['signed', 'notarized']),
 }) })
@@ -20,6 +22,8 @@ export interface DesktopPublishRoute {
   readonly runId: string
   readonly attempt: string
   readonly commit: string
+  readonly sourceRef: string
+  readonly channel: 'nightly' | 'latest'
   readonly runnerName: string
   readonly runnerLabel: string
   readonly target: 'mac-arm64' | 'win-x64'
@@ -44,7 +48,8 @@ export function resolveDesktopPublishRoute(
   const routes = routesSchema.parse(routesValue)
   const workflow = source.target === 'win-x64' ? '.github/workflows/windows-package.yml' : '.github/workflows/macos-package.yml'
   if (run.repository.full_name !== repository || source.repository !== repository || run.path !== workflow
-    || source.runId !== String(run.id) || source.attempt !== String(run.run_attempt) || source.commit !== run.head_sha
+    || source.runId !== String(run.id) || source.attempt !== String(run.run_attempt)
+    || source.workflowCommit !== run.head_sha
     || source.qualification !== (source.target === 'win-x64' ? 'signed' : 'notarized')) {
     throw new Error('desktop publish: request does not match the successful packaging attempt')
   }
@@ -55,6 +60,7 @@ export function resolveDesktopPublishRoute(
   }
   const matches = jobs.filter(job => job.runner_name === source.runnerName && job.conclusion === 'success')
   if (matches.length !== 1) throw new Error('desktop publish: original job does not establish a single successful packaging runner')
-  return { runId: source.runId, attempt: source.attempt, commit: source.commit, runnerName: source.runnerName,
+  return { runId: source.runId, attempt: source.attempt, commit: source.commit, sourceRef: source.sourceRef, channel: source.channel,
+    runnerName: source.runnerName,
     runnerLabel: route.label, target: source.target, preset: source.preset }
 }
