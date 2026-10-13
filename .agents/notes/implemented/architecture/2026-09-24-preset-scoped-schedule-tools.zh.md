@@ -31,4 +31,4 @@ Status: implemented
 
 ## Testing
 
-`packages/schedule/tool-schedule/tests/tool-schedule.spec.ts` 固定这四个定义及其错误映射，包括 `refuses every tool for a delegated child caller`。`apps/cli/tests/web-agent-presets.e2e.ts` 断言 `minimal` preset 的工具列表，`snapshots/web/minimal-preset/tool-schemas.expected.json` 记录其只含 `bash` 的工具表。`packages/schedule/schedule/tests/subagent-ownership.spec.ts` 固定委派深度拒绝，`scripts/optional-bundles.spec.ts` 断言三个 preset 的两行委派行都拒绝全部四个工具名。
+`packages/schedule/tool-schedule/tests/tool-schedule.spec.ts` 固定这四个定义及其错误映射，包括 `refuses every tool for a delegated child caller`。`apps/cli/tests/web-agent-presets.e2e.ts` 断言 `minimal` preset 的工具列表，`snapshots/web/minimal-preset/tool-schemas.expected.json` 记录其不含提醒工具 schema 的工具表。`packages/schedule/schedule/tests/subagent-ownership.spec.ts` 固定委派深度拒绝，`scripts/optional-bundles.spec.ts` 断言三个 preset 的两行委派行都拒绝全部四个工具名。

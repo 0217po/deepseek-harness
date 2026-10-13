@@ -55,7 +55,11 @@ async function scenarios(): Promise<Scenario[]> {
       expect(existsSync(path), `${profile}/${entry.name}/snapshot.yml`).toBe(true)
       const manifest = parseSnapshotManifest(await readFile(path, 'utf8'), path)
       expect(manifest.scenario, `${profile}/${entry.name}: scenario`).toBe(entry.name)
-      expect(manifest.profile, `${profile}/${entry.name}: profile`).toBe(profile === 'session' ? 'headless' : profile)
+      if (profile === 'sdk') {
+        expect(['sdk', 'sdk-minimal'], `${profile}/${entry.name}: profile`).toContain(manifest.profile)
+      } else {
+        expect(manifest.profile, `${profile}/${entry.name}: profile`).toBe(profile === 'session' ? 'headless' : profile)
+      }
       expect(manifest.composition, `${profile}/${entry.name}: composition`).toBeTypeOf('string')
       expect(manifest.recording, `${profile}/${entry.name}: recording`).toMatch(/^(live|authored)$/)
       expect(manifest.header, `${profile}/${entry.name}: header`).toBeDefined()
