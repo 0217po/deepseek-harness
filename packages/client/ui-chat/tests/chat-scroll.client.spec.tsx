@@ -92,10 +92,14 @@ function mountScroll(deferCompletedTurns = true, initial: Partial<ChatScrollInpu
       if (motion === undefined) throw new Error('Viewport motion callbacks are not bound')
       act(() => { motion.collapse(row, () => { row.hidden = true }) })
     },
+    /** Run the fold's frame clock to its end (a row outside a batch finishes on its transition). */
     finishFold: () => {
       const event = new Event('transitionend', { bubbles: true })
       Object.defineProperty(event, 'propertyName', { value: 'height' })
-      act(() => { row.dispatchEvent(event) })
+      act(() => {
+        row.dispatchEvent(event)
+        vi.advanceTimersByTime(200)
+      })
     },
   }
 }

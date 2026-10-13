@@ -1,7 +1,7 @@
 /**
- * Fold transitions owned by one Chat viewport. Input folds coordinate box sizes and scrolling on
- * one frame clock; other folds use CSS transitions. Motion is opt-in under `[data-chat-motion]`,
- * respects reduced motion, and clears temporary styles.
+ * Fold transitions owned by one Chat viewport. Every batch containing a closing row moves its boxes and
+ * the scrollport on one frame clock; a batch that only reveals rows uses CSS transitions. Motion is
+ * opt-in under `[data-chat-motion]`, respects reduced motion, and clears temporary styles.
  */
 import { useCallback, useLayoutEffect, useRef, type RefObject } from 'react'
 import { useSearchableHidden, type HiddenTransition } from './searchable-hidden.ts'
@@ -24,7 +24,7 @@ export interface FlowMotionRows {
   cancelMotion(element: HTMLElement): void
 }
 
-/** Geometry captured before one input-owned fold changes its boxes. */
+/** Geometry captured before one fold batch changes its boxes. */
 export interface InputFoldBox {
   readonly element: HTMLElement
   readonly height: number
@@ -32,29 +32,31 @@ export interface InputFoldBox {
   readonly closing: boolean
 }
 
-/** The viewport follows the same progress that changes the folded boxes. */
+/** The viewport moves on the same progress that changes the folded boxes. */
 export interface InputFoldDriver {
   /**
-   * Capture geometry before the frame clock changes the boxes.
+   * Capture geometry and choose the landing before the frame clock changes the boxes.
    * @param boxes - non-nested boxes whose layout changes on this clock.
+   * @returns closing boxes that scroll with the content and stay opaque; the rest fade in place.
    */
-  begin(boxes: readonly InputFoldBox[]): void
+  begin(boxes: readonly InputFoldBox[]): ReadonlySet<HTMLElement>
   /**
-   * Reserve scroll range before box writes; omit when the driver needs no pre-write compensation.
+   * Reserve scroll range before box writes.
    * @param progress - shared eased progress from zero to one.
-   * @param cancelled - automatic following has stopped; reader-position compensation still applies.
+   * @param cancelled - a reading gesture stopped the automatic target.
    */
-  prepare?(progress: number, cancelled: boolean): void
+  prepare(progress: number, cancelled: boolean): void
   /**
-   * Apply viewport geometry after box writes, even when automatic following is cancelled.
+   * Apply viewport geometry after box writes.
    * @param progress - shared eased progress from zero to one.
-   * @param cancelled - preserve the reader's position rather than applying the automatic target.
+   * @param cancelled - a reading gesture stopped the automatic target.
    * @returns actual scrollTop displacement from the batch start, for closing-content visual compensation.
    */
   frame(progress: number, cancelled: boolean): number
   /**
-   * Release temporary geometry after the last frame or cancellation.
-   * @param cancelled - clean up without reacquiring follow ownership or committing an obsolete landing.
+   * Install the final geometry after the last frame or cancellation.
+   * @param cancelled - a reading gesture stopped the automatic target, every closing row reopened, or the
+   * viewport detached; the driver commits no obsolete landing.
    */
   finish(cancelled: boolean): void
 }
@@ -65,11 +67,11 @@ export interface FlowMotion extends FlowMotionRows {
   foldActive(): boolean
   /** @param listener - callback after the last fold. @returns cancellation for a pending callback. */
   onFoldIdle(listener: () => void): () => void
-  /** @param driver - one input-owned viewport motion. @returns whether an active fold was adopted. */
-  followInput(driver: InputFoldDriver): boolean
-  /** Stop input-owned scrolling while letting its closing rows finish. */
+  /** Stop the running batch's automatic target while letting its boxes finish. */
   cancelInput(): void
-  /** @returns whether a coordinated fold currently owns layout and scrolling. */
+  /** Restore the running batch's automatic target after a newer request takes it over. */
+  resumeInput(): void
+  /** @returns whether a fold batch currently owns layout and scrolling. */
   inputActive(): boolean
   /** Cancel owned animations and pending work when the viewport detaches. */
   clear(): void
@@ -96,111 +98,113 @@ export function hiddenOrCollapsing(element: HTMLElement): boolean {
 
 /**
  * Create animation coordination without cross-viewport broadcasts.
- * @param reserve - reserve the deduplicated removed height in this viewport.
+ * @param driver - the viewport's driver for the next batch; null while detached.
  * @param foldingChanged - disable or restore this viewport's native scroll anchoring.
  * @returns stable callbacks and cleanup for this viewport's animations.
  */
-export function createFlowMotion(reserve: (px: number) => void, foldingChanged: (active: boolean) => void): FlowMotion {
+export function createFlowMotion(driver: () => InputFoldDriver | null, foldingChanged: (active: boolean) => void): FlowMotion {
   const running = new Map<HTMLElement, () => void>()
   let folding = 0
   const foldIdleListeners = new Set<() => void>()
-  const pendingReserve = new Set<HTMLElement>()
-  let pendingGrowth = 0
-  let reserveScheduled = false
+  let batchScheduled = false
   const boxes = new Map<HTMLElement, InputFoldBox & { take: () => void; finish: () => void }>()
-  let inputDriver: InputFoldDriver | null = null
-  let inputFrame: number | null = null
-  let inputBatch = false
+  let frameRequest: number | null = null
+  let batch = false
+  let cancelled = false
   let clearEpoch = 0
-  let inputCleanup: (() => void) | null = null
-  let activeDriver: InputFoldDriver | null = null
+  let batchCleanup: (() => void) | null = null
   let cancelEmptyBatch: (() => void) | null = null
+  /** The batch is committing hidden rows and its final geometry; idle listeners wait until both land. */
+  let settling = false
+  let anchoringDisabled = false
 
-  function cancelInput(): void { inputDriver = null }
-
-  function followInput(driver: InputFoldDriver): boolean {
-    if (folding === 0) return false
-    if (inputBatch) {
-      inputDriver = activeDriver
-      return true
-    }
-    inputDriver = driver
-    scheduleReserve()
-    return true
+  function cancelInput(): void {
+    if (batch) cancelled = true
   }
 
-  function runInputBatch(): void {
-    const driver = inputDriver
-    if (driver === null || inputBatch) return
+  function resumeInput(): void {
+    cancelled = false
+  }
+
+  function runBatch(current: InputFoldDriver): void {
     const owned = [...boxes.values()]
-    const batch = owned.filter(box => box.element.parentElement?.closest('[data-chat-motion="collapse"]') === null)
+    const members = owned.filter(box => box.element.parentElement?.closest('[data-chat-motion="collapse"]') === null)
       .sort((left, right) => left.element.compareDocumentPosition(right.element) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1)
-    if (!batch.some(box => box.closing)) return
-    inputBatch = true
-    activeDriver = driver
-    driver.begin(batch)
-    inputCleanup = () => { driver.finish(true) }
+    if (!members.some(box => box.closing)) return
+    batch = true
+    cancelled = false
+    const travelling = current.begin(members)
+    batchCleanup = () => { current.finish(true) }
     for (const box of owned) box.take()
-    for (const box of batch) {
+    for (const box of members) {
       box.element.style.transition = 'none'
       box.element.style.height = `${box.closing ? box.height : 0}px`
       box.element.style.marginTop = `${box.closing ? box.marginTop : 0}px`
       box.element.style.opacity = box.closing ? '1' : '0'
     }
+    // A travelling box clips its content as it shrinks, so nested closing rows keep their size until it ends.
+    for (const box of owned) {
+      if (members.includes(box) || ![...travelling].some(element => element.contains(box.element))) continue
+      box.element.style.transition = 'none'
+      box.element.style.height = `${box.height}px`
+      box.element.style.marginTop = `${box.marginTop}px`
+      box.element.style.opacity = '1'
+    }
     const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
     let started: number | undefined
     let displacement = 0
-    cancelEmptyBatch = () => {
-      if (batch.some(box => box.closing && boxes.get(box.element) === box)) return
-      if (inputFrame !== null) cancelAnimationFrame(inputFrame)
-      inputFrame = null
-      inputBatch = false
-      activeDriver = null
-      inputDriver = null
-      inputCleanup = null
+    const settle = (finishCancelled: boolean): void => {
+      batch = false
+      batchCleanup = null
       cancelEmptyBatch = null
-      for (const box of owned) if (boxes.get(box.element) === box) box.finish()
-      driver.finish(true)
+      settling = true
+      try {
+        for (const box of owned) if (boxes.get(box.element) === box) box.finish()
+        current.finish(finishCancelled)
+      } finally {
+        settling = false
+      }
+      if (folding === 0) notifyIdle()
+    }
+    cancelEmptyBatch = () => {
+      if (members.some(box => box.closing && boxes.get(box.element) === box)) return
+      if (frameRequest !== null) cancelAnimationFrame(frameRequest)
+      frameRequest = null
+      settle(true)
     }
     const tick = (now: number): void => {
-      inputFrame = null
+      frameRequest = null
       started ??= now
       const elapsed = reduced ? CLOSE_DELAY_MS + CLOSE_MS : now - started
       const linear = Math.min(1, Math.max(0, (elapsed - CLOSE_DELAY_MS) / CLOSE_MS))
       const progress = linear * linear * (3 - 2 * linear)
-      driver.prepare?.(progress, inputDriver !== driver)
-      for (const box of batch) {
+      current.prepare(progress, cancelled)
+      for (const box of members) {
         if (boxes.get(box.element) !== box) continue
         const remaining = box.closing ? 1 - progress : progress
         box.element.style.height = `${box.height * remaining}px`
         box.element.style.marginTop = `${box.marginTop * remaining}px`
-        box.element.style.opacity = box.closing ? String(Math.max(0, 1 - elapsed / FADE_OUT_MS)) : String(progress)
+        box.element.style.opacity = !box.closing ? String(progress)
+          : travelling.has(box.element) ? '1' : String(Math.max(0, 1 - elapsed / FADE_OUT_MS))
       }
-      displacement = driver.frame(progress, inputDriver !== driver)
+      displacement = current.frame(progress, cancelled)
       let removedBefore = 0
-      for (const box of batch) {
+      for (const box of members) {
         if (boxes.get(box.element) !== box) continue
         if (box.closing) {
           // Transforming the closing box changes its pixels, not its flow contribution.
-          box.element.style.translate = `0 ${displacement + removedBefore}px`
+          if (!travelling.has(box.element)) box.element.style.translate = `0 ${displacement + removedBefore}px`
           removedBefore += (box.height + box.marginTop) * progress
         } else removedBefore -= (box.height + box.marginTop) * progress
       }
       if (linear < 1) {
-        inputFrame = requestAnimationFrame(tick)
+        frameRequest = requestAnimationFrame(tick)
         return
       }
-      for (const box of owned) box.finish()
-      inputBatch = false
-      activeDriver = null
-      inputCleanup = null
-      cancelEmptyBatch = null
-      const cancelled = inputDriver !== driver
-      if (!cancelled) inputDriver = null
-      driver.finish(cancelled)
+      settle(cancelled)
     }
     if (reduced) tick(0)
-    else inputFrame = requestAnimationFrame(tick)
+    else frameRequest = requestAnimationFrame(tick)
   }
 
   function foldActive(): boolean { return folding > 0 }
@@ -211,48 +215,42 @@ export function createFlowMotion(reserve: (px: number) => void, foldingChanged: 
     return () => { foldIdleListeners.delete(listener) }
   }
 
-  function flushReserve(): void {
-    reserveScheduled = false
-    if (inputDriver !== null && !inputBatch) {
-      pendingReserve.clear()
-      pendingGrowth = 0
-      runInputBatch()
-      return
-    }
-    if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      pendingReserve.clear()
-      pendingGrowth = 0
+  function flushBatch(): void {
+    batchScheduled = false
+    // Rows that start closing during a batch keep their CSS transitions; the batch follows their size changes.
+    if (batch || ![...boxes.values()].some(box => box.closing)) return
+    const current = driver()
+    if (current !== null) runBatch(current)
+    else if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) {
       for (const box of [...boxes.values()]) box.finish()
-      return
     }
-    let total = -pendingGrowth
-    pendingGrowth = 0
-    for (const element of pendingReserve) {
-      // A member inside a closing group is already part of the group's own box.
-      if (element.parentElement?.closest('[data-chat-motion="collapse"]') !== null) continue
-      total += element.offsetHeight + (Number.parseFloat(getComputedStyle(element).marginTop) || 0)
-    }
-    pendingReserve.clear()
-    if (total > 0) reserve(total)
   }
 
-  function scheduleReserve(): void {
-    if (reserveScheduled) return
-    reserveScheduled = true
+  function scheduleBatch(): void {
+    if (batchScheduled) return
+    batchScheduled = true
     // After the whole commit's collapses and reveals have started, before any box changes size.
     const epoch = clearEpoch
-    queueMicrotask(() => { if (epoch === clearEpoch) flushReserve() })
+    queueMicrotask(() => { if (epoch === clearEpoch) flushBatch() })
   }
 
   function foldStarted(): void {
     folding += 1
-    if (folding === 1) foldingChanged(true)
+    if (folding !== 1 || anchoringDisabled) return
+    anchoringDisabled = true
+    foldingChanged(true)
   }
 
   function foldEnded(): void {
     folding = Math.max(0, folding - 1)
-    if (folding > 0) return
-    foldingChanged(false)
+    if (folding === 0 && !settling) notifyIdle()
+  }
+
+  function notifyIdle(): void {
+    if (anchoringDisabled) {
+      anchoringDisabled = false
+      foldingChanged(false)
+    }
     const listeners = [...foldIdleListeners]
     foldIdleListeners.clear()
     for (const listener of listeners) listener()
@@ -274,7 +272,6 @@ export function createFlowMotion(reserve: (px: number) => void, foldingChanged: 
   }
 
   function cancelMotion(element: HTMLElement): void {
-    pendingReserve.delete(element)
     running.get(element)?.()
     cancelEmptyBatch?.()
   }
@@ -290,8 +287,7 @@ export function createFlowMotion(reserve: (px: number) => void, foldingChanged: 
     const { style } = element
     element.dataset.chatMotion = 'collapse'
     foldStarted()
-    pendingReserve.add(element)
-    scheduleReserve()
+    scheduleBatch()
     style.transition = 'none'
     style.overflow = 'hidden'
     style.height = `${height}px`
@@ -329,8 +325,7 @@ export function createFlowMotion(reserve: (px: number) => void, foldingChanged: 
     const height = element.offsetHeight
     if (height === 0) return
     const marginTop = Number.parseFloat(getComputedStyle(element).marginTop) || 0
-    pendingGrowth += height + marginTop
-    scheduleReserve()
+    scheduleBatch()
     const { style } = element
     element.dataset.chatMotion = 'reveal'
     style.transition = 'none'
@@ -360,22 +355,21 @@ export function createFlowMotion(reserve: (px: number) => void, foldingChanged: 
 
   function clear(): void {
     clearEpoch++
-    reserveScheduled = false
-    inputDriver = null
-    activeDriver = null
-    inputBatch = false
-    if (inputFrame !== null) cancelAnimationFrame(inputFrame)
-    inputFrame = null
-    inputCleanup?.()
-    inputCleanup = null
+    batchScheduled = false
+    batch = false
+    cancelled = false
+    if (frameRequest !== null) cancelAnimationFrame(frameRequest)
+    frameRequest = null
+    batchCleanup?.()
+    batchCleanup = null
     cancelEmptyBatch = null
     foldIdleListeners.clear()
-    pendingReserve.clear()
-    pendingGrowth = 0
     for (const cancel of [...running.values()]) cancel()
   }
 
-  return { collapse, reveal, cancelMotion, foldActive, onFoldIdle, followInput, cancelInput, inputActive: () => inputBatch, clear }
+  return {
+    collapse, reveal, cancelMotion, foldActive, onFoldIdle, cancelInput, resumeInput, inputActive: () => batch, clear,
+  }
 }
 
 function useFlowTransition(motion: FlowMotionRows | undefined, grow: boolean): HiddenTransition | undefined {

@@ -5,21 +5,33 @@ import { StrictMode, useRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import {
   createFlowMotion, hiddenOrCollapsing, motionEnabled, useFlowHidden, useMotionHidden,
-  type FlowMotion, type FlowMotionRows,
+  type FlowMotion, type FlowMotionRows, type InputFoldBox, type InputFoldDriver,
 } from '../src/client/chat/flow-motion.ts'
 
 const ownedRows = new Set<HTMLElement>()
 const subscriptions = new Set<() => void>()
 let motion: FlowMotion
-let reserve: Mock<(px: number) => void>
+let driver: Mock<() => InputFoldDriver | null>
 let changed: Mock<(active: boolean) => void>
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-  reserve = vi.fn<(px: number) => void>()
+  // Without a driver, rows keep their CSS transitions; batch tests supply one.
+  driver = vi.fn<() => InputFoldDriver | null>(() => null)
   changed = vi.fn<(active: boolean) => void>()
-  motion = createFlowMotion(reserve, changed)
+  motion = createFlowMotion(driver, changed)
 })
+
+function batchDriver(travelling: readonly HTMLElement[] = []) {
+  const calls = {
+    begin: vi.fn<(boxes: readonly InputFoldBox[]) => ReadonlySet<HTMLElement>>(() => new Set(travelling)),
+    prepare: vi.fn<(progress: number, cancelled: boolean) => void>(),
+    frame: vi.fn<(progress: number, cancelled: boolean) => number>(() => -20),
+    finish: vi.fn<(cancelled: boolean) => void>(),
+  }
+  driver.mockReturnValue(calls)
+  return calls
+}
 afterEach(async () => {
   try {
     for (const unsubscribe of subscriptions) unsubscribe()
@@ -104,7 +116,7 @@ describe('flow motion', () => {
     expect(motion.foldActive()).toBe(false)
     expect(vi.getTimerCount()).toBe(0)
     await Promise.resolve()
-    expect(reserve).not.toHaveBeenCalled()
+    expect(driver).not.toHaveBeenCalled()
     expectCleared(row)
   })
 
@@ -121,7 +133,7 @@ describe('flow motion', () => {
     expect(row.style.opacity).toBe('0')
     expect(row.style.height).toBe('0px')
     await Promise.resolve()
-    expect(reserve).toHaveBeenCalledExactlyOnceWith(80)
+    expect(driver).toHaveBeenCalledTimes(1)
     transitionEnd(row, 'opacity')
     transitionEnd(child, 'height')
     expect(done).not.toHaveBeenCalled()
@@ -180,7 +192,7 @@ describe('flow motion', () => {
     expect(idle).toHaveBeenCalledTimes(1)
   })
 
-  it('cancels before reserve delivery without hiding the row or retaining callbacks', async () => {
+  it('cancels before the batch starts without hiding the row or retaining callbacks', async () => {
     const row = rowWithHeight(80)
     const done = vi.fn()
     motion.collapse(row, done)
@@ -190,14 +202,15 @@ describe('flow motion', () => {
     expect(hiddenOrCollapsing(row)).toBe(false)
     expectCleared(row)
     await Promise.resolve()
-    expect(reserve).not.toHaveBeenCalled()
+    expect(driver).not.toHaveBeenCalled()
     transitionEnd(row, 'height')
     vi.runAllTimers()
     expect(done).not.toHaveBeenCalled()
     expect(row.hasAttribute('hidden')).toBe(false)
   })
 
-  it('reserves nested closing content once and subtracts newly revealed height', async () => {
+  it('drives non-nested closing and revealing boxes in document order on one batch', async () => {
+    const calls = batchDriver()
     const parent = rowWithHeight(180)
     const child = rowWithHeight(80, parent)
     const sibling = rowWithHeight(50)
@@ -207,23 +220,118 @@ describe('flow motion', () => {
     motion.collapse(sibling, vi.fn())
     motion.reveal(opening)
     await Promise.resolve()
-    expect(reserve).toHaveBeenCalledExactlyOnceWith(200)
+    expect(calls.begin).toHaveBeenCalledTimes(1)
+    expect(calls.begin.mock.calls[0]?.[0].map(box => [box.element, box.height, box.closing])).toEqual([
+      [parent, 180, true], [sibling, 50, true], [opening, 30, false],
+    ])
+    expect(motion.inputActive()).toBe(true)
   })
 
-  it('does not rewrite a reopened row after its input-fold ownership is cancelled', async () => {
+  it('leaves a reveal-only commit to its CSS transition', async () => {
+    batchDriver()
+    const row = rowWithHeight(30)
+    motion.reveal(row)
+    await Promise.resolve()
+    expect(driver).not.toHaveBeenCalled()
+    expect(row.dataset.chatMotion).toBe('reveal')
+    vi.runAllTimers()
+  })
+
+  it('lands a batch on its frame clock and notifies idle after the final geometry', async () => {
     vi.useFakeTimers()
+    const calls = batchDriver()
+    const row = rowWithHeight(180)
+    const order: string[] = []
+    const done = vi.fn(() => { order.push('hidden'); row.setAttribute('hidden', '') })
+    calls.finish.mockImplementation(() => { order.push('finish') })
+    motion.collapse(row, done)
+    subscriptions.add(motion.onFoldIdle(() => { order.push('idle') }))
+    await Promise.resolve()
+    vi.advanceTimersByTime(96)
+    expect(row.style.translate).toBe('0 -20px')
+    expect(Number.parseFloat(row.style.height)).toBeLessThan(180)
+    vi.advanceTimersByTime(400)
+    expect(order).toEqual(['hidden', 'finish', 'idle'])
+    expect(calls.finish).toHaveBeenCalledExactlyOnceWith(false)
+    expect(changed.mock.calls).toEqual([[true], [false]])
+    expect(motion.inputActive()).toBe(false)
+    expectCleared(row)
+  })
+
+  it('keeps a travelling box opaque and in the flow while it shrinks', async () => {
+    vi.useFakeTimers()
+    const row = rowWithHeight(180)
+    const nested = rowWithHeight(60, row)
+    batchDriver([row])
+    motion.collapse(nested, vi.fn())
+    motion.collapse(row, vi.fn())
+    await Promise.resolve()
+    expect(nested.style.height).toBe('60px')
+    expect(nested.style.transition).toBe('none')
+    vi.advanceTimersByTime(96)
+    expect(row.style.opacity).toBe('1')
+    expect(row.style.translate).toBe('')
+    expect(nested.style.opacity).toBe('1')
+    vi.advanceTimersByTime(400)
+  })
+
+  it('reports reader cancellation to the driver and lets a newer request resume the target', async () => {
+    vi.useFakeTimers()
+    const calls = batchDriver()
+    const row = rowWithHeight(180)
+    motion.cancelInput()
+    motion.collapse(row, vi.fn())
+    await Promise.resolve()
+    motion.cancelInput()
+    vi.advanceTimersByTime(96)
+    expect(calls.frame.mock.calls.at(-1)?.[1]).toBe(true)
+    motion.resumeInput()
+    vi.advanceTimersByTime(16)
+    expect(calls.frame.mock.calls.at(-1)?.[1]).toBe(false)
+    motion.cancelInput()
+    vi.advanceTimersByTime(400)
+    expect(calls.finish).toHaveBeenCalledExactlyOnceWith(true)
+  })
+
+  it('finishes a batch synchronously under reduced motion', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+    const calls = batchDriver()
     const row = rowWithHeight(180)
     const done = vi.fn()
     motion.collapse(row, done)
-    motion.followInput({ begin: vi.fn(), frame: () => -20, finish: vi.fn() })
+    await Promise.resolve()
+    expect(done).toHaveBeenCalledTimes(1)
+    expect(calls.finish).toHaveBeenCalledExactlyOnceWith(false)
+  })
+
+  it('does not rewrite a reopened row after its batch is cancelled', async () => {
+    vi.useFakeTimers()
+    const calls = batchDriver()
+    const row = rowWithHeight(180)
+    const done = vi.fn()
+    motion.collapse(row, done)
     await Promise.resolve()
     vi.advanceTimersByTime(96)
     motion.cancelMotion(row)
     expectCleared(row)
+    expect(calls.finish).toHaveBeenCalledExactlyOnceWith(true)
     vi.advanceTimersByTime(400)
     expectCleared(row)
     expect(row.style.translate).toBe('')
     expect(done).not.toHaveBeenCalled()
+  })
+
+  it('cancels a running batch with its owner', async () => {
+    vi.useFakeTimers()
+    const calls = batchDriver()
+    const row = rowWithHeight(180)
+    motion.collapse(row, vi.fn())
+    await Promise.resolve()
+    vi.advanceTimersByTime(32)
+    motion.clear()
+    expect(calls.finish).toHaveBeenCalledExactlyOnceWith(true)
+    expect(motion.inputActive()).toBe(false)
+    expectCleared(row)
   })
 
   it('clears pending reservations and idle work with its owner', async () => {
@@ -233,7 +341,7 @@ describe('flow motion', () => {
     motion.onFoldIdle(idle)
     motion.clear()
     await Promise.resolve()
-    expect(reserve).not.toHaveBeenCalled()
+    expect(driver).not.toHaveBeenCalled()
     expect(idle).not.toHaveBeenCalled()
     expectCleared(row)
   })
@@ -292,7 +400,7 @@ describe('flow motion', () => {
     act(() => { vi.advanceTimersByTime(100) })
     view.rerender(<div data-chat-motion=""><SearchableHiddenRow motion={motion} hidden onReveal={vi.fn()} /></div>)
     expect(changed.mock.calls).toEqual([[true]])
-    expect(reserve).toHaveBeenCalledExactlyOnceWith(80)
+    expect(driver).toHaveBeenCalledTimes(1)
     act(() => { vi.advanceTimersByTime(140) })
     expect(row.getAttribute('hidden')).toBe('until-found')
     expect(changed.mock.calls).toEqual([[true], [false]])
@@ -347,7 +455,7 @@ describe.each([
     expect(motion.foldActive()).toBe(false)
     expectCleared(row)
     await Promise.resolve()
-    expect(reserve).not.toHaveBeenCalled()
+    expect(driver).not.toHaveBeenCalled()
     act(() => { vi.runAllTimers() })
     transitionEnd(row, 'height')
     expect(row.hasAttribute('hidden')).toBe(false)
