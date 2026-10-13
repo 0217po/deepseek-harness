@@ -29,27 +29,30 @@ final class WindowPointerInput {
     }
 
     /// Move the visible cursor without restoring the prior point or reserving the application.
-    func hover(in route: WindowRoute, at point: WindowPoint) throws {
+    @MainActor static func hover(in route: WindowRoute, at point: WindowPoint, checkCancellation: @Sendable () throws -> Void) throws {
         try checkCancellation()
         try Self.validate(point, in: route)
+        try NativePlatform.verify(route.owner)
+        try NativePlatform.requireUnlocked(NativePlatform.sessionLocked())
+        let current = try NativePlatform.ownedWindow(route.owner.pid, route.windowID)
+        guard current.bounds == route.bounds else {
+            throw NativeFailure(code: "WINDOW_CHANGED", message: "Window moved or resized before hover; read fresh state")
+        }
         guard let event = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved,
                                   mouseCursorPosition: Self.screenPoint(point, in: route), mouseButton: .left) else {
             throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create system pointer movement")
         }
         event.flags = []
-        try Self.requireSystemPointerTarget(route, at: point, frontPID: NativePlatform.frontPID(), windows: NativePlatform.windows(allLayers: true))
+        try Self.requireSystemPointerTarget(route, frontPID: NativePlatform.frontPID(),
+                                            hitWindowID: NativePlatform.mouseWindow(at: Self.screenPoint(point, in: route)))
         try checkCancellation()
         event.post(tap: .cghidEventTap)
         try checkCancellation()
     }
 
-    /// System movement requires the selected foreground window to be first at the destination point.
-    static func requireSystemPointerTarget(_ route: WindowRoute, at point: WindowPoint, frontPID: Int32?, windows: [WindowInfo]) throws {
-        let screen = screenPoint(point, in: route)
-        let hit = windows.first { window in
-            window.isOnScreen && CGRect(x: window.bounds.x, y: window.bounds.y, width: window.bounds.width, height: window.bounds.height).contains(screen)
-        }
-        guard frontPID == route.owner.pid, hit?.pid == route.owner.pid, hit?.windowID == route.windowID else {
+    /// Input-transparent windows do not obscure a target; AppKit owns mouse hit testing.
+    static func requireSystemPointerTarget(_ route: WindowRoute, frontPID: Int32?, hitWindowID: Int) throws {
+        guard frontPID == route.owner.pid, hitWindowID == Int(route.windowID) else {
             throw NativeFailure(code: "FOREGROUND_REQUIRED", message: "System-pointer hover requires the selected window to be unobscured at the target point in the foreground application. Activate or raise it explicitly, then observe again")
         }
     }

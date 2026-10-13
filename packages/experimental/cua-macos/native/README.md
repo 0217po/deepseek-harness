@@ -89,7 +89,7 @@ Request modifier arrays accept command/control/option/shift/fn. The object API n
 
 `hover` accepts an observed element index or a window-local point and sends only unpressed movement. Disabled controls may be hovered. No request completion, AX read or screenshot restores the previous point; subsequent hover calls can enter revealed content. Click sends its button events at the target without an off-window priming click. Individual requests are serialized, but no application is reserved between calls. Other input or application changes can interrupt the interaction.
 
-`hover` moves the visible system cursor through the system input queue after checking the foreground PID and first on-screen window at the point. A failed check returns `FOREGROUND_REQUIRED` without moving the cursor. Hover does not activate, raise or restore focus. Other input or window changes can race the check and dispatch.
+`hover` moves the visible system cursor through the system input queue after checking the foreground PID and AppKit mouse hit testing at the point. Input-transparent windows and transparent regions do not block the target. A failed check returns `FOREGROUND_REQUIRED` without moving the cursor. Hover does not activate, raise or restore focus. Other input or window changes can race the check and dispatch.
 
 
 -----

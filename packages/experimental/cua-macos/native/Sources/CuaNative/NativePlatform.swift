@@ -102,6 +102,11 @@ enum NativePlatform {
         }
     }
     static func frontPID() -> Int32? { WindowSpaces().frontPID() }
+    /// AppKit excludes input-transparent windows and transparent regions, including system overlays.
+    @MainActor static func mouseWindow(at quartzPoint: CGPoint) -> Int {
+        let point = WindowGeometry.appKitPoint(quartzPoint, mainDisplayHeight: CGDisplayBounds(CGMainDisplayID()).height)
+        return NSWindow.windowNumber(at: point, belowWindowWithWindowNumber: 0)
+    }
     static func ownedWindow(_ pid: Int32, _ id: UInt32) throws -> WindowInfo {
         try requireOwnedWindow(pid, windows(allLayers: true).first { $0.windowID == id })
     }

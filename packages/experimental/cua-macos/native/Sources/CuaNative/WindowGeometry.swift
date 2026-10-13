@@ -4,6 +4,11 @@ import CoreGraphics
 enum WindowGeometry {
     static let conflictMessage = "Window display and accessibility bounds disagree. Read fresh state; if unchanged, use AX actions or explicitly restore the window before capture or coordinate input"
 
+    /// Quartz and AppKit use opposite Y directions anchored to the primary display, including on other displays.
+    static func appKitPoint(_ point: CGPoint, mainDisplayHeight: CGFloat) -> CGPoint {
+        CGPoint(x: point.x, y: mainDisplayHeight - point.y)
+    }
+
     /// Window-local coordinates survive movement, but require a fresh observation after resizing.
     static func validateObservedSize(observed: WindowBounds?, current: WindowBounds) throws {
         guard let observed else {

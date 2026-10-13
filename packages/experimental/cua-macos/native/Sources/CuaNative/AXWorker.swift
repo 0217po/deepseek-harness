@@ -64,7 +64,7 @@ private enum ApplicationTarget {
     case running(ProcessIdentity)
     case pending(InstalledApplication, JSONValue)
 }
-enum DriverOutcome: Sendable { case result(JSONValue), capture(CaptureTarget), foreground(ForegroundPlan), launch(ApplicationLaunch), paste(PastePlan) }
+enum DriverOutcome: Sendable { case result(JSONValue), capture(CaptureTarget), foreground(ForegroundPlan), launch(ApplicationLaunch), paste(PastePlan), hover(WindowRoute, WindowPoint) }
 
 actor AXWorker {
     nonisolated let executor = NativeSerialExecutor()
@@ -368,8 +368,8 @@ actor AXWorker {
                 point = try params.point()
             }
             let route = WindowRoute(owner: identity, windowID: window.windowID, bounds: window.bounds)
-            if method == "hover" { try inputs().1.hover(in: route, at: point) }
-            else { try inputs().1.click(in: route, at: point, button: button, count: count, modifiers: modifiers) }
+            if method == "hover" { return .hover(route, point) }
+            try inputs().1.click(in: route, at: point, button: button, count: count, modifiers: modifiers)
         case "scroll", "drag":
             let id = try params.windowID()
             try coordinateSnapshot(handle, params, id)

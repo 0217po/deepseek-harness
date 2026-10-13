@@ -1,28 +1,27 @@
 // System-pointer movement must not target another app or an obscured window.
 import Testing
+import CoreGraphics
 @testable import CuaNative
 
 @Test func systemHoverRequiresTheForegroundUnobscuredTarget() throws {
     let owner = ProcessIdentity(pid: 42, startedSeconds: 1, startedMicroseconds: 0)
     let bounds = WindowBounds(x: 100, y: 100, width: 400, height: 300)
     let route = WindowRoute(owner: owner, windowID: 7, bounds: bounds)
-    let target = WindowInfo(windowID: 7, pid: 42, appName: "Fixture", title: "Target", bounds: bounds, isOnScreen: true, onCurrentSpace: true)
-    let point = WindowPoint(x: 20, y: 30)
-    try WindowPointerInput.requireSystemPointerTarget(route, at: point, frontPID: 42, windows: [target])
+    try WindowPointerInput.requireSystemPointerTarget(route, frontPID: 42, hitWindowID: 7)
     for pid: Int32? in [nil, 99] {
         #expect(throws: NativeFailure.self) {
-            try WindowPointerInput.requireSystemPointerTarget(route, at: point, frontPID: pid, windows: [target])
+            try WindowPointerInput.requireSystemPointerTarget(route, frontPID: pid, hitWindowID: 7)
         }
     }
-    for pid: Int32 in [42, 99] {
-        let cover = WindowInfo(windowID: 8, pid: pid, appName: "Other", title: "Cover", bounds: bounds, isOnScreen: true, onCurrentSpace: true)
+    for hitWindowID in [0, -1, 8] {
         #expect(throws: NativeFailure.self) {
-            try WindowPointerInput.requireSystemPointerTarget(route, at: point, frontPID: 42, windows: [cover, target])
+            try WindowPointerInput.requireSystemPointerTarget(route, frontPID: 42, hitWindowID: hitWindowID)
         }
     }
-    #expect(throws: NativeFailure.self) {
-        try WindowPointerInput.requireSystemPointerTarget(route, at: point, frontPID: 42, windows: [])
-    }
-    let hidden = WindowInfo(windowID: 8, pid: 99, appName: "Other", title: "Hidden", bounds: bounds, isOnScreen: false, onCurrentSpace: false)
-    try WindowPointerInput.requireSystemPointerTarget(route, at: point, frontPID: 42, windows: [hidden, target])
+}
+
+@Test func hoverHitTestingUsesThePrimaryDisplayOriginForEveryDisplay() {
+    #expect(WindowGeometry.appKitPoint(CGPoint(x: 120, y: 230), mainDisplayHeight: 900) == CGPoint(x: 120, y: 670))
+    #expect(WindowGeometry.appKitPoint(CGPoint(x: -800, y: -200), mainDisplayHeight: 900) == CGPoint(x: -800, y: 1100))
+    #expect(WindowGeometry.appKitPoint(CGPoint(x: 2100, y: 1200), mainDisplayHeight: 900) == CGPoint(x: 2100, y: -300))
 }
