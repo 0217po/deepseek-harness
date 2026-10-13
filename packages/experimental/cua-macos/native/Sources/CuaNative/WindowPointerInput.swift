@@ -275,7 +275,7 @@ final class WindowPointerInput {
         button == .left ? .leftMouseDragged : button == .right ? .rightMouseDragged : .otherMouseDragged
     }
 
-    private static func validate(_ point: WindowPoint, in route: WindowRoute) throws {
+    static func validate(_ point: WindowPoint, in route: WindowRoute) throws {
         guard point.x.isFinite, point.y.isFinite, point.x >= 0, point.y >= 0,
               point.x < route.bounds.width, point.y < route.bounds.height,
               (route.bounds.x + point.x).isFinite, (route.bounds.y + point.y).isFinite else {

@@ -80,6 +80,7 @@ actor AXWorker {
     private var access: AXAccess?
     private var keyboard: KeyboardInput?
     private var pointer: WindowPointerInput?
+    private var hovers: [String: AXHover] = [:]
     private var closed = false
 
     init(cancellation: CancellationLatch, axTimeout: Float, textEventInterval: Double) {
@@ -113,6 +114,7 @@ actor AXWorker {
         return state
     }
     private func forget(_ handle: String) {
+        hovers.removeValue(forKey: handle)
         targets.removeValue(forKey: handle)
         snapshots = snapshots.filter { $0.key.appHandle != handle }
         observedWindowBounds.removeValue(forKey: handle)
@@ -345,9 +347,11 @@ actor AXWorker {
             let modifiers = try params.modifiers()
             let window: WindowInfo
             let point: WindowPoint
+            var hoverElement: AXUIElement?
             if params.contains("elementIndex") {
                 guard !params.contains("x"), !params.contains("y"), !params.contains("windowId") else { throw RequestParameters.invalid("Element and coordinate targets cannot be combined") }
                 let selected = try element(handle, params)
+                hoverElement = selected
                 if method == "click" {
                     let names = try ax().actions(selected)
                     let action: String? = !modifiers.isEmpty ? nil : button == "right" && names.contains("AXShowMenu") ? "AXShowMenu"
@@ -368,7 +372,19 @@ actor AXWorker {
                 point = try params.point()
             }
             let route = WindowRoute(owner: identity, windowID: window.windowID, bounds: window.bounds)
-            if method == "hover" { return .hover(route, point) }
+            if method == "hover" {
+                try WindowPointerInput.validate(point, in: route)
+                if hoverElement == nil {
+                    hoverElement = try ax().element(at: CGPoint(x: window.bounds.x + point.x, y: window.bounds.y + point.y), owner: identity)
+                    if let hit = hoverElement, try ax().windowID(hit) != window.windowID { hoverElement = nil }
+                }
+                let hover = hovers[handle] ?? AXHover()
+                hovers[handle] = hover
+                if try hover.move(to: hoverElement, in: route, access: ax()) {
+                    return .result(Self.hoverResult(route: "accessibility", pointerMoved: false))
+                }
+                return .hover(route, point)
+            }
             try inputs().1.click(in: route, at: point, button: button, count: count, modifiers: modifiers)
         case "scroll", "drag":
             let id = try params.windowID()
@@ -464,5 +480,8 @@ actor AXWorker {
             "pixelWidth": .number(Double(image.width)), "pixelHeight": .number(Double(image.height)), "bounds": after.bounds.json,
             "coordinateSpace": .string("window-points"), "windowId": .number(Double(after.windowID))])
     }
-    func shutdown() { closed = true; snapshots.removeAll(); observedWindowBounds.removeAll(); targets.removeAll(); access = nil; keyboard = nil; pointer = nil }
+    static func hoverResult(route: String, pointerMoved: Bool) -> JSONValue {
+        .object(["dispatched": .bool(true), "verified": .bool(false), "hoverRoute": .string(route), "systemPointerMoved": .bool(pointerMoved)])
+    }
+    func shutdown() { closed = true; snapshots.removeAll(); observedWindowBounds.removeAll(); targets.removeAll(); hovers.removeAll(); access = nil; keyboard = nil; pointer = nil }
 }

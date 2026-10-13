@@ -89,6 +89,15 @@ final class AXAccess {
         guard let value = try attribute(element, name) else { return nil }
         return try elementValue(value, name)
     }
+    func element(at point: CGPoint, owner: ProcessIdentity) throws -> AXUIElement? {
+        let app = AXUIElementCreateApplication(owner.pid)
+        try prepare(app)
+        var hit: AXUIElement?
+        let error = AXUIElementCopyElementAtPosition(app, Float(point.x), Float(point.y), &hit)
+        if absent(error) { return nil }
+        guard error == .success else { throw failure(error, "find element at hover point") }
+        return hit
+    }
     func children(_ element: AXUIElement, _ name: String = "AXChildren") throws -> [AXUIElement] {
         try childValues(try attribute(element, name), attribute: name)
     }

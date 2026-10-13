@@ -92,6 +92,7 @@ def main():
     parser.add_argument("--artifacts", type=Path, help="Save fixture screenshots and private JSON protocol transcript")
     parser.add_argument("--panels-only", action="store_true", help="Exercise system file panels without unrelated pointer gestures")
     parser.add_argument("--hover-only", action="store_true", help="Exercise native hover without keyboard or file-panel scenarios")
+    parser.add_argument("--alternate-hover", action="store_true", help="Use AX alternate UI and verify the system pointer stays unchanged")
     args = parser.parse_args()
     artifacts = args.artifacts
     if artifacts is not None:
@@ -103,7 +104,10 @@ def main():
         fixture_binary = Path(directory) / "dsh-cua-fixture"
         state_path = Path(directory) / "state.json"
         subprocess.run(["swiftc", str(ROOT / "tests" / "Fixture.swift"), "-o", str(fixture_binary)], check=True)
-        fixture = subprocess.Popen([str(fixture_binary), str(state_path)], stdout=subprocess.PIPE, text=True)
+        fixture_args = [str(fixture_binary), str(state_path)]
+        if args.alternate_hover:
+            fixture_args += ["35", "--alternate-hover"]
+        fixture = subprocess.Popen(fixture_args, stdout=subprocess.PIPE, text=True)
         helper = None
         try:
             assert line(fixture).strip() == "READY"
@@ -180,24 +184,34 @@ def main():
                 return result
 
             def check_hover():
-                call("activate", owner)
-                current = call("getState", primary_params)
-                window_element = next(element for element in current["elements"] if element["role"] == "AXWindow")
-                call("performSecondaryAction", {**owner, "snapshotId": current["snapshotId"],
-                                                 "elementIndex": window_element["index"], "action": "raise"})
+                if not args.alternate_hover:
+                    call("activate", owner)
+                    current = call("getState", primary_params)
+                    window_element = next(element for element in current["elements"] if element["role"] == "AXWindow")
+                    call("performSecondaryAction", {**owner, "snapshotId": current["snapshotId"],
+                                                     "elementIndex": window_element["index"], "action": "raise"})
                 call("getState", primary_params)
+                def hover(target):
+                    result = call("hover", target)
+                    if args.alternate_hover:
+                        assert result["hoverRoute"] == "accessibility" and result["systemPointerMoved"] is False, result
+                    return result
                 x, y, width, height = json.loads(state_path.read_text())["dragBounds"]
-                call("hover", {**owner, "windowId": primary["windowId"], "x": x + 20, "y": y + 20})
+                hover({**owner, "windowId": primary["windowId"], "x": x + 20, "y": y + 20})
                 wait_state(lambda actual: actual["hoverVisible"], "AppKit tracking area did not reveal hover controls")
+                time.sleep(0.25)
                 hover_state = call("getState", primary_params)
                 capture(primary, "02-native-hover.png")
                 assert json.loads(state_path.read_text())["hoverVisible"], "Observation dismissed native hover controls"
                 hover_target = button_target(hover_state, "Use native hover details")
-                call("hover", {**hover_target})
+                hover(hover_target)
                 call("click", hover_target)
                 wait_state(lambda actual: actual["hoverClicks"] == 1, "Native hover control did not activate")
-                call("hover", {**owner, "windowId": primary["windowId"], "x": 10, "y": 40})
+                hover({**owner, "windowId": primary["windowId"], "x": 10, "y": 40})
                 wait_state(lambda actual: not actual["hoverVisible"], "AppKit tracking area did not exit")
+                if args.alternate_hover:
+                    actual = json.loads(state_path.read_text())
+                    assert actual["cursorSamples"] > 1 and actual["cursorChanges"] == 0, actual
 
             if args.hover_only:
                 check_hover()

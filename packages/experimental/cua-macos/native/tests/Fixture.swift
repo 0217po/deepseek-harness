@@ -1,6 +1,6 @@
 import AppKit
 
-final class DragPad: NSView {
+class DragPad: NSView {
     var changed: (() -> Void)?
     var dragDownCount = 0
     var dragCount = 0
@@ -36,6 +36,17 @@ final class DragPad: NSView {
         NSColor.systemBlue.setFill(); NSBezierPath(ovalIn: NSRect(x: lastPoint.x - 5, y: lastPoint.y - 5, width: 10, height: 10)).fill()
     }
 }
+final class AlternateHoverPad: DragPad {
+    override func isAccessibilityElement() -> Bool { true }
+    override func accessibilityRole() -> NSAccessibility.Role? { .group }
+    override func accessibilityLabel() -> String? { "Alternate hover controls" }
+    override func accessibilityPerformShowAlternateUI() -> Bool {
+        hoverButton.isHidden = false; changed?(); return true
+    }
+    override func accessibilityPerformShowDefaultUI() -> Bool {
+        hoverButton.isHidden = true; changed?(); return true
+    }
+}
 final class ScrollDocument: NSView { override var isFlipped: Bool { true } }
 final class CountingScrollView: NSScrollView {
     var changed: (() -> Void)?
@@ -47,6 +58,11 @@ final class CountingScrollView: NSScrollView {
 final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     let statePath: String
     let rowCount: Int
+    let alternateHover: Bool
+    var cursorSamples = 0
+    var cursorChanges = 0
+    var lastCursor = CGPoint.zero
+    var cursorTimer: Timer?
     var window: NSWindow!
     var second: NSWindow!
     var field: NSTextField!
@@ -57,7 +73,9 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     var secondaryCount = 0
     var selectedFile = ""
 
-    init(statePath: String, rowCount: Int = 35) { self.statePath = statePath; self.rowCount = rowCount }
+    init(statePath: String, rowCount: Int = 35, alternateHover: Bool = false) {
+        self.statePath = statePath; self.rowCount = rowCount; self.alternateHover = alternateHover
+    }
     func applicationDidFinishLaunching(_ notification: Notification) {
         let menu = NSMenu()
         let editItem = NSMenuItem()
@@ -87,7 +105,8 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         countLabel = NSTextField(labelWithString: "Count: 0")
         countLabel.frame = NSRect(x: 260, y: 371, width: 130, height: 24)
         content.addSubview(countLabel)
-        dragPad = DragPad(frame: NSRect(x: 30, y: 245, width: 350, height: 90))
+        let dragFrame = NSRect(x: 30, y: 245, width: 350, height: 90)
+        dragPad = alternateHover ? AlternateHoverPad(frame: dragFrame) : DragPad(frame: dragFrame)
         dragPad.changed = { [weak self] in self?.persist() }
         content.addSubview(dragPad)
         let open = NSButton(title: "Open fixture file", target: self, action: #selector(openFile))
@@ -118,8 +137,20 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         close.frame = NSRect(x: 30, y: 30, width: 240, height: 32)
         second.contentView!.addSubview(close)
         second.orderFront(nil)
-        window.makeKeyAndOrderFront(nil)
-        NSApplication.shared.activate(ignoringOtherApps: true)
+        if alternateHover {
+            window.orderFront(nil)
+            lastCursor = NSEvent.mouseLocation
+            cursorTimer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { [weak self] _ in
+                guard let self else { return }
+                let position = NSEvent.mouseLocation
+                self.cursorSamples += 1
+                if position != self.lastCursor { self.cursorChanges += 1; self.lastCursor = position }
+                self.persist()
+            }
+        } else {
+            window.makeKeyAndOrderFront(nil)
+            NSApplication.shared.activate(ignoringOtherApps: true)
+        }
         persist()
         print("READY")
         fflush(stdout)
@@ -150,6 +181,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             "rowCount": rowCount, "primaryWindowId": window.windowNumber,
             "dragDownCount": dragPad.dragDownCount, "dragCount": dragPad.dragCount, "dragPoint": [dragPad.lastPoint.x, dragPad.lastPoint.y],
             "hoverVisible": !dragPad.hoverButton.isHidden, "hoverClicks": dragPad.hoverClicks,
+            "cursorSamples": cursorSamples, "cursorChanges": cursorChanges,
             "rightDownCount": dragPad.rightDownCount, "rightUpCount": dragPad.rightUpCount,
             "scrollEventCount": scroll.eventCount, "scrollY": scroll.contentView.bounds.origin.y, "dragBounds": windowPoints(dragPad), "scrollBounds": windowPoints(scroll),
             "primaryWindowSize": [window.frame.width, window.frame.height],
@@ -159,13 +191,14 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     }
 }
 let arguments = CommandLine.arguments
-guard (2...3).contains(arguments.count), let rowCount = arguments.count == 3 ? Int(arguments[2]) : 35,
+guard (2...4).contains(arguments.count), let rowCount = arguments.count >= 3 ? Int(arguments[2]) : 35,
+      arguments.count != 4 || arguments[3] == "--alternate-hover",
       (1...1000).contains(rowCount) else {
     fputs("usage: Fixture STATE_PATH [ROW_COUNT:1...1000]\n", stderr)
     exit(2)
 }
 let application = NSApplication.shared
 application.setActivationPolicy(.regular)
-let fixture = Fixture(statePath: arguments[1], rowCount: rowCount)
+let fixture = Fixture(statePath: arguments[1], rowCount: rowCount, alternateHover: arguments.count == 4)
 application.delegate = fixture
 application.run()
