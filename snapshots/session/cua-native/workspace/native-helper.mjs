@@ -38,7 +38,7 @@ function serve() {
   }
   const instanceId = randomUUID()
   const sockets = new Set()
-  const application = { count: 0, value: '', visualCount: 0, frontPid: 42, frontWindowId: 99 }
+  const application = { count: 0, value: '', visualCount: 0, hovering: false, frontPid: 42, frontWindowId: 99 }
   const captureBroker = { pendingCapture: false }
   let started = false
   let hadClient = false
@@ -117,7 +117,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
   const screenshotConfig = new URL('./fixture-screenshot.json', import.meta.url)
   const customScreenshot = existsSync(screenshotConfig) ? JSON.parse(readFileSync(screenshotConfig, 'utf8')) : undefined
   const snapshots = new Map()
-  const methods = ['getCapabilities', 'listApps', 'getApp', 'activate', 'show', 'listWindows', 'getState', 'click', 'setValue', 'typeText', 'pressKey', 'scroll', 'drag', 'screenshot']
+  const methods = ['getCapabilities', 'listApps', 'getApp', 'activate', 'show', 'listWindows', 'getState', 'hover', 'click', 'setValue', 'typeText', 'pressKey', 'scroll', 'drag', 'screenshot']
   let acquired = false
   let generation = 0
   let observationChanged = false
@@ -167,12 +167,12 @@ function createApplicationState(socket, record, application, captureBroker, conn
       if (axless) return { appHandle: app.appHandle, pid: 9, windowId: 8, snapshotId,
         tree: '', elements: [], windows: [axlessWindow], truncated: false }
       return { appHandle: app.appHandle, pid: 9, windowId: params.windowId ?? null,
-        snapshotId: `${scope}-snapshot-${generation}`, tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16${params.details ? ' bounds=global-points' : ''}\n- [0] AXButton "Increment"${params.details ? ' id="increment" actions=["AXPress"] bounds=[60,80,100,20]' : ''}\n- [1] AXTextField valueWritable=true selectionWritable=true value=${JSON.stringify(application.value)} placeholder="Fixture text"\n- AXStaticText "Count: ${application.count}"\n- [2] AXMenuBarItem "File"${params.includeMenus ? '\n  - [3] AXMenuItem "Fixture command"' : '\nMenu contents omitted; request includeMenus=true to expand.'}`,
+        snapshotId: `${scope}-snapshot-${generation}`, tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16${params.details ? ' bounds=global-points' : ''}\n- [0] AXButton "Increment"${params.details ? ' id="increment" actions=["AXPress"] bounds=[60,80,100,20]' : ''}\n- [1] AXTextField valueWritable=true selectionWritable=true value=${JSON.stringify(application.value)} placeholder="Fixture text"\n- AXStaticText "Count: ${application.count}"${application.hovering ? '\n- AXStaticText "Hover information"' : ''}\n- [2] AXMenuBarItem "File"${params.includeMenus ? '\n  - [3] AXMenuItem "Fixture command"' : '\nMenu contents omitted; request includeMenus=true to expand.'}`,
         elements: [{ index: 0, role: 'AXButton', title: 'Increment', value: null, description: null,
           identifier: null, bounds: [60, 80, 100, 20], actions: ['AXPress'], enabled: true }],
         windows: [params.windowId === 9 ? transformedWindow : window], truncated: false }
     }
-    if (params.windowId === 9 && ['screenshot', 'click', 'scroll', 'drag'].includes(method) && params.elementIndex === undefined) {
+    if (params.windowId === 9 && ['screenshot', 'hover', 'click', 'scroll', 'drag'].includes(method) && params.elementIndex === undefined) {
       refuse('WINDOW_CHANGED', 'Window display and accessibility bounds disagree. Read fresh state; if unchanged, use AX actions or explicitly restore the window before capture or coordinate input')
     }
     if (method === 'screenshot' && captureBroker.pendingCapture) {
@@ -188,12 +188,13 @@ function createApplicationState(socket, record, application, captureBroker, conn
         windowId: params.windowId, mimeType: 'image/png', coordinateSpace: 'window-points',
         data: readFileSync(new URL(customScreenshot.file, import.meta.url)).toString('base64') }
       : { windowId: params.windowId, mimeType: 'image/png', data: png, pixelWidth: 1, pixelHeight: 1, bounds, coordinateSpace: 'window-points' }
-    if (method === 'click' || method === 'setValue') {
+    if (method === 'click' || method === 'setValue' || method === 'hover') {
       const observed = [...snapshots.values()].find(snapshot => snapshot.snapshotId === params.snapshotId)
       if (!observed) refuse('STALE_SNAPSHOT', 'Read fresh state before acting')
       if (params.windowId !== undefined && observed.windowId !== null && observed.windowId !== params.windowId) refuse('STALE_SNAPSHOT', 'Snapshot belongs to another window')
       if (observed.axless && params.elementIndex !== undefined) refuse('INVALID_ARGUMENT', 'Element index is absent from the selected snapshot')
-      if (method === 'click' && params.windowId === 8) application.visualCount++
+      if (method === 'hover') application.hovering = params.elementIndex === 0 || params.x === 20
+      else if (method === 'click' && params.windowId === 8) application.visualCount++
       else if (method === 'click') application.count++
       else application.value = params.value
       record('state', { count: application.count, value: application.value, visualCount: application.visualCount })

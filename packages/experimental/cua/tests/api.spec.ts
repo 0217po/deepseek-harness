@@ -138,6 +138,31 @@ describe('background window restoration', () => {
   })
 })
 
+describe('hover across observations', () => {
+  it('moves to an AX element then into a popup without inserting clicks or restoring a point', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.dispatch.mockClear()
+    expect(await app.hover(0)).toEqual(delivered)
+    await app.getAXStateAndScreenshot({ emit: false })
+    expect(await app.hover([30, 40])).toEqual(delivered)
+    expect(f.dispatch.mock.calls.map(([operation]) => operation)).toEqual([
+      { method: 'hover', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementIndex: 0 } },
+      { method: 'getState', params: { appHandle: 'app-17' } },
+      { method: 'screenshot', params: { appHandle: 'app-17', windowId: 23 } },
+      { method: 'hover', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', windowId: 23, x: 30, y: 40 } },
+    ])
+    const window = await app.getWindow(24)
+    await window.hover([5, 6])
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'hover', params: {
+      appHandle: 'app-17', snapshotId: 'snapshot-3', windowId: 24, x: 5, y: 6,
+    } })
+    f.dispatch.mockRejectedValueOnce(new Error('WINDOW_CHANGED'))
+    await expect(window.hover([5, 6])).rejects.toThrow('WINDOW_CHANGED')
+    expect(f.dispatch).toHaveBeenCalledTimes(7)
+  })
+})
+
 describe('pointer buttons and modifiers', () => {
   it('retains middle-button and modifier intent through click and drag dispatch', async () => {
     const f = fixture()
@@ -409,6 +434,9 @@ describe('input actions', () => {
   const invalidActions: Array<[string, (app: CuaApp) => Promise<unknown>]> = [
     ['right double click', app => app.click([1, 2], { mouseButton: 'right', clickCount: 2 })],
     ['right AX double click', app => app.click(0, { mouseButton: 'right', clickCount: 2 })],
+    ['negative hover index', app => app.hover(-1)],
+    ['negative hover point', app => app.hover([-1, 0])],
+    ['nonfinite hover point', app => app.hover([NaN, 0])],
     ['negative AX index', app => app.click(-1)],
     ['nonfinite coordinate', app => app.click([NaN, 0])],
     ['negative coordinate', app => app.click([-1, 0])],

@@ -28,6 +28,19 @@ final class WindowPointerInput {
         Double(durationMs) / Double(steps) / 1000
     }
 
+    /// Send unpressed movement without restoring the prior point or reserving the application.
+    func hover(in route: WindowRoute, at point: WindowPoint) throws {
+        try checkCancellation()
+        try Self.validate(point, in: route)
+        let event = try mouseEvent(
+            source: Self.source(), route: route, screen: Self.screenPoint(point, in: route), local: point,
+            type: .mouseMoved, button: .left, clickState: 0, subtype: 3, group: Self.clickGroup()
+        )
+        try checkCancellation()
+        poster.post(event, to: route.owner.pid)
+        try checkCancellation()
+    }
+
     /// Post one or two left clicks, or one right/middle click, with a shared window-routing group.
     func click(in route: WindowRoute, at point: WindowPoint, button: String, count: Int, modifiers: [String] = []) throws {
         try checkCancellation()
@@ -46,11 +59,6 @@ final class WindowPointerInput {
             group: group, number: button == "left" ? 2 : nil, flags: flags
         )
         if button == "left" {
-            let outside = WindowPoint(x: -1, y: -1)
-            let primer = try mousePair(
-                source: source, route: route, screen: CGPoint(x: -1, y: -1), local: outside,
-                button: .left, clickState: 1, group: group, downNumber: 1, upNumber: 2, flags: flags
-            )
             var pairs: [MousePair] = []
             for index in 1...count {
                 pairs.append(try mousePair(
@@ -61,9 +69,6 @@ final class WindowPointerInput {
             try checkCancellation()
             poster.post(move, to: route.owner.pid)
             Thread.sleep(forTimeInterval: 0.015)
-            // This off-screen pair is part of the existing Chromium click sequence.
-            try postPair(primer, to: route.owner.pid, downInterval: 0.001)
-            Thread.sleep(forTimeInterval: 0.100)
             for (index, pair) in pairs.enumerated() {
                 try postPair(pair, to: route.owner.pid, downInterval: 0.001)
                 if index + 1 < pairs.count { Thread.sleep(forTimeInterval: 0.080) }

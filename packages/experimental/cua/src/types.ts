@@ -98,6 +98,14 @@ export interface CuaSurface {
    */
   getAXStateAndScreenshot(options?: CuaAxOptions): Promise<CuaObservation>
   /**
+   * Move to an observed element's center or window point without pressing a button.
+   * Returning and subsequent observations do not restore the previous pointer position.
+   * Other input and application changes can interrupt hover; observe before continuing.
+   * @param target - Current AX index, including disabled controls, or window-local [x,y].
+   * @returns Dispatch evidence; the application's hover delay and resulting UI are not verified.
+   */
+  hover(target: number | readonly [number, number]): Promise<CuaActionResult>
+  /**
    * Click a current AX index or window point.
    * @param target - index or [x,y].
    * @param options - button and click count.

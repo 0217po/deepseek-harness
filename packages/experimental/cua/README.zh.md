@@ -81,7 +81,7 @@ kind: "package-library"
 <a id="known-limitations-and-deferred-work"></a>
 
 - 当前原生执行使用 macOS 提供方。Windows 支持计划使用独立的提供方包和 C# helper，保留共享应用与窗口 API、授权、快照有效性和动作结果语义。实现须说明系统特有的限制，并区分交叉编译证据和 Windows 桌面验证。
-- 持久变量不会在一组连续操作期间独占应用。其他 Agent 和用户可能改变其状态。
+- 持久变量不会在一组连续操作期间独占应用。其他 Agent 和用户可能改变其状态。 悬停和观察不恢复先前的鼠标位置；[连续交互](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.zh.md)不分配跨调用所有权。
 - 本包保留在 `experimental`，Windows 支持和平台验证完成后可迁至 `computer-use` 组。
 
 -----

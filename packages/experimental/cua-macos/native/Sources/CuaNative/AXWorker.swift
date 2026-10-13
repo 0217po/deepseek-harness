@@ -338,31 +338,38 @@ actor AXWorker {
                     role: try ax().string(selected, "AXRole"), main: try ax().boolean(selected, "AXMain"), minimized: try ax().boolean(selected, "AXMinimized")))
             }
             try ax().perform(selected, action)
-        case "click":
+        case "click", "hover":
             let button = try params.optionalString("mouseButton") ?? "left"
             let count = params.contains("clickCount") ? try params.integer("clickCount", in: 1...2) : 1
             guard button == "left" || (["right", "middle"].contains(button) && count == 1) else { throw RequestParameters.invalid("Unsupported mouse button or click count") }
             let modifiers = try params.modifiers()
+            let window: WindowInfo
+            let point: WindowPoint
             if params.contains("elementIndex") {
                 guard !params.contains("x"), !params.contains("y"), !params.contains("windowId") else { throw RequestParameters.invalid("Element and coordinate targets cannot be combined") }
                 let selected = try element(handle, params)
-                let names = try ax().actions(selected)
-                let action: String? = !modifiers.isEmpty ? nil : button == "right" && names.contains("AXShowMenu") ? "AXShowMenu"
-                    : (button == "left" && count == 1 ? (names.contains("AXPress") ? "AXPress" : names.contains("AXPick") ? "AXPick" : nil) : nil)
-                if let action { try ax().perform(selected, action) }
-                else {
+                if method == "click" {
+                    let names = try ax().actions(selected)
+                    let action: String? = !modifiers.isEmpty ? nil : button == "right" && names.contains("AXShowMenu") ? "AXShowMenu"
+                        : (button == "left" && count == 1 ? (names.contains("AXPress") ? "AXPress" : names.contains("AXPick") ? "AXPick" : nil) : nil)
+                    if let action {
+                        try ax().perform(selected, action)
+                        return .result(Self.actionResult)
+                    }
                     try ax().requireEnabled(selected)
-                    guard let bounds = try ax().bounds(selected), bounds.width > 0, bounds.height > 0 else { throw NativeFailure(code: "NATIVE_ERROR", message: "Element has no pointer bounds") }
-                    let window = try ax().enclosingWindow(selected, owner: identity)
-                    let point = WindowPoint(x: bounds.x + bounds.width / 2 - window.bounds.x, y: bounds.y + bounds.height / 2 - window.bounds.y)
-                    try inputs().1.click(in: WindowRoute(owner: identity, windowID: window.windowID, bounds: window.bounds), at: point, button: button, count: count, modifiers: modifiers)
                 }
+                guard let bounds = try ax().bounds(selected), bounds.width > 0, bounds.height > 0 else { throw NativeFailure(code: "NATIVE_ERROR", message: "Element has no pointer bounds") }
+                window = try ax().enclosingWindow(selected, owner: identity)
+                point = WindowPoint(x: bounds.x + bounds.width / 2 - window.bounds.x, y: bounds.y + bounds.height / 2 - window.bounds.y)
             } else {
                 let id = try params.windowID()
                 try coordinateSnapshot(handle, params, id)
-                let window = try observedCoordinateWindow(handle, identity, id)
-                try inputs().1.click(in: WindowRoute(owner: identity, windowID: id, bounds: window.bounds), at: params.point(), button: button, count: count, modifiers: modifiers)
+                window = try observedCoordinateWindow(handle, identity, id)
+                point = try params.point()
             }
+            let route = WindowRoute(owner: identity, windowID: window.windowID, bounds: window.bounds)
+            if method == "hover" { try inputs().1.hover(in: route, at: point) }
+            else { try inputs().1.click(in: route, at: point, button: button, count: count, modifiers: modifiers) }
         case "scroll", "drag":
             let id = try params.windowID()
             try coordinateSnapshot(handle, params, id)

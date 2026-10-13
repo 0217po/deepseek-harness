@@ -81,7 +81,7 @@ Results append to history. Retaining objects does not rewrite previous messages;
 <a id="known-limitations-and-deferred-work"></a>
 
 - Native execution currently uses the macOS provider. Windows support is planned as a separate provider package with a C# helper, retaining the shared app/window API, authorization, snapshot validity, and action-result semantics. Its implementation must document system-specific limitations and distinguish cross-compilation evidence from Windows desktop validation.
-- Persistent variables do not reserve an application across a sequence of operations. Other Agents and the user can change its state.
+- Persistent variables do not reserve an application across a sequence of operations. Other Agents and the user can change its state. Hover and observations do not restore the previous pointer position; [continuous interaction](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.md) uses no cross-call ownership.
 - The package stays in `experimental` until Windows support and platform validation permit promotion to the `computer-use` group.
 
 -----

@@ -30,7 +30,7 @@ void app.whenReady().then(async () => {
     { label: 'Edit', submenu: [{ role: 'selectAll' }] },
   ]))
   window = new BrowserWindow({
-    title: 'DSH CUA Electron fixture', width: 600, height: 380, useContentSize: true,
+    title: 'DSH CUA Electron fixture', width: 600, height: 540, useContentSize: true,
     show: false, resizable: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false },
   })
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))

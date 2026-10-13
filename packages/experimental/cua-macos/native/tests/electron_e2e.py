@@ -120,8 +120,35 @@ def main():
                 if args.artifacts:
                     (args.artifacts / 'electron-input.png').write_bytes(png)
                     (args.artifacts / 'fixture-state.json').write_text(state_path.read_text())
+                state = observe()
+                trigger = next(element for element in state['elements'] if element['role'] == 'AXButton' and
+                               'Reveal hover details' in (element.get('title') or element.get('description') or ''))
+                baseline = json.loads(state_path.read_text())['pointerDowns']
+                call('hover', {**owner, 'snapshotId': state['snapshotId'], 'elementIndex': trigger['index']})
+                actual = wait_state(lambda actual: actual['popupOpen'], 'Hover did not reveal delayed information')
+                assert actual['pointerDowns'] == baseline and actual['lastMove'] == {'buttons': 0, 'trusted': True}, actual
+                state = observe()
+                assert 'Hover information' in state['tree'], state['tree']
+                image = call('screenshot', {**owner, 'windowId': window_id})
+                assert json.loads(state_path.read_text())['popupOpen'], 'Observation dismissed the popup'
+                if args.artifacts:
+                    (args.artifacts / 'electron-hover.png').write_bytes(base64.b64decode(image['data']))
+                action = next(element for element in state['elements'] if element['role'] == 'AXButton' and
+                              'Use hover details' in (element.get('title') or element.get('description') or ''))
+                bounds = action['bounds']
+                target = {**owner, 'windowId': window_id,
+                          'x': bounds[0] + bounds[2] / 2 - window['bounds']['x'],
+                          'y': bounds[1] + bounds[3] / 2 - window['bounds']['y']}
+                call('hover', target)
+                state = observe()
+                assert 'Hover information' in state['tree'], 'Moving into the popup dismissed it'
+                call('click', target)
+                actual = wait_state(lambda actual: actual['popupClicks'] == 1, 'Popup action did not receive its click')
+                assert actual['popupOpen'] and actual['pointerDowns'] == baseline + 1 and actual['popupClickTrusted'], actual
+                call('hover', {**owner, 'windowId': window_id, 'x': 10, 'y': 40})
+                wait_state(lambda actual: not actual['popupOpen'], 'Leaving the hover region did not close it')
                 helper.eof()
-                print(f"PASS: Electron {runtime['electron']} native AX readiness, trusted DOM click, Unicode input, Command+A replacement, PNG capture")
+                print(f"PASS: Electron {runtime['electron']} native AX readiness, trusted DOM click, Unicode input, Command+A replacement, PNG capture, delayed hover across observations, popup entry/click/exit")
             except Exception:
                 diagnostics.flush()
                 diagnostics.seek(0)

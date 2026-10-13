@@ -87,13 +87,15 @@ void await app.getScreenshot()
 
 `getWindow` 会输出初始 AX 树。已确认归属但没有 AX 界面的窗口返回空快照，仍可截图和发送坐标输入。不同窗口分别保留快照，读取一个窗口不会使另一个窗口失效；重新读取同一范围会使旧索引失效。观察期间节点被移除时，该次读取返回 `STALE_SNAPSHOT`，不发布部分树；可以重新读取，但不要重复此前的输入。应用级截图和坐标操作复用最近一次 AX 观察：优先使用其中在屏幕上且尺寸非零的焦点窗口，否则要求只有一个符合条件的窗口。它们不会重新查询即时焦点；需要跟随焦点变化时，先读取 `app.getAXState()`。显式窗口对象保持选定的目标。键盘方法保留在 `app` 上，因为输入跟随应用的当前焦点。
 
+`hover(target)` 将鼠标移到 AX 元素中心或窗口内坐标，不按鼠标按钮，也可用于禁用控件。调用结束、AX 读取和截图保持悬停位置。等待应用的悬停延迟后，观察出现的内容，再移入并点击；连续调用可经过中间位置。其他输入或应用自身变化可能中断交互。[连续交互的设计理由](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.zh.md)。
+
 `paste(text, { format: "text" | "html" })` 临时提供指定格式的剪贴板内容，并调用应用已启用的标准 Paste 菜单命令。临时格式保留到剪贴板读取方请求其数据，然后只在仍持有剪贴板时恢复保存的全部原格式，保留期间产生的新复制内容。粘贴操作共用跨进程锁，取消会等待辅助进程清理。强制终止进程可能阻止恢复。应用不支持 Paste 命令时明确失败，不自动改成逐字输入；`typeText` 仍单独提供按键事件输入。
 
 `selectText` 通过可写的 `AXSelectedTextRange` 选中唯一的字面文本，或把光标放在它的前后。紧邻的前后文用于区分重复文本。选区操作保留其余文字和格式，并核对实际 UTF-16 范围；控件不支持、文本不存在、匹配不唯一或文字变化时明确失败，不自动改用键盘输入。AX 文本包含可用的 `selectionWritable`、选区范围和选中文字。
 
 截图数据必须使用规范 Base64。响应字节上限在解析前执行，附件接入校验图像数据及配置的容量。
 
-坐标点击、滚动和拖动要求先成功读取该窗口的 AX 或截图。窗口宽高与最近一次观察不同时，在输入前返回 `WINDOW_CHANGED`，原始调用即使不传快照 ID 也会检查；重新读取 AX 或截图后再操作。单纯移动窗口不使窗口内坐标失效。截图和鼠标输入会核对所选窗口的辅助功能框与显示边界；已知两者不一致时，在发送任何鼠标事件前返回 `WINDOW_CHANGED`。当 AX 保留完整窗口框时，这也会拦住 Stage Manager 变换后的窗口。需要重新读取状态；激活应用或抬起窗口仍须显式调用。元素声明的 AX 动作保持可用。缺少 AX 几何时保留无 AX 路径，不代表变换后的窗口一定可以操作。
+坐标悬停、点击、滚动和拖动要求先成功读取该窗口的 AX 或截图。窗口宽高与最近一次观察不同时，在输入前返回 `WINDOW_CHANGED`，原始调用即使不传快照 ID 也会检查；重新读取 AX 或截图后再操作。单纯移动窗口不使窗口内坐标失效。截图和鼠标输入会核对所选窗口的辅助功能框与显示边界；已知两者不一致时，在发送任何鼠标事件前返回 `WINDOW_CHANGED`。当 AX 保留完整窗口框时，这也会拦住 Stage Manager 变换后的窗口。需要重新读取状态；激活应用或抬起窗口仍须显式调用。元素声明的 AX 动作保持可用。缺少 AX 几何时保留无 AX 路径，不代表变换后的窗口一定可以操作。
 
 保留的对象会在每次调用时获取当前工具绑定。外部运行时负责持久化、导入、取消和最终表达式值的序列化。截图返回 PNG 字节，标准工具链负责将图片作为附件传递一次。`emit: false` 只控制对象层的输出。使用其他分派器的宿主可以通过 `./api` 的 `createCuaApi` 创建对象。
 
@@ -169,6 +171,7 @@ App and Window methods:
 - getAXState(options?: { emit?: boolean, disableDiffing?: boolean, includeMenus?: boolean, details?: boolean }) -> string
 - getScreenshot(options?: { emit?: boolean }) -> Uint8Array
 - getAXStateAndScreenshot(options?) -> { state: string, screenshot: Uint8Array }
+- hover(target: number | [x, y]) -> action result
 - click(target: number | [x, y], options?: { mouseButton?: "left" | "right" | "middle", clickCount?: 1 | 2, modifiers?: Array<"command" | "control" | "option" | "shift" | "fn"> }) -> action result
 - setValue(elementIndex: number, value: string) -> action result
 - selectText(elementIndex: number, text: string, options?: { prefix?: string, suffix?: string, selectionType?: "text" | "cursor_before" | "cursor_after" }) -> action result
@@ -178,7 +181,9 @@ App and Window methods:
 
 Raw operation tools use { method, params }, including params: {} for parameterless methods. getApp selects without activating the app. Keep applications in the background for observation and routine input. Do not activate or raise an app during initialization, before each action, or merely because another app is foreground. Prefer advertised AX actions. If a window is hidden or minimized, try app.show() or window.show() and read fresh state. show requests unhide and unminimize without activation, raising or switching Spaces; it chooses the explicit, focused, main or sole AX window. A null windowId means no window was selected for restoration. foregroundChanged compares the front app and top window before and after the request; null means unavailable, and delayed focus changes remain possible. If restoration is unsupported or the window remains unusable, including another Space or Stage Manager, explain the needed foreground step, use app.activate() or an advertised raise action, and read fresh state. Completing the task takes priority when foreground access is necessary. Avoid repeated activation when the user switches away; continue background-capable steps and report what requires foreground access. Applications may still change focus in response to input.
 
-Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. Coordinate clicks, scrolling and dragging require a successful AX observation or screenshot of that window. Window resizing since the latest observation rejects coordinate input; movement alone preserves window-local coordinates. WINDOW_CHANGED requires fresh state before any retry; use an advertised AX action or explicitly restore the window before screenshot or coordinate input, then observe again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording access in System Settings. After granting access, observe fresh state before continuing; do not automatically replay prior input.
+Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. Coordinate hovering, clicks, scrolling and dragging require a successful AX observation or screenshot of that window. Window resizing since the latest observation rejects coordinate input; movement alone preserves window-local coordinates. WINDOW_CHANGED requires fresh state before any retry; use an advertised AX action or explicitly restore the window before screenshot or coordinate input, then observe again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording access in System Settings. After granting access, observe fresh state before continuing; do not automatically replay prior input.
+
+Hover moves without pressing a button; returning, AX reads and screenshots do not restore the previous point. Wait for the application's hover delay, observe, then hover into the revealed controls before clicking. Use successive hover calls for intermediate points. Other input or application changes can interrupt the interaction; app objects do not reserve applications between calls.
 
 Use selectText only on controls advertising selectionWritable. It selects a unique literal occurrence, or places the cursor before/after it; prefix and suffix must be immediately adjacent. AMBIGUOUS_TEXT requires more context; TEXT_NOT_FOUND or SELECTION_CHANGED requires a fresh observation before deciding on input. Left clicks support single/double clicks; right and middle clicks support single clicks. Modified clicks use pointer input. Keypad names such as KP_0 and KP_Enter retain their physical key identity. Window objects expose observation and pointer/AX actions; keyboard input remains app-scoped and follows current focus. Scroll deltas are integer lines from -10 to 10; positive values reveal content above or left. Paste delivers plain text or HTML through the application's enabled standard Paste menu command. Original clipboard formats are restored if the clipboard still belongs to this paste; a later copy is preserved. Unsupported Paste commands fail without typing fallback. CLIPBOARD_CHANGED means another writer intervened; observe before deciding on further input. Browser applications can be controlled with getApp like other native apps; browser tabs are unavailable. Installed-app search covers standard macOS application directories; use an absolute application path for another location. Launch does not restore a window or document, and cancellation may leave an application already started. The execution host must install the object API and own variable persistence; this plugin does not preload a cua global. In persistent PTC, use the host-provided initialization snippet below once. Its installation-owned file URL works independently of the project directory. Retain app objects between calls. Observation methods emit by default and also return their value. Use void await app.getAXState() to avoid a duplicate REPL completion, or pass emit:false and print the returned text once. End screenshot calls with void await app.getScreenshot() or void await app.getAXStateAndScreenshot() so image bytes are not serialized as the program completion value.
 ```
@@ -193,7 +198,7 @@ Use selectText only on controls advertising selectionWritable. It selects a uniq
 
 ## 已知限制与后续工作
 
-队列只排序单次原生请求。持有 app 对象不会为 Session 保留应用，跨多个请求的应用级占用需要单独设计。一直不返回的系统截图 RPC 会占用唯一捕获槽位，重新创建 app 对象不会重置该系统连接。
+队列只排序单次原生请求。持有 app 对象不会为 Session 保留应用，[连续交互](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.zh.md)不分配跨调用所有权。一直不返回的系统截图 RPC 会占用唯一捕获槽位，重新创建 app 对象不会重置该系统连接。
 
 <a id="known-limitations-and-deferred-work"></a>
 

@@ -43,3 +43,21 @@ it('accepts disclosure options without accepting host traversal limits', () => {
   expect(Request.safeParse({ method: 'getState', params: { ...params, details: 'all' } }).success).toBe(false)
   expect(Request.safeParse({ method: 'getState', params: { ...params, maxDepth: 100 } }).success).toBe(false)
 })
+
+it.each([
+  { appHandle: 'app', snapshotId: 'snapshot', elementIndex: 0 },
+  { appHandle: 'app', windowId: 23, x: 1, y: 2 },
+])('accepts a hover target %j without button input', (params) => {
+  expect(Request.parse({ method: 'hover', params })).toEqual({ method: 'hover', params })
+  for (const extra of [{ mouseButton: 'left' }, { clickCount: 1 }, { modifiers: ['shift'] }]) {
+    expect(Request.safeParse({ method: 'hover', params: { ...params, ...extra } }).success).toBe(false)
+  }
+})
+
+it.each([
+  { appHandle: 'app', elementIndex: 0 },
+  { appHandle: 'app', x: 1, y: 2 },
+  { appHandle: 'app', snapshotId: 'snapshot', elementIndex: 0, windowId: 23, x: 1, y: 2 },
+])('rejects incomplete or mixed hover targets %j', (params) => {
+  expect(Request.safeParse({ method: 'hover', params }).success).toBe(false)
+})

@@ -18,7 +18,7 @@ Cancellation and timeout first stop one request and wait for acknowledgement. A 
 
 ## Alternatives considered
 
-Separate executable copies per Agent avoid the observed identity collision but multiply system capture clients. One shared service preserves a single capture client while retaining Agent state isolation. An in-process Swift binding changes crash containment without removing the system RPC. Sharing a process does not establish application-level ownership across a multi-step interaction; that scheduling policy remains separate.
+Separate executable copies per Agent avoid the observed identity collision but multiply system capture clients. One shared service preserves a single capture client while retaining Agent state isolation. An in-process Swift binding changes crash containment without removing the system RPC. The [continuous-hover decision](2026-10-13-cua-continuous-hover.md) keeps individual operations serialized without cross-call application ownership.
 
 ## Consequences
 

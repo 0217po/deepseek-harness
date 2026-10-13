@@ -35,6 +35,9 @@ export const Request = z.discriminatedUnion('method', [
     includeMenus: z.boolean().optional().describe('Expand menu contents; omitted or false shows menu-bar entries only.'),
     details: z.boolean().optional().describe('Include identifiers, global-point bounds and complete action names.'),
   }),
+  z.object({ method: z.literal('hover'), params: z.union([
+    z.object(snapshot).strict(), z.object(coordinate).strict(),
+  ]) }).strict(),
   z.object({ method: z.literal('click'), params: z.union([
     z.object({ ...snapshot, ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).optional() }).strict(),
     z.object({ ...coordinate, ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).optional() }).strict(),
