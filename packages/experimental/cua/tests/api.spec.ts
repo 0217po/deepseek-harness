@@ -153,9 +153,9 @@ describe('hover across observations', () => {
       { method: 'hover', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', windowId: 23, x: 30, y: 40 } },
     ])
     const window = await app.getWindow(24)
-    await window.hover([5, 6], { useSystemPointer: true })
+    await window.hover([5, 6])
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'hover', params: {
-      appHandle: 'app-17', snapshotId: 'snapshot-3', windowId: 24, x: 5, y: 6, useSystemPointer: true,
+      appHandle: 'app-17', snapshotId: 'snapshot-3', windowId: 24, x: 5, y: 6,
     } })
     f.dispatch.mockRejectedValueOnce(new Error('WINDOW_CHANGED'))
     await expect(window.hover([5, 6])).rejects.toThrow('WINDOW_CHANGED')

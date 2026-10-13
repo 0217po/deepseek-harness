@@ -28,27 +28,18 @@ final class WindowPointerInput {
         Double(durationMs) / Double(steps) / 1000
     }
 
-    /// Send unpressed movement without restoring the prior point or reserving the application.
-    func hover(in route: WindowRoute, at point: WindowPoint, useSystemPointer: Bool = false) throws {
+    /// Move the visible cursor without restoring the prior point or reserving the application.
+    func hover(in route: WindowRoute, at point: WindowPoint) throws {
         try checkCancellation()
         try Self.validate(point, in: route)
-        if useSystemPointer {
-            guard let event = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved,
-                                      mouseCursorPosition: Self.screenPoint(point, in: route), mouseButton: .left) else {
-                throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create system pointer movement")
-            }
-            event.flags = []
-            try Self.requireSystemPointerTarget(route, at: point, frontPID: NativePlatform.frontPID(), windows: NativePlatform.windows(allLayers: true))
-            try checkCancellation()
-            event.post(tap: .cghidEventTap)
-        } else {
-            let event = try mouseEvent(
-                source: Self.source(), route: route, screen: Self.screenPoint(point, in: route), local: point,
-                type: .mouseMoved, button: .left, clickState: 0, subtype: 3, group: Self.clickGroup(), number: 2
-            )
-            try checkCancellation()
-            poster.post(event, to: route.owner.pid)
+        guard let event = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved,
+                                  mouseCursorPosition: Self.screenPoint(point, in: route), mouseButton: .left) else {
+            throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create system pointer movement")
         }
+        event.flags = []
+        try Self.requireSystemPointerTarget(route, at: point, frontPID: NativePlatform.frontPID(), windows: NativePlatform.windows(allLayers: true))
+        try checkCancellation()
+        event.post(tap: .cghidEventTap)
         try checkCancellation()
     }
 

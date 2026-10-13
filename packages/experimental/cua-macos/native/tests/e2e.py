@@ -182,16 +182,16 @@ def main():
             def check_hover():
                 call("activate", owner)
                 x, y, width, height = json.loads(state_path.read_text())["dragBounds"]
-                call("hover", {**owner, "windowId": primary["windowId"], "x": x + 20, "y": y + 20, "useSystemPointer": True})
+                call("hover", {**owner, "windowId": primary["windowId"], "x": x + 20, "y": y + 20})
                 wait_state(lambda actual: actual["hoverVisible"], "AppKit tracking area did not reveal hover controls")
                 hover_state = call("getState", primary_params)
                 capture(primary, "02-native-hover.png")
                 assert json.loads(state_path.read_text())["hoverVisible"], "Observation dismissed native hover controls"
                 hover_target = button_target(hover_state, "Use native hover details")
-                call("hover", {**hover_target, "useSystemPointer": True})
+                call("hover", {**hover_target})
                 call("click", hover_target)
                 wait_state(lambda actual: actual["hoverClicks"] == 1, "Native hover control did not activate")
-                call("hover", {**owner, "windowId": primary["windowId"], "x": 10, "y": 40, "useSystemPointer": True})
+                call("hover", {**owner, "windowId": primary["windowId"], "x": 10, "y": 40})
                 wait_state(lambda actual: not actual["hoverVisible"], "AppKit tracking area did not exit")
 
             if args.hover_only:

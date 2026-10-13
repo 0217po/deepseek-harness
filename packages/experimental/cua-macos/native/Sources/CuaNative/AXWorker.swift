@@ -368,7 +368,7 @@ actor AXWorker {
                 point = try params.point()
             }
             let route = WindowRoute(owner: identity, windowID: window.windowID, bounds: window.bounds)
-            if method == "hover" { try inputs().1.hover(in: route, at: point, useSystemPointer: params.optionalBoolean("useSystemPointer") ?? false) }
+            if method == "hover" { try inputs().1.hover(in: route, at: point) }
             else { try inputs().1.click(in: route, at: point, button: button, count: count, modifiers: modifiers) }
         case "scroll", "drag":
             let id = try params.windowID()

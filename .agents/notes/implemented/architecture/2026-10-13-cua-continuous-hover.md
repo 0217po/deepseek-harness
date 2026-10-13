@@ -10,7 +10,7 @@ Hover interactions span movement, delayed content, observation and input inside 
 
 ## Decision
 
-App and Window expose `hover` for an observed AX element or window-local point. It sends unpressed movement, including over disabled controls. Completion, AX reads and screenshots do not restore a previous pointer position. Successive calls can visit intermediate points before entering a popup. Clicks deliver button events at their target without an off-window priming click. Background movement reaches Chromium hover. Native AppKit tracking can require the explicit `useSystemPointer` option, which moves the visible cursor only after checking the foreground app and unobscured target window. It never activates or raises the app implicitly. Other input or window changes can race that check.
+App and Window expose `hover` for an observed AX element or window-local point. It sends unpressed movement, including over disabled controls. Completion, AX reads and screenshots do not restore a previous pointer position. Successive calls can visit intermediate points before entering a popup. Clicks deliver button events at their target without an off-window priming click. Hover moves the visible system cursor after checking the foreground app and unobscured target window. It never activates or raises the app implicitly. Other input or window changes can race that check.
 
 The [shared helper](2026-10-09-cua-shared-native-helper.md) serializes complete individual operations. It grants no application ownership across calls. Earlier arrival, a retained app object and Session lifetime do not establish task priority. Waiting for the model does not reserve the application. Explicit task coordination determines any required execution order.
 
@@ -19,6 +19,8 @@ The [shared helper](2026-10-09-cua-shared-native-helper.md) serializes complete 
 **Cross-call application reservation** would block other tasks throughout observation and model inference without evidence that the first task deserves priority. Continuous interaction instead relies on CUA preserving the last hover state when no further input occurs.
 
 **Click or drag as hover** introduces button input that can activate a control, select text or dismiss a popup. Hover requires a separate unpressed movement operation.
+
+**PID-directed virtual movement** can display Chromium hover content after prior interaction, but a fresh window can ignore it, and later pointer checks can dismiss the content. Native AppKit tracking also requires real pointer movement in the measured fixture. A single system-pointer operation avoids reporting this unreliable route as continuous hover.
 
 ## Consequences
 
