@@ -754,8 +754,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
       },
       {
-        signature: 'readonly operator: PeerScope',
-        description: 'The operator Peer every admitted request speaks for; its scope lives as long as Connection.',
+        signature: 'readonly browserPeer: PeerScope',
+        description: 'The Peer every authenticated browser connection shares; its principal is the owner and its scope lives as long as Connection.',
         parameters: [],
       },
       {
@@ -777,9 +777,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'admit(request: ConnectionTrustRequest): PeerAdmission',
-        description: 'Admit one request: it passes requestRejection and speaks for the operator, or it is refused with that status.',
+        description: 'Admit one network request: it passes requestRejection and speaks for browserPeer, or it is refused with that status.',
         parameters: [{ name: 'request', description: 'request headers from the HTTP or upgrade request.' }],
-        returns: 'the operator Peer, or the rejection status.',
+        returns: 'the admitted Peer, or the rejection status.',
+      },
+      {
+        signature: 'createPeer(options: { readonly principal: Principal }): PeerScope',
+        description: 'Create an independent Peer. In-process only: no route, header, query, or cookie reaches it. Disposed with the Context that read `ctx.connection`, or earlier by its own `dispose()`.',
+        parameters: [{ name: 'options', description: '.principal - principal fixed for the Peer\'s lifetime.' }],
+        returns: 'a new Peer distinct from every other Peer.',
       },
       {
         signature: 'authorizeIndex(request: ConnectionIndexRequest, response: ConnectionIndexResponse): boolean',
@@ -1874,6 +1880,49 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'remoteAccess',
+    summary: 'Registry of access policies, the Gateway\'s access decisions, list filtering, and the per-Peer access snapshot.',
+    description: 'Registry of access policies, the Gateway\'s access decisions, list filtering, and the per-Peer access snapshot. Every composition that mounts the Gateway mounts this service too.',
+    methods: [
+      {
+        signature: 'registerPolicy<K extends Exclude<keyof PrincipalMap, \'owner\'>>(kind: K, policy: RemoteAccessPolicy<PrincipalMap[K]>): () => void',
+        description: 'Register the policy of one non-owner principal kind in the caller\'s fiber; open snapshots are recomputed on registration and removal.',
+        parameters: [{ name: 'kind', description: 'the principal kind the policy serves; never `owner`.' }, { name: 'policy', description: 'business-owned bindings and refusal reasons for principals of `kind`.' }],
+        returns: 'disposer removing this policy.',
+        throws: ['Error when `kind` already has a policy.'],
+      },
+      {
+        signature: 'invalidate(principal?: Principal): void',
+        description: 'Report that the bindings or condition answers for `principal` may have changed. Business packages call this on every grant, revocation, mode change, and expiry; open snapshots re-push, and the next failure of each policy is logged again.',
+        parameters: [{ name: 'principal', description: 'affected principal; omitted for every principal.' }],
+      },
+      {
+        signature: 'decide(request: RemoteAccessRequest<Principal>): RemoteAccessDecision',
+        description: 'Gateway-only: decide one request whose resources the Gateway resolved. The owner is allowed, and so is `remoteAccess/follow`: every Peer reads its own snapshot. Otherwise the action is allowed only when, on every listed resource, some binding of the principal\'s policy names that resource, has a role listing the action, and has no condition or a condition that allows. `bindings()` is called once per decision.',
+        parameters: [{ name: 'request', description: 'the caller or recipient, the action, the resources it touches, and a call\'s arguments.' }],
+        returns: '`allow`; or `deny` with `no-allow` when the principal kind has no policy, the first refusing condition\'s reason on the first resource no binding allows, else `explain()`\'s reason, else `no-allow`; `policy-failed` when `bindings()`, a condition, or `explain()` throws, logged once per policy until the next `invalidate()`. The Gateway throws `remote-access/denied` for a denied call and drops a denied event.',
+      },
+      {
+        signature: 'allows(resource: RemoteAccessResource): boolean',
+        description: 'Filter items inside a Remote method. The invocation is read from the Context that accessed this service, so call it as `this.ctx.remoteAccess.allows(resource)` from the Remote method. Each check reads the policy\'s bindings again, so a long-running stream sees binding changes from the next check on.',
+        parameters: [{ name: 'resource', description: 'resource of one result item.' }],
+        returns: 'true for the owner and outside a Remote call; otherwise whether the invocation\'s endpoint action is allowed on `resource` without call arguments, false when the policy is absent or fails.',
+      },
+      {
+        signature: 'snapshotFor(principal: Principal): RemoteAccessBaseline',
+        description: 'The baseline a page opens with before its snapshot stream connects. A business package rendering a non-owner page assigns this value to REMOTE_ACCESS_SNAPSHOT_KEY after every index injection row, replacing the owner baseline the webServer index carries.',
+        parameters: [{ name: 'principal', description: 'the page\'s caller identity.' }],
+        returns: 'the owner baseline for the owner; otherwise the principal\'s current grants.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *follow(signal: AbortSignal): AsyncIterable<RemoteAccessFrame>',
+        description: 'Stream the calling Peer\'s access snapshot: one baseline, then `upsert` and `remove` frames after each `invalidate()` and each policy registration or removal that changes a grant. The owner receives only `{ owner: true }`. The generation ends when `signal` aborts or this service unloads, so a reloaded service starts every reader from a fresh baseline.',
+        parameters: [{ name: 'signal', description: 'generation cancellation.' }],
+        returns: 'the access frames of one generation.',
+      },
+    ],
+  },
+  {
     key: 'sandbox',
     summary: 'Abstract process-sandbox service.',
     description: 'Abstract process-sandbox service. confine must return enforcing argv or fail closed at wrap or runner-execution time; silent unconfined passthrough is forbidden. Functional probes arbitrate multi-runner chains and may be skipped for a sole candidate, whose own refusal remains the fail-closed end.',
@@ -1983,8 +2032,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'visible Session summaries ordered by activity.',
       },
       {
-        signature: '@Remote(\'search\') search(request: SessionSearchRequest, signal: AbortSignal): Promise<SessionSearchValue>',
-        description: 'Search visible Session content without resuming an Agent.',
+        signature: '@Remote(\'search\') async search(request: SessionSearchRequest, signal: AbortSignal): Promise<SessionSearchValue>',
+        description: 'Search visible Session content without resuming an Agent. A non-owner receives only the hits whose Session `allows()` admits; `hasMore` describes the bounded result before that filtering.',
         parameters: [{ name: 'request', description: 'literal message-content query.' }, { name: 'signal', description: 'cancellation for list and search reads.' }],
         returns: 'authorized bounded Session search results.',
       },
@@ -2051,7 +2100,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the new Session identity.',
       },
       {
-        signature: '@Remote(\'prompt\') prompt(request: SessionPromptRequest, signal: AbortSignal): Promise<SessionPromptValue>',
+        signature: '@Remote(\'prompt\') async prompt(request: SessionPromptRequest, signal: AbortSignal): Promise<SessionPromptValue>',
         description: 'Admit one prompt after explicitly resuming its Session.',
         parameters: [{ name: 'request', description: 'Session identity, prompt content, source metadata, and delivery mode.' }, { name: 'signal', description: 'caller cancellation before prompt admission begins.' }],
         returns: 'acknowledgement that the Agent accepted the prompt.',
@@ -2075,13 +2124,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'acknowledgement that cancellation was requested.',
       },
       {
-        signature: '@Remote(\'page\') page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage>',
+        signature: '@Remote({ name: \'page\', resources: { session: addressedSession } }) page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage>',
         description: 'Read one cold-safe, message-aligned Session history page.',
         parameters: [{ name: 'request', description: 'durable address, backward cursor, and page budget.' }, { name: 'signal', description: 'cancellation for persistence reads.' }],
         returns: 'one chronological page.',
       },
       {
-        signature: '@Remote({ mode: \'stream\' }) follow(request: SessionFollowRequest, signal: AbortSignal): AsyncIterable<SessionFollowFrame>',
+        signature: '@Remote({ mode: \'stream\', resources: { session: addressedSession } }) follow(request: SessionFollowRequest, signal: AbortSignal): AsyncIterable<SessionFollowFrame>',
         description: 'Follow one Session log from its opening or resume cursor.',
         parameters: [{ name: 'request', description: 'durable address and last committed sequence already held by the caller.' }, { name: 'signal', description: 'cancellation owned by the Remote stream carrier.' }],
         returns: 'a complete opening snapshot followed by gap-free durable event frames and optional cursorless assistant-stream frames.',
@@ -2093,7 +2142,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'a sequenced baseline, cached hints when migration is deferred, or null when absent.',
       },
       {
-        signature: '@Remote({ mode: \'stream\' }) control(signal: AbortSignal): AsyncIterable<SessionControlFrame>',
+        signature: '@Remote({ mode: \'stream\' }) async *control(signal: AbortSignal): AsyncIterable<SessionControlFrame>',
         description: 'Stream a complete live-control baseline followed by replacement frames.',
         parameters: [{ name: 'signal', description: 'cancellation owned by the Remote stream carrier.' }],
         returns: 'one complete baseline followed by live replacement frames.',
@@ -3459,9 +3508,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'hasLiveClient(): boolean',
-        description: 'Check for an active Client event stream.',
+        description: 'Check for an active owner Client event stream, the only kind that can answer forwarded waterfalls.',
         parameters: [],
-        returns: 'whether a stream is open and has not been cancelled.',
+        returns: 'whether an owner stream is open and has not been cancelled.',
       },
       {
         signature: 'registerRemoteEvents( source: TypertRemoteEventSource, host: RemoteEventHostInfo, ): () => Promise<void>',
@@ -3768,8 +3817,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the complete resulting pin set, most recently pinned first.',
       },
       {
-        signature: '@Remote({ mode: \'stream\' }) follow(signal: AbortSignal): AsyncIterable<WorkspaceFollowFrame>',
-        description: 'Stream a complete Workspace baseline followed by ordered increments.',
+        signature: '@Remote({ mode: \'stream\' }) async *follow(signal: AbortSignal): AsyncIterable<WorkspaceFollowFrame>',
+        description: 'Stream a complete Workspace baseline followed by ordered increments. A non-owner receives only the Workspaces and Sessions `allows()` admits. When a delivered Workspace is no longer admitted at its next change or the next order change, the stream sends a `replace` frame with the complete filtered state instead of a `remove`, because a Client never resurrects a removed Workspace; a `remove` frame reports a deletion and reaches only a Client that received that Workspace.',
         parameters: [{ name: 'signal', description: 'generation cancellation.' }],
         returns: 'baseline followed by ordered Workspace increments.',
       },
@@ -4993,7 +5042,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ConnectionFetchHandler',
-    declaration: 'export interface ConnectionFetchHandler {\n    requestBodyMode(request: {\n        readonly method: string;\n        readonly url: URL;\n    }): ConnectionRequestBodyMode;\n    fetch(request: Request): Promise<Response>;\n}',
+    declaration: 'export interface ConnectionFetchHandler {\n    requestBodyMode(request: {\n        readonly method: string;\n        readonly url: URL;\n    }): ConnectionRequestBodyMode;\n    fetch(request: Request, peer: PeerScope): Promise<Response>;\n}',
   },
   {
     name: 'ConnectionFetchMethod',
@@ -5645,7 +5694,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'InvokeRemoteRequest',
-    declaration: 'export interface InvokeRemoteRequest {\n    readonly namespace: string;\n    readonly method: string;\n    readonly args: Readonly<Record<string, unknown>>;\n    readonly uplink?: AsyncIterable<unknown>;\n    readonly uplinkWindow?: RemoteUplinkWindow | undefined;\n    readonly peer?: PeerScope;\n    readonly signal?: AbortSignal;\n}',
+    declaration: 'export interface InvokeRemoteRequest {\n    readonly namespace: string;\n    readonly method: string;\n    readonly args: Readonly<Record<string, unknown>>;\n    readonly uplink?: AsyncIterable<unknown>;\n    readonly uplinkWindow?: RemoteUplinkWindow | undefined;\n    readonly peer: PeerScope;\n    readonly signal?: AbortSignal;\n}',
   },
   {
     name: 'JobAppendOptions',
@@ -6185,7 +6234,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'PeerScope',
-    declaration: 'export interface PeerScope {\n    readonly id: PeerId;\n    readonly ctx: Context;\n    dispose(): Promise<void>;\n}',
+    declaration: 'export interface PeerScope {\n    readonly id: PeerId;\n    readonly ctx: Context;\n    readonly principal: Principal;\n    readonly signal: AbortSignal;\n    dispose(): Promise<void>;\n}',
   },
   {
     name: 'PendingModule',
@@ -6310,6 +6359,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'PreToolDecision',
     declaration: 'export type PreToolDecision = {\n    kind: \'allow\';\n} | {\n    kind: \'deny\';\n    reason: string;\n    info?: ToolErrorInfo;\n} | {\n    kind: \'cancel\';\n} | {\n    kind: \'ask\';\n    reason?: string;\n    displayReason?: {\n        readonly en: string;\n        readonly [locale: string]: string;\n    };\n};',
+  },
+  {
+    name: 'Principal',
+    declaration: 'export type Principal = PrincipalMap[keyof PrincipalMap];',
+  },
+  {
+    name: 'PrincipalMap',
+    declaration: 'export interface PrincipalMap {\n    owner: {\n        readonly kind: \'owner\';\n    };\n}',
   },
   {
     name: 'ProductEvent',
@@ -6482,6 +6539,62 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'Reload',
     declaration: 'export interface Reload {\n    filename: string;\n    modules: ReloadModules;\n    runtime?: Plugin.Runtime | undefined;\n}',
+  },
+  {
+    name: 'RemoteAccessAction',
+    declaration: 'export type RemoteAccessAction = RemoteAccessEndpoint | `event:${string}`;',
+  },
+  {
+    name: 'RemoteAccessBaseline',
+    declaration: 'export type RemoteAccessBaseline = Extract<RemoteAccessFrame, {\n    type: \'baseline\';\n}>;',
+  },
+  {
+    name: 'RemoteAccessBinding',
+    declaration: 'export type RemoteAccessBinding = {\n    [K in RemoteAccessResourceKind]: {\n        readonly role: RemoteAccessRole<K>;\n        readonly resource: RemoteAccessResourceOf<K>;\n        readonly condition?: RemoteAccessCondition<K>;\n    };\n}[RemoteAccessResourceKind];',
+  },
+  {
+    name: 'RemoteAccessCondition',
+    declaration: 'export type RemoteAccessCondition<K extends RemoteAccessResourceKind> = (request: {\n    readonly action: RemoteAccessAction;\n    readonly resource: RemoteAccessResourceOf<K>;\n    readonly args?: Readonly<Record<string, unknown>>;\n}) => RemoteAccessDecision;',
+  },
+  {
+    name: 'RemoteAccessDecision',
+    declaration: 'export type RemoteAccessDecision = {\n    readonly kind: \'allow\';\n} | {\n    readonly kind: \'deny\';\n    readonly reason: string;\n};',
+  },
+  {
+    name: 'RemoteAccessEndpoint',
+    declaration: 'export type RemoteAccessEndpoint = `${string}/${string}`;',
+  },
+  {
+    name: 'RemoteAccessFrame',
+    declaration: 'export type RemoteAccessFrame = {\n    readonly type: \'baseline\';\n    readonly owner: true;\n} | {\n    readonly type: \'baseline\';\n    readonly owner: false;\n    readonly grants: readonly RemoteAccessGrant[];\n} | {\n    readonly type: \'upsert\';\n    readonly grant: RemoteAccessGrant;\n} | {\n    readonly type: \'remove\';\n    readonly resource: RemoteAccessResource;\n};',
+  },
+  {
+    name: 'RemoteAccessGrant',
+    declaration: 'export interface RemoteAccessGrant {\n    readonly resource: RemoteAccessResource;\n    readonly actions: readonly string[];\n}',
+  },
+  {
+    name: 'RemoteAccessPolicy',
+    declaration: 'export interface RemoteAccessPolicy<P extends Principal> {\n    bindings(principal: P): readonly RemoteAccessBinding[];\n    explain?(request: RemoteAccessRequest<P>): string | undefined;\n}',
+  },
+  {
+    name: 'RemoteAccessRequest',
+    declaration: 'export interface RemoteAccessRequest<P extends Principal> {\n    readonly principal: P;\n    readonly action: RemoteAccessAction;\n    readonly resources: readonly RemoteAccessResource[];\n    readonly args?: Readonly<Record<string, unknown>>;\n}',
+  },
+  {
+    name: 'RemoteAccessResource',
+    declaration: 'export type RemoteAccessResource = {\n    readonly kind: \'global\';\n} | {\n    [Kind in TypertResourceKind]: {\n        readonly kind: Kind;\n        readonly id: TypertResourceId<TypertResourceMap[Kind]>;\n    };\n}[TypertResourceKind];',
+  },
+  {
+    name: 'RemoteAccessResourceKind',
+    declaration: 'export type RemoteAccessResourceKind = \'global\' | TypertResourceKind;',
+  },
+  {
+    name: 'RemoteAccessResourceOf',
+    declaration: 'export type RemoteAccessResourceOf<K extends RemoteAccessResourceKind> = Extract<RemoteAccessResource, {\n    readonly kind: K;\n}>;',
+  },
+  {
+    name: 'RemoteAccessRole',
+    declaration: 'export interface RemoteAccessRole<K extends RemoteAccessResourceKind> {\n    readonly name: string;\n    readonly resource: K;\n    readonly actions: readonly RemoteAccessAction[];\n}',
   },
   {
     name: 'RemoteError',
@@ -8173,7 +8286,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TypertGatewayWireStream',
-    declaration: 'export interface TypertGatewayWireStream {\n    readonly open: (endpoint: string, payload: unknown, uplink: AsyncIterable<unknown>, peer: PeerScope | undefined, signal: AbortSignal) => Promise<AsyncIterable<unknown>>;\n    readonly failure: (error: unknown) => {\n        readonly code: string;\n        readonly message: string;\n        readonly details: object;\n    };\n}',
+    declaration: 'export interface TypertGatewayWireStream {\n    readonly open: (endpoint: string, payload: unknown, uplink: AsyncIterable<unknown>, peer: PeerScope, signal: AbortSignal) => Promise<AsyncIterable<unknown>>;\n    readonly failure: (error: unknown) => {\n        readonly code: string;\n        readonly message: string;\n        readonly details: object;\n    };\n}',
   },
   {
     name: 'TypertMemberModel',
@@ -8205,7 +8318,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TypertRemoteEventFrame',
-    declaration: 'export interface TypertRemoteEventFrame {\n    readonly event: string;\n    readonly args: readonly unknown[];\n}',
+    declaration: 'export interface TypertRemoteEventFrame {\n    readonly event: string;\n    readonly args: readonly unknown[];\n    readonly resources?: Readonly<Record<string, TypertResourceReader>>;\n}',
   },
   {
     name: 'TypertRemoteEventInvocation',
@@ -8226,6 +8339,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TypertRemoteValue',
     declaration: 'export interface TypertRemoteValue<Value = unknown> {\n    readonly create: () => TypertSchema<Value>;\n    readonly description?: string | undefined;\n    readonly jsonSchema?: Readonly<Record<string, unknown>> | undefined;\n    readonly jsonSchemaError?: string | undefined;\n}',
+  },
+  {
+    name: 'TypertResource',
+    declaration: 'export interface TypertResource<Id> {\n    readonly [RESOURCE_ID]: Id;\n}',
+  },
+  {
+    name: 'TypertResourceId',
+    declaration: 'export type TypertResourceId<Resource> = Resource extends TypertResource<infer Id> ? Id : never;',
+  },
+  {
+    name: 'TypertResourceKind',
+    declaration: 'export type TypertResourceKind = Extract<keyof TypertResourceMap, string>;',
+  },
+  {
+    name: 'TypertResourceMap',
+    declaration: 'export interface TypertResourceMap {\n}',
+  },
+  {
+    name: 'TypertResourceReader',
+    declaration: 'export type TypertResourceReader = {\n    read(...args: readonly unknown[]): unknown;\n}[\'read\'];',
   },
   {
     name: 'TypertSchema',
@@ -8557,7 +8690,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WorkspaceFollowIncrement',
-    declaration: 'export type WorkspaceFollowIncrement = {\n    readonly type: \'upsert\';\n    readonly workspace: WorkspaceView;\n} | {\n    readonly type: \'remove\';\n    readonly workspaceId: WorkspaceId;\n} | {\n    readonly type: \'order\';\n    readonly workspaceIds: readonly WorkspaceId[];\n} | {\n    readonly type: \'archived\';\n    readonly archivedSessionIds: readonly SessionId[];\n} | {\n    readonly type: \'pinned\';\n    readonly pinnedSessionIds: readonly SessionId[];\n};',
+    declaration: 'export type WorkspaceFollowIncrement = {\n    readonly type: \'replace\';\n    readonly value: WorkspaceBaseline;\n} | {\n    readonly type: \'upsert\';\n    readonly workspace: WorkspaceView;\n} | {\n    readonly type: \'remove\';\n    readonly workspaceId: WorkspaceId;\n} | {\n    readonly type: \'order\';\n    readonly workspaceIds: readonly WorkspaceId[];\n} | {\n    readonly type: \'archived\';\n    readonly archivedSessionIds: readonly SessionId[];\n} | {\n    readonly type: \'pinned\';\n    readonly pinnedSessionIds: readonly SessionId[];\n};',
   },
   {
     name: 'WorkspaceInsertBeforeRequest',
