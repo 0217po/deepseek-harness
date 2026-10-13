@@ -661,7 +661,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'KeyedStandardSource',
-    declaration: 'export type KeyedStandardSource = (key: string) => HostObservable<unknown> | undefined;',
+    declaration: 'export type KeyedStandardSource = (key: string, member?: string) => HostObservable<unknown> | undefined;',
   },
   {
     name: 'KeyPropsOf',

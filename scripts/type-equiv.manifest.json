@@ -2088,6 +2088,16 @@
     },
     {
       "doc": "docs/subsystems/typert.md",
+      "symbol": "PrincipalMap",
+      "source": "packages/typert/protocol/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
+      "symbol": "Principal",
+      "source": "packages/typert/protocol/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
       "symbol": "PeerScope",
       "source": "packages/typert/protocol/src/types.ts"
     },
@@ -2100,6 +2110,31 @@
       "doc": "docs/subsystems/typert.md",
       "symbol": "RemoteInvocation",
       "source": "packages/typert/protocol/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
+      "symbol": "TypertResourceMap",
+      "source": "packages/typert/protocol/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
+      "symbol": "RemoteAccessResourceKind",
+      "source": "packages/typert/protocol/src/remote-access.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
+      "symbol": "RemoteAccessResource",
+      "source": "packages/typert/protocol/src/remote-access.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
+      "symbol": "RemoteScopeOptions",
+      "source": "packages/typert/protocol/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
+      "symbol": "RemoteMethodOptions",
+      "source": "packages/typert/protocol/src/index.ts"
     },
     {
       "doc": "docs/subsystems/typert.md",
