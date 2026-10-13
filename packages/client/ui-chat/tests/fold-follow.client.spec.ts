@@ -174,6 +174,17 @@ it('keeps the reader landing while reader movement awaits sampling', async () =>
   vi.advanceTimersByTime(500)
 })
 
+it('lands a tail batch on the committed content when it reaches past the estimate', async () => {
+  const h = fixture(VISIBLE_ROW)
+  // Content arriving with the hidden commit is not in the estimate; the landing reads the real floor.
+  h.viewport.motion.collapse(h.row, () => { h.row.hidden = true; h.grow(1_200) })
+  await Promise.resolve()
+  runFrames()
+  expect(h.list.scrollTop).toBe(800)
+  expect(h.spacer.style.height).toBe('')
+  expect(h.reading.followingTail).toBe(true)
+})
+
 it('keeps a reader below folding rows on the same content without room or follow', async () => {
   const h = fixture({ earlier: 100, later: 500, top: 2_000, following: false })
   await h.close()

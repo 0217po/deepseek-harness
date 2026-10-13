@@ -99,6 +99,20 @@ export function hiddenOrCollapsing(element: HTMLElement): boolean {
   return element.hasAttribute('hidden') || element.dataset.chatMotion === 'collapse'
 }
 
+/** A box this viewport owns until it finishes or is cancelled. */
+interface OwnedBox {
+  readonly element: HTMLElement
+  /** Measured when the box starts, and again when a batch takes over a closing box. */
+  height: number
+  marginTop: number
+  readonly closing: boolean
+  /** The box closed while a batch ran; it keeps its size without a CSS transition until the next batch. */
+  readonly held: boolean
+  /** Stop the box's own transition and fallback timer before a batch drives it. */
+  take(): void
+  finish(): void
+}
+
 /**
  * Create animation coordination without cross-viewport broadcasts.
  * @param driver - the viewport's driver for the next batch; null while detached.
@@ -110,7 +124,7 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
   let folding = 0
   const foldIdleListeners = new Set<() => void>()
   let batchScheduled = false
-  const boxes = new Map<HTMLElement, InputFoldBox & { take: () => void; finish: () => void }>()
+  const boxes = new Map<HTMLElement, OwnedBox>()
   let frameRequest: number | null = null
   let batch = false
   let cancelled = false
@@ -135,6 +149,14 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
   }
 
   function runBatch(current: InputFoldDriver): void {
+    // A closing box continues from its current size: its own transition may have moved it, and a held box
+    // may now sit inside a row that finished closing.
+    for (const box of [...boxes.values()]) {
+      if (!box.closing || !batchMember(box)) continue
+      box.height = box.element.offsetHeight
+      box.marginTop = Number.parseFloat(getComputedStyle(box.element).marginTop) || 0
+      if (box.height === 0 && box.marginTop === 0) box.finish()
+    }
     const owned = [...boxes.values()]
     const members = owned.filter(batchMember)
       .sort((left, right) => left.element.compareDocumentPosition(right.element) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1)
@@ -183,6 +205,8 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
         settling = false
       }
       if (folding === 0) notifyIdle()
+      // Rows that closed while this batch ran wait in place; the next batch starts at once.
+      else if ([...boxes.values()].some(box => box.held)) flushBatch()
     }
     cancelEmptyBatch = () => {
       if (members.some(box => box.closing && boxes.get(box.element) === box)) return
@@ -236,12 +260,14 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
 
   function flushBatch(): void {
     batchScheduled = false
-    // Rows that start closing during a batch keep their CSS transitions; the batch follows their size changes.
+    // Rows that start closing during a batch are held until it settles, which starts the next batch.
     if (batch || ![...boxes.values()].some(box => box.closing)) return
     const current = driver()
     if (current !== null) runBatch(current)
-    else if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      for (const box of [...boxes.values()]) box.finish()
+    else {
+      const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+      // Held rows have no transition of their own, so without a driver they finish at once.
+      for (const box of [...boxes.values()]) if (reduced || box.held) box.finish()
     }
   }
 
@@ -275,7 +301,11 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
     for (const listener of listeners) listener()
   }
 
-  function clearMotion(element: HTMLElement, onEnd: (event: TransitionEvent) => void, timer: ReturnType<typeof setTimeout>): void {
+  function clearMotion(
+    element: HTMLElement,
+    onEnd: (event: TransitionEvent) => void,
+    timer: ReturnType<typeof setTimeout> | undefined,
+  ): void {
     element.removeEventListener('transitionend', onEnd)
     clearTimeout(timer)
     running.delete(element)
@@ -304,6 +334,8 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
       return
     }
     const { style } = element
+    // A running batch owns the scrollport; a row closing now keeps its size until the next batch drives it.
+    const held = batch
     element.dataset.chatMotion = 'collapse'
     foldStarted()
     scheduleBatch()
@@ -311,12 +343,14 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
     style.overflow = 'hidden'
     style.height = `${height}px`
     style.marginTop = `${marginTop}px`
-    void element.offsetHeight
-    style.transition = `opacity ${FADE_OUT_MS}ms ${EASING}, `
-      + `height ${CLOSE_MS}ms ${EASING} ${CLOSE_DELAY_MS}ms, margin-top ${CLOSE_MS}ms ${EASING} ${CLOSE_DELAY_MS}ms`
-    style.opacity = '0'
-    style.height = '0px'
-    style.marginTop = '0px'
+    if (!held) {
+      void element.offsetHeight
+      style.transition = `opacity ${FADE_OUT_MS}ms ${EASING}, `
+        + `height ${CLOSE_MS}ms ${EASING} ${CLOSE_DELAY_MS}ms, margin-top ${CLOSE_MS}ms ${EASING} ${CLOSE_DELAY_MS}ms`
+      style.opacity = '0'
+      style.height = '0px'
+      style.marginTop = '0px'
+    }
 
     // The hidden state must land before fold-idle listeners measure the flow.
     const finish = (): void => {
@@ -328,14 +362,14 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
     const onEnd = (event: TransitionEvent): void => {
       if (event.target === element && event.propertyName === 'height') finish()
     }
-    const timer = setTimeout(finish, CLOSE_DELAY_MS + CLOSE_MS + SETTLE_SLACK_MS)
+    const timer = held ? undefined : setTimeout(finish, CLOSE_DELAY_MS + CLOSE_MS + SETTLE_SLACK_MS)
     const cancel = (): void => {
       clearMotion(element, onEnd, timer)
       foldEnded()
     }
-    element.addEventListener('transitionend', onEnd)
+    if (!held) element.addEventListener('transitionend', onEnd)
     running.set(element, cancel)
-    boxes.set(element, { element, height, marginTop, closing: true, finish,
+    boxes.set(element, { element, height, marginTop, closing: true, held, finish,
       take: () => { element.removeEventListener('transitionend', onEnd); clearTimeout(timer) } })
   }
 
@@ -368,7 +402,7 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
     const timer = setTimeout(finish, CLOSE_DELAY_MS + CLOSE_MS + SETTLE_SLACK_MS)
     element.addEventListener('transitionend', onEnd)
     running.set(element, finish)
-    boxes.set(element, { element, height, marginTop, closing: false, finish,
+    boxes.set(element, { element, height, marginTop, closing: false, held: false, finish,
       take: () => { element.removeEventListener('transitionend', onEnd); clearTimeout(timer) } })
   }
 

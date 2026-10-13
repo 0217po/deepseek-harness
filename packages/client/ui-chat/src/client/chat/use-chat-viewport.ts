@@ -360,7 +360,13 @@ export class ChatViewport {
           else this.observation = { top: elements.scroller.scrollTop, landing: null }
           return
         }
-        this.setSpacer(finalRoom)
+        // The estimate can differ from the committed layout, for example settled sibling spacing.
+        // Land on the actual content: never above the target, and at the real floor when content reaches past it.
+        const content = elements.scroller.scrollHeight - this.spacerHeight()
+        const clientHeight = elements.scroller.clientHeight
+        const top = Math.max(target, content - clientHeight, 0)
+        this.setSpacer(top === 0 ? 0 : Math.max(0, top + clientHeight - content))
+        elements.scroller.scrollTop = top
         const metrics = scrollMetrics(elements.scroller)
         const landing = { metrics, position: null, turn: this.latestTurn }
         this.observation = { top: metrics.top, landing }

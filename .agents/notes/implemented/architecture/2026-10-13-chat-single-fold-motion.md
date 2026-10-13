@@ -38,7 +38,8 @@ Subagent children showed no local echo because, when echoes were introduced, `su
   - `finish`: install the final room.
 
   Content added during the batch updates the remaining movement by starting a new segment.
-- A batch with only revealing rows needs no room and keeps CSS transitions. When the viewport has no reading policy attached, closing rows also keep CSS transitions; under reduced motion they finish immediately.
+- A row that starts closing while a batch runs keeps its size, without a transition of its own, until that batch settles; the next batch starts at once and drives it. Rows therefore never close outside a batch while following continues, which would follow the bottom room without the growth that should have consumed it. When a batch takes over a closing row, it measures the row's current size; a row with no size left finishes without animation.
+- A batch with only revealing rows needs no room and keeps CSS transitions. When the viewport has no reading policy attached, closing rows also keep CSS transitions, and held rows finish immediately; under reduced motion closing rows finish immediately.
 - Closing rows commit their hidden state first, the driver then installs the final geometry, and only then are fold-idle listeners notified (for example, clearing room after a display-mode change).
 - The generic path is removed: the `reserve` callback, the `pendingReserve` and `pendingGrowth` reservation arithmetic, `reserveBelow`, and the post-fold `followAfterFold`. `reclaimBelow` (returning room after new content or reader scrolling) and `resetBelow` (clearing room after a display-mode change) remain.
 
@@ -51,7 +52,7 @@ Let `start` be the scrollTop when the batch begins, `above` the height of closin
 | **Tail** | This client's own input, or the reader was following the tail when the batch began and had no reading movement awaiting sampling | `max(base, bottom)` | Commit follow ownership |
 | **Reader content still** | Otherwise | `base` | Keep the reader's reading state and acknowledge the new position |
 
-- Both landings install only the exact deficit as room: `max(0, target + viewport height − folded height)`.
+- Both landings install only the exact deficit as room: `max(0, target + viewport height − folded height)`. The tail landing reads the committed layout when it finishes: it lands at the larger of the target and the real floor, and keeps only the room that target needs.
 - Content never slides back down: content already above the viewport top does not return. When the retained body and the new message cannot fill the viewport, the deficit remains as room until new content fills it.
 - Own input during a running batch starts a new segment from the current position toward the tail; it takes over even when a reading gesture cancelled the automatic target. A tail request counts only while a batch runs or is scheduled; rows still closing on CSS transitions after a batch leave own input to ordinary following.
 - A reading gesture cancels a tail landing's automatic target and keeps the reader's position. During a reader-content-still landing, the reader's own scrolling between frames moves the position the batch keeps still.

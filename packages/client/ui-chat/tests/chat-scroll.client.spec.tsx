@@ -373,6 +373,8 @@ describe('Chat scroll collapse timing', () => {
     expect(h.scrollTo).not.toHaveBeenCalled()
     expect(h.scroller.scrollTop).toBe(0)
     await act(async () => { await Promise.resolve() })
+    // The folded row leaves the committed layout; the landing reads the actual content height.
+    h.grow(920)
     act(() => { vi.advanceTimersByTime(400) })
     expect(h.scrollTo).not.toHaveBeenCalled()
     expect(h.scroller.scrollTop).toBe(520)
@@ -480,6 +482,7 @@ describe('Chat scroll collapse timing', () => {
     h.resize()
     h.update({ order: ['streaming-change'], running: true })
     if (newInput) h.update({ submissionId: 'second' })
+    h.grow(920)
     h.finishFold()
     await act(async () => { await Promise.resolve() })
     act(() => { vi.advanceTimersByTime(400) })
