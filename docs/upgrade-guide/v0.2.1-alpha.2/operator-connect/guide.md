@@ -9,7 +9,7 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-Non-page Connection installations default to `interactions: 'none'`. They do not open `$events`, and `$on()` and the generation-recovery helper `$stream()` are unavailable in that mode. Generated unary and raw stream methods remain usable. Browser authentication, existing browser Cookies, the shared Operator, and recovery behavior are unchanged; browsers need no reauthentication.
+Non-page Connection installations default to `interactions: 'none'`. They do not open `$events`, and `$on()` and the generation-recovery helper `$stream()` are unavailable in that mode. Generated unary and raw stream methods remain usable. Browser authentication, existing browser Cookies, the shared Peer, and recovery behavior are unchanged; browsers need no reauthentication.
 
 ## Migration
 

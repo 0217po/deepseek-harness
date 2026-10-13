@@ -188,16 +188,18 @@ export interface PeerScope {
   readonly principal: Principal
   /** Aborted once the Peer is disposed. */
   readonly signal: AbortSignal
+  /** Participation in forwarded interactions; independent of RBAC. */
+  readonly interactions: 'answer' | 'none'
   dispose(): Promise<void>
 }
 ```
 
-`@deepseek-ai/dsh-client-connection` 实现唯一的 Peer 类 `Peer(owner, { principal })`，用 `createScope(owner, peer)` 建立，与 Agent 建自己的 scope 是同一机制：Peer 对象就是 ScopeKey，`peer.ctx` 承接连接期效果，scope 结束时 `peer.signal` 中止，`dispose()` 让 fiber 静默。Connection 在服务 apply 时以 owner principal 创建 `connection.browserPeer`；principal、`createPeer()` 与访问检查归 [Peer 身份属性与 Remote 方法级访问控制](../../implemented/architecture/2026-10-12-peer-principal-and-remote-access.zh.md)。
+`@deepseek-ai/dsh-client-connection` 实现唯一的 Peer 类 `Peer(owner, { principal, interactions? })`，用 `createScope(owner, peer)` 建立，与 Agent 建自己的 scope 是同一机制：Peer 对象就是 ScopeKey，`peer.ctx` 承接连接期效果，scope 结束时 `peer.signal` 中止，`dispose()` 让 fiber 静默。Connection 在服务 apply 时以 owner principal 创建 `connection.browserPeer`；principal、`createPeer()` 与访问检查归 [Peer 身份属性与 Remote 方法级访问控制](../../implemented/architecture/2026-10-12-peer-principal-and-remote-access.zh.md)。
 
 | 成员 | 语义 |
 | --- | --- |
 | `connection.browserPeer: PeerScope` | 所有通过认证的浏览器连接共享的 Peer；principal 为 owner；随 connection 生灭 |
-| `connection.admit(request): PeerAdmission` | 过既有的 `requestRejection`：被拒返回 `{ rejection: 401 \| 403 }`，否则返回 `{ peer: browserPeer }`。将来的接纳方在这里接入 |
+| `connection.admit(request): PeerAdmission` | 检查 Host/Origin 与浏览器或 API 签名 Cookie；返回 `{ rejection: 401 \| 403 }` 或凭据对应的存活 Peer；API Peer 在 connect 时发布，并由其生命周期 socket 负责释放 |
 
 网关 `handleUpgrade(req, socket, head, peer)` 为该 socket 绑一个固定 Peer 的 opener，并在 `peer.ctx.effect` 里登记 socket 关闭；scope 已失效时改为直接以 1001 关闭 socket。`InvokeRemoteRequest.peer`、`RemoteStreamOpener` 与 `wireStream.open` 的 `peer` 形参均为 required，每个进程内调用方都显式给出 Peer，网关不自建 Peer。按 id 查 Peer、Peer 的开关事件，都等第一个需要它们的消费者出现时再加。
 

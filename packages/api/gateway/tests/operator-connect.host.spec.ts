@@ -99,7 +99,7 @@ describe('operator connect through Loader composition', () => {
     try {
       await close(await mux(host, cookie))
       await vi.waitFor(() => {
-        expect(report).toHaveBeenCalledWith('[api-gateway] Operator release failed:', failure)
+        expect(report).toHaveBeenCalledWith('[api-gateway] Peer release failed:', failure)
       })
       expect((await rpc(host, cookie, 'fixture/identity', { label: 'refused' })).status).toBe(401)
       expect(host.fixture.calls.has('refused')).toBe(false)

@@ -9,7 +9,7 @@ description: "非页面 Client 默认不参与转发交互，并使用不带浏�
 
 ## 变更
 
-非页面 Connection 安装默认 `interactions: 'none'`。该模式不打开 `$events`，也不提供 `$on()` 和代际恢复辅助方法 `$stream()`；生成的 unary 和原始流方法仍可使用。浏览器认证、既有 Cookie、共享 Operator 与恢复行为均不变，无需重新认证。
+非页面 Connection 安装默认 `interactions: 'none'`。该模式不打开 `$events`，也不提供 `$on()` 和代际恢复辅助方法 `$stream()`；生成的 unary 和原始流方法仍可使用。浏览器认证、既有 Cookie、共享 Peer 与恢复行为均不变，无需重新认证。
 
 ## 迁移
 

@@ -203,7 +203,7 @@ describe('connection node half', () => {
       await fiber.await()
       const connection = ctx.get('connection') as HostConnectionHandle
       const cookie = browserCookie(connection, 'localhost')
-      expect(connection.admit(fakeRequest({ host: 'localhost', cookie }))).toEqual({ peer: connection.operator })
+      expect(connection.admit(fakeRequest({ host: 'localhost', cookie }))).toEqual({ peer: connection.browserPeer })
     } finally {
       await fiber.dispose()
     }

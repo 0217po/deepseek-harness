@@ -69,7 +69,7 @@ function guestPolicy(ctx: Context, ...bindings: RemoteAccessBinding[]): RemoteAc
 
 /** Invoke `session/<method>` as the guest through the Gateway. */
 function guestCall(ctx: Context, method: string, args: Readonly<Record<string, unknown>>): Promise<unknown> {
-  const peer: PeerScope = { id: 'session-access-peer' as PeerId, ctx, principal: GUEST, signal: new AbortController().signal, dispose: async () => {} }
+  const peer: PeerScope = { id: 'session-access-peer' as PeerId, ctx, principal: GUEST, interactions: 'answer', signal: new AbortController().signal, dispose: async () => {} }
   return ctx.typertGateway.invoke({ peer, namespace: 'session', method, args })
 }
 
@@ -93,7 +93,7 @@ async function harness(): Promise<{
     const invocation: RemoteInvocation = {
       request: { namespace: 'session', method, args: {} },
       service: 'sessionController',
-      peer: { id: 'session-access-peer' as PeerId, ctx, principal, signal: new AbortController().signal, dispose: async () => {} },
+      peer: { id: 'session-access-peer' as PeerId, ctx, principal, interactions: 'answer', signal: new AbortController().signal, dispose: async () => {} },
       signal: new AbortController().signal,
       uplink: <In>(): AsyncIterable<In> => ({ [Symbol.asyncIterator]: () => ({ next: async () => ({ done: true, value: undefined }) }) }),
     }

@@ -6,7 +6,7 @@ English | [中文](2026-10-09-operator-scoped-connect-handshake.zh.md)
 
 ## Problem
 
-Automatically subscribing automation clients to forwarded events lets method-only callers receive and answer human interactions. CLI and MCP callers need independent participation and cleanup without changing browser authentication or introducing a general identity system.
+Automatically subscribing automation clients to forwarded events lets method-only callers receive and answer human interactions. CLI and MCP callers need independent participation and cleanup without changing browser authentication or assigning per-browser identities.
 
 ## Decision
 
@@ -50,6 +50,6 @@ The [recorded approval scenario](../../../../apps/web/tests/approval-composer.e2
 
 ## Consequences
 
-Unconnected API records need not be promptly reclaimed; resource-heavy additions to idle Peers require revisiting that choice. API Cookies cannot restore an Peer after its socket closes or the Host restarts. Browser Cookie format and authentication behavior remain unchanged, with no reauthentication migration. API and browser Cookies use the same authority-specific name, so API callers keep their own Cookie storage rather than exchanging credentials in a shared browser jar. Any launch-token holder may request `answer`; this is interaction participation, not user isolation.
+Unconnected API records need not be promptly reclaimed; resource-heavy additions to idle Peers require revisiting that choice. API Cookies cannot restore a Peer after its socket closes or the Host restarts. Browser Cookie format and authentication behavior remain unchanged, with no reauthentication migration. API and browser Cookies use the same authority-specific name, so API callers keep their own Cookie storage rather than exchanging credentials in a shared browser jar. Any launch-token holder may request `answer`; this is interaction participation, not user isolation.
 
 The [duplex-stream decision](2026-09-19-remote-duplex-stream.md) retains Peer scopes and stream framing. The [browser authentication decision](2026-08-24-browser-token-authentication.md) retains browser token, signature, authority, and lifetime semantics; only independent API admission is added here. Both records remain active.
