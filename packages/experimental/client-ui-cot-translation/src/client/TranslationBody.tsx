@@ -1,9 +1,9 @@
 /** Translation controls for one expanded reasoning body. */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, MarkdownText, IconLoadingOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconLoadingOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { LocaleSnapshot } from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
-import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { CotTranslationPreferences } from '../preferences.ts'
 import { ReasoningTranslation, type TranslateText, type TranslationState } from './translation.ts'
 import { NS } from './locales.ts'
@@ -19,8 +19,8 @@ export interface TranslationBodyInjected {
   translate: TranslateText
 }
 
-export type TranslationBodyProps = PropsRuntime<'conversation.chat.reasoning-body'>
-  & PropsLocale<typeof NS> & InjectFace<TranslationBodyInjected>
+export type TranslationBodyProps = PropsRuntime<'conversation.chat.reasoning.body'>
+  & PropsRenderFactories & PropsLocale<typeof NS> & InjectFace<TranslationBodyInjected>
 
 /**
  * Render translated reasoning, retaining the complete original until a failed request is retried.
@@ -28,7 +28,7 @@ export type TranslationBodyProps = PropsRuntime<'conversation.chat.reasoning-bod
  * @returns compact Markdown and translation status with a retry action on failure.
  */
 export function TranslationBody(props: TranslationBodyProps) {
-  const { text, running, translate, t, setHeaderAction } = props
+  const { text, running, translate, t, renderFactorySlot } = props
   const preferences = props.usePreferences(value => value)
   const locale = props.useTranslationLocale(value => value.active)
   const maxTextChars = props.useTranslationLimit(value => value)
@@ -47,18 +47,15 @@ export function TranslationBody(props: TranslationBodyProps) {
     toolbarLabels: { codeLabel: t('codeTitle'), wrapLabel: t('wrap'), unwrapLabel: t('unwrap') } }, footnotes: t('footnotes') }), [t])
   const showOriginal = original || state.failed
   const actionLabel = t(showOriginal ? 'translation' : 'original')
-  useEffect(() => {
-    setHeaderAction({ label: actionLabel, persistent: showOriginal, disabled: state.failed,
-      onClick: () => { setOriginal(!showOriginal) } })
-    return () => { setHeaderAction(undefined) }
-  }, [actionLabel, showOriginal, state.failed, setHeaderAction])
   return <div data-cot-translation="true" data-translation-state={state.failed ? 'failed' : state.pending ? 'pending' : 'ready'}
     data-translation-view={showOriginal ? 'original' : 'translated'}>
-    {(state.pending || state.failed) && <div className={css.toolbar}>
+    <div className={css.toolbar}>
+      <Button className={css.viewToggle} size="sm" variant="ghost" disabled={state.failed}
+        onClick={() => { setOriginal(!showOriginal) }}>{actionLabel}</Button>
       {state.pending && <span role="status" aria-label={t('translating')}><IconLoadingOutlineRegular size={14} className={css.spinner} /></span>}
       {state.failed && <><span className={css.failure} role="status">{t('failed')}</span>
         <Button size="sm" variant="ghost" onClick={() => { translation.current?.retry() }}>{t('retry')}</Button></>}
-    </div>}
-    <MarkdownText text={showOriginal ? text : state.text} streaming={running} labels={labels} variant="compact" />
+    </div>
+    {renderFactorySlot('conversation.chat.reasoning.content', { text: showOriginal ? text : state.text, running, labels })}
   </div>
 }

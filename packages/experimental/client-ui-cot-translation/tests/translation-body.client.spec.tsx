@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** Expanded reasoning keeps its original accessible across translation lifetimes. */
-import { useState } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
+import { renderReasoningFactory as renderFactorySlot } from '../../../client/ui-chat/tests/reasoning-component-fixture.tsx'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -13,27 +13,19 @@ import type { TranslateText } from '../src/client/translation.ts'
 
 afterEach(cleanup)
 
-function ReasoningBody(props: Omit<TranslationBodyProps, 'setHeaderAction'>) {
-  const [action, setHeaderAction] = useState<Parameters<TranslationBodyProps['setHeaderAction']>[0]>()
-  return <>
-    {action && <button disabled={action.disabled} onClick={action.onClick}>{action.label}</button>}
-    <TranslationBody {...props} setHeaderAction={setHeaderAction} />
-  </>
-}
-
 function fixture() {
   const preferences = createSnapshotStore<CotTranslationPreferences>({ provider: 'google', targetLanguage: 'auto' })
   const locale = createSnapshotStore<LocaleSnapshot>({ active: 'zh', locales: [], revision: 0 })
   const translationLimit = createSnapshotStore(4000)
   const translate = vi.fn<TranslateText>(async request => `${request.provider}:${request.targetLanguage}:${request.text}`)
-  const props = { text: 'Original paragraph', running: false, translate, t: makeTranslate(en),
+  const props = { text: 'Original paragraph', running: false, translate, renderFactorySlot, t: makeTranslate(en),
     usePreferences: bindSnapshotSelector(preferences), useTranslationLocale: bindSnapshotSelector(locale),
     useTranslationLimit: bindSnapshotSelector(translationLimit) } as TranslationBodyProps
   return { props, preferences, locale, translationLimit, translate }
 }
 
 it('honors an explicit Google selection and the UI language, and switches to the original without another request', async () => {
-  const b = fixture(), view = render(<ReasoningBody {...b.props} />)
+  const b = fixture(), view = render(<TranslationBody {...b.props} />)
   await view.findByText('google:zh:Original paragraph')
   expect(b.translate).toHaveBeenCalledWith({ text: 'Original paragraph', provider: 'google', targetLanguage: 'zh' }, expect.any(AbortSignal))
   const markdown = view.container.querySelector('[data-markdown-variant]')
@@ -50,7 +42,7 @@ it('honors an explicit Google selection and the UI language, and switches to the
 it('cancels stale provider or locale requests and honors an explicit language after locale changes', async () => {
   const b = fixture(), first = Promise.withResolvers<string>()
   b.translate.mockImplementationOnce(() => first.promise)
-  const view = render(<ReasoningBody {...b.props} />)
+  const view = render(<TranslationBody {...b.props} />)
   const firstSignal = b.translate.mock.calls[0]![1]
   act(() => { b.preferences.set({ provider: 'bing', targetLanguage: 'ja' }) })
   expect(firstSignal.aborted).toBe(true)
@@ -67,7 +59,7 @@ it('cancels stale provider or locale requests and honors an explicit language af
 it('shows a generic failure with original text and retries only on the reader action', async () => {
   const b = fixture()
   b.translate.mockRejectedValueOnce(new Error('secret request text'))
-  const view = render(<ReasoningBody {...b.props} />)
+  const view = render(<TranslationBody {...b.props} />)
   await view.findByText(en.failed)
   expect(view.getByText('Original paragraph')).toBeTruthy()
   expect(view.queryByRole('button', { name: 'View original' })).toBeNull()
@@ -82,7 +74,7 @@ it('shows a generic failure with original text and retries only on the reader ac
 it('keeps the full original visible after a later paragraph fails and reuses completed translations on retry', async () => {
   const b = fixture()
   b.translate.mockResolvedValueOnce('第一段').mockRejectedValueOnce(new Error('provider unavailable'))
-  const view = render(<ReasoningBody {...b.props} text={'First\n\nSecond'} />)
+  const view = render(<TranslationBody {...b.props} text={'First\n\nSecond'} />)
   await view.findByText(en.failed)
   expect(view.getByText('First')).toBeTruthy()
   expect(view.getByText('Second')).toBeTruthy()
@@ -103,9 +95,9 @@ it('keeps the full original visible after a later paragraph fails and reuses com
 it('keeps an unfinished streaming tail original and cancels the disclosure on unmount', async () => {
   const b = fixture(), pending = Promise.withResolvers<string>()
   b.translate.mockImplementationOnce(() => pending.promise)
-  const view = render(<ReasoningBody {...b.props} text="Unfinished" running />)
+  const view = render(<TranslationBody {...b.props} text="Unfinished" running />)
   expect(b.translate).not.toHaveBeenCalled()
-  view.rerender(<ReasoningBody {...b.props} text={'First\n\nTail'} running />)
+  view.rerender(<TranslationBody {...b.props} text={'First\n\nTail'} running />)
   expect(view.getByRole('status', { name: en.translating })).toBeTruthy()
   const signal = b.translate.mock.calls[0]![1]
   view.unmount()
@@ -117,7 +109,7 @@ it('keeps an unfinished streaming tail original and cancels the disclosure on un
 it('cancels the previous request and rechunks when the request limit changes', async () => {
   const b = fixture(), first = Promise.withResolvers<string>()
   b.translate.mockImplementationOnce(() => first.promise)
-  const view = render(<ReasoningBody {...b.props} text="abcdefghij" />)
+  const view = render(<TranslationBody {...b.props} text="abcdefghij" />)
   const firstSignal = b.translate.mock.calls[0]![1]
   act(() => { b.translationLimit.set(4) })
   expect(firstSignal.aborted).toBe(true)

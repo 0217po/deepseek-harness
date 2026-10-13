@@ -52,7 +52,7 @@ describe.skipIf(webSnapshotMode() === 'record')('web e2e: DeepSeek Messages sett
     const messages = dialog
     await messages.getByText('自定义设置', { exact: true }).click()
     expect(await messages.getByLabel('API 地址', { exact: true }).getAttribute('placeholder'))
-      .toBe('https://api.deepseek.com/anthropic')
+      .toBe('https://api.deepseek.com/anthropic（默认使用环境 DEEPSEEK_BASE_URL）')
     await compareOrRefreshGolden(join(EXPECTED, 'cards.expected.md'),
       await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd), webSnapshotMode())
     await messages.getByLabel('API 密钥', { exact: true }).fill('sk-e2e-messages')
@@ -96,14 +96,18 @@ describe.skipIf(webSnapshotMode() === 'record')('web e2e: DeepSeek Messages sett
     await scaffold.ctx.agentDefaultModel.saveSelection({ provider: 'deepseek-official', model: 'deepseek-v4-flash' })
     await page.reload({ waitUntil: 'load' })
     const input = page.locator('[data-composer-input]').first()
-    const trigger = page.getByRole('button', { name: /^选择模型.*deepseek-official\/deepseek-v4-flash/ })
+    const trigger = page.getByRole('button', { name: '请选择模型', exact: true })
     await trigger.waitFor()
+    expect(scaffold.ctx.agentDefaultModel.currentSelection()).toEqual({
+      provider: 'deepseek-official', model: 'deepseek-v4-flash',
+    })
     await expect.poll(() => input.getAttribute('contenteditable')).toBe('true')
     await trigger.click()
-    await page.getByRole('menuitem', { name: /模型/ }).click()
     await page.getByRole('menuitemradio', { name: 'Messages Flash', exact: true }).click()
     await expect.poll(() => input.getAttribute('contenteditable')).toBe('true')
-    await expect.poll(() => scaffold.ctx.agentDefaultModel.currentSelection().provider).toBe('deepseek-official')
+    await expect.poll(() => scaffold.ctx.agentDefaultModel.currentSelection()).toMatchObject({
+      provider: 'deepseek-official', model: 'deepseek-flash',
+    })
     const settings = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     expect(settings).toContain('provider: deepseek-official')
     expect(tripwire.pageErrors).toEqual([])

@@ -18,6 +18,7 @@ import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import {
   assertSubagentMaxDepth,
+  delegationDepthOf,
   parentAgentOptionsForDelegation,
 } from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider } from '@deepseek-ai/dsh-subagent'
@@ -194,7 +195,7 @@ export async function apply(ctx: Context, config: Config, session?: Session): Pr
     if (modelSelectionPolicy !== undefined) registerListSubagentModels(runtimeCtx, modelSelectionPolicy)
     // Load order and HMR replacement can change provider availability while
     // this fiber remains active.
-    let mounted: { subagentProvider: SubagentProvider; disposeTool: () => void } | undefined
+    let mounted: { subagentProvider: SubagentProvider; definition: ToolDefinition; disposeTool: () => void } | undefined
     const mount = (subagentProvider: SubagentProvider): void => {
       assertSubagentProviderConfiguration(subagentProvider)
       const wording = providerWording(subagentProvider.inheritsParentContext)
@@ -345,7 +346,7 @@ export async function apply(ctx: Context, config: Config, session?: Session): Pr
         }
       })
       // oxlint-disable-next-line typescript/no-misused-promises -- Tool and guidance disposal are synchronous.
-      mounted = { subagentProvider, disposeTool }
+      mounted = { subagentProvider, definition, disposeTool }
     }
 
     // Register listeners before checking presence so no synchronous change is missed.
@@ -375,7 +376,21 @@ export async function apply(ctx: Context, config: Config, session?: Session): Pr
           .sort()
         if (visible[0] !== toolName) return ''
         const names = visible.map(name => `\`${name}\``).join(' or ')
-        return `Start independent delegations with ${names} together in one assistant message and continue useful work while they run.`
+        return `Start independent delegations with ${names} together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn.`
+      },
+    })
+    runtimeCtx.systemPrompt.context({
+      name: `tool:${toolName}:depth`,
+      order: runtimeCtx.systemPrompt.getContextOrder('SUBAGENT_DELEGATION'),
+      text: (context) => {
+        if (context.agent === undefined || mounted === undefined
+          || runtimeCtx.tools.get(toolName, context.scope) !== mounted.definition) return ''
+        const maxDepth = runtimeCtx.subagents.resolveMaxDepth(config.maxDepth)
+        if (maxDepth === undefined) return ''
+        const depth = delegationDepthOf(context.agent)
+        if (depth < maxDepth) return ''
+        return `Delegation depth for \`${toolName}\`: current ${depth}, maximum ${maxDepth}, remaining levels 0.`
+          + ` Do not call \`${toolName}\` at this depth; carry out the work directly.`
       },
     })
   }

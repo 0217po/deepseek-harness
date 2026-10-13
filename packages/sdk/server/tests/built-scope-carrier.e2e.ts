@@ -29,7 +29,7 @@ const [
   { default: AgentLoop },
   { mountAgentLoopTestDependencies },
   { default: SubagentRuntime },
-  { default: JsonlSessionPersistence },
+  JsonlSessionPersistence,
   { HarnessSdkJsonRpcServer },
   { SessionId },
 ] = await Promise.all([
