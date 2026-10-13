@@ -125,6 +125,7 @@ def main():
                     (args.artifacts / 'fixture-state.json').write_text(state_path.read_text())
                 def hover_sequence():
                     state = observe()
+                    window = next(window for window in state['windows'] if window['windowId'] == window_id)
                     trigger = next(element for element in state['elements'] if element['role'] == 'AXButton' and
                                    'Reveal hover details' in (element.get('title') or element.get('description') or ''))
                     before = json.loads(state_path.read_text())

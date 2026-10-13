@@ -181,6 +181,11 @@ def main():
 
             def check_hover():
                 call("activate", owner)
+                current = call("getState", primary_params)
+                window_element = next(element for element in current["elements"] if element["role"] == "AXWindow")
+                call("performSecondaryAction", {**owner, "snapshotId": current["snapshotId"],
+                                                 "elementIndex": window_element["index"], "action": "raise"})
+                call("getState", primary_params)
                 x, y, width, height = json.loads(state_path.read_text())["dragBounds"]
                 call("hover", {**owner, "windowId": primary["windowId"], "x": x + 20, "y": y + 20})
                 wait_state(lambda actual: actual["hoverVisible"], "AppKit tracking area did not reveal hover controls")
