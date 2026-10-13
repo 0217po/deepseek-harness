@@ -156,12 +156,12 @@ The schema is prefix-stable across adapter registration and catalog changes. Eac
 
 #### What the model sees
 
-Visible delegation tools share one guidance paragraph, listing tools in name order and instructing the model to start independent delegations together and keep working while they run. Hidden or unavailable tools are omitted; no guidance appears when none are visible. With both `subagent` and `subagent_fork` visible, the text is:
+Visible delegation tools share one guidance paragraph, listing tools in name order and instructing the model to start independent delegations together and keep working while they run, and to end its turn instead of sleeping or polling when only waiting for their results remains. Hidden or unavailable tools are omitted; no guidance appears when none are visible. With both `subagent` and `subagent_fork` visible, the text is:
 
 ##### Tool-guidance section
 
 ```markdown
-Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run.
+Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn.
 ```
 
 #### Token effect
@@ -171,6 +171,26 @@ At most one short delegation paragraph per parent request, listing the tool name
 #### KV Cache effect
 
 Prefix-stable while the visible tool names are unchanged; adding or removing a visible tool changes the paragraph.
+
+### Runtime depth context
+
+#### What the model sees
+
+When the calling agent reaches or exceeds a visible tool's effective numeric depth cap, an optional runtime-context snapshot tells it to do the work directly. The cap is resolved again at each request, including after settings changes or session resume. Hidden tools and `provider-managed` limits contribute no depth text. For a child at depth one with a cap of one:
+
+##### Depth-limit notice
+
+```markdown
+Delegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do not call `subagent` at this depth; carry out the work directly.
+```
+
+#### Token effect
+
+One short contribution per capped tool joins the user-role runtime-context snapshot. Unchanged snapshots are not appended again; agents below the cap receive no additional text. `includeRuntimeContext: false` suppresses this notice without changing runtime depth enforcement.
+
+#### KV Cache effect
+
+Depth changes do not alter the system prompt or tool schemas. Updated runtime context appends after existing history; the provider still enforces the cap if the model attempts delegation.
 
 ### Start result
 
