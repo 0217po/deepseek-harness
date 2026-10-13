@@ -75,7 +75,10 @@ export interface RemoteAccessRequest<P extends Principal> {
    * names none; allowed only when the action is allowed on every listed resource.
    */
   readonly resources: readonly RemoteAccessResource[]
-  /** Named arguments of a concrete call, validated against their Typert-compiled types with lookup parameters as wire identities; absent for events, snapshots, and list filtering. */
+  /**
+   * Named arguments of a concrete call, validated against their Typert-compiled types
+   * with lookup parameters as wire identities; absent for events, snapshots, and list filtering.
+   */
   readonly args?: Readonly<Record<string, unknown>>
 }
 
