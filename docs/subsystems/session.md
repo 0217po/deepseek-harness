@@ -848,12 +848,14 @@ inspect( sessionId: SessionId, signal?: AbortSignal, ): Promise<SessionInspectio
 @Remote('list') async list(_request: SessionListRequest, signal: AbortSignal): Promise<SessionListValue>
 
 /**
- * Search visible Session content without resuming an Agent.
+ * Search visible Session content without resuming an Agent. A non-owner
+ * receives only the hits whose Session `allows()` admits; `hasMore`
+ * describes the bounded result before that filtering.
  * @param request - literal message-content query.
  * @param signal - cancellation for list and search reads.
  * @returns authorized bounded Session search results.
  */
-@Remote('search') search(request: SessionSearchRequest, signal: AbortSignal): Promise<SessionSearchValue>
+@Remote('search') async search(request: SessionSearchRequest, signal: AbortSignal): Promise<SessionSearchValue>
 
 /**
  * Create one ordinary Session for a new conversation, reusing the named blank Session while it is reusable.

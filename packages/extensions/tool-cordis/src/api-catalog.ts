@@ -2032,8 +2032,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'visible Session summaries ordered by activity.',
       },
       {
-        signature: '@Remote(\'search\') search(request: SessionSearchRequest, signal: AbortSignal): Promise<SessionSearchValue>',
-        description: 'Search visible Session content without resuming an Agent.',
+        signature: '@Remote(\'search\') async search(request: SessionSearchRequest, signal: AbortSignal): Promise<SessionSearchValue>',
+        description: 'Search visible Session content without resuming an Agent. A non-owner receives only the hits whose Session `allows()` admits; `hasMore` describes the bounded result before that filtering.',
         parameters: [{ name: 'request', description: 'literal message-content query.' }, { name: 'signal', description: 'cancellation for list and search reads.' }],
         returns: 'authorized bounded Session search results.',
       },
