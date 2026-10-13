@@ -15,6 +15,8 @@ import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-session-query'
 import { Remote, RemoteError, TypertRemoteService, principalOf } from '@deepseek-ai/dsh-typert-protocol'
 import { canonicalClientTimeZone } from '@deepseek-ai/dsh-util-time'
+import { assertNever } from '@deepseek-ai/dsh-util-values'
+import type {} from '@deepseek-ai/dsh-api-remote-access'
 import {
   ApiSessionAgentController,
   inspectApiSession,
@@ -33,6 +35,7 @@ import { ArchivedSessionGate } from './archived-session-gate.ts'
 import type {
   ModelCatalog,
   SessionWorkspacePathApplication,
+  SessionAddress,
   SessionAttachmentRequest,
   SessionAttachmentValue,
   SessionCancelRequest,
@@ -77,6 +80,16 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+/**
+ * Read the Session resource a history address names: the Session itself, or
+ * the child Session whose transcript a subagent address reads.
+ * @param request - history request carrying the durable address.
+ * @returns the Session whose access the read requires.
+ */
+function addressedSession(request: { readonly address: SessionAddress }): SessionId {
+  return request.address.kind === 'session' ? request.address.sessionId : request.address.childSessionId
+}
+
 /** Session Controller deployment policy. */
 export interface Config {
   /** Override platform desktop-opener detection. */
@@ -111,6 +124,7 @@ export class SessionController extends TypertRemoteService {
     'fileUploads',
     'fs',
     'llm',
+    'remoteAccess',
     'sessions',
     'sessionProjections',
     'sessionQuery',
@@ -142,6 +156,7 @@ export class SessionController extends TypertRemoteService {
    */
   constructor(ctx: Context, config: Config, internals: SessionControllerInternals = {}) {
     super(ctx, 'sessionController', { namespace: 'session' })
+    ctx.typert.resources.register('session', { field: 'sessionId' })
     const resolved = SessionController.Config(config)
     installModelSelectionProjection(ctx)
     this.agents = new ApiSessionAgentController(ctx)
@@ -259,7 +274,8 @@ export class SessionController extends TypertRemoteService {
    */
   @Remote('list')
   async list(_request: SessionListRequest, signal: AbortSignal): Promise<SessionListValue> {
-    return { items: await this.listState.list(signal) }
+    const items = await this.listState.list(signal)
+    return { items: items.filter(item => this.ctx.remoteAccess.allows({ kind: 'session', id: item.sessionId })) }
   }
 
   /**
@@ -502,7 +518,7 @@ export class SessionController extends TypertRemoteService {
    * @param signal - cancellation for persistence reads.
    * @returns one chronological page.
    */
-  @Remote('page')
+  @Remote({ name: 'page', resources: { session: addressedSession } })
   page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage> {
     return this.history.page(request, signal)
   }
@@ -514,7 +530,7 @@ export class SessionController extends TypertRemoteService {
    * @returns a complete opening snapshot followed by gap-free durable event
    *   frames and optional cursorless assistant-stream frames.
    */
-  @Remote({ mode: 'stream' })
+  @Remote({ mode: 'stream', resources: { session: addressedSession } })
   follow(request: SessionFollowRequest, signal: AbortSignal): AsyncIterable<SessionFollowFrame> {
     return this.history.follow(request, signal)
   }
@@ -577,8 +593,23 @@ export class SessionController extends TypertRemoteService {
    * @returns one complete baseline followed by live replacement frames.
    */
   @Remote({ mode: 'stream' })
-  control(signal: AbortSignal): AsyncIterable<SessionControlFrame> {
-    return this.controlState.control(signal)
+  async *control(signal: AbortSignal): AsyncIterable<SessionControlFrame> {
+    for await (const frame of this.controlState.control(signal)) {
+      switch (frame.type) {
+        case 'baseline': {
+          const projections = Object.fromEntries(Object.entries(frame.value.projections)
+            .filter(([sessionId]) => this.ctx.remoteAccess.allows({ kind: 'session', id: sessionId as SessionId })))
+          yield { type: 'baseline', value: { ...frame.value, projections } }
+          break
+        }
+        case 'projection':
+          if (this.ctx.remoteAccess.allows({ kind: 'session', id: frame.sessionId })) yield frame
+          break
+        /* v8 ignore next -- closed control-frame union. */
+        default:
+          assertNever(frame)
+      }
+    }
   }
 
 
