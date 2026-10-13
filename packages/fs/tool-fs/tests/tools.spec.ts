@@ -149,14 +149,14 @@ describe('current directory resolution', () => {
 
 describe('registration', () => {
   it.each([
-    { tools: ['read'] as const, sections: ['tool:read'] },
-    { tools: ['write'] as const, sections: ['tool:write'] },
-    { tools: ['edit'] as const, sections: ['tool:edit'] },
-    { tools: ['edit', 'read'] as const, sections: ['tool:edit', 'tool:read'] },
-  ])('registers only selected tools and their guidance: $tools', async ({ tools, sections }) => {
-    const { ctx } = await setup({ tools: [...tools] })
+    { config: { read: false }, tools: ['edit', 'write'], sections: ['tool:edit', 'tool:write'] },
+    { config: { write: false }, tools: ['edit', 'read'], sections: ['tool:edit', 'tool:read'] },
+    { config: { edit: false }, tools: ['read', 'write'], sections: ['tool:read', 'tool:write'] },
+    { config: { read: false, readImage: false, write: false, edit: false }, tools: [], sections: [] },
+  ])('omits disabled tools and their guidance: $config', async ({ config, tools, sections }) => {
+    const { ctx } = await setup(config)
     try {
-      expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual([...tools].sort())
+      expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(tools)
       expect((await ctx.systemPrompt.assemble()).sections.map(section => section.name)
         .filter(name => name.startsWith('tool:')).sort()).toEqual(sections)
       const excluded = ['read', 'write', 'edit'].find(name => !tools.some(tool => tool === name))!
@@ -166,22 +166,8 @@ describe('registration', () => {
     }
   })
 
-  it.each([{ tools: [] }, { tools: ['missing'] }])('rejects invalid tool selection at configuration parsing: %j', async (config) => {
+  it.each([{ read: 'false' }, { readImage: 1 }, { write: [] }, { edit: {} }])('rejects non-boolean switches at configuration parsing: %j', async (config) => {
     expect((await ToolFs.Config['~standard'].validate(config)).issues).toBeDefined()
-  })
-
-  it('rejects duplicate selection before registering tools', async () => {
-    const ctx = new Context()
-    try {
-      provideWorkingDirectoryFixture(ctx)
-      await ctx.plugin(SystemPrompt)
-      await ctx.plugin(ToolRuntime)
-      await ctx.plugin(FakeFs)
-      await expect(ctx.plugin(ToolFs, { tools: ['read', 'read'] })).rejects.toThrow('tools must contain unique names')
-      expect(ctx.tools.schemas()).toEqual([])
-    } finally {
-      await ctx.fiber.dispose()
-    }
   })
 
   it('registers read, write, and edit', async () => {

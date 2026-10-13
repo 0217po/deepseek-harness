@@ -96,7 +96,7 @@ afterEach(async () => {
 })
 
 interface SetupOptions {
-  tools?: ToolFs.Config['tools']
+  toolFs?: ToolFs.Config
   models?: LlmModelInfo[]
   resolvedModels?: LlmModelInfo[]
   attachments?: boolean
@@ -127,7 +127,7 @@ async function setup(options: SetupOptions = {}) {
       { provider: 'visual', id: 'legacy-model', name: 'Legacy' },
     ], options.resolvedModels))
   }
-  await ctx.plugin(ToolFs, options.tools === undefined ? {} : { tools: options.tools })
+  await ctx.plugin(ToolFs, options.toolFs ?? {})
   return ctx
 }
 
@@ -514,7 +514,7 @@ describe('argument and service preconditions', () => {
     expect(text(nonImage)).toContain('the .txt extension does not declare a supported image format')
   })
 
-  it.each([{}, { tools: ['read_image'] }] satisfies SetupOptions[])
+  it.each([{}, { toolFs: { read: false, write: false, edit: false } }] satisfies SetupOptions[])
   ('refuses when no attachment service is mounted: %j', async (config) => {
     await writeFile(join(dir, 'red.png'), PNG_1X1)
     const ctx = await setup({ ...config, attachments: false })
@@ -762,7 +762,7 @@ describe('image admission failures', () => {
 
 describe('registration surface', () => {
   it('registers only read_image without text guidance', async () => {
-    const ctx = await setup({ tools: ['read_image'] })
+    const ctx = await setup({ toolFs: { read: false, write: false, edit: false } })
     try {
       expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['read_image'])
       expect((await ctx.systemPrompt.assemble()).sections.some(section => section.name.startsWith('tool:'))).toBe(false)
@@ -775,8 +775,17 @@ describe('registration surface', () => {
     }
   })
 
-  it.each([{ tools: ['read_image'] }, { tools: ['read', 'read_image', 'write', 'edit'] }] as const)
-  ('withdraws and restores selected image registration with the attachment store: $tools', async ({ tools }) => {
+  it('omits read_image while an attachment store is mounted when readImage is false', async () => {
+    const ctx = await setup({ toolFs: { readImage: false } })
+    expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(['edit', 'read', 'write'])
+    expect(ctx.tools.get('read_image')).toBeUndefined()
+    expect((await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))).isError).toBe(true)
+  })
+
+  it.each([
+    { config: { read: false, write: false, edit: false }, tools: ['read_image'] },
+    { config: {}, tools: ['read', 'read_image', 'write', 'edit'] },
+  ])('withdraws and restores enabled image registration with the attachment store: $config', async ({ config, tools }) => {
     const ctx = new Context()
     try {
       provideWorkingDirectoryFixture(ctx)
@@ -784,7 +793,7 @@ describe('registration surface', () => {
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(LocalFileSystem, { cwd: dir })
       const attachment = await ctx.plugin(LocalAttachmentStore, { dshHome: home })
-      const plugin = await ctx.plugin(ToolFs, { tools: [...tools] })
+      const plugin = await ctx.plugin(ToolFs, config)
       const names = () => ctx.tools.schemas().map(tool => tool.name).sort()
       expect(names()).toEqual([...tools].sort())
       await attachment.dispose()

@@ -17,8 +17,10 @@
           - id: tool-fs
             name: '@deepseek-ai/dsh-tool-fs'
             config:
-              tools:
-                - read_image
+              read: false
+              readImage: true
+              write: false
+              edit: false
           - id: compaction
             name: cordis:group
             group: true
@@ -27,8 +29,6 @@
             config:
               - id: compaction-basic
                 name: '@deepseek-ai/dsh-compaction-basic'
-                config:
-                  auto: true
               - id: command-compact
                 name: '@deepseek-ai/dsh-command-compact'
           - id: persistent-shell

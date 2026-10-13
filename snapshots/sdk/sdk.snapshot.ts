@@ -962,6 +962,10 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(summaries[0]?.data).not.toHaveProperty('sourceCommandId')
         expect(events.filter(event => event.type === 'compaction/end')).toHaveLength(1)
         expect(events.filter(event => event.type === 'compaction/error')).toHaveLength(0)
+        const offloads = events.filter(event => event.type === 'image/offload')
+        expect(offloads).toHaveLength(1)
+        const imageSeq = events.find(event => event.type === 'tool/result')?.seq
+        expect(offloads[0]).toMatchObject({ data: { targets: [{ seq: imageSeq, imageIndexes: [0] }] } })
         const subscribed = notifications.flatMap(notification => {
           const event = notificationEvent(notification)
           return event?.type === 'compaction/summary' ? [event] : []

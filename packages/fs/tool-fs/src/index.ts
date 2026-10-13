@@ -24,8 +24,14 @@ export const inject = ['tools', 'fs', 'systemPrompt', 'workingDirectory']
 
 /** Plugin config (all optional — `Config` supplies the defaults). */
 export interface Config {
-  /** Tools to register, in canonical order; omitted means all four. Names must be unique and the list non-empty. */
-  tools?: ('read' | 'read_image' | 'write' | 'edit')[]
+  /** Register `read` and its guidance. Defaults to true. */
+  read?: boolean
+  /** Register `read_image` while an attachment store is mounted. Defaults to true. */
+  readImage?: boolean
+  /** Register `write` and its guidance. Defaults to true. */
+  write?: boolean
+  /** Register `edit` and its guidance. Defaults to true. */
+  edit?: boolean
   /** Default and maximum number of lines returned by one `read` call. */
   readLimit?: number
   /** Maximum characters returned for a single line before truncation. */
@@ -37,8 +43,10 @@ export interface Config {
 }
 
 export const Config: z<Config> = z.object({
-  tools: z.array(z.union(['read', 'read_image', 'write', 'edit'] as const)).min(1)
-    .default(['read', 'read_image', 'write', 'edit']),
+  read: z.boolean().default(true),
+  readImage: z.boolean().default(true),
+  write: z.boolean().default(true),
+  edit: z.boolean().default(true),
   readLimit: z.number().default(READ_LIMIT),
   readMaxLineLength: z.number().default(READ_MAX_LINE_LENGTH),
   readMaxBytes: z.number().default(READ_MAX_BYTES),
@@ -59,13 +67,11 @@ function assertPositiveInteger(name: string, value: number): void {
 export function apply(ctx: Context, config: Config): void {
   // schemastery (Config) has already filled every defaulted field.
   const resolved = config as ResolvedConfig
-  const tools = new Set(resolved.tools)
-  if (tools.size !== resolved.tools.length) throw new Error('tool-fs: tools must contain unique names')
   assertPositiveInteger('readLimit', resolved.readLimit)
   assertPositiveInteger('readMaxLineLength', resolved.readMaxLineLength)
   assertPositiveInteger('readMaxBytes', resolved.readMaxBytes)
   assertPositiveInteger('readStreamMinSize', resolved.readStreamMinSize)
-  if (tools.has('read')) {
+  if (resolved.read) {
     applyReadTool(ctx, {
       limit: resolved.readLimit,
       maxLineLength: resolved.readMaxLineLength,
@@ -76,7 +82,7 @@ export function apply(ctx: Context, config: Config): void {
   // read_image is composition-conditional: without a mounted attachment store
   // the deployment cannot durably commit image bytes, so the tool never
   // registers; the execute body keeps a defensive re-check for direct callers.
-  if (tools.has('read_image')) {
+  if (resolved.readImage) {
     ctx.inject(['attachments'], (imageCtx) => {
       applyReadImageTool(imageCtx)
     })
@@ -84,9 +90,9 @@ export function apply(ctx: Context, config: Config): void {
   // One escalation API shared by both mutating tools: advertisement gating,
   // per-call policy resolution, and denial-marker mapping, all keyed off whether
   // the mounted ctx.fs confines (ctx.fs.sandboxMode).
-  if (tools.has('write') || tools.has('edit')) {
+  if (resolved.write || resolved.edit) {
     const sandbox = new FsSandboxController(ctx)
-    if (tools.has('write')) applyWriteTool(ctx, sandbox)
-    if (tools.has('edit')) applyEditTool(ctx, sandbox)
+    if (resolved.write) applyWriteTool(ctx, sandbox)
+    if (resolved.edit) applyEditTool(ctx, sandbox)
   }
 }

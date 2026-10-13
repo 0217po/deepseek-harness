@@ -44,8 +44,10 @@
     - id: tool-fs
       name: '@deepseek-ai/dsh-tool-fs'
       config:
-        tools:
-          - read_image
+        read: false
+        readImage: true
+        write: false
+        edit: false
 
     - id: working-directory
       name: '@deepseek-ai/dsh-working-directory'
@@ -61,8 +63,9 @@
 
     - id: compaction-basic
       name: '@deepseek-ai/dsh-compaction-basic'
-      config:
-        auto: true
+
+    - id: image-offload
+      name: '@deepseek-ai/dsh-compaction-image-offload'
 
     - id: sandbox-policy
       name: '@deepseek-ai/dsh-sandbox-policy'

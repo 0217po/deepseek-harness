@@ -202,11 +202,12 @@ describe('Python SDK dsh profile keyless smoke', () => {
   }, 40_000)
 
   it.each([
-    { label: 'boots the standalone minimal profile through its generated manifest', editorEnabled: false, imageEnabled: false, optOut: false },
-    { label: 'executes the documented editor opt-in patch with sdk-minimal', editorEnabled: true, imageEnabled: false, optOut: false },
-    { label: 'sends a read_image result to the model with sdk-minimal', editorEnabled: false, imageEnabled: true, optOut: false },
-    { label: 'retains the previous tools through the documented opt-out patch', editorEnabled: false, imageEnabled: false, optOut: true },
-  ])('$label', async ({ editorEnabled, imageEnabled, optOut }) => {
+    { label: 'boots the standalone minimal profile through its generated manifest', editorEnabled: false, imageEnabled: false, optOut: false, offloadEnabled: false },
+    { label: 'executes the documented editor opt-in patch with sdk-minimal', editorEnabled: true, imageEnabled: false, optOut: false, offloadEnabled: false },
+    { label: 'sends a read_image result to the model with sdk-minimal', editorEnabled: false, imageEnabled: true, optOut: false, offloadEnabled: false },
+    { label: 'offloads an over-budget image and continues with sdk-minimal', editorEnabled: false, imageEnabled: true, optOut: false, offloadEnabled: true },
+    { label: 'retains the previous tools through the documented opt-out patch', editorEnabled: false, imageEnabled: false, optOut: true, offloadEnabled: false },
+  ])('$label', async ({ editorEnabled, imageEnabled, optOut, offloadEnabled }) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-python-sdk-minimal-'))
     onTestFinished(() => rm(root, { recursive: true, force: true }))
     const editorPatch = join(root, 'editor.patch.yml')
@@ -223,6 +224,14 @@ describe('Python SDK dsh profile keyless smoke', () => {
       expect(yaml).toBeDefined()
       await writeFile(editorPatch, yaml!)
     }
+    if (offloadEnabled) await writeFile(editorPatch, [
+      '- id: llm-deepseek',
+      '  config:',
+      '    apiKeyEnv: DEEPSEEK_API_KEY',
+      '    maxRequestFilesBytes: 1',
+      '    imageOffloadByteQuantum: 1',
+      '',
+    ].join('\n'))
     const editorFile = join(root, 'editor.txt')
     if (imageEnabled) await writeFile(join(root, 'red.png'), Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', 'base64',
@@ -268,7 +277,7 @@ describe('Python SDK dsh profile keyless smoke', () => {
       ...launch.args,
       '--profile',
       'sdk-minimal',
-      ...(editorEnabled || optOut ? ['--patch', editorPatch] : []),
+      ...(editorEnabled || optOut || offloadEnabled ? ['--patch', editorPatch] : []),
     ], {
       cwd: repoRoot,
       env: {
@@ -307,9 +316,11 @@ describe('Python SDK dsh profile keyless smoke', () => {
         method: 'session/prompt',
         params: { sessionId: 'minimal', contentBlocks: [{ type: 'text', text: 'inspect tools' }] },
       })}\n`)
+      const offloads: Record<string, unknown>[] = []
       const turnEnd = await waitForLine(lines, (value) => {
         const params = value.params as Record<string, unknown> | undefined
         const event = params?.event as Record<string, unknown> | undefined
+        if (params?.sessionId === 'minimal' && event?.type === 'image/offload') offloads.push(event)
         return params?.sessionId === 'minimal' && event?.type === 'turn/end'
       }, () => stderr)
       expect(turnEnd, `${JSON.stringify(turnEnd)}\n${stderr}`).toMatchObject({
@@ -337,9 +348,17 @@ describe('Python SDK dsh profile keyless smoke', () => {
         }[]
         const imageResult = messages.flatMap(message => message.content)
           .find(block => block.type === 'tool_result' && block.tool_use_id === 'minimal-image-read')
-        expect(imageResult?.content).toEqual(expect.arrayContaining([
-          { type: 'image', source: { type: 'file', file_id: 'file-minimal-image' } },
-        ]))
+        if (offloadEnabled) {
+          expect(offloads).toHaveLength(1)
+          expect(offloads[0]).toMatchObject({ data: { targets: [{ imageIndexes: [0] }] } })
+          expect(imageResult?.content?.some(block => block.type === 'image')).toBe(false)
+          expect(JSON.stringify(imageResult?.content)).toContain('red.png')
+        } else {
+          expect(offloads).toEqual([])
+          expect(imageResult?.content).toEqual(expect.arrayContaining([
+            { type: 'image', source: { type: 'file', file_id: 'file-minimal-image' } },
+          ]))
+        }
         const stored = await readdir(join(root, '.dsh', 'attachments', 'v1', 'objects'), { recursive: true })
         expect(stored.some(file => /[a-f0-9]{64}$/u.test(file))).toBe(true)
       }

@@ -434,7 +434,6 @@ describe('the shipped Web composition', () => {
       expect(toolNames(ctx, handle.agent)).toEqual(['bash', 'read_image', 'working_directory'])
     } finally {
       await handle.dispose()
-      unregister()
     }
   })
 
@@ -463,7 +462,6 @@ describe('the shipped Web composition', () => {
       expect(adapter.requests.some(request => request.purpose === 'compaction')).toBe(true)
     } finally {
       await handle.dispose()
-      unregister()
     }
   })
 

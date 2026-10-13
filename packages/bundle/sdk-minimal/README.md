@@ -82,11 +82,11 @@ The system prompt is `DSH_SYSTEM_PROMPT` or `You are a helpful software engineer
 
 #### Token effect
 
-By default, one stable persona, three tool schemas, and user context for the initial directory and subsequent changes. Configured MCP servers add their tools, shared resource tools, and available server instructions. Images consume model input tokens. Automatic compaction sends an additional summarization request when context pressure reaches the configured threshold and replaces older model-visible history with its summary; the durable JSONL log retains those events.
+By default, one stable persona, three tool schemas, and user context for the initial directory and subsequent changes. Configured MCP servers add their tools, shared resource tools, and available server instructions. Images consume model input tokens. When images exceed the route budget, [image offload](../../compaction/compaction-image-offload/README.md) permanently replaces older image occurrences with attachment/path placeholders and retries the request or compaction summary. Automatic compaction sends an additional summarization request when context pressure reaches the configured threshold and replaces older model-visible history with its summary; the durable JSONL log retains those events.
 
 #### KV Cache effect
 
-Stable for a fixed persona, platform, provider, model, and bundle patch stack. Compaction replaces part of the request history and can reduce cache reuse. Profile changes take effect on the next process.
+Stable for a fixed persona, platform, provider, model, and bundle patch stack. Compaction replaces part of the request history and can reduce cache reuse. Image offload also ends cache reuse at the first changed image. Profile changes take effect on the next process.
 
 ## Known Limitations and Deferred Work
 
