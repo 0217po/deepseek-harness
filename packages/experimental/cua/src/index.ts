@@ -102,7 +102,7 @@ interface CuaExecution extends ToolExecution {
 }
 
 
-type ScreenshotValue = z.infer<typeof ScreenshotResult> & { attachment: ImageAttachmentRef } & JsonValue
+type ScreenshotValue = z.infer<typeof ScreenshotResult> & { attachment: { [K in keyof ImageAttachmentRef]: ImageAttachmentRef[K] } }
 
 /** Native values stay available to programs; only metadata and the stored image enter model content. */
 function renderResult(args: unknown, value: JsonValue): ContentBlock[] {
