@@ -1,5 +1,6 @@
 /** Agent-owned mapping from observed screenshot pixels or integer ratios to native window points. */
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import { z } from 'zod'
 import type { CuaAppHandle, CuaOperation, CuaWindowInfo } from './types.ts'
 import { NativeError } from './native-client.ts'
 
@@ -51,7 +52,7 @@ export class CuaCoordinates {
    */
   parameters(request: CuaOperation): Record<string, JsonValue> {
     const params = request.params
-    const native: Record<string, JsonValue> = { ...params }
+    const native = z.record(z.string(), z.json()).parse(params)
     if (!('x' in params) && !('fromX' in params)) return native
     const frame = this.applications.get(params.appHandle as CuaAppHandle)?.get(params.windowId)
     if (!frame || frame.width <= 0 || frame.height <= 0) throw new NativeError('STALE_SNAPSHOT', 'Read fresh window state before coordinate input')
