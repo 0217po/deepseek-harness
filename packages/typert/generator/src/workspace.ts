@@ -70,15 +70,16 @@ export class WorkspaceTypertGenerator {
 
   /**
    * Generate all discovered contributors, or an explicit package subset.
-   * @param packages - optional exact package names for a focused pass.
+   * @param packages - optional exact package names to emit; every pass includes the same face-wide declaration merges.
    * @param faces - optional independent program faces to analyze.
    * @returns one artifact per package face.
    */
   generate(packages?: readonly string[], faces?: readonly TypertFace[]): WorkspaceEmitResult[] {
-    const selected = packages ?? this.discover(faces).map(candidate => candidate.package)
+    const contributors = this.discover(faces).map(candidate => candidate.package)
+    const selected = new Set(packages ?? contributors)
     const workspace = new WorkspaceAnalyzer({
       root: this.root,
-      packages: selected,
+      packages: contributors,
       caches: this.caches,
       ...(faces === undefined ? {} : { faces }),
       ...(this.options.checkDiagnostics === undefined ? {} : { checkDiagnostics: this.options.checkDiagnostics }),
@@ -88,6 +89,7 @@ export class WorkspaceTypertGenerator {
     for (const face of workspace.faces) {
       const emitter = new FaceModelEmitter(face)
       for (const packageModel of face.packages) {
+        if (!selected.has(packageModel.name)) continue
         const artifact = {
           ...emitter.emit(packageModel.name),
           packageRoot: packageModel.root,
