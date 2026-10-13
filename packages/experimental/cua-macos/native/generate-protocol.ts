@@ -25,13 +25,23 @@ export function renderNativeProtocol(): { json: string; swift: string } {
   for (const schema of schemas) {
     const method = object(schema.properties?.method).const
     if (typeof method !== 'string') throw new Error('CUA method must be one string literal')
-    const params = object(schema.properties?.params)
+    const nativeVariants = variants(object(schema.properties?.params)).filter((variant) => {
+      const relative = variant.properties?.relative
+      return relative === undefined || typeof relative === 'boolean' || relative.const !== true
+    })
+    const params = nativeVariants.length === 1 ? object(nativeVariants[0]) : { anyOf: nativeVariants }
+    schema.properties = { ...schema.properties, params }
     const extension = resources.get(method)
-    if (extension !== undefined) {
-      const extra = z.toJSONSchema(extension)
-      if (params.type !== 'object') throw new Error(`Host fields require object parameters: ${method}`)
-      params.properties = { ...params.properties, ...extra.properties }
-      params.required = [...new Set([...(params.required ?? []), ...(extra.required ?? [])])]
+    for (const variant of variants(params)) {
+      // The Host resolves image pixels and relative coordinates before native dispatch.
+      if (variant.properties) delete variant.properties.relative
+      if (variant.required) variant.required = variant.required.filter(name => name !== 'relative')
+      if (extension !== undefined) {
+        const extra = z.toJSONSchema(extension)
+        if (variant.type !== 'object') throw new Error(`Host fields require object parameters: ${method}`)
+        variant.properties = { ...variant.properties, ...extra.properties }
+        variant.required = [...new Set([...(variant.required ?? []), ...(extra.required ?? [])])]
+      }
     }
     schema.properties = { id: { type: 'string' }, ...schema.properties }
     schema.required = ['id', 'method', 'params']

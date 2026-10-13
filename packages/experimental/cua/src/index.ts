@@ -1,5 +1,6 @@
 /** Shared CUA tool execution, application consent, and object-runtime integration. */
 import { join } from 'node:path'
+import { Buffer } from 'node:buffer'
 import { tmpdir } from 'node:os'
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import type { Context, Volatile } from '@deepseek-ai/cordis'
@@ -7,7 +8,7 @@ import Schema from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/brand'
 import { admitEncodedImages } from '@deepseek-ai/dsh-attachment'
-import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
@@ -15,7 +16,8 @@ import { NativeClient, NativeError, type NativeClientConfig, type NativeChannelF
 import { ApplicationAuthorizationResult, ApplicationAccess } from './application-access.ts'
 import type { CuaApplicationGrant, CuaApplicationId } from './application-types.ts'
 import type { CuaAppHandle, CuaOperation } from './types.ts'
-import { AppResult, Request, ScreenshotResult, StateResult } from './protocol.ts'
+import { AppResult, NativeScreenshotResult, Request, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
+import { CuaCoordinates } from './coordinates.ts'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-subprocess'
@@ -99,6 +101,7 @@ function executionAgent(execution: Readonly<ToolExecution>): Agent {
 interface CuaExecution extends ToolExecution {
   agent: Agent
   nativeClient: NativeClient
+  coordinates: CuaCoordinates
 }
 
 
@@ -112,7 +115,7 @@ function renderResult(args: unknown, value: JsonValue): ContentBlock[] {
 }
 
 /** Resolve the exact calling model and attachment store before requesting a screenshot. */
-async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>): Promise<AttachmentStore> {
+async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>) {
   const attachments = ctx.get('attachments')
   if (!attachments) throw new Error('CUA screenshots require an attachment store')
   const agent = execution.agent
@@ -124,7 +127,7 @@ async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>):
   const info = await llm.resolveModelInfo(provider, model, execution.signal)
   execution.signal.throwIfAborted()
   if (!info.inputModalities?.includes('image')) throw new Error(`CUA screenshots require model "${model}" to declare image input`)
-  return attachments
+  return { attachments, target: (image: ImageAttachmentRef) => llm.imageRequestTarget(provider, model, image) }
 }
 
 /** Prepared platform executable, transport, and platform-specific operating instructions. */
@@ -166,7 +169,12 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
   const clients = new Map<Agent, NativeClient>()
   const lifetime = new AbortController()
   const pending = new Map<Promise<unknown>, Agent>()
-  const ownerCleanups = new Map<Agent, { close: () => Promise<void>; release: () => Promise<void>; signal: AbortSignal }>()
+  const ownerCleanups = new Map<Agent, {
+    close: () => Promise<void>
+    release: () => Promise<void>
+    signal: AbortSignal
+    coordinates: CuaCoordinates
+  }>()
   const closedOwners = new WeakSet<Agent>()
   function ownerFor(agent: Agent) {
     if (closedOwners.has(agent) || ctx.agents.get(agent.id) !== agent) throw new Error('dsh-cua agent has been disposed')
@@ -189,7 +197,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       })
     }
     const release = agent.ctx.effect(() => close, 'dsh-cua.agent')
-    const owner = { close, release, signal: controller.signal }
+    const owner = { close, release, signal: controller.signal, coordinates: new CuaCoordinates() }
     ownerCleanups.set(agent, owner)
     return owner
   }
@@ -206,8 +214,9 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       for (const result of [...await permissions, ...results, ...releases]) if (result.status === 'rejected') errors.push(result.reason)
       if (errors.length > 0) throw new AggregateError(errors, 'dsh-cua helper cleanup failed')
     }
-    const callNative = async ({ method, params: parsedParams }: CuaOperation, execution: Readonly<CuaExecution>) => {
-      const params = z.record(z.string(), z.json()).parse(parsedParams)
+    const callNative = async (request: CuaOperation, execution: Readonly<CuaExecution>) => {
+      const { method, params: parsedParams } = request
+      const params = execution.coordinates.parameters(request)
       const agent = execution.agent
       const signal = execution.signal
       signal.throwIfAborted()
@@ -222,12 +231,21 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
               : params
       const requestNative = () => client.request(method, nativeParams, signal, execution.callId)
       if (method === 'screenshot') {
-        const attachments = await screenshotStore(ctx, execution)
-        const screenshot = ScreenshotResult.parse(await requestNative())
+        const { attachments, target } = await screenshotStore(ctx, execution)
+        const screenshot = NativeScreenshotResult.parse(await requestNative())
         signal.throwIfAborted()
         const refs = await admitEncodedImages(attachments, [{ data: screenshot.data, mediaType: screenshot.mimeType }])
         signal.throwIfAborted()
-        return { ...screenshot, attachment: refs[0] as ImageAttachmentRef }
+        const attachment = refs[0] as ImageAttachmentRef
+        const original = attachment.originalDimensions ?? attachment
+        if (original.width !== screenshot.pixelWidth || original.height !== screenshot.pixelHeight) {
+          throw new NativeError('NATIVE_PROTOCOL', 'Native screenshot dimensions disagree with its decoded image')
+        }
+        const image = await attachments.readImageRequest(attachment, target(attachment), signal)
+        signal.throwIfAborted()
+        execution.coordinates.screenshot(parsedParams.appHandle as CuaAppHandle, screenshot.windowId, screenshot.bounds, image)
+        return { ...screenshot, mimeType: image.mediaType, data: Buffer.from(image.data).toString('base64'),
+          pixelWidth: image.width, pixelHeight: image.height, coordinateSpace: 'screenshot-pixels', attachment }
       }
       const result = method === 'paste'
         ? await withFileLock(join(tmpdir(), 'dsh-cua-system-clipboard'), requestNative, { waitMs: config.timeoutMs, signal })
@@ -245,7 +263,14 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         return selected
       }
       signal.throwIfAborted()
-      return method === 'getState' ? StateResult.parse(result) : result
+      if (method === 'getCapabilities') return { ...z.record(z.string(), z.json()).parse(result), coordinateSpace: 'screenshot-pixels' }
+      if (method === 'getState') {
+        const state = StateResult.parse(result)
+        execution.coordinates.observe(state.appHandle, state.windows)
+        return state
+      }
+      if (method === 'listWindows') execution.coordinates.observe(parsedParams.appHandle as CuaAppHandle, WindowsResult.parse(result))
+      return result
     }
     yield ctx.tools.register({
       name: 'cua', description: backend.description,
@@ -270,10 +295,11 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
           if (!client || (client.disposed && !('appHandle' in request.params))) {
             client = new NativeClient(ctx, native, backend.createChannel, (message) => { ctx.logger.debug(message) })
             clients.set(agent, client)
+            owner.coordinates = new CuaCoordinates()
           }
           const nativeClient = client
           const dispatch = async (signal: AbortSignal) => {
-            const scoped = { ...execution, agent, signal, nativeClient }
+            const scoped = { ...execution, agent, signal, nativeClient, coordinates: owner.coordinates }
             const result = await callNative(request, scoped)
             signal.throwIfAborted()
             return result

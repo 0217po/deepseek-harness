@@ -17,6 +17,7 @@ import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepse
 import { resolveAdapterOptions } from '@deepseek-ai/dsh-llm-deepseek'
 import { inlineImages, prepareImages } from '@deepseek-ai/dsh-llm-deepseek/src/images.ts'
 import { serialize } from '@deepseek-ai/dsh-llm-deepseek/src/serialize.ts'
+import { resolveRequestImageTarget } from '@deepseek-ai/dsh-llm-deepseek/src/request-pricing.ts'
 import NodePtcRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
@@ -55,7 +56,6 @@ it.skipIf(process.platform === 'win32')('delivers a valid PNG larger than 4 MiB 
   expect(decodedSource.data.subarray(0, 3)).toEqual(Buffer.from([0x44, 0x88, 0xcc]))
   const sourcePath = join(root, 'generated-screenshot.png')
   await writeFile(sourcePath, source)
-  const encodedLength = source.toString('base64').length
 
   const helperPath = await installNativeFixture(root)
   fixture.close = await startFixtureHost(helperPath)
@@ -92,6 +92,12 @@ it.skipIf(process.platform === 'win32')('delivers a valid PNG larger than 4 MiB 
   class VisionModel extends LlmAdapter {
     readonly requests: GenerateOptions[] = []
     readonly requestImages: Buffer[] = []
+
+    override imageRequestTarget(_provider: string, _model: string, image: ImageAttachmentRef) {
+      const entry = connection.models.find(model => model.id === MODEL)
+      if (!entry) throw new Error('Missing image fixture route')
+      return resolveRequestImageTarget(entry, image)
+    }
 
     override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
       return Promise.resolve({ provider, id: model, name: model, inputModalities: ['text', 'image'] })
@@ -150,7 +156,8 @@ it.skipIf(process.platform === 'win32')('delivers a valid PNG larger than 4 MiB 
   const result = messages.find(message => message.role === 'tool' && message.toolCallId === 'large-image-ptc')
   if (result?.role !== 'tool') throw new Error('The PTC result was not recorded')
   expect(result.isError, JSON.stringify(result.content)).toBe(false)
-  expect(result.content.filter(block => block.type === 'text').map(block => block.text).join('\n')).toContain(String(encodedLength))
+  expect(result.content.filter(block => block.type === 'text').map(block => block.text).join('\n'))
+    .toContain(String(model.requestImages[0]?.toString('base64').length))
   const nextImages = model.requests[1]?.messages.flatMap(message => message.content).filter(block => block.type === 'image')
   expect(nextImages).toHaveLength(1)
   const image = nextImages?.[0]

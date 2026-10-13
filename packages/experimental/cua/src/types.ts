@@ -2,7 +2,7 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { z } from 'zod'
-import type { ActionResult, CapabilitiesResult, FoundAppsResult, Request, ShowResult, WindowsResult } from './protocol.ts'
+import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ShowResult, WindowsResult } from './protocol.ts'
 
 /** Helper-issued application selection; public app objects bind it to one process lifetime. */
 export type CuaAppHandle = Branded<'CuaAppHandle'>
@@ -49,6 +49,13 @@ export type CuaBounds = CuaWindowInfo['bounds']
 export type CuaWindowInfo = z.output<typeof WindowsResult>[number]
 /** Successful input dispatch; application outcome still requires observation. */
 export type CuaActionResult = z.output<typeof ActionResult>
+/** Hover dispatch and the effect on the user's system pointer. */
+export type CuaHoverResult = z.output<typeof HoverResult>
+/** Select screenshot pixels by default or integer thousandths when explicitly requested. */
+export interface CuaCoordinateOptions {
+  /** True uses integers from 0 to 1000; omitted or false uses the latest screenshot's pixels. Applies only to coordinate targets. */
+  relative?: boolean
+}
 /** Restoration dispatch; foregroundChanged compares the front app and top window before and after the request. */
 export type CuaShowResult = z.output<typeof ShowResult>
 /** Modifiers attached to a window-directed pointer gesture. */
@@ -56,15 +63,15 @@ export type CuaPointerModifier = NonNullable<CuaParameters<'click'>['modifiers']
 /** Buttons supported by window-directed clicks and drags. */
 export type CuaMouseButton = NonNullable<CuaParameters<'click'>['mouseButton']>
 /** Left clicks support one or two presses; right and middle clicks support one. */
-export type CuaClickOptions = Pick<CuaParameters<'click'>, 'mouseButton' | 'clickCount' | 'modifiers'>
+export type CuaClickOptions = Pick<CuaParameters<'click'>, 'mouseButton' | 'clickCount' | 'modifiers'> & CuaCoordinateOptions
 /** One same-window drag; omitted button is left and omitted modifiers are empty. */
-export type CuaDragOptions = Pick<CuaParameters<'drag'>, 'mouseButton' | 'modifiers'>
+export type CuaDragOptions = Pick<CuaParameters<'drag'>, 'mouseButton' | 'modifiers'> & CuaCoordinateOptions
 /** Clipboard representation delivered through the application's Paste command. */
 export type CuaPasteOptions = Pick<CuaParameters<'paste'>, 'format'>
 /** Adjacent literal context disambiguates repeated text; cursor modes collapse the matched range. */
 export type CuaSelectTextOptions = Pick<CuaParameters<'selectText'>, 'prefix' | 'suffix' | 'selectionType'>
 /** Positive deltas reveal content above/left; each axis is an integer from -10 to 10. */
-export type CuaScrollOptions = Pick<CuaParameters<'scroll'>, 'x' | 'y' | 'deltaLinesX' | 'deltaLinesY'>
+export type CuaScrollOptions = Pick<CuaParameters<'scroll'>, 'x' | 'y' | 'deltaLinesX' | 'deltaLinesY'> & CuaCoordinateOptions
 /** An observed AX tree and independently captured PNG; capture is not atomic. */
 export interface CuaObservation { state: string; screenshot: Uint8Array }
 /**
@@ -88,7 +95,7 @@ export interface CuaSurface {
   /**
    * Capture the selected window.
    * @param options - emission options.
-   * @returns PNG bytes, whose pixel dimensions may differ from window points.
+   * @returns encoded image bytes matching the model-request screenshot and its absolute pixel coordinates.
    */
   getScreenshot(options?: CuaObservationOptions): Promise<Uint8Array>
   /**
@@ -98,18 +105,19 @@ export interface CuaSurface {
    */
   getAXStateAndScreenshot(options?: CuaAxOptions): Promise<CuaObservation>
   /**
-   * Move the visible system cursor to an observed element center or window point without pressing a button.
-   * Requires the selected app to be foreground and the target point unobscured; never activates or raises it.
+   * Reveal advertised AX alternate UI, otherwise move the system cursor without pressing a button.
+   * The system-pointer route requires the app to be foreground and the point unobscured; never activates or raises it.
    * Returning and subsequent observations do not restore the previous pointer position.
    * Other input and application changes can interrupt hover; observe before continuing.
-   * @param target - Current AX index, including disabled controls, or window-local [x,y].
-   * @returns Dispatch evidence; the application's hover delay and resulting UI are not verified.
+   * @param target - current AX index or screenshot-local [x,y].
+   * @param options - coordinate mode; applies only to [x,y].
+   * @returns dispatch evidence and the selected route; observe the resulting UI after its hover delay.
    */
-  hover(target: number | readonly [number, number]): Promise<CuaActionResult>
+  hover(target: number | readonly [number, number], options?: CuaCoordinateOptions): Promise<CuaHoverResult>
   /**
-   * Click a current AX index or window point.
+   * Click a current AX index or screenshot-local point.
    * @param target - index or [x,y].
-   * @param options - button and click count.
+   * @param options - button, click count, modifiers and coordinate mode.
    * @returns dispatch evidence.
    */
   click(target: number | readonly [number, number], options?: CuaClickOptions): Promise<CuaActionResult>
@@ -136,16 +144,16 @@ export interface CuaSurface {
    */
   performSecondaryAction(index: number, action: string): Promise<CuaActionResult>
   /**
-   * Scroll at a window point.
-   * @param options - point and line deltas; at least one delta must be nonzero.
+   * Scroll at a screenshot-local point or integer ratio.
+   * @param options - point, coordinate mode and line deltas; at least one delta must be nonzero.
    * @returns dispatch evidence.
    */
   scroll(options: CuaScrollOptions): Promise<CuaActionResult>
   /**
    * Drag between points in one window while holding the selected button and modifiers.
-   * @param from - starting window point.
-   * @param to - destination window point.
-   * @param options - Button and modifiers for the complete gesture.
+   * @param from - starting screenshot-local point or integer ratio.
+   * @param to - destination in the same coordinate mode.
+   * @param options - button, modifiers and coordinate mode for the complete gesture.
    * @returns dispatch evidence.
    */
   drag(from: readonly [number, number], to: readonly [number, number], options?: CuaDragOptions): Promise<CuaActionResult>

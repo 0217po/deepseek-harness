@@ -311,7 +311,7 @@
           "type": "tool-call",
           "id": "cua-native-10",
           "name": "cua",
-          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":8,\"snapshotId\":\"fixture-snapshot-3\",\"x\":20,\"y\":20}}"
+          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":8,\"snapshotId\":\"fixture-snapshot-3\",\"x\":0,\"y\":0}}"
         }
       },
       {
@@ -575,7 +575,7 @@
           "type": "tool-call",
           "id": "cua-native-other-window",
           "name": "cua",
-          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":8,\"snapshotId\":\"fixture-snapshot-4\",\"x\":20,\"y\":20}}"
+          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":8,\"snapshotId\":\"fixture-snapshot-4\",\"x\":0,\"y\":0}}"
         }
       },
       {
@@ -773,7 +773,7 @@
           "type": "tool-call",
           "id": "cua-native-geometry-click",
           "name": "cua",
-          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":9,\"snapshotId\":\"fixture-snapshot-7\",\"x\":20,\"y\":20}}"
+          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":9,\"snapshotId\":\"fixture-snapshot-7\",\"x\":20,\"y\":20,\"relative\":true}}"
         }
       },
       {
@@ -806,7 +806,7 @@
           "type": "tool-call",
           "id": "cua-native-geometry-scroll",
           "name": "cua",
-          "arguments": "{\"method\":\"scroll\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":9,\"x\":20,\"y\":20,\"deltaLinesX\":0,\"deltaLinesY\":-1}}"
+          "arguments": "{\"method\":\"scroll\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":9,\"x\":20,\"y\":20,\"deltaLinesX\":0,\"deltaLinesY\":-1,\"relative\":true}}"
         }
       },
       {
@@ -839,7 +839,7 @@
           "type": "tool-call",
           "id": "cua-native-geometry-drag",
           "name": "cua",
-          "arguments": "{\"method\":\"drag\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":9,\"fromX\":20,\"fromY\":20,\"toX\":30,\"toY\":30}}"
+          "arguments": "{\"method\":\"drag\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":9,\"fromX\":20,\"fromY\":20,\"toX\":30,\"toY\":30,\"relative\":true}}"
         }
       },
       {
@@ -1202,7 +1202,7 @@
           "type": "tool-call",
           "id": "cua-hover-popup",
           "name": "cua",
-          "arguments": "{\"method\":\"hover\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"x\":20,\"y\":40}}"
+          "arguments": "{\"method\":\"hover\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"x\":100,\"y\":200,\"relative\":true}}"
         }
       },
       {
@@ -1235,7 +1235,7 @@
           "type": "tool-call",
           "id": "cua-hover-click",
           "name": "cua",
-          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"snapshotId\":\"fixture-snapshot-10\",\"x\":20,\"y\":40}}"
+          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"snapshotId\":\"fixture-snapshot-10\",\"x\":100,\"y\":200,\"relative\":true}}"
         }
       },
       {
@@ -1268,7 +1268,7 @@
           "type": "tool-call",
           "id": "cua-hover-exit",
           "name": "cua",
-          "arguments": "{\"method\":\"hover\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"x\":0,\"y\":40}}"
+          "arguments": "{\"method\":\"hover\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"x\":0,\"y\":200,\"relative\":true}}"
         }
       },
       {

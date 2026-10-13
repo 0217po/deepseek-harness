@@ -52,7 +52,7 @@ it('returns screenshot bytes with one image-bearing tool call and no image text 
     if (operation.method === 'getApp') return selected
     if (operation.method === 'getState') return snapshot
     return {
-      mimeType: 'image/png', data: PNG, pixelWidth: 1, pixelHeight: 1, windowId: 23, bounds, coordinateSpace: 'window-points',
+      mimeType: 'image/png', data: PNG, pixelWidth: 1, pixelHeight: 1, windowId: 23, bounds, coordinateSpace: 'screenshot-pixels',
     }
   })
   const text = vi.fn()

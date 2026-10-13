@@ -23,6 +23,8 @@ import { LlmAdapter, ToolCallId, type LlmResolvedModelInfo, type StreamChunk } f
 import { SessionId } from '@deepseek-ai/dsh-session'
 import Subprocess from '@deepseek-ai/dsh-subprocess'
 import { expect, it, onTestFinished, vi } from 'vitest'
+import sharp from 'sharp'
+import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import * as NativeProvider from '../src/index.ts'
 import type { NativeClient } from '@deepseek-ai/dsh-cua/native-client'
 import type { NativeBuildSpec } from '../src/native-build.ts'
@@ -370,12 +372,55 @@ it('preserves screenshot coordinates and image attachments on every host', async
   expect(result.isError).toBe(false)
   const text = result.content.find(block => block.type === 'text')
   if (text?.type !== 'text') throw new Error('Screenshot coordinates were not returned')
-  expect(JSON.parse(text.text)).toEqual(metadata)
+  expect(JSON.parse(text.text)).toEqual({ ...metadata, coordinateSpace: 'screenshot-pixels' })
   const image = result.content.find(block => block.type === 'image')
   if (image?.type !== 'image') throw new Error('Screenshot attachment was not admitted')
   const stored = await f.ctx.attachments.readImage(image.attachment)
   expect(Buffer.from(stored.data).toString('base64')).toBe(data)
-  expect(result.value).toMatchObject({ ...metadata, mimeType: 'image/png', data })
+  expect(result.value).toMatchObject({ ...metadata, coordinateSpace: 'screenshot-pixels', mimeType: 'image/png', data })
+})
+
+it('maps the actual model-request image pixels back to native points without storing the screenshot twice', async () => {
+  const f = await setup({ provider: 'image-fixture', model: 'vision' })
+  await selectApplication(f)
+  class ResizingAdapter extends ImageAdapter {
+    override imageRequestTarget(_provider: string, _model: string, _image: ImageAttachmentRef) {
+      return { width: 10, height: 5, maxBytes: 100_000 }
+    }
+  }
+  f.ctx.llm.registerAdapter(['image-fixture'], new ResizingAdapter())
+  const root = await mkdtemp(join(tmpdir(), 'dsh-cua-coordinate-image-'))
+  onTestFinished(async () => { await f.ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
+  await f.ctx.plugin(LocalAttachmentStore, { dshHome: root })
+  const save = vi.spyOn(f.ctx.attachments, 'saveImages')
+  const image = await sharp({ create: { width: 40, height: 20, channels: 3, background: '#4488cc' } }).png().toBuffer()
+  native.request.mockResolvedValue({ ...imageMetadata, bounds: { x: 10, y: 20, width: 400, height: 200 },
+    pixelWidth: 40, pixelHeight: 20, mimeType: 'image/png', data: image.toString('base64') })
+  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+  expect(result.isError, JSON.stringify(result.content)).toBe(false)
+  expect(result.value).toMatchObject({ pixelWidth: 10, pixelHeight: 5, coordinateSpace: 'screenshot-pixels' })
+  const value = result.value as { data: string }
+  expect(await sharp(Buffer.from(value.data, 'base64')).metadata()).toMatchObject({ width: 10, height: 5 })
+  expect(save).toHaveBeenCalledTimes(1)
+  native.request.mockResolvedValue({ dispatched: true, verified: false })
+  expect((await f.execute('click', { appHandle: 'app-one', windowId: 7, x: 5, y: 2.5 })).isError).toBe(false)
+  expect(native.request).toHaveBeenLastCalledWith('click', { appHandle: 'app-one', windowId: 7, x: 200, y: 100 }, expect.any(AbortSignal), expect.any(String))
+  expect((await f.execute('click', { appHandle: 'app-one', windowId: 7, x: 500, y: 500, relative: true })).isError).toBe(false)
+  expect(native.request).toHaveBeenLastCalledWith('click', { appHandle: 'app-one', windowId: 7, x: 200, y: 100 }, expect.any(AbortSignal), expect.any(String))
+})
+
+it.each([{ pixelWidth: 2 }, { pixelHeight: 2 }])('rejects native screenshot dimensions that disagree with decoded bytes: %j', async (invalid) => {
+  const f = await setup({ provider: 'image-fixture', model: 'vision' })
+  await selectApplication(f)
+  f.ctx.llm.registerAdapter(['image-fixture'], new ImageAdapter())
+  const root = await mkdtemp(join(tmpdir(), 'dsh-cua-image-metadata-'))
+  onTestFinished(async () => { await f.ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
+  await f.ctx.plugin(LocalAttachmentStore, { dshHome: root })
+  native.request.mockResolvedValue({ ...imageMetadata, ...invalid, mimeType: 'image/png', data: imageData })
+  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+  expect(result.isError).toBe(true)
+  expect(JSON.stringify(result.content)).toContain('dimensions disagree')
+  expect(result.content.some(block => block.type === 'image')).toBe(false)
 })
 
 it('refuses screenshot capture when no attachment store is mounted', async () => {

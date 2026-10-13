@@ -1,7 +1,7 @@
 /** Object facade over logged native operations; its caller owns evaluator persistence. */
 import { Buffer } from 'node:buffer'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, Request, ScreenshotResult, ShowResult, StateResult, WindowsResult } from './protocol.ts'
+import { ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ScreenshotResult, ShowResult, StateResult, WindowsResult } from './protocol.ts'
 import type { CuaApi, CuaApp, CuaAppHandle, CuaDispatch, CuaObservationOptions, CuaObservationSink, CuaOperation, CuaSurface, CuaWindow } from './types.ts'
 export type * from './types.ts'
 
@@ -81,35 +81,33 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
         const image = ScreenshotResult.parse(await call('screenshot', { appHandle, windowId: target }))
         if (image.windowId !== target) throw new Error('Native screenshot belongs to another window')
         const bytes = Buffer.from(image.data, 'base64')
-        if (bytes.length < 24 || bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a'
-          || bytes.readUInt32BE(16) !== image.pixelWidth || bytes.readUInt32BE(20) !== image.pixelHeight) {
-          throw new Error('Native screenshot has invalid PNG dimensions')
-        }
-        const png = Uint8Array.from(bytes)
-        if (options?.emit !== false) await sink?.image(png)
-        return png
+        const screenshot = Uint8Array.from(bytes)
+        if (options?.emit !== false) await sink?.image(screenshot)
+        return screenshot
       },
       async getAXStateAndScreenshot(options) {
         const state = await result.getAXState(options)
         return { state, screenshot: await result.getScreenshot(options) }
       },
-      async hover(target) {
-        if (typeof target === 'number') return action('hover', { ...snapshotParams(), elementIndex: target })
+      async hover(target, options) {
+        const relative = options?.relative === undefined ? {} : { relative: options.relative }
+        if (typeof target === 'number') return HoverResult.parse(await call('hover', { ...snapshotParams(), elementIndex: target, ...relative }))
         const [x, y] = target
-        return action('hover', { ...snapshotParams(), windowId: windowId(), x, y })
+        return HoverResult.parse(await call('hover', { ...snapshotParams(), windowId: windowId(), x, y, ...relative }))
       },
       async click(target, options) {
         const mouseButton = options?.mouseButton ?? 'left'
         const clickCount = options?.clickCount ?? 1
         if (mouseButton !== 'left' && clickCount !== 1) throw new Error('Only left double-click is supported')
         const modifiers = options?.modifiers === undefined ? {} : { modifiers: [...options.modifiers] }
+        const relative = options?.relative === undefined ? {} : { relative: options.relative }
         if (typeof target === 'number') {
-          return action('click', { ...snapshotParams(), ...modifiers, elementIndex: target,
+          return action('click', { ...snapshotParams(), ...modifiers, ...relative, elementIndex: target,
             ...mouseButton === 'left' ? {} : { mouseButton }, ...clickCount === 1 ? {} : { clickCount },
           })
         }
         const [x, y] = target
-        return action('click', { ...snapshotParams(), windowId: windowId(), x, y, mouseButton, clickCount, ...modifiers })
+        return action('click', { ...snapshotParams(), windowId: windowId(), x, y, mouseButton, clickCount, ...modifiers, ...relative })
       },
       async setValue(index, value) { return action('setValue', { ...snapshotParams(), elementIndex: index, value }) },
       async selectText(index, text, options) {
@@ -125,10 +123,12 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
         return action('scroll', {
           ...snapshotParams(), windowId: windowId(),
           x: options.x, y: options.y, deltaLinesX: options.deltaLinesX, deltaLinesY: options.deltaLinesY,
+          ...options.relative === undefined ? {} : { relative: options.relative },
         })
       },
       async drag(from, to, options) {
         return action('drag', { ...snapshotParams(), windowId: windowId(), fromX: from[0], fromY: from[1], toX: to[0], toY: to[1],
+          ...options?.relative === undefined ? {} : { relative: options.relative },
           ...options?.mouseButton === undefined ? {} : { mouseButton: options.mouseButton },
           ...options?.modifiers === undefined ? {} : { modifiers: [...options.modifiers] },
         })

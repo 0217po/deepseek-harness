@@ -23,17 +23,17 @@ it.each([
 ])('rejects noncanonical screenshot base64 %j', (data) => {
   expect(ScreenshotResult.safeParse({
     mimeType: 'image/png', data, pixelWidth: 1, pixelHeight: 1, windowId: 23,
-    bounds: { x: 0, y: 0, width: 10, height: 10 }, coordinateSpace: 'window-points',
+    bounds: { x: 0, y: 0, width: 10, height: 10 }, coordinateSpace: 'screenshot-pixels',
   }).success).toBe(false)
 })
 
 it.each([
-  { mimeType: 'image/jpeg' }, { pixelWidth: 0 }, { pixelHeight: -1 }, { windowId: 0 },
+  { mimeType: 'application/octet-stream' }, { pixelWidth: 0 }, { pixelHeight: -1 }, { windowId: 0 },
   { bounds: { x: 0, y: 0, width: 0, height: 10 } }, { coordinateSpace: 'screen-pixels' },
 ])('retains screenshot metadata validation for %j', (invalid) => {
   expect(ScreenshotResult.safeParse({
     mimeType: 'image/png', data: 'AQ==', pixelWidth: 1, pixelHeight: 1, windowId: 23,
-    bounds: { x: 0, y: 0, width: 10, height: 10 }, coordinateSpace: 'window-points', ...invalid,
+    bounds: { x: 0, y: 0, width: 10, height: 10 }, coordinateSpace: 'screenshot-pixels', ...invalid,
   }).success).toBe(false)
 })
 
@@ -60,4 +60,15 @@ it.each([
   { appHandle: 'app', snapshotId: 'snapshot', elementIndex: 0, windowId: 23, x: 1, y: 2 },
 ])('rejects incomplete or mixed hover targets %j', (params) => {
   expect(Request.safeParse({ method: 'hover', params }).success).toBe(false)
+})
+
+it.each(['click', 'hover', 'scroll', 'drag'])('validates integer thousandths for %s', (method) => {
+  const params = { appHandle: 'app', windowId: 7, relative: true,
+    ...method === 'drag' ? { fromX: 0, fromY: 0, toX: 1000, toY: 1000 } : { x: 0, y: 1000 },
+    ...method === 'scroll' ? { deltaLinesX: 0, deltaLinesY: -1 } : {},
+  }
+  expect(Request.safeParse({ method, params }).success).toBe(true)
+  for (const value of [-1, 1001, 0.5]) {
+    expect(Request.safeParse({ method, params: { ...params, [method === 'drag' ? 'toX' : 'x']: value } }).success).toBe(false)
+  }
 })

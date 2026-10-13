@@ -9,7 +9,7 @@ const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG
 const bounds = { x: -640, y: 100, width: 640, height: 480 }
 const selected = { appHandle: 'app-17', pid: 17, name: 'Editor', bundleId: 'test.editor' }
 const delivered = { dispatched: true, verified: false }
-const capabilities = { platform: 'macos', sessionLocked: false, permissions: { accessibility: true, screenRecording: false }, methods: ['getState', 'click'], coordinateSpace: 'window-points', browser: false }
+const capabilities = { platform: 'macos', sessionLocked: false, permissions: { accessibility: true, screenRecording: false }, methods: ['getState', 'click'], coordinateSpace: 'screenshot-pixels', browser: false }
 
 function windowInfo(windowId: number) {
   return { windowId, pid: 17, appName: 'Editor', title: `Document ${windowId}`, bounds, isOnScreen: true, onCurrentSpace: null }
@@ -25,13 +25,14 @@ function fixture(withSink = true) {
       case 'listApps': return [selected, { pid: 18, name: 'Utility' }]
       case 'getApp': return selected
       case 'listWindows': return windows
+      case 'hover': return { ...delivered, hoverRoute: 'accessibility', systemPointerMoved: false }
       case 'show': return { ...delivered, windowId: params.windowId ?? 23, foregroundChanged: false }
       case 'getState': return {
         appHandle: selected.appHandle, pid: 17, windowId: params.windowId ?? null,
         snapshotId: `snapshot-${++generation}`, tree: `Tree ${generation}`, truncated: false,
         windows: params.windowId === undefined ? windows : windows.filter(window => window.windowId === params.windowId),
       }
-      case 'screenshot': return { mimeType: 'image/png', data: PNG, pixelWidth: 1, pixelHeight: 1, windowId: params.windowId, bounds, coordinateSpace: 'window-points' }
+      case 'screenshot': return { mimeType: 'image/png', data: PNG, pixelWidth: 1, pixelHeight: 1, windowId: params.windowId, bounds, coordinateSpace: 'screenshot-pixels' }
       default: return delivered
     }
   })
@@ -47,7 +48,7 @@ function state(overrides: Record<string, JsonValue> = {}): JsonValue {
 }
 
 function screenshot(overrides: Record<string, JsonValue> = {}): JsonValue {
-  return { mimeType: 'image/png', data: PNG, pixelWidth: 1, pixelHeight: 1, windowId: 23, bounds, coordinateSpace: 'window-points', ...overrides }
+  return { mimeType: 'image/png', data: PNG, pixelWidth: 1, pixelHeight: 1, windowId: 23, bounds, coordinateSpace: 'screenshot-pixels', ...overrides }
 }
 
 describe('application discovery', () => {
@@ -143,9 +144,9 @@ describe('hover across observations', () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     f.dispatch.mockClear()
-    expect(await app.hover(0)).toEqual(delivered)
+    expect(await app.hover(0)).toEqual({ ...delivered, hoverRoute: 'accessibility', systemPointerMoved: false })
     await app.getAXStateAndScreenshot({ emit: false })
-    expect(await app.hover([30, 40])).toEqual(delivered)
+    expect(await app.hover([30, 40])).toEqual({ ...delivered, hoverRoute: 'accessibility', systemPointerMoved: false })
     expect(f.dispatch.mock.calls.map(([operation]) => operation)).toEqual([
       { method: 'hover', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementIndex: 0 } },
       { method: 'getState', params: { appHandle: 'app-17' } },
@@ -385,21 +386,34 @@ describe('screenshots', () => {
     expect(f.sink.image).not.toHaveBeenCalled()
   })
 
-  const invalidImages: Record<string, JsonValue>[] = [
-    { data: Buffer.from('short').toString('base64') },
-    { data: Buffer.alloc(24).toString('base64') },
-    { pixelWidth: 2 }, { pixelHeight: 2 },
-  ]
-  it.each(invalidImages)('rejects invalid PNG dimensions before emitting a screenshot: %j', async (invalid) => {
+  it.each(['image/jpeg', 'image/webp'])('returns Host-admitted %s bytes without assuming PNG encoding', async (mimeType) => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
-    f.dispatch.mockResolvedValueOnce(screenshot(invalid))
-    await expect(app.getScreenshot()).rejects.toThrow('invalid PNG dimensions')
-    expect(f.sink.image).not.toHaveBeenCalled()
+    const data = Buffer.from('admitted request image').toString('base64')
+    f.dispatch.mockResolvedValueOnce(screenshot({ mimeType, data }))
+    expect(await app.getScreenshot()).toEqual(Uint8Array.from(Buffer.from(data, 'base64')))
   })
+
 })
 
 describe('input actions', () => {
+  it('passes explicit relative mode to every coordinate gesture and rejects it on element indices', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    await app.click([500, 250], { relative: true })
+    await app.hover([500, 250], { relative: true })
+    await app.drag([0, 0], [1000, 1000], { relative: true })
+    await app.scroll({ x: 500, y: 250, relative: true, deltaLinesX: 0, deltaLinesY: -1 })
+    expect(f.dispatch.mock.calls.slice(-4).map(([request]) => request.params)).toEqual([
+      expect.objectContaining({ x: 500, y: 250, relative: true }),
+      expect.objectContaining({ x: 500, y: 250, relative: true }),
+      expect.objectContaining({ fromX: 0, toX: 1000, relative: true }),
+      expect.objectContaining({ x: 500, y: 250, relative: true }),
+    ])
+    await expect(app.click(1, { relative: true })).rejects.toThrow()
+    await expect(app.hover(1, { relative: true })).rejects.toThrow()
+  })
+
   it('keeps the selected app and window when scroll options include another target identity', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
