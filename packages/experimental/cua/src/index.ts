@@ -6,7 +6,7 @@ import type { Context, Volatile } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/brand'
-import { admitEncodedImages } from '@deepseek-ai/dsh-attachment/admission'
+import { admitEncodedImages } from '@deepseek-ai/dsh-attachment'
 import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
@@ -102,7 +102,7 @@ interface CuaExecution extends ToolExecution {
 }
 
 
-type ScreenshotValue = z.infer<typeof ScreenshotResult> & { attachment: ImageAttachmentRef }
+type ScreenshotValue = z.infer<typeof ScreenshotResult> & { attachment: ImageAttachmentRef } & JsonValue
 
 /** Native values stay available to programs; only metadata and the stored image enter model content. */
 function renderResult(args: unknown, value: JsonValue): ContentBlock[] {
