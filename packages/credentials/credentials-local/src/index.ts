@@ -25,8 +25,9 @@
  * edits hot-publish through the seam, and each reload replaces the snapshot
  * wholesale so a deleted entry never lingers in memory.
  *
- * The document holds nothing but credentials, which is why it is a strict
- * `CredentialRef`-to-string mapping rather than a dotenv file: a store the
+ * The document holds credentials, which is why `refs` is a strict
+ * `CredentialRef`-to-string mapping rather than a dotenv file; a foreign
+ * top-level key another tool wrote is kept but resolves nothing: a store the
  * Harness owns and never materializes into the environment cannot also serve
  * as the user's environment layer; a store that doubled as the environment
  * layer would shadow non-secret entries behind its precedence, making them
@@ -165,7 +166,7 @@ function describeYamlError(error: YAMLError): string {
 /** The document layout this build reads and writes. */
 export const DOCUMENT_VERSION = 1
 
-/** One parsed credentials document: the two key spaces it stores, keyed as written. */
+/** One parsed credentials document: the two key spaces it stores, keyed as written, plus the top-level keys it does not read. */
 export interface CredentialsDocument {
   /** Reference entries, keyed by {@link CredentialRef}. */
   refs: Map<string, string>
@@ -186,7 +187,7 @@ export interface CredentialsDocument {
  * and needs no version.
  * @param text - the document's text.
  * @param filename - absolute path, quoted in errors.
- * @returns the parsed references and records.
+ * @returns the parsed references, records, and ignored top-level keys.
  */
 export function parseCredentialsDocument(text: string, filename: string): CredentialsDocument {
   // `prettyErrors` is on only for `linePos`; `error.message` is never used,
@@ -426,8 +427,9 @@ function assertJsonValue(where: string, value: unknown, seen: Set<object>): void
  */
 function mutableDocument(text: string | undefined): Document {
   // `text` only ever caches content that parsed successfully, so this re-parse
-  // for the mutable comment-preserving tree cannot fail.
-  const document = text === undefined ? new Document({}) : parseDocument(text)
+  // for the mutable comment-preserving tree cannot fail. `intAsBigInt` keeps an
+  // integer beyond 2^53 in a foreign top-level entry exact when re-serialized.
+  const document = text === undefined ? new Document({}) : parseDocument(text, { intAsBigInt: true })
   // Stamped on every edit so a document this provider creates is readable by
   // the same parser that admitted the one it edits; an existing stamp is
   // rewritten to the identical value.
