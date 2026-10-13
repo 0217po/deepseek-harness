@@ -263,7 +263,7 @@ def main():
             call("listWindows", owner, "APP_UNAVAILABLE")
             call("listWindows", owner, "STALE_APP")
             helper.eof()
-            print("PASS: capability preflight, two-window snapshots, scoped invalidation, AX readback, Unicode input, single scroll/right-click/drag dispatch, image dimensions, native hover, stale app cleanup, EOF", system file panel")
+            print("PASS: capability preflight, two-window snapshots, scoped invalidation, AX readback, Unicode input, single scroll/right-click/drag dispatch, image dimensions, native hover, stale app cleanup, EOF, system file panel")
         finally:
             def save_artifacts():
                 if artifacts is not None:
