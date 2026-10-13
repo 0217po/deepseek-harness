@@ -36,7 +36,7 @@ const NATIVE_AUTH_ENV: Record<BuiltinProvider, readonly string[]> = {
     'ANTHROPIC_SERVICE_ACCOUNT_ID',
     'ANTHROPIC_WORKSPACE_ID',
   ],
-  'azure-openai-responses': ['AZURE_OPENAI_API_KEY'],
+  azure: ['AZURE_OPENAI_API_KEY'],
   baseten: ['BASETEN_API_KEY'],
   cerebras: ['CEREBRAS_API_KEY'],
   'cloudflare-ai-gateway': ['CLOUDFLARE_API_KEY', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_GATEWAY_ID'],
