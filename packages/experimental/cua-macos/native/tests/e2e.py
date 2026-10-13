@@ -93,6 +93,7 @@ def main():
     parser.add_argument("--panels-only", action="store_true", help="Exercise system file panels without unrelated pointer gestures")
     parser.add_argument("--hover-only", action="store_true", help="Exercise native hover without keyboard or file-panel scenarios")
     parser.add_argument("--alternate-hover", action="store_true", help="Use AX alternate UI and verify the system pointer stays unchanged")
+    parser.add_argument("--input-overlays", action="store_true", help="Verify pass-through and input-blocking overlay windows")
     args = parser.parse_args()
     artifacts = args.artifacts
     if artifacts is not None:
@@ -212,6 +213,23 @@ def main():
                 if args.alternate_hover:
                     actual = json.loads(state_path.read_text())
                     assert actual["cursorSamples"] > 1 and actual["cursorChanges"] == 0, actual
+                if args.input_overlays:
+                    def cycle_overlay(mode):
+                        state = call("getState", primary_params)
+                        call("click", button_target(state, "Cycle input overlay"))
+                        return wait_state(lambda actual: actual["overlayMode"] == mode, "Overlay mode did not change")
+                    cycle_overlay(1)
+                    target = {**owner, "windowId": primary["windowId"], "x": x + 20, "y": y + 20}
+                    hover(target)
+                    wait_state(lambda actual: actual["hoverVisible"], "Input-transparent overlay blocked hover")
+                    before = cycle_overlay(2)
+                    call("hover", target, "FOREGROUND_REQUIRED")
+                    after = wait_state(lambda actual: actual["cursorSamples"] >= before["cursorSamples"] + 2,
+                                       "Pointer observation did not advance")
+                    assert after["cursorChanges"] == before["cursorChanges"], "Rejected hover moved the system pointer"
+                    cycle_overlay(0)
+                    hover({**owner, "windowId": primary["windowId"], "x": 10, "y": 40})
+                    wait_state(lambda actual: not actual["hoverVisible"], "Hover did not exit after removing the overlay")
 
             if args.hover_only:
                 check_hover()

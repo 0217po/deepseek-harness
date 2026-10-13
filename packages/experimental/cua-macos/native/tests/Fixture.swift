@@ -63,6 +63,8 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     var cursorChanges = 0
     var lastCursor = CGPoint.zero
     var cursorTimer: Timer?
+    var inputOverlay: NSPanel?
+    var overlayMode = 0
     var window: NSWindow!
     var second: NSWindow!
     var field: NSTextField!
@@ -98,6 +100,9 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         field.setAccessibilityLabel("Fixture text")
         field.delegate = self
         content.addSubview(field)
+        let overlayButton = NSButton(title: "Cycle input overlay", target: self, action: #selector(cycleOverlay))
+        overlayButton.frame = NSRect(x: 30, y: 398, width: 350, height: 25)
+        content.addSubview(overlayButton)
         let button = NSButton(title: "Increment primary", target: self, action: #selector(increment))
         button.frame = NSRect(x: 30, y: 365, width: 200, height: 32)
         button.setAccessibilityIdentifier("dsh-cua-test-button")
@@ -139,23 +144,42 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         second.orderFront(nil)
         if alternateHover {
             window.orderFront(nil)
-            lastCursor = NSEvent.mouseLocation
-            cursorTimer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { [weak self] _ in
-                guard let self else { return }
-                let position = NSEvent.mouseLocation
-                self.cursorSamples += 1
-                if position != self.lastCursor { self.cursorChanges += 1; self.lastCursor = position }
-                self.persist()
-            }
         } else {
             window.makeKeyAndOrderFront(nil)
             NSApplication.shared.activate(ignoringOtherApps: true)
+        }
+        lastCursor = NSEvent.mouseLocation
+        cursorTimer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            let position = NSEvent.mouseLocation
+            self.cursorSamples += 1
+            if position != self.lastCursor { self.cursorChanges += 1; self.lastCursor = position }
+            self.persist()
         }
         persist()
         print("READY")
         fflush(stdout)
     }
     @objc func increment() { count += 1; countLabel.stringValue = "Count: \(count)"; persist() }
+    @objc func cycleOverlay() {
+        overlayMode = (overlayMode + 1) % 3
+        if overlayMode == 0 {
+            inputOverlay?.close(); inputOverlay = nil
+        } else {
+            if inputOverlay == nil {
+                let panel = NSPanel(contentRect: window.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+                panel.isReleasedWhenClosed = false
+                panel.level = .floating
+                panel.isOpaque = false
+                panel.backgroundColor = NSColor.systemYellow.withAlphaComponent(0.15)
+                panel.collectionBehavior = [.canJoinAllApplications, .stationary]
+                inputOverlay = panel
+            }
+            inputOverlay!.ignoresMouseEvents = overlayMode == 1
+            inputOverlay!.orderFrontRegardless()
+        }
+        persist()
+    }
     @objc func incrementSecondary() { secondaryCount += 1; persist() }
     @objc func openFile() {
         let panel = NSOpenPanel()
@@ -182,6 +206,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             "dragDownCount": dragPad.dragDownCount, "dragCount": dragPad.dragCount, "dragPoint": [dragPad.lastPoint.x, dragPad.lastPoint.y],
             "hoverVisible": !dragPad.hoverButton.isHidden, "hoverClicks": dragPad.hoverClicks,
             "cursorSamples": cursorSamples, "cursorChanges": cursorChanges,
+            "overlayMode": overlayMode, "overlayWindowId": inputOverlay?.windowNumber ?? 0,
             "rightDownCount": dragPad.rightDownCount, "rightUpCount": dragPad.rightUpCount,
             "scrollEventCount": scroll.eventCount, "scrollY": scroll.contentView.bounds.origin.y, "dragBounds": windowPoints(dragPad), "scrollBounds": windowPoints(scroll),
             "primaryWindowSize": [window.frame.width, window.frame.height],
@@ -194,7 +219,7 @@ let arguments = CommandLine.arguments
 guard (2...4).contains(arguments.count), let rowCount = arguments.count >= 3 ? Int(arguments[2]) : 35,
       arguments.count != 4 || arguments[3] == "--alternate-hover",
       (1...1000).contains(rowCount) else {
-    fputs("usage: Fixture STATE_PATH [ROW_COUNT:1...1000]\n", stderr)
+    fputs("usage: Fixture STATE_PATH [ROW_COUNT:1...1000] [--alternate-hover]\n", stderr)
     exit(2)
 }
 let application = NSApplication.shared

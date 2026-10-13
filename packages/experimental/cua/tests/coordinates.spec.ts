@@ -28,7 +28,7 @@ it('maps integer ratios after AX observation and keeps endpoint 1000 inside the 
   expect(coordinates.parameters(call('hover', { x: 500, y: 250, relative: true }))).toEqual({ appHandle: handle, windowId: 7, x: 320, y: 120 })
   expect(coordinates.parameters(call('click', { x: 1000, y: 1000, relative: true }))).toMatchObject({ x: 639, y: 479 })
   coordinates.screenshot(handle, 7, window().bounds, { width: 1280, height: 960 })
-  expect(coordinates.parameters(call('click', { x: 1000, y: 1000, relative: true }))).toMatchObject({ x: 639.5, y: 479.5 })
+  expect(coordinates.parameters(call('click', { x: 1000, y: 1000, relative: true }))).toMatchObject({ x: 639, y: 479 })
   expect(coordinates.parameters(call('click', { x: 0, y: 0, relative: true }))).toMatchObject({ x: 0, y: 0 })
 })
 

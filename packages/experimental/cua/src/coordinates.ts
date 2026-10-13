@@ -62,7 +62,7 @@ export class CuaCoordinates {
     if (!relative && !frame.image) throw new NativeError('SCREENSHOT_REQUIRED', 'Take a fresh screenshot before using absolute pixel coordinates')
     const convert = (value: number, axis: 'width' | 'height'): number => {
       const pixels = frame.image?.[axis] ?? frame[axis]
-      if (relative) return (value === 1000 ? Math.max(0, pixels - 1) / pixels : value / 1000) * frame[axis]
+      if (relative) return Math.min(value / 1000 * frame[axis], Math.max(0, frame[axis] - 1))
       if (value >= pixels) throw new NativeError('INVALID_ARGUMENT', 'Coordinate is outside the latest screenshot')
       return value * frame[axis] / pixels
     }
