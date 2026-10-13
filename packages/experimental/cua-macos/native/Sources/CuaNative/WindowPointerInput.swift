@@ -34,7 +34,7 @@ final class WindowPointerInput {
         try Self.validate(point, in: route)
         let event = try mouseEvent(
             source: Self.source(), route: route, screen: Self.screenPoint(point, in: route), local: point,
-            type: .mouseMoved, button: .left, clickState: 0, subtype: 3, group: Self.clickGroup()
+            type: .mouseMoved, button: .left, clickState: 0, subtype: 3, group: Self.clickGroup(), number: 2
         )
         try checkCancellation()
         if useSystemPointer {
