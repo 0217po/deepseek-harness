@@ -16,7 +16,9 @@ Keys are write-only. The page receives a redacted descriptor after saving, never
 
 Choose **Add model provider**. The card opens on **Third-party model provider**: pick a provider dsh ships with — the list shows provider ids such as `anthropic`, `openai`, `moonshotai` for Kimi, or `zai` for GLM — enter its API key, and save. The installed catalog supplies the endpoint, protocol, and model list.
 
-Providers that sign in with OAuth, such as Codex, are not supported here yet.
+The authentication **?** explains saved-credential priority and the environment fallbacks displayed for a key field. Leaving the key blank preserves existing authentication. Providers without native key authentication, such as `openai-codex`, show no key field unless the profile explicitly names a credential reference.
+
+For an existing profile that names a credential reference, **API key source** shows the layer currently supplying that reference: saved credentials, launch environment, `$cwd/.env`, or `$DSH_HOME/.env`. Native authentication without a named reference has no source label.
 
 ## Add a custom model API
 

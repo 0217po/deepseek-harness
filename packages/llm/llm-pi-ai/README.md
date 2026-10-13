@@ -149,6 +149,7 @@ Initial prompt text and active tools use pi-ai's `Context.systemPrompt` and `Con
 | [`src/login.ts`](src/login.ts) | Authorization flows for the installed providers that ship a login |
 | [`src/config.ts`](src/config.ts) | Profile schema, resolution, and serviceability checks |
 | [`src/catalog.ts`](src/catalog.ts) | Installed-catalog integration and drift gates |
+| [`src/native-auth.ts`](src/native-auth.ts) | Environment variables each installed provider's native authentication reads |
 | [`src/models.ts`](src/models.ts) | Model collections, static providers, and reasoning levels over narrow pi-ai entry points |
 | [`src/provider.ts`](src/provider.ts) | The supported-protocol table and provider construction |
 | [`src/context.ts`](src/context.ts) | Harness-to-pi-ai context conversion, image handling, replay restore |
@@ -158,7 +159,7 @@ Initial prompt text and active tools use pi-ai's `Context.systemPrompt` and `Con
 
 ### Registration and directory
 
-The plugin declares every installed catalog provider it can authenticate in the configurable-provider directory, joined with every route the current profiles declare, so configuration surfaces can offer the full catalog before any route exists. A catalog provider whose catalog lists models but no chat model, such as one of classifier models alone, is left out and gets no sign-in flow, because this adapter dispatches chat requests only. Each entry carries `declared` — whether pi-ai ships nothing under that key — because only the adapter can distinguish a hand-declared route from a narrowed catalog route. Route registration is atomic: a candidate set that collides with another adapter leaves the previous routes serving. A bare mount with zero routes is the dormant posture: nothing registers until the Config supplies profiles, and routes drop when it empties.
+The plugin declares every installed catalog provider it can authenticate in the configurable-provider directory, joined with every route the current profiles declare, so configuration surfaces can offer the full catalog before any route exists. A catalog provider whose catalog lists models but no chat model, such as one of classifier models alone, is left out and gets no sign-in flow, because this adapter dispatches chat requests only. Each entry carries `declared` — whether pi-ai ships nothing under that key — because only the adapter can distinguish a hand-declared route from a narrowed catalog route. A catalog entry also carries `defaultBaseURL` when pi-ai ships a fixed endpoint for the provider, and `nativeAuth`: the environment variables the provider's own authentication reads, in lookup order, and whether it offers an OAuth sign-in. pi-ai exports no list of those names, so `src/native-auth.ts` keeps one, and `tests/native-auth.spec.ts` runs every installed provider's resolver to fail on a changed name or order. Route registration is atomic: a candidate set that collides with another adapter leaves the previous routes serving. A bare mount with zero routes is the dormant posture: nothing registers until the Config supplies profiles, and routes drop when it empties.
 
 ### Replay and vocabulary
 

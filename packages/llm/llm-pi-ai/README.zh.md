@@ -149,6 +149,7 @@ Config 更新严格验证发生变化的 provider。初始加载将已存储的�
 | [`src/login.ts`](src/login.ts) | 面向提供登录的已安装提供方的授权流程 |
 | [`src/config.ts`](src/config.ts) | Profile schema、解析与可服务性校验 |
 | [`src/catalog.ts`](src/catalog.ts) | 已安装目录集成与漂移门禁 |
+| [`src/native-auth.ts`](src/native-auth.ts) | 每个已安装提供方原生认证读取的环境变量 |
 | [`src/models.ts`](src/models.ts) | 基于 pi-ai 窄入口的 model collection、静态 provider 与 reasoning level |
 | [`src/provider.ts`](src/provider.ts) | 受支持协议表与提供方构建 |
 | [`src/context.ts`](src/context.ts) | Harness 到 pi-ai 的上下文转换、图片处理、回放恢复 |
@@ -158,7 +159,7 @@ Config 更新严格验证发生变化的 provider。初始加载将已存储的�
 
 ### 注册与目录
 
-插件会在可配置提供方目录中声明它能认证的每个已安装目录提供方，并加入当前 profile 声明的每条路由，因此配置界面可以在任何路由存在之前提供完整目录。目录列出了模型却没有聊天模型的提供方（例如只有分类器模型）不进入目录，也不注册登录流程，因为本适配器只分派聊天请求。每个条目都携带 `declared`——pi-ai 是否在该键下不提供任何内容——因为只有适配器能区分手工声明路由与收窄目录路由。路由注册具有原子性：与其他适配器冲突的候选集合会让此前路由继续服务。零路由的裸挂载即休眠姿态：settings 分节提供 profile 前不注册任何内容，分节清空时路由随之消失。
+插件会在可配置提供方目录中声明它能认证的每个已安装目录提供方，并加入当前 profile 声明的每条路由，因此配置界面可以在任何路由存在之前提供完整目录。目录列出了模型却没有聊天模型的提供方（例如只有分类器模型）不进入目录，也不注册登录流程，因为本适配器只分派聊天请求。每个条目都携带 `declared`——pi-ai 是否在该键下不提供任何内容——因为只有适配器能区分手工声明路由与收窄目录路由。目录条目在 pi-ai 为该提供方提供固定端点时还携带 `defaultBaseURL`，并携带 `nativeAuth`：提供方自身认证按查找顺序读取的环境变量，以及它是否提供 OAuth 登录。pi-ai 不导出这些变量名的列表，因此由 `src/native-auth.ts` 维护一份，`tests/native-auth.spec.ts` 运行每个已安装提供方的解析器，变量名或顺序变化时测试失败。路由注册具有原子性：与其他适配器冲突的候选集合会让此前路由继续服务。零路由的裸挂载即休眠姿态：settings 分节提供 profile 前不注册任何内容，分节清空时路由随之消失。
 
 ### 回放与词汇
 
