@@ -914,18 +914,19 @@ describe('a forked session', () => {
 })
 
 describe('a delegated child', () => {
-  it('runs on the composition its parent runs on', async () => {
+  it.each([false, true])('inherits preset tools with seeded=%s and refuses child reminders', async (seeded) => {
     const parent = await ctx.agents.create({
-      sessionId: SessionId('preset-child-parent'),
+      sessionId: SessionId(`preset-child-parent-${seeded}`),
       meta: { agentPreset: 'standard' },
       setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'standard').then(() => undefined),
     })
     // Exactly what an in-process subagent driver's creation window does.
     const child = await parent.agent.ctx.agents.create({
-      sessionId: SessionId('preset-child'),
-      meta: childSessionMeta(parent.agent, 1, false),
+      sessionId: SessionId(`preset-child-${seeded}`),
+      meta: childSessionMeta(parent.agent, 1, seeded),
+      ...(seeded ? { seed: [], inheritedEventCount: SessionLogOffset(0) } : {}),
       setup: (agentCtx) => {
-        applyChildComposition(agentCtx, parent.agent, {})
+        return applyChildComposition(agentCtx, parent.agent, {})
       },
     })
     try {
@@ -933,6 +934,21 @@ describe('a delegated child', () => {
       // The shipped `standard` preset is the whole coding agent; an empty
       // child here is the defect, and equality alone would not catch it.
       expect(toolNames(ctx, child.agent)).toContain('bash')
+      expect(ctx.tools.schemas(child.agent)).toEqual(ctx.tools.schemas(parent.agent))
+      const calls = [
+        ['schedule_create', { prompt: 'Check', after_seconds: 60, title: 'Check' }],
+        ['schedule_list', {}],
+        ['schedule_delete', { id: 'task-1' }],
+        ['schedule_update', { id: 'task-1', title: 'Check' }],
+      ] as const
+      for (const [name, args] of calls) {
+        expect(toolNames(ctx, child.agent)).toContain(name)
+        const result = await ctx.tools.execute({
+          callId: ToolCallId(`child-${name}`), signal: new AbortController().signal,
+          name, arguments: args, agent: child.agent,
+        })
+        expect(result.value).toEqual({ code: 'subagent_session', message: 'A delegated subagent cannot use reminders.' })
+      }
       expect(child.agent.session.header.agentPreset).toBe('standard')
     } finally {
       await child.dispose()
@@ -951,7 +967,7 @@ describe('a delegated child', () => {
       sessionId: SessionId('preset-child-switch'),
       meta: childSessionMeta(parent.agent, 1, false),
       setup: (agentCtx) => {
-        applyChildComposition(agentCtx, parent.agent, {})
+        return applyChildComposition(agentCtx, parent.agent, {})
       },
     })
     try {
