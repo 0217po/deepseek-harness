@@ -2,8 +2,7 @@
 import { readFile } from 'node:fs/promises'
 import { isMap, isNode, isScalar, isSeq, parseDocument } from 'yaml'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
-import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
-import { composeEntries, loadOptionalPatches } from '@deepseek-ai/dsh-app-boot'
+import { composeEntries, loadOptionalPatches, readBundlePatches, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 
 /** Flatten only the groups addressable by the profile's patch composer.
@@ -17,16 +16,14 @@ export function flatten(rows: EntryOptions[]): EntryOptions[] {
 /** Replace the last matching override or append one after existing insertions. An override that holds only `id` and
  * `disabled`, without anchors, is removed, or not appended, when the bundle layers and the remaining profile patches
  * already give the entry the requested literal `disabled` value; home patches and launch overlays are not consulted.
- * @param filename Current profile patch file.
+ * @param profile Profile whose patch file is edited and whose selected bundles supply the compared composition.
  * @param id Unique composition entry id.
  * @param name Module name used to match name-qualified overrides.
  * @param enabled Desired entry enablement.
- * @param layers Bundle patches applied before the profile patch file.
  * @returns Whether the file changed.
  */
-export async function writePluginEnabled(
-  filename: string, id: string, name: string, enabled: boolean, layers: readonly PatchOptions[],
-): Promise<boolean> {
+export async function writePluginEnabled(profile: ProfileContext, id: string, name: string, enabled: boolean): Promise<boolean> {
+  const filename = profile.patchPath
   let text: string
   try {
     text = await readFile(filename, 'utf8')
@@ -41,6 +38,7 @@ export async function writePluginEnabled(
   if (error !== undefined) throw error
   if (!isSeq(document.contents)) throw new Error('Profile patch must be a YAML sequence')
   const patches = loadOptionalPatches('dsh', filename) ?? []
+  const bundlePatches = readBundlePatches('dsh', profile)
   const items = document.contents.items
   const target = items.findLast((item, index) => {
     if (!isMap(item) || document.getIn([index, 'id']) !== id || item.has('insert')) return false
@@ -49,7 +47,7 @@ export async function writePluginEnabled(
   })
   // Compares the entry's own literal `disabled`; a `!!js` value never matches, so its override is kept.
   const implied = (index: number): boolean => {
-    const row = flatten(composeEntries([[...layers, ...patches.toSpliced(index, 1)]])).findLast(entry => entry.id === id)
+    const row = flatten(composeEntries([[...bundlePatches, ...patches.toSpliced(index, 1)]])).findLast(entry => entry.id === id)
     return row !== undefined && (row.disabled ?? false) === !enabled
   }
   if (isMap(target)) {
