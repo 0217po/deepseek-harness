@@ -3,7 +3,7 @@ import { Buffer } from 'node:buffer'
 import { describe, expect, it, vi } from 'vitest'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { createCuaApi } from '../src/api.ts'
-import type { CuaApp, CuaOperation } from '../src/types.ts'
+import type { CuaApp, CuaOperation, CuaScreenshot } from '../src/types.ts'
 
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
 const bounds = { x: -640, y: 100, width: 640, height: 480 }
@@ -18,7 +18,7 @@ function windowInfo(windowId: number) {
 function fixture(withSink = true) {
   let windows = [windowInfo(23)]
   let generation = 0
-  const sink = { text: vi.fn<(value: string) => void>(), image: vi.fn<(data: Uint8Array) => void>() }
+  const sink = { text: vi.fn<(value: string) => void>(), image: vi.fn<(screenshot: CuaScreenshot) => void>() }
   const dispatch = vi.fn(async ({ method, params }: CuaOperation): Promise<JsonValue> => {
     switch (method) {
       case 'getCapabilities': return capabilities
@@ -72,7 +72,7 @@ describe('application discovery', () => {
     const app = await f.api.getApp('Editor')
     expect(app.pid).toBe(17)
     expect(app.appHandle).toBe('app-17')
-    expect(await app.getScreenshot()).toEqual(Uint8Array.from(Buffer.from(PNG, 'base64')))
+    expect(await app.getScreenshot()).toEqual({ bytes: Uint8Array.from(Buffer.from(PNG, 'base64')), mimeType: 'image/png', pixelWidth: 1, pixelHeight: 1, windowId: 23 })
     expect(f.dispatch.mock.calls.map(([operation]) => operation.method)).toEqual([
       'getCapabilities', 'listApps', 'getApp', 'getState', 'screenshot',
     ])
@@ -238,7 +238,7 @@ describe('application and window observations', () => {
     f.dispatch.mockResolvedValueOnce(state({ windowId: 23, snapshotId: 'axless', tree: '', elements: [] }))
     const window = await app.getWindow(23)
     expect(f.sink.text).toHaveBeenLastCalledWith('')
-    await expect(window.getScreenshot()).resolves.toEqual(Uint8Array.from(Buffer.from(PNG, 'base64')))
+    await expect(window.getScreenshot()).resolves.toEqual({ bytes: Uint8Array.from(Buffer.from(PNG, 'base64')), mimeType: 'image/png', pixelWidth: 1, pixelHeight: 1, windowId: 23 })
     await window.click([10, 20])
     await window.scroll({ x: 10, y: 20, deltaLinesX: 0, deltaLinesY: -1 })
     await window.drag([10, 20], [30, 40])
@@ -361,7 +361,7 @@ describe('application and window observations', () => {
 })
 
 describe('screenshots', () => {
-  it('returns PNG pixels independently of input point bounds and supports selective output', async () => {
+  it('returns screenshot metadata independently of input point bounds and supports selective output', async () => {
     const f = fixture()
     f.setWindows([23, 24])
     const app = await f.api.getApp('Editor')
@@ -369,7 +369,7 @@ describe('screenshots', () => {
     f.sink.text.mockClear()
     const observation = await window.getAXStateAndScreenshot()
     expect(observation.state).toBe('Tree 3')
-    expect(observation.screenshot).toEqual(Uint8Array.from(Buffer.from(PNG, 'base64')))
+    expect(observation.screenshot).toEqual({ bytes: Uint8Array.from(Buffer.from(PNG, 'base64')), mimeType: 'image/png', pixelWidth: 1, pixelHeight: 1, windowId: 24 })
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'screenshot', params: { appHandle: 'app-17', windowId: 24 } })
     expect(f.sink.text).toHaveBeenCalledWith('Tree 3')
     expect(f.sink.image).toHaveBeenCalledWith(observation.screenshot)
@@ -386,12 +386,14 @@ describe('screenshots', () => {
     expect(f.sink.image).not.toHaveBeenCalled()
   })
 
-  it.each(['image/jpeg', 'image/webp'])('returns Host-admitted %s bytes without assuming PNG encoding', async (mimeType) => {
+  it.each(['image/jpeg', 'image/webp', 'image/gif'])('preserves Host-admitted %s bytes and metadata in the return value and image sink', async (mimeType) => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     const data = Buffer.from('admitted request image').toString('base64')
-    f.dispatch.mockResolvedValueOnce(screenshot({ mimeType, data }))
-    expect(await app.getScreenshot()).toEqual(Uint8Array.from(Buffer.from(data, 'base64')))
+    f.dispatch.mockResolvedValueOnce(screenshot({ mimeType, data, pixelWidth: 320, pixelHeight: 240 }))
+    const image = await app.getScreenshot()
+    expect(image).toEqual({ bytes: Uint8Array.from(Buffer.from(data, 'base64')), mimeType, pixelWidth: 320, pixelHeight: 240, windowId: 23 })
+    expect(f.sink.image).toHaveBeenCalledExactlyOnceWith(image)
   })
 
 })

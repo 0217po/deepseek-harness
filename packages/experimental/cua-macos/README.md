@@ -97,7 +97,7 @@ Screenshot capture requires an attachment store and a resolved model route decla
 
 Absolute coordinates for hover, click, scroll and drag use pixels in the latest returned screenshot. Pass `relative: true` for integer thousandths of window width and height; omission or `false` uses pixels. Relative input can use a successful AX read or screenshot, while absolute input requires a screenshot. The Host maps the delivered image to native points, including attachment and model-request resizing. A value of 1000 remains inside the window edge. Coordinate options do not apply to AX element indices. A width or height change since the latest observation returns `WINDOW_CHANGED` before input, including raw calls without a snapshot ID; read fresh AX or take a new screenshot before proceeding. Window movement alone preserves window-local coordinates. Capture and pointer input reject known disagreement between the selected window’s accessibility frame and displayed bounds with `WINDOW_CHANGED`, before posting pointer events. This includes Stage Manager transformations when AX retains the full window frame. Read fresh state; any activation or window raise remains explicit. Advertised AX actions remain available. Missing AX geometry retains the AXless path and does not establish that a transformed window can be operated.
 
-Retained objects resolve the current tool binding on every call. The external runtime owns persistence, imports, cancellation and completion-value serialization. Screenshots return PNG bytes; the standard tool pipeline admits the image attachment exactly once. `emit: false` suppresses facade output only. A host that uses another dispatcher can build objects through `createCuaApi` from `./api`.
+Retained objects resolve the current tool binding on every call. The external runtime owns persistence, imports, cancellation and completion-value serialization. Screenshots return encoded bytes with their MIME type, pixel dimensions and window ID; the standard tool pipeline admits the image attachment exactly once. `emit: false` suppresses facade output only. A host that uses another dispatcher can build objects through `createCuaApi` from `./api`.
 
 AppKit sheets are selectable by their window IDs and remain visible in their document window’s tree. Keyboard input follows a system Open/Save panel only when the application’s focused sheet identifies one Apple panel-service window and that service still focuses the same panel. Unrelated or ambiguous remote recipients fail before dispatch.
 
@@ -152,6 +152,8 @@ Initialize the object API once in persistent PTC. Reuse its variables in later c
 
 Use app methods directly for single-window tasks; getApp already reads initial AX state. Call app.getWindows() and await app.getWindow(windowId) only to target a particular window or resolve ambiguous window selection. App screenshots and coordinate actions use the latest AX observation: its focused on-screen, nonzero-size window, otherwise the sole such window. They do not refresh focus automatically. Read app.getAXState() to follow changed focus.
 
+CuaScreenshot contains { bytes: Uint8Array, mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/gif", pixelWidth: number, pixelHeight: number, windowId: number }. Use mimeType to choose a file extension or declare an image; do not assume PNG.
+
 Object API signatures (options default to { emit: true }):
 
 - cua.getCapabilities(options?) -> { platform, permissions, sessionLocked, methods, coordinateSpace, browser }
@@ -169,8 +171,8 @@ App and Window methods:
 
 - show() -> { dispatched: true, verified: false, windowId: number | null, foregroundChanged: boolean | null }
 - getAXState(options?: { emit?: boolean, disableDiffing?: boolean, includeMenus?: boolean, details?: boolean }) -> string
-- getScreenshot(options?: { emit?: boolean }) -> Uint8Array
-- getAXStateAndScreenshot(options?) -> { state: string, screenshot: Uint8Array }
+- getScreenshot(options?: { emit?: boolean }) -> CuaScreenshot
+- getAXStateAndScreenshot(options?) -> { state: string, screenshot: CuaScreenshot }
 - hover(target: number | [x, y], options?: { relative?: boolean }) -> { dispatched, verified, hoverRoute, systemPointerMoved }
 - click(target: number | [x, y], options?: { mouseButton?: "left" | "right" | "middle", clickCount?: 1 | 2, modifiers?: Array<"command" | "control" | "option" | "shift" | "fn">, relative?: boolean }) -> action result
 - setValue(elementIndex: number, value: string) -> action result

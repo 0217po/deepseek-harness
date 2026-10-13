@@ -97,7 +97,7 @@ void await app.getScreenshot()
 
 hover、click、scroll 和 drag 的绝对坐标默认使用最近返回截图中的像素。传入 `relative: true` 时使用窗口宽高的千分比整数；省略或传入 `false` 时使用像素。相对坐标可基于成功的 AX 读取或截图，绝对坐标必须先截图。Host 根据实际送入模型的图片尺寸换算原生 point，包含附件归一化和模型请求阶段的缩放。1000 映射到窗口边缘以内。坐标选项不适用于 AX 元素索引。窗口宽高与最近一次观察不同时，在输入前返回 `WINDOW_CHANGED`，原始调用即使不传快照 ID 也会检查；重新读取 AX 或截图后再操作。单纯移动窗口不使窗口内坐标失效。截图和鼠标输入会核对所选窗口的辅助功能框与显示边界；已知两者不一致时，在发送任何鼠标事件前返回 `WINDOW_CHANGED`。当 AX 保留完整窗口框时，这也会拦住 Stage Manager 变换后的窗口。需要重新读取状态；激活应用或抬起窗口仍须显式调用。元素声明的 AX 动作保持可用。缺少 AX 几何时保留无 AX 路径，不代表变换后的窗口一定可以操作。
 
-保留的对象会在每次调用时获取当前工具绑定。外部运行时负责持久化、导入、取消和最终表达式值的序列化。截图返回 PNG 字节，标准工具链负责将图片作为附件传递一次。`emit: false` 只控制对象层的输出。使用其他分派器的宿主可以通过 `./api` 的 `createCuaApi` 创建对象。
+保留的对象会在每次调用时获取当前工具绑定。外部运行时负责持久化、导入、取消和最终表达式值的序列化。截图返回编码字节及其 MIME 类型、像素尺寸和窗口 ID，标准工具链负责将图片作为附件传递一次。`emit: false` 只控制对象层的输出。使用其他分派器的宿主可以通过 `./api` 的 `createCuaApi` 创建对象。
 
 AppKit sheet 可以通过其窗口 ID 单独选择，也会出现在所属文档窗口的控件树中。只有应用当前获得焦点的 sheet 指向唯一的 Apple 面板服务窗口，且该服务仍聚焦于同一面板时，键盘输入才转交系统打开或保存面板。无法确认或存在歧义的远端接收方会在输入前报错。
 
@@ -152,6 +152,8 @@ Initialize the object API once in persistent PTC. Reuse its variables in later c
 
 Use app methods directly for single-window tasks; getApp already reads initial AX state. Call app.getWindows() and await app.getWindow(windowId) only to target a particular window or resolve ambiguous window selection. App screenshots and coordinate actions use the latest AX observation: its focused on-screen, nonzero-size window, otherwise the sole such window. They do not refresh focus automatically. Read app.getAXState() to follow changed focus.
 
+CuaScreenshot contains { bytes: Uint8Array, mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/gif", pixelWidth: number, pixelHeight: number, windowId: number }. Use mimeType to choose a file extension or declare an image; do not assume PNG.
+
 Object API signatures (options default to { emit: true }):
 
 - cua.getCapabilities(options?) -> { platform, permissions, sessionLocked, methods, coordinateSpace, browser }
@@ -169,8 +171,8 @@ App and Window methods:
 
 - show() -> { dispatched: true, verified: false, windowId: number | null, foregroundChanged: boolean | null }
 - getAXState(options?: { emit?: boolean, disableDiffing?: boolean, includeMenus?: boolean, details?: boolean }) -> string
-- getScreenshot(options?: { emit?: boolean }) -> Uint8Array
-- getAXStateAndScreenshot(options?) -> { state: string, screenshot: Uint8Array }
+- getScreenshot(options?: { emit?: boolean }) -> CuaScreenshot
+- getAXStateAndScreenshot(options?) -> { state: string, screenshot: CuaScreenshot }
 - hover(target: number | [x, y], options?: { relative?: boolean }) -> { dispatched, verified, hoverRoute, systemPointerMoved }
 - click(target: number | [x, y], options?: { mouseButton?: "left" | "right" | "middle", clickCount?: 1 | 2, modifiers?: Array<"command" | "control" | "option" | "shift" | "fn">, relative?: boolean }) -> action result
 - setValue(elementIndex: number, value: string) -> action result

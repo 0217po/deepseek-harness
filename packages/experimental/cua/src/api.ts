@@ -2,7 +2,7 @@
 import { Buffer } from 'node:buffer'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ScreenshotResult, ShowResult, StateResult, WindowsResult } from './protocol.ts'
-import type { CuaApi, CuaApp, CuaAppHandle, CuaDispatch, CuaObservationOptions, CuaObservationSink, CuaOperation, CuaSurface, CuaWindow } from './types.ts'
+import type { CuaApi, CuaApp, CuaAppHandle, CuaDispatch, CuaObservationOptions, CuaObservationSink, CuaOperation, CuaScreenshot, CuaSurface, CuaWindow } from './types.ts'
 export type * from './types.ts'
 
 function keyChord(chord: string): { key: string; modifiers: string[] } {
@@ -80,8 +80,13 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
         const target = windowId()
         const image = ScreenshotResult.parse(await call('screenshot', { appHandle, windowId: target }))
         if (image.windowId !== target) throw new Error('Native screenshot belongs to another window')
-        const bytes = Buffer.from(image.data, 'base64')
-        const screenshot = Uint8Array.from(bytes)
+        const screenshot: CuaScreenshot = {
+          bytes: Uint8Array.from(Buffer.from(image.data, 'base64')),
+          mimeType: image.mimeType,
+          pixelWidth: image.pixelWidth,
+          pixelHeight: image.pixelHeight,
+          windowId: image.windowId,
+        }
         if (options?.emit !== false) await sink?.image(screenshot)
         return screenshot
       },

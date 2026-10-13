@@ -47,7 +47,7 @@ it.each([null, 'text only', { content: [{ type: 'text', text: '{}' }] }])('rejec
   await expect(cua.getState()).rejects.toThrow()
 })
 
-it('returns screenshot bytes with one image-bearing tool call and no image text output', async () => {
+it('returns screenshot bytes and metadata with one image-bearing tool call and no image text output', async () => {
   const tool = vi.fn(async (operation: CuaOperation): Promise<JsonValue> => {
     if (operation.method === 'getApp') return selected
     if (operation.method === 'getState') return snapshot
@@ -59,7 +59,7 @@ it('returns screenshot bytes with one image-bearing tool call and no image text 
   const app = await connectCua(() => tool, text).getApp('Editor')
   text.mockClear()
 
-  expect(await app.getScreenshot()).toEqual(Uint8Array.from(Buffer.from(PNG, 'base64')))
+  expect(await app.getScreenshot()).toEqual({ bytes: Uint8Array.from(Buffer.from(PNG, 'base64')), mimeType: 'image/png', pixelWidth: 1, pixelHeight: 1, windowId: 23 })
   expect(tool.mock.calls.map(([operation]) => operation.method)).toEqual(['getApp', 'getState', 'screenshot'])
   expect(text).not.toHaveBeenCalled()
 })

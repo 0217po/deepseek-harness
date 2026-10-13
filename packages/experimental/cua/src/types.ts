@@ -13,6 +13,14 @@ export type CuaOperation = z.output<typeof Request>
 type CuaParameters<M extends CuaOperation['method']> = Extract<CuaOperation, { method: M }>['params']
 /** Dispatch exactly once; a failed action must not be retried implicitly. */
 export type CuaDispatch = (operation: CuaOperation) => Promise<JsonValue>
+/** Encoded model-request image with the format, pixel dimensions and window reported by the Host. */
+export interface CuaScreenshot {
+  bytes: Uint8Array
+  mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
+  pixelWidth: number
+  pixelHeight: number
+  windowId: number
+}
 /** Optional output owned by the caller; persistence and image admission are external. */
 export interface CuaObservationSink {
   /**
@@ -22,9 +30,9 @@ export interface CuaObservationSink {
   text(value: string): void | Promise<void>
   /**
    * Emit an image.
-   * @param data - encoded screenshot bytes.
+   * @param screenshot - encoded image and its validated format, dimensions and window.
    */
-  image(data: Uint8Array): void | Promise<void>
+  image(screenshot: CuaScreenshot): void | Promise<void>
 }
 /** Observations emit by default. Returned values are unaffected by this option. */
 export interface CuaObservationOptions { emit?: boolean }
@@ -73,7 +81,7 @@ export type CuaSelectTextOptions = Pick<CuaParameters<'selectText'>, 'prefix' | 
 /** Positive deltas reveal content above/left; each axis is an integer from -10 to 10. */
 export type CuaScrollOptions = Pick<CuaParameters<'scroll'>, 'x' | 'y' | 'deltaLinesX' | 'deltaLinesY'> & CuaCoordinateOptions
 /** An observed AX tree and independently captured image; capture is not atomic. */
-export interface CuaObservation { state: string; screenshot: Uint8Array }
+export interface CuaObservation { state: string; screenshot: CuaScreenshot }
 /**
  * App-wide or explicitly scoped window observations and actions.
  * Capture and pointer delivery reject known AX/display frame conflicts with WINDOW_CHANGED.
@@ -95,9 +103,9 @@ export interface CuaSurface {
   /**
    * Capture the selected window.
    * @param options - emission options.
-   * @returns encoded image bytes matching the model-request screenshot and its absolute pixel coordinates.
+   * @returns encoded model-request image with its format, pixel dimensions and window; use mimeType when saving or declaring the image.
    */
-  getScreenshot(options?: CuaObservationOptions): Promise<Uint8Array>
+  getScreenshot(options?: CuaObservationOptions): Promise<CuaScreenshot>
   /**
    * Read AX then capture.
    * @param options - observation options.

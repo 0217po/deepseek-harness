@@ -22,7 +22,7 @@ The operation schema owns shared data declarations. Host-only limits and launch 
 
 Clipboard paste is distinct from Unicode key input: Return and Tab key events can trigger actions instead of inserting clipboard content. Pasteboard access runs on the AppKit main actor and retains promised data until a reader requests it. AX command completion alone does not establish that the application has fetched the data. Restoration checks ownership before replacing contents; the caller still verifies the application result.
 
-CUA registers its own Harness tool and returns native operation values directly. Screenshot capture requires a resolved image-capable model and the shared attachment service. The tool admits each screenshot once and renders its durable image reference; the object bridge returns PNG bytes without another upload or image emission.
+CUA registers its own Harness tool and returns operation values directly. Screenshot capture requires a resolved image-capable model and the shared attachment service. The tool admits each screenshot once and renders its durable image reference; the object API, combined observation and image sink retain the same `CuaScreenshot` containing encoded `bytes`, `mimeType`, `pixelWidth`, `pixelHeight` and `windowId` from the validated screenshot result. The bridge preserves this metadata without another upload or image emission. Callers use the reported format and dimensions when saving or declaring images.
 
 ## Alternatives considered
 
@@ -31,6 +31,8 @@ Depending on the complete upstream driver would simplify upgrades but does not m
 A CUA-specific persistent evaluator duplicates execution lifecycle policy and prevents independent iteration on PTC. Requiring callers to manage raw app and snapshot tokens alone loses reusable object semantics. The facade and small tool adapter provide those semantics while leaving the evaluator outside this package.
 
 Reusing the MCP result adapter would impose MCP envelopes and wire validation on native CUA operations. Direct Harness tool output and shared attachment admission provide the needed logging and images without a second protocol.
+
+**Fixing the screenshot format** would require otherwise unnecessary re-encoding and discard the attachment pipeline’s pass-through optimization. A format convention alone still forces callers to guess, and cannot tell them when encoding policy changes. Returning the already computed format and dimensions preserves pass-through and makes each result describe its actual bytes.
 
 ## Consequences
 

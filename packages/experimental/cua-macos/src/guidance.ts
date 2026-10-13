@@ -6,6 +6,8 @@ Initialize the object API once in persistent PTC. Reuse its variables in later c
 
 Use app methods directly for single-window tasks; getApp already reads initial AX state. Call app.getWindows() and await app.getWindow(windowId) only to target a particular window or resolve ambiguous window selection. App screenshots and coordinate actions use the latest AX observation: its focused on-screen, nonzero-size window, otherwise the sole such window. They do not refresh focus automatically. Read app.getAXState() to follow changed focus.
 
+CuaScreenshot contains { bytes: Uint8Array, mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/gif", pixelWidth: number, pixelHeight: number, windowId: number }. Use mimeType to choose a file extension or declare an image; do not assume PNG.
+
 Object API signatures (options default to { emit: true }):
 
 - cua.getCapabilities(options?) -> { platform, permissions, sessionLocked, methods, coordinateSpace, browser }
@@ -23,8 +25,8 @@ App and Window methods:
 
 - show() -> { dispatched: true, verified: false, windowId: number | null, foregroundChanged: boolean | null }
 - getAXState(options?: { emit?: boolean, disableDiffing?: boolean, includeMenus?: boolean, details?: boolean }) -> string
-- getScreenshot(options?: { emit?: boolean }) -> Uint8Array
-- getAXStateAndScreenshot(options?) -> { state: string, screenshot: Uint8Array }
+- getScreenshot(options?: { emit?: boolean }) -> CuaScreenshot
+- getAXStateAndScreenshot(options?) -> { state: string, screenshot: CuaScreenshot }
 - hover(target: number | [x, y], options?: { relative?: boolean }) -> { dispatched, verified, hoverRoute, systemPointerMoved }
 - click(target: number | [x, y], options?: { mouseButton?: "left" | "right" | "middle", clickCount?: 1 | 2, modifiers?: Array<"command" | "control" | "option" | "shift" | "fn">, relative?: boolean }) -> action result
 - setValue(elementIndex: number, value: string) -> action result
