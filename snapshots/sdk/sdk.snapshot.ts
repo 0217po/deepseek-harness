@@ -572,7 +572,15 @@ async function runScenario(scenario: CorpusScenario): Promise<{
   finalWorkspace: WorkspaceSnapshotEntry[]
   cwd: string
 }> {
-  const cwd = await realpath(await mkdtemp(join(tmpdir(), `sdk-snapshot-${scenario.name}-`)))
+  const workspaceParent = await realpath(tmpdir())
+  let workspacePrefix = `sdk-snapshot-${scenario.name}-`
+  if (scenario.name === 'minimal-image-compaction') {
+    // mkdtemp appends six characters; JSON quoting is part of the runtime-context text.
+    const paddingLength = 192 - JSON.stringify(join(workspaceParent, `${workspacePrefix}XXXXXX`)).length
+    if (paddingLength < 0) throw new Error('compaction snapshot temporary root exceeds its fixed cwd text length')
+    workspacePrefix += '-'.repeat(paddingLength)
+  }
+  const cwd = await realpath(await mkdtemp(join(workspaceParent, workspacePrefix)))
   const dshHome = join(cwd, '.dsh')
   const sessionsRoot = join(dshHome, 'sessions')
   const replayFixtures = recording ? [] : await hydrateReplayFixtures(scenario, cwd)

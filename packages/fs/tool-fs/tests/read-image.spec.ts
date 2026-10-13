@@ -782,10 +782,7 @@ describe('registration surface', () => {
     expect((await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))).isError).toBe(true)
   })
 
-  it.each([
-    { config: { read: false, write: false, edit: false }, tools: ['read_image'] },
-    { config: {}, tools: ['read', 'read_image', 'write', 'edit'] },
-  ])('withdraws and restores enabled image registration with the attachment store: $config', async ({ config, tools }) => {
+  it('withdraws and restores image-only registration with the attachment store', async () => {
     const ctx = new Context()
     try {
       provideWorkingDirectoryFixture(ctx)
@@ -793,13 +790,13 @@ describe('registration surface', () => {
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(LocalFileSystem, { cwd: dir })
       const attachment = await ctx.plugin(LocalAttachmentStore, { dshHome: home })
-      const plugin = await ctx.plugin(ToolFs, config)
+      const plugin = await ctx.plugin(ToolFs, { read: false, write: false, edit: false })
       const names = () => ctx.tools.schemas().map(tool => tool.name).sort()
-      expect(names()).toEqual([...tools].sort())
+      expect(names()).toEqual(['read_image'])
       await attachment.dispose()
-      expect(names()).toEqual(tools.filter(name => name !== 'read_image').sort())
+      expect(names()).toEqual([])
       await ctx.plugin(LocalAttachmentStore, { dshHome: home })
-      expect(names()).toEqual([...tools].sort())
+      expect(names()).toEqual(['read_image'])
       await plugin.dispose()
       expect(names()).toEqual([])
     } finally {

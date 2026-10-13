@@ -211,7 +211,7 @@ describe('minimal manual compaction', () => {
     expect(prompts).toHaveLength(2)
     const [initial, continuation] = prompts
     if (initial === undefined || continuation === undefined) throw new Error('minimal compaction fixture requires two user prompts')
-    scaffold = await launchWebScaffold({ replayFixture: fixture, compareReplaySession: true })
+    scaffold = await launchWebScaffold({ replayFixture: fixture, compareReplaySession: true, workspacePathLength: 192 })
     scaffold.ctx.on('llm/stream', async function* (options, next) {
       requests.push(options)
       yield* next()
