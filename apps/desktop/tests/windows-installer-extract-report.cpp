@@ -10,6 +10,11 @@ extern "C" __declspec(dllimport) int __cdecl InstallerReportExtractFailure(
     HWND parent, int code, LPCWSTR archive, LPCWSTR destination, LPCWSTR log, LPCWSTR reportPath, int show,
     LPCWSTR title, LPCWSTR heading, LPCWSTR hint, LPCWSTR copy, LPCWSTR expand, LPCWSTR collapse, LPCWSTR savedFormat, LPCWSTR unsaved, LPCWSTR copied);
 
+extern "C" __declspec(dllimport) int __cdecl InstallerReportDirectoryFailure(
+    HWND parent, DWORD error, LPCWSTR source, LPCWSTR destination, DWORD restoreError, LPCWSTR backup,
+    LPCWSTR log, LPCWSTR reportPath, int show,
+    LPCWSTR title, LPCWSTR heading, LPCWSTR hint, LPCWSTR copy, LPCWSTR expand, LPCWSTR collapse, LPCWSTR savedFormat, LPCWSTR unsaved, LPCWSTR copied);
+
 static bool Contains(const std::wstring& text, const std::wstring& needle) { return text.find(needle) != std::wstring::npos; }
 
 static std::string ReadBytes(const std::wstring& path) {
@@ -127,7 +132,19 @@ int wmain() {
         L"title", L"heading", L"hint", L"copy", L"expand", L"collapse", L"saved %s", L"unsaved", L"copied");
     assert(unwritable == 0);
 
-    for (const std::wstring& file : {reportPath, missingLogReport, log}) DeleteFileW(file.c_str());
+    const std::wstring directoryReport = root + L"\\directory.log";
+    assert(InstallerReportDirectoryFailure(nullptr, ERROR_SHARING_VIOLATION, L"C:\\Apps\\\x6587\x4EF6.new", L"C:\\Apps\\\x6587\x4EF6",
+        ERROR_ALREADY_EXISTS, L"C:\\Apps\\\x6587\x4EF6.old", (root + L"\\absent.log").c_str(), directoryReport.c_str(), 0,
+        L"title", L"heading", L"hint", L"copy", L"expand", L"collapse", L"saved %s", L"unsaved", L"copied") == 1);
+    const std::string directorySaved = ReadBytes(directoryReport);
+    for (const std::string& expected : {"Operation: MoveFileExW", "Windows error: 32", "Restoration error: 183",
+        "Preserved backup: C:\\Apps\\\xE6\x96\x87\xE4\xBB\xB6.old"}) {
+        assert(directorySaved.find(expected) != std::string::npos);
+    }
+    assert(InstallerReportDirectoryFailure(nullptr, ERROR_ACCESS_DENIED, L"a", L"", 0, L"", log.c_str(), (log + L"\\impossible.txt").c_str(), 0,
+        L"title", L"heading", L"hint", L"copy", L"expand", L"collapse", L"saved %s", L"unsaved", L"copied") == 0);
+
+    for (const std::wstring& file : {reportPath, missingLogReport, directoryReport, log}) DeleteFileW(file.c_str());
     RemoveDirectoryW((root + L"\\nested\\logs").c_str());
     RemoveDirectoryW((root + L"\\nested").c_str());
     const BOOL removed = RemoveDirectoryW(root.c_str());
