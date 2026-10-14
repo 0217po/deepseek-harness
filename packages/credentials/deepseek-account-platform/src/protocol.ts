@@ -82,7 +82,7 @@ export const initialization = z.object({
 export const exchange = z.object({ token: z.string().regex(/^[\x21-\x7e]+$/), authorized_url: z.url(), user: z.unknown().optional() })
 
 /**
- * Read one bounded platform response; failures emit non-secret diagnostics to stderr.
+ * Read one bounded platform response; non-cancellation failures emit non-secret diagnostics to stderr.
  * @param origin - validated platform origin.
  * @param method - platform endpoint suffix.
  * @param body - protocol request, never logged.
@@ -163,22 +163,28 @@ export async function logoutAccount(origin: string, token: string,
   }, signal)
 }
 
+/** Caller cancellation stays silent; standard TimeoutError aborts remain failures. */
+function callerCancelled(signal: AbortSignal): boolean {
+  const reason: unknown = signal.reason
+  return signal.aborted && !(reason instanceof Error && reason.name === 'TimeoutError')
+}
+
 async function platformRequest(url: string, init: RequestInit, signal: AbortSignal): Promise<unknown> {
   const path = new URL(url).pathname
   let response: Response
   try {
     response = await fetch(url, { ...init, redirect: 'error', signal })
   } catch {
-    console.error('[deepseek-account] request failed', { path, errorCode: 'no-response', aborted: signal.aborted })
+    if (!callerCancelled(signal)) console.error('[deepseek-account] request failed', { path, errorCode: 'no-response', aborted: signal.aborted })
     throw new PlatformAuthError('no-response')
   }
   if (response.status === 401 && new Headers(init.headers).has('x-dsh-auth-token')) {
-    console.error('[deepseek-account] request failed', { path, status: response.status, errorCode: 'expired' })
+    if (!callerCancelled(signal)) console.error('[deepseek-account] request failed', { path, status: response.status, errorCode: 'expired' })
     await response.body?.cancel()
     throw new AccountUnauthorizedError()
   }
   if (!response.ok || response.body === null) {
-    console.error('[deepseek-account] request failed', { path, status: response.status, errorCode: 'network' })
+    if (!callerCancelled(signal)) console.error('[deepseek-account] request failed', { path, status: response.status, errorCode: 'network' })
     await response.body?.cancel()
     throw new PlatformAuthError('network')
   }
@@ -186,6 +192,8 @@ async function platformRequest(url: string, init: RequestInit, signal: AbortSign
   const chunks: Uint8Array[] = []
   let size = 0
   let stage = 'read-body'
+  let codes: { code: number; data?: { biz_code: number } | undefined } | undefined
+  let validationError: z.ZodError | undefined
   try {
     while (true) {
       const next = await reader.read()
@@ -199,12 +207,8 @@ async function platformRequest(url: string, init: RequestInit, signal: AbortSign
     }
     stage = 'parse-json'
     const payload: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'))
-    const codes = z.object({ code: z.number().int(), data: z.object({ biz_code: z.number().int() }).optional() }).safeParse(payload)
-    if (codes.success && (codes.data.code !== 0 || (codes.data.data !== undefined && codes.data.data.biz_code !== 0))) {
-      console.error('[deepseek-account] response codes', {
-        path, status: response.status, code: codes.data.code, bizCode: codes.data.data?.biz_code,
-      })
-    }
+    const responseCodes = z.object({ code: z.number().int(), data: z.object({ biz_code: z.number().int() }).optional() }).safeParse(payload)
+    if (responseCodes.success) codes = responseCodes.data
     const authorization = z.object({ code: z.literal(40003) }).safeParse(payload)
     if (authorization.success && new Headers(init.headers).has('x-dsh-auth-token')) {
       throw new AccountUnauthorizedError()
@@ -212,9 +216,7 @@ async function platformRequest(url: string, init: RequestInit, signal: AbortSign
     stage = 'envelope'
     const parsed = envelope.safeParse(payload)
     if (!parsed.success) {
-      console.error('[deepseek-account] envelope rejected', {
-        path, issues: parsed.error.issues.map(issue => ({ path: issue.path, code: issue.code })),
-      })
+      validationError = parsed.error
       throw new PlatformAuthError('protocol')
     }
     stage = 'business-code'
@@ -225,8 +227,11 @@ async function platformRequest(url: string, init: RequestInit, signal: AbortSign
     }
     return parsed.data.data.biz_data
   } catch (error) {
-    console.error('[deepseek-account] response rejected', { path, status: response.status, stage,
-      errorCode: error instanceof PlatformAuthError ? error.code : 'protocol' })
+    if (!callerCancelled(signal)) console.error('[deepseek-account] response rejected', {
+      path, status: response.status, stage, code: codes?.code, bizCode: codes?.data?.biz_code,
+      issues: validationError?.issues.map(issue => ({ path: issue.path, code: issue.code })),
+      errorCode: error instanceof PlatformAuthError ? error.code : 'protocol',
+    })
     if (error instanceof PlatformAuthError) throw error
     throw new PlatformAuthError('protocol')
   } finally {

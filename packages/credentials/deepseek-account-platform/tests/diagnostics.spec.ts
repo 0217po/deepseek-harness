@@ -28,6 +28,7 @@ it('reports business failure codes without credentials or response messages', as
     await expect(requestPlatform('https://platform.deepseek.com', 'auth_init',
       { code_verifier: 'request-secret' }, new AbortController().signal,
       { Cookie: 'cookie-secret' })).rejects.toThrow('account: protocol')
+    expect(output).toHaveBeenCalledOnce()
     const logged = JSON.stringify(output.mock.calls)
     expect(logged).toContain('/auth-api/v0/dsh/auth_init')
     expect(logged).toContain('40123')
@@ -184,6 +185,116 @@ it('reports invalid bonus fields without logging bonus data', async () => {
     expect(output.mock.calls[0]?.[0]).toBe('[deepseek-account] bonus schema rejected')
     expect(JSON.stringify(output.mock.calls)).toContain('order_id')
     expect(JSON.stringify(output.mock.calls)).not.toContain('private-')
+  } finally {
+    fetcher.mockRestore()
+    output.mockRestore()
+  }
+})
+
+
+it.each([
+  { stage: 'fetch', code: 'no-response' },
+  { stage: 'unauthorized', code: 'expired' },
+  { stage: 'http', code: 'network' },
+  { stage: 'body', code: 'protocol' },
+])('keeps caller cancellation silent during $stage', async ({ stage, code }) => {
+  const output = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  const fetcher = vi.spyOn(globalThis, 'fetch')
+  const cancellation = new AbortController()
+  const reading = Promise.withResolvers<undefined>()
+  let body: ReadableStreamDefaultController<Uint8Array> | undefined
+  try {
+    if (stage === 'body') {
+      fetcher.mockResolvedValue(new Response(new ReadableStream<Uint8Array>({
+        start(controller) { body = controller },
+        pull() { reading.resolve(undefined) },
+      })))
+    } else if (stage === 'fetch') {
+      cancellation.abort()
+      fetcher.mockRejectedValue(cancellation.signal.reason)
+    } else {
+      fetcher.mockImplementation(async () => {
+        cancellation.abort()
+        return new Response('private-response', { status: stage === 'unauthorized' ? 401 : 503 })
+      })
+    }
+    const request = requestAccount('https://platform.deepseek.com', '/auth-api/v0/users/current',
+      'private-token', cancellation.signal, {})
+    if (stage === 'body') {
+      await reading.promise
+      cancellation.abort()
+      body!.error(cancellation.signal.reason)
+    }
+    await expect(request).rejects.toThrow(`account: ${code}`)
+    expect(output).not.toHaveBeenCalled()
+  } finally {
+    body?.error()
+    fetcher.mockRestore()
+    output.mockRestore()
+  }
+})
+
+it('keeps cancellation with a non-error reason silent', async () => {
+  const output = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  const fetcher = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('private-network-error'))
+  const cancellation = new AbortController()
+  cancellation.abort('private-cancel-reason')
+  try {
+    expect(await readAccountDetail('profile', 'https://platform.deepseek.com', 'private-token',
+      cancellation.signal, {})).toEqual({ status: 'failed' })
+    expect(output).not.toHaveBeenCalled()
+  } finally {
+    fetcher.mockRestore()
+    output.mockRestore()
+  }
+})
+
+it.each(['fetch', 'body'] as const)('reports request timeouts during %s once without raw exceptions', async (stage) => {
+  const output = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  const fetcher = vi.spyOn(globalThis, 'fetch')
+  const timeout = new AbortController()
+  const reading = Promise.withResolvers<undefined>()
+  let body: ReadableStreamDefaultController<Uint8Array> | undefined
+  try {
+    if (stage === 'body') {
+      fetcher.mockResolvedValue(new Response(new ReadableStream<Uint8Array>({
+        start(controller) { body = controller },
+        pull() { reading.resolve(undefined) },
+      })))
+    } else {
+      timeout.abort(new DOMException('private-timeout-message', 'TimeoutError'))
+      fetcher.mockRejectedValue(timeout.signal.reason)
+    }
+    const request = readAccountDetail('profile', 'https://platform.deepseek.com', 'private-token', timeout.signal, {})
+    if (stage === 'body') {
+      await reading.promise
+      timeout.abort(new DOMException('private-timeout-message', 'TimeoutError'))
+      body!.error(timeout.signal.reason)
+    }
+    expect(await request).toEqual({ status: 'failed' })
+    expect(output).toHaveBeenCalledOnce()
+    expect(JSON.stringify(output.mock.calls)).not.toContain('private-')
+  } finally {
+    body?.error()
+    fetcher.mockRestore()
+    output.mockRestore()
+  }
+})
+
+it('reports invalid profile fields once without logging profile values', async () => {
+  const output = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+    code: 0, data: { biz_code: 0, biz_data: { email: 42, id: 'private-id' } },
+  })))
+  try {
+    expect(await readAccountDetail('profile', 'https://platform.deepseek.com', 'private-token',
+      new AbortController().signal, {})).toEqual({ status: 'failed' })
+    expect(output).toHaveBeenCalledOnce()
+    expect(output.mock.calls[0]?.[0]).toBe('[deepseek-account] profile schema rejected')
+    const logged = JSON.stringify(output.mock.calls)
+    expect(logged).toContain('email')
+    expect(logged).toContain('invalid_type')
+    expect(logged).not.toContain('private-')
   } finally {
     fetcher.mockRestore()
     output.mockRestore()

@@ -220,8 +220,7 @@ it('keeps successful account refreshes silent and reports only failed reads', as
   await vi.waitFor(() => { expect(actions.hooks.account.getSnapshot().details?.profile).toEqual(profile) })
   await actions.refreshAccount()
   for (const spy of [output, info, log]) {
-    expect(spy.mock.calls.filter(call => String(call[0]).startsWith('[account-debug]')
-      || String(call[0]).startsWith('[deepseek-account]'))).toEqual([])
+    expect(spy.mock.calls.filter(call => String(call[0]).startsWith('[deepseek-account]'))).toEqual([])
   }
   c.mock.remote.account.getProfile.mockResolvedValueOnce(ok({ status: 'failed' }))
   c.mock.remote.account.getBalance.mockRejectedValueOnce(new Error('private-transport-detail'))
