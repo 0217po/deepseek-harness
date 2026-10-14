@@ -49,7 +49,10 @@ export default defineConfig([
   },
   {
     ...shared,
-    entry: { 'session-corpus.worker': 'session-corpus/session-corpus.worker.ts' },
+    entry: {
+      'session-corpus.worker': 'session-corpus/session-corpus.worker.ts',
+      'projection-list.worker': 'session-corpus/projection-list.worker.ts',
+    },
     outDir: '.dsh-build/session-corpus',
     clean: true,
     tsconfig: 'tsconfig.host.json',
@@ -60,6 +63,13 @@ export default defineConfig([
       'conversation-fold.worker': 'conversation-fold/conversation-fold.worker.client.ts',
     },
     outDir: '.dsh-build/conversation-fold',
+    clean: true,
+    tsconfig: 'tsconfig.client.json',
+  },
+  {
+    ...shared,
+    entry: { 'user-text.worker': 'user-text/user-text.worker.client.ts' },
+    outDir: '.dsh-build/user-text',
     clean: true,
     tsconfig: 'tsconfig.client.json',
   },

@@ -19,7 +19,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 /** One resolved theme snapshot per scheme; the slot's theme hook serves these in the application. */
 const themeOf = (colorScheme: 'light' | 'dark'): ThemeSnapshot => ({
-  preference: colorScheme, fontSize: 14,
+  preference: colorScheme, fontSizes: { text: 14, code: 11, terminal: 13 }, fontFamilies: { text: '', code: '', terminal: '' },
   active: { id: colorScheme, colorScheme, tokens: {} }, themes: [], revision: 0,
 })
 
@@ -505,7 +505,7 @@ it.each(['initializing', 'waiting-browser', 'exchanging'] as const)('shows %s an
   expect(operations.cancel).toHaveBeenCalledExactlyOnceWith('attempt')
 })
 
-it('opens the authorization link with the active Desktop palette and follows later switches', () => {
+it('opens the authorization link with the active application palette and follows later switches', () => {
   const authorizeUrl = 'https://platform.deepseek.com/dsh/authorize?state=example'
   const operations = operationsOf({ status: 'signed-out', attempt: { id: 'attempt' as SignInAttemptId, phase: 'waiting-browser', authorizeUrl } })
   const element = (theme: ThemeSnapshot) => <AccountSection {...({} as GlobalStandardProps)} {...operations}

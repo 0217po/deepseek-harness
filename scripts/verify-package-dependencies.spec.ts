@@ -9,6 +9,7 @@ import {
 import {
   collectHostDependencyExportPolicyViolations,
   collectPackageDependencyViolations,
+  collectRootTypePackageViolations,
   collectRuntimeSourceExportUses,
   discoverPackageDependencyScope,
   expectedPackageDependencies,
@@ -17,6 +18,7 @@ import {
   formatPeerRequiredRuntimeDependencies,
   readPackageDependencyFacts,
   readPackageDependencyState,
+  readWorkspacePackageManifests,
   repairPackageDependencyManifest,
   type PackageDependencyFacts,
   type PackageDependencyManifest,
@@ -180,6 +182,27 @@ function hostRuntimeFixture(): {
   return { provider, workspaceNames, consumerFacts }
 }
 
+function workspaceFixture(manifests: Readonly<Record<string, PackageDependencyManifest>>): {
+  rootManifest: PackageDependencyManifest
+  packages: WorkspacePackageManifest[]
+} {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-root-type-packages-'))
+  roots.push(root)
+  for (const [path, manifest] of Object.entries(manifests)) {
+    mkdirSync(dirname(join(root, path)), { recursive: true })
+    writeFileSync(join(root, path), JSON.stringify(manifest))
+  }
+  return {
+    rootManifest: JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as PackageDependencyManifest,
+    packages: readWorkspacePackageManifests(root).all,
+  }
+}
+
+function rootTypeRemoval(path: string, entry: string): string {
+  return `${path}: remove ${entry}; the root package.json provides it because each package-local link slows `
+    + 'TypeScript JSX checking (packages/client/AGENTS.md#dependency-declaration)'
+}
+
 describe('package dependency scope', () => {
   it('keeps the measured Host relay roster explicit', () => {
     expect(PACKAGE_DEPENDENCY_POLICY.clientFaceExclude).toEqual([
@@ -190,6 +213,9 @@ describe('package dependency scope', () => {
       '@deepseek-ai/dsh-llm',
       '@deepseek-ai/dsh-session',
     ])
+    expect(PACKAGE_DEPENDENCY_POLICY.requiredServicePeers).toEqual({
+      '@deepseek-ai/dsh-api-terminal-controller': ['@deepseek-ai/dsh-subprocess'],
+    })
     expect(PACKAGE_DEPENDENCY_POLICY.configurationOnlyDevDependencies).toEqual({
       '@deepseek-ai/dsh-client-locale': ['@deepseek-ai/dsh-api-remotes'],
       '@deepseek-ai/dsh-client-ui-conversation': [
@@ -442,19 +468,29 @@ describe('face-aware source classification', () => {
 
   it('uses declared DefinitelyTyped providers only for erased source references', () => {
     const subject = sourceFacts({
-      'src/index.ts': "import type { ReactNode } from 'react'",
+      'src/index.ts': "import type { ParseResult } from 'papaparse'",
       'src/client/index.ts': "import type { Root } from 'mdast'; import type { Kind } from '@scope/types'",
     }, {
       dependencies: { '@types/mdast': '^4.0.0' },
-      devDependencies: { '@types/react': '^18.0.0', '@types/scope__types': '^1.0.0' },
+      devDependencies: { '@types/papaparse': '^5.0.0', '@types/scope__types': '^1.0.0' },
     })
 
-    expect([...subject.allSourceUses.keys()].sort()).toEqual(['@types/mdast', '@types/react', '@types/scope__types'])
+    expect([...subject.allSourceUses.keys()].sort()).toEqual(['@types/mdast', '@types/papaparse', '@types/scope__types'])
     expect([...subject.hostRuntimeSourceUses]).toEqual([])
     repairPackageDependencyManifest(subject)
     expect(subject.manifest.devDependencies?.['@types/mdast']).toBe('^4.0.0')
     expect(subject.manifest.dependencies?.['@types/mdast']).toBeUndefined()
     expect(subject.manifest.devDependencies?.mdast).toBeUndefined()
+  })
+
+  it('never lets a root-provided React type package stand in for react', () => {
+    const subject = sourceFacts({
+      'src/index.ts': "import type { ReactNode } from 'react'",
+      'src/client/index.ts': "import type { Root } from 'react-dom/client'",
+    }, { devDependencies: { '@types/react': '~18.3.1', '@types/react-dom': '~18.3.0' } })
+
+    expect([...subject.allSourceUses.keys()].sort()).toEqual(['react', 'react-dom'])
+    expect(() => { repairPackageDependencyManifest(subject) }).toThrow('undeclared third-party dependency react')
   })
 
   it.each(["import 'runtime-library'", 'export const view = <div />'])('does not let type providers satisfy runtime imports or JSX: %s', (source) => {
@@ -471,11 +507,11 @@ describe('face-aware source classification', () => {
   it('does not treat static browser library entries as Host modules', () => {
     const subject = sourceFacts({
       'src/index.tsx': "import 'static-input'; export const view = <div />",
-      'src/invariant.ts': "import 'browser-companion'",
+      'src/companion.ts': "import 'browser-companion'",
     }, {
       exports: {
         '.': { types: './lib/types/index.d.ts', default: './lib/index.js' },
-        './invariant': { types: './lib/types/invariant.d.ts', default: './lib/invariant.js' },
+        './companion': { types: './lib/types/companion.d.ts', default: './lib/companion.js' },
       },
     }, 'client-only')
 
@@ -488,7 +524,7 @@ describe('face-aware source classification', () => {
   it('scans published Node companions, conditional entries, and emitted-tree subpaths from source', () => {
     const subject = sourceFacts({
       'src/index.ts': 'export function apply() {}',
-      'src/invariant.ts': "import 'invariant-runtime'; import type { Kind } from 'invariant-types'",
+      'src/companion.ts': "import 'companion-runtime'; import type { Kind } from 'companion-types'",
       'src/node/helper.ts': "export { helper } from 'node-helper'",
       'src/node.mts': "import 'node-import'",
       'src/node.cts': "require('node-require')",
@@ -500,7 +536,7 @@ describe('face-aware source classification', () => {
     }, {
       exports: {
         '.': { types: './lib/types/index.d.ts', default: './lib/index.js' },
-        './invariant': { types: './lib/types/invariant.d.ts', default: './lib/invariant.js' },
+        './companion': { types: './lib/types/companion.d.ts', default: './lib/companion.js' },
         './renamed': { types: './lib/types/node/helper.d.ts', default: './lib/node-bundle.js' },
         './conditional': { browser: './lib/browser.js', node: { import: './lib/node.mjs', require: './lib/node.cjs' } },
         './emitted': { types: './lib/types/emitted.d.ts', default: './lib/types/emitted.js' },
@@ -515,11 +551,11 @@ describe('face-aware source classification', () => {
     })
 
     expect([...subject.hostRuntimeSourceUses.keys()].sort()).toEqual([
-      'invariant-runtime', 'node-helper', 'node-import', 'node-require', 'react', 'worker-one', 'worker-two',
+      'companion-runtime', 'node-helper', 'node-import', 'node-require', 'react', 'worker-one', 'worker-two',
     ])
     const expected = expectedPackageDependencies(subject)
     for (const name of subject.hostRuntimeSourceUses.keys()) expect(expected.get(name)?.section).toBe('dependencies')
-    for (const name of ['browser-only', 'invariant-types', 'type-export-only']) {
+    for (const name of ['browser-only', 'companion-types', 'type-export-only']) {
       expect(expected.get(name)?.section).toBe('devDependencies')
     }
   })
@@ -550,7 +586,7 @@ describe('face-aware source classification', () => {
       .toThrow('packages/g/host/package.json: Host runtime entry packages/g/host/src/index.ts does not exist')
   })
 
-  it('counts Host values as dependencies and Client values as development inputs', () => {
+  it('classifies Host values, required services, and Client build inputs separately', () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-package-faces-'))
     roots.push(root)
     const subject = pkg('@f/dual', 'packages/g/dual/package.json', {
@@ -575,10 +611,22 @@ describe('face-aware source classification', () => {
       CORDIS, '@f/runtime', '@f/types', '@f/nested', '@f/hidden', '@f/browser', '@f/injected',
     ]), policy({
       configurationOnlyDevDependencies: { '@f/dual': ['@f/injected'] },
+      requiredServicePeers: { '@f/dual': ['@f/types'] },
     }))
 
     expect([...found.hostRuntimeSourceUses.keys()].sort()).toEqual(['@f/nested', '@f/runtime'])
     expect([...found.configurationOnlyDevDependencies]).toEqual(['@f/injected'])
+    expect([...found.peerRequiredHostDependencies]).toEqual(['@f/types'])
+    expect(expectedPackageDependencies(found).get('@f/types')?.section).toBe('peer-dev')
+    const unrelated = readPackageDependencyFacts(root, subject, 'client-host', found.workspaceNames, policy({
+      requiredServicePeers: { '@f/other': ['@f/types'] },
+    }))
+    expect(expectedPackageDependencies(unrelated).get('@f/types')?.section).toBe('devDependencies')
+    for (const name of ['@f/missing', '@f/injected']) {
+      expect(() => readPackageDependencyFacts(root, subject, 'client-host', found.workspaceNames, policy({
+        requiredServicePeers: { '@f/dual': [name] },
+      }))).toThrow(`requiredServicePeers must name a referenced workspace package: ${name}`)
+    }
     expect(found.hostRuntimeExportUses).toEqual([
       {
         packageName: '@f/nested',
@@ -916,9 +964,50 @@ describe('dependency sections', () => {
     expect(formatPeerRequiredRuntimeDependencies({
       facts: [subject], packages: [], policyViolations: [], workspaceNames: subject.workspaceNames,
     })).toEqual([
-      'verify-package-dependencies: 1 Host runtime edge(s) remain in peerDependencies because their exports require shared identity across 1 package(s):',
+      'verify-package-dependencies: 1 Host runtime edge(s) remain in peerDependencies for shared exports or required services across 1 package(s):',
       '  @deepseek-ai/dsh-probe -> @deepseek-ai/dsh-runtime: @deepseek-ai/dsh-runtime#runtimeValue',
     ])
+  })
+
+  it('requires both peer and development declarations for a service without a value import', () => {
+    const dependency = '@deepseek-ai/dsh-runtime'
+    const manifest: PackageDependencyManifest = {
+      name: '@deepseek-ai/dsh-probe',
+      devDependencies: {
+        [CORDIS]: 'workspace:~',
+        [dependency]: 'workspace:*',
+        '@deepseek-ai/dsh-types': 'workspace:*',
+      },
+      peerDependencies: { [CORDIS]: 'workspace:~' },
+    }
+    const subject: PackageDependencyFacts = {
+      ...facts(manifest),
+      hostRuntimeSourceUses: new Map(),
+      hostRuntimeExportUses: [],
+      peerRequiredHostDependencies: new Set([dependency]),
+    }
+    const state = { facts: [subject], packages: [], policyViolations: [], workspaceNames: subject.workspaceNames }
+    expect(collectPackageDependencyViolations(state)).toEqual([
+      expect.stringContaining(`${dependency} must be matching peerDependencies + devDependencies`),
+    ])
+    repairPackageDependencyManifest(subject)
+    expect(collectPackageDependencyViolations(state)).toEqual([])
+    expect(manifest.peerDependencies?.[dependency]).toBe('workspace:*')
+    delete manifest.devDependencies?.[dependency]
+    expect(collectPackageDependencyViolations(state)).toHaveLength(1)
+    repairPackageDependencyManifest(subject)
+    expect(collectPackageDependencyViolations(state)).toEqual([])
+    expect(formatPeerRequiredRuntimeDependencies(state)).toEqual([
+      'verify-package-dependencies: 1 Host runtime edge(s) remain in peerDependencies for shared exports or required services across 1 package(s):',
+      `  ${manifest.name} -> ${dependency}: required Cordis service`,
+    ])
+  })
+
+  it('rejects required service declarations for unmanaged packages', () => {
+    const { root } = generatedHostFixture('schema')
+    expect(readPackageDependencyState(root, policy({
+      requiredServicePeers: { '@fixture/missing': [CORDIS] },
+    })).policyViolations).toContain('requiredServicePeers names unmanaged package @fixture/missing')
   })
 
   it('reports wrong sections, workspace ranges, and stale peer metadata', () => {
@@ -986,5 +1075,42 @@ describe('dependency sections', () => {
     repairPackageDependencyManifest(facts(manifest))
     expect(manifest.dependencies).toEqual({ '@deepseek-ai/dsh-runtime': 'workspace:*' })
     expect(manifest.peerDependencies).toEqual({ [CORDIS]: 'workspace:~' })
+  })
+})
+
+describe('root-provided type packages', () => {
+  it('rejects React type packages in any workspace dependency section and requires them at the root', () => {
+    const { rootManifest, packages } = workspaceFixture({
+      'package.json': { name: 'root', devDependencies: { '@types/react': '~18.3.1' } },
+      'apps/app/package.json': { name: '@f/app', devDependencies: { '@types/react': '~18.3.1', react: '^18.2.0' } },
+      'packages/experimental/probe/package.json': {
+        name: '@f/probe',
+        dependencies: { '@types/react-dom': '~18.3.0' },
+        peerDependencies: { '@types/react': '*' },
+      },
+      'vendor/lib/package.json': { name: '@f/lib', optionalDependencies: { '@types/react': '~18.3.1' } },
+    })
+
+    expect(collectRootTypePackageViolations(rootManifest, packages)).toEqual([
+      rootTypeRemoval('apps/app/package.json', 'devDependencies.@types/react'),
+      'package.json: devDependencies must declare @types/react-dom for every workspace package',
+      rootTypeRemoval('packages/experimental/probe/package.json', 'dependencies.@types/react-dom'),
+      rootTypeRemoval('packages/experimental/probe/package.json', 'peerDependencies.@types/react'),
+      rootTypeRemoval('vendor/lib/package.json', 'optionalDependencies.@types/react'),
+    ])
+  })
+
+  it('accepts root declarations beside package-level runtime React and other type packages', () => {
+    const { rootManifest, packages } = workspaceFixture({
+      'package.json': { name: 'root', devDependencies: { '@types/react': '~18.3.1', '@types/react-dom': '~18.3.0' } },
+      'packages/client/ui-probe/package.json': {
+        name: '@f/ui-probe',
+        dependencies: { react: '^18.2.0' },
+        devDependencies: { 'react-dom': '^18.2.0', '@types/react-is': '^18.0.0' },
+      },
+    })
+
+    expect(packages.map(pkg => pkg.manifestPath)).toEqual(['packages/client/ui-probe/package.json'])
+    expect(collectRootTypePackageViolations(rootManifest, packages)).toEqual([])
   })
 })

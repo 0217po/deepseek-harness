@@ -89,16 +89,6 @@ describe('llm/adapters-updated', () => {
     expect(observed).toEqual([['a']])
   })
 
-  it('rethrows the first INVARIANT-coded listener failure after notifying the rest', async () => {
-    const ctx = await setup()
-    const later = vi.fn()
-    ctx.on('llm/adapters-updated', () => {
-      throw Object.assign(new Error('registry incoherent'), { code: 'INVARIANT' })
-    })
-    ctx.on('llm/adapters-updated', later)
-    expect(() => ctx.llm.registerAdapter(['a'], new NoopAdapter())).toThrow('registry incoherent')
-    expect(later).toHaveBeenCalledTimes(1)
-  })
 })
 
 describe('configurable-provider directory', () => {
@@ -124,10 +114,17 @@ describe('configurable-provider directory', () => {
 
   it('detaches stored entries from caller-owned objects', async () => {
     const ctx = await setup()
-    const source = entry()
+    const env = ['OPENAI_API_KEY']
+    const source = entry({ defaultBaseURL: 'https://api.openai.com/v1', nativeAuth: { env, oauth: false } })
     ctx.llm.registerConfigurableProviders([source])
     source.displayName = 'mutated'
-    expect(ctx.llm.listConfigurableProviders()[0]!.displayName).toBe('OpenAI')
+    env.push('mutated')
+    const listed = ctx.llm.listConfigurableProviders()
+    expect(listed).toEqual([
+      entry({ defaultBaseURL: 'https://api.openai.com/v1', nativeAuth: { env: ['OPENAI_API_KEY'], oauth: false } }),
+    ])
+    ;(listed[0]!.nativeAuth!.env as string[]).push('mutated')
+    expect(ctx.llm.listConfigurableProviders()[0]!.nativeAuth!.env).toEqual(['OPENAI_API_KEY'])
   })
 
   it('withdraws every entry when the registration disposes', async () => {
