@@ -8,7 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import {
   confirmLinuxManager,
+  LinuxScopeNotStartedError,
   launchLinuxScope,
+  linuxManagerListener,
   prepareLinuxTerminalScope,
   probeLinuxBootstrap,
   probeLinuxManager,
@@ -260,7 +262,9 @@ describe('Linux native capability selection', () => {
       writeFileSync(table, header + row('00000000', socket) + row('00010000', `listener ${socket}`))
       expect(confirmLinuxManager({ spawnSync: failedQuery as never, unixSocketTable: table })).toBe(false)
       expect(failedQuery).toHaveBeenCalledOnce()
+      expect(linuxManagerListener({ unixSocketTable: table })).toBeUndefined()
       writeFileSync(table, header + row('00010000', socket))
+      expect(linuxManagerListener({ unixSocketTable: table })).toBe('2088859725')
       expect(confirmLinuxManager({ spawnSync: failedQuery as never, unixSocketTable: table })).toBe(true)
       expect(failedQuery).toHaveBeenCalledOnce()
       expect(confirmLinuxManager({ spawnSync: failedQuery as never, unixSocketTable: join(runtime, 'missing') })).toBe(false)
@@ -269,6 +273,7 @@ describe('Linux native capability selection', () => {
       for (const value of ['', undefined]) {
         vi.stubEnv('XDG_RUNTIME_DIR', value)
         const query = vi.fn(() => ({ status: 0, error: undefined }))
+        expect(linuxManagerListener({ unixSocketTable: table })).toBeUndefined()
         expect(confirmLinuxManager({ spawnSync: query as never, unixSocketTable: table })).toBe(true)
         expect(query).toHaveBeenCalledOnce()
       }
@@ -343,7 +348,8 @@ describe('Linux scope establishment and quiescence', () => {
     const { child, result } = launch(async () => missingUnit())
     result.owner.signal('SIGTERM')
     child.exit(outcome.exitCode, outcome.signal)
-    await expect(result.direct).rejects.toThrow(/before its bootstrap consumed.*restart the provider to probe native containment again/u)
+    await expect(result.direct).rejects.toBeInstanceOf(LinuxScopeNotStartedError)
+    await expect(result.direct).rejects.toThrow(/before its bootstrap consumed.*probes native containment again before its next command/u)
     await expect(result.owner.waitForExit()).resolves.toBeUndefined()
     result.owner.cleanup?.()
   })

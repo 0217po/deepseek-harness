@@ -35,7 +35,9 @@ import { logSpillFailure, prepareManagedProcessBinding } from './output.ts'
 import type { LocalSubprocessHandle, SpawnInternals } from './spawn.ts'
 import {
   confirmLinuxManager,
+  LinuxScopeNotStartedError,
   launchLinuxScope,
+  linuxManagerListener,
   prepareLinuxTerminalScope,
   probeLinuxNative,
   signalLinuxDirectProcess,
@@ -68,13 +70,18 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
   internals: SpawnInternals = {}
   /** Provider-lifetime latch suppressing repeated weaker-containment warnings. */
   private fallbackWarningIssued = false
-  /** Whether the first eligible ordinary or terminal spawn has run the Linux native probe. */
+  /** Whether linuxLiteralArgv holds a Linux native probe result; cleared when that result must be probed again. */
   private linuxProbed = false
   /**
-   * Provider-lifetime result of that probe: literal-argv scope options, or undefined when unavailable.
-   * Each probe is a spawnSync that blocks the event loop and forks the host, so later spawns only confirm the user manager.
+   * Latest Linux native probe result: literal-argv scope options, or undefined when unavailable. Each probe is a
+   * spawnSync that blocks the event loop and forks the host, so it reruns only after a scope never started its
+   * target or a new user-manager listener appeared; a positive result otherwise only confirms the manager per spawn.
    */
   private linuxLiteralArgv: LiteralArgvOptions | undefined
+  /** Count of Linux native probes; a failed scope launch resets the result only for the probe it launched under. */
+  private linuxProbeGeneration = 0
+  /** User-manager listener seen when the probe last failed; only a different listener triggers another probe. */
+  private linuxUnavailableListener: string | undefined
   /** Test hook for platform process inspection; production resolves lazily on terminal spawn. */
   terminalInspector: ProcessInspector | undefined
 
@@ -200,6 +207,7 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
         ? launchWindowsJob(spec, env)
         : launchLinuxScope(spec, env, linuxScope)
       handle = bindManagedProcess(spec, launch, binding)
+      if (linuxScope !== undefined) this.watchLinuxScopeStart(handle.done)
     }
     this.live.add(handle)
     const control = handle.control
@@ -217,14 +225,32 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
     return handle
   }
 
-  /** Probe on the first eligible ordinary or terminal spawn; after a positive result, confirm the user manager before each launch. */
+  /**
+   * Probe on the first eligible ordinary or terminal spawn. After a positive result, confirm the user manager
+   * before each launch; after a negative one, probe again only when a new user-manager listener appears.
+   */
   private linuxScopeAvailable(): boolean {
+    if (this.linuxProbed && this.linuxLiteralArgv === undefined) {
+      const listener = linuxManagerListener()
+      if (listener === undefined || listener === this.linuxUnavailableListener) return false
+      this.linuxProbed = false
+    }
     if (!this.linuxProbed) {
       this.linuxProbed = true
+      this.linuxProbeGeneration += 1
       this.linuxLiteralArgv = probeLinuxNative()
+      if (this.linuxLiteralArgv === undefined) this.linuxUnavailableListener = linuxManagerListener()
       return this.linuxLiteralArgv !== undefined
     }
-    return this.linuxLiteralArgv !== undefined && confirmLinuxManager()
+    return confirmLinuxManager()
+  }
+
+  /** Probe again before the next launch when a scope launched under the current probe never started its target. */
+  private watchLinuxScopeStart(done: Promise<unknown>): void {
+    const generation = this.linuxProbeGeneration
+    void done.catch((error: unknown) => {
+      if (error instanceof LinuxScopeNotStartedError && generation === this.linuxProbeGeneration) this.linuxProbed = false
+    })
   }
 
   private selectContainmentMode(
@@ -337,6 +363,7 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
       spec.shellActivity === true,
     )
     this.terminals.add(handle)
+    if (scope !== undefined) this.watchLinuxScopeStart(handle.done)
     const release = async (): Promise<void> => {
       // terminate() can wait on this direct-exit promise.
       directSettlement.resolve()

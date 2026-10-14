@@ -179,43 +179,51 @@ export function probeLinuxManager(internals: LinuxScopeInternals = {}): boolean 
 }
 
 /**
- * Report whether a process in this network namespace listens on a unix socket bound to path.
- * The kernel lists a bound socket only while a process holds it open, so a socket file that
- * a stopped or crashed listener left behind does not count.
+ * Find the socket a process in this network namespace listens on at path. The kernel lists a
+ * bound socket only while a process holds it open, so a socket file that a stopped or crashed
+ * listener left behind does not count.
  */
-function unixSocketListening(path: string, table: string): boolean {
+function unixSocketListener(path: string, table: string): string | undefined {
   let text: string
   try {
     text = readFileSync(table, 'latin1')
   } catch (_unreadableSocketTable) {
-    // Without the socket table nothing is known, so the caller queries systemctl.
-    return false
+    // Without the socket table nothing is known, so callers fall back to systemctl or keep their verdict.
+    return undefined
   }
   const suffix = ` ${path}`
-  return text.split('\n').some((line) => {
-    if (!line.endsWith(suffix)) return false
+  for (const line of text.split('\n')) {
+    if (!line.endsWith(suffix)) continue
     const fields = line.trim().split(/\s+/u)
-    return fields.slice(7).join(' ') === path && (Number.parseInt(String(fields[3]), 16) & UNIX_SOCKET_ACCEPTING) !== 0
-  })
+    if (fields.slice(7).join(' ') === path && (Number.parseInt(String(fields[3]), 16) & UNIX_SOCKET_ACCEPTING) !== 0) {
+      return String(fields[6])
+    }
+  }
+  return undefined
 }
 
 /**
- * Confirm the user manager before a scope launch. `systemd-run --user` connects through
- * `$XDG_RUNTIME_DIR/systemd/private`; when the kernel socket table shows a process listening
- * there, the confirmation needs no child process. Otherwise one systemctl query decides.
- * A hung manager that still listens passes, and its scope launch fails.
+ * Identify the user manager's listener on `$XDG_RUNTIME_DIR/systemd/private`, the socket
+ * `systemd-run --user` connects through.
+ * @param internals - optional socket-table seam used by tests.
+ * @returns the listening socket's inode from the kernel socket table, or undefined when
+ *   XDG_RUNTIME_DIR is unset or nothing in this network namespace listens there.
+ */
+export function linuxManagerListener(internals: LinuxScopeInternals = {}): string | undefined {
+  const runtimeDirectory = childEnv().XDG_RUNTIME_DIR
+  if (runtimeDirectory === undefined || runtimeDirectory === '') return undefined
+  return unixSocketListener(join(runtimeDirectory, 'systemd', 'private'), internals.unixSocketTable ?? '/proc/net/unix')
+}
+
+/**
+ * Confirm the user manager before a scope launch. A listener on its private socket confirms it
+ * without a child process; otherwise one systemctl query decides. A hung manager that still
+ * listens passes, and its scope launch fails with LinuxScopeNotStartedError.
  * @param internals - optional socket-table and systemctl seams used by tests.
  * @returns whether a scope launch can reach the user manager.
  */
 export function confirmLinuxManager(internals: LinuxScopeInternals = {}): boolean {
-  const runtimeDirectory = childEnv().XDG_RUNTIME_DIR
-  if (runtimeDirectory !== undefined && runtimeDirectory !== '' && unixSocketListening(
-    join(runtimeDirectory, 'systemd', 'private'),
-    internals.unixSocketTable ?? '/proc/net/unix',
-  )) {
-    return true
-  }
-  return probeLinuxManager(internals)
+  return linuxManagerListener(internals) !== undefined || probeLinuxManager(internals)
 }
 
 interface DirectRange {
@@ -224,6 +232,13 @@ interface DirectRange {
   signal(signal: 'SIGTERM' | 'SIGKILL'): boolean
   /** Direct exit/error settlement, independent of output drain and managed-range completion. */
   settled: Promise<unknown>
+}
+
+/** A scope launch whose bootstrap never consumed its launch request, so its target never ran. */
+export class LinuxScopeNotStartedError extends Error {
+  override readonly name = 'LinuxScopeNotStartedError'
+  /** Stable code for callers that classify failures without instanceof. */
+  readonly code = 'ERR_SUBPROCESS_SCOPE_NOT_STARTED'
 }
 
 class LinuxScopeStartup {
@@ -236,8 +251,8 @@ class LinuxScopeStartup {
     if (startup !== undefined) throw deserializeRunnerError(startup.error)
     if (existsSync(this.files.requestPath)
       && !(outcome.signal !== null && this.terminationSignals.has(outcome.signal))) {
-      throw new Error(
-        `${this.kind} scope exited before its bootstrap consumed the launch request; if the user-systemd manager is no longer reachable, restart the provider to probe native containment again`,
+      throw new LinuxScopeNotStartedError(
+        `${this.kind} scope exited before its bootstrap consumed the launch request; the provider probes native containment again before its next command`,
       )
     }
     return outcome
