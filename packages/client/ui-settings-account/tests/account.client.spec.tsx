@@ -401,7 +401,7 @@ it.each([
   expect(screen.getByRole('button', { name: en.menu }).textContent).toBe(expected)
 })
 
-it('shows the profile image in settings and the sidebar, with independent load-error fallbacks', async () => {
+it('shows the same shared picture outcome in settings and the sidebar', async () => {
   const operations = mount({ status: 'credential-stored', attempt: null }, en, {
     profile: { status: 'ready', value: { id: null, name: 'User', contact: null, avatarUrl: 'https://example.test/avatar.png' } },
   })
@@ -410,28 +410,33 @@ it('shows the profile image in settings and the sidebar, with independent load-e
     useAccount={selector => selector(operations.hooks.account.getSnapshot())}
     useTheme={selector => selector(operations.hooks.theme.getSnapshot())}
     wide openSettings={() => {}} openOnboarding={() => {}} t={key => en[key as AccountKey]} />)
+  expect(document.querySelectorAll('img')).toHaveLength(0)
+  const snapshot = operations.hooks.account.getSnapshot()
+  cleanup()
+  snapshot.avatar = { status: 'ready', url: 'https://example.test/avatar.png' }
+  operations.hooks.account.getSnapshot = () => snapshot
+  render(<>
+    {await accountMenu(operations, () => snapshot, true)}
+    <AccountSection {...({} as GlobalStandardProps)} {...operations}
+      useAccount={selector => selector(snapshot)} useTheme={selector => selector(themeOf('light'))}
+      close={() => {}} t={key => en[key as AccountKey]} />
+  </>)
   const images = document.querySelectorAll('img')
   expect(images).toHaveLength(2)
-  for (const image of images) {
-    expect(image.getAttribute('src')).toBe('https://example.test/avatar.png')
-    const parent = image.parentElement!
-    fireEvent.error(image)
-    expect(parent.querySelector('img')).toBeNull()
-    expect(parent.querySelector('svg')).not.toBeNull()
-  }
+  for (const image of images) expect(image.getAttribute('src')).toBe('https://example.test/avatar.png')
 })
 
-it('retries a changed avatar URL after an image fails', async () => {
+it.each(['loading', 'failed'] as const)('shows fallback until the shared avatar is ready (%s)', async (status) => {
   const { AccountAvatar } = await import('../src/client/AccountAvatar.tsx')
-  const view = render(<AccountAvatar />)
+  const view = render(<AccountAvatar avatar={undefined} />)
   expect(view.container.querySelector('img')).toBeNull()
   expect(view.container.querySelector('svg')).not.toBeNull()
-  view.rerender(<AccountAvatar url="https://example.test/old.png" />)
-  fireEvent.error(view.container.querySelector('img')!)
+  view.rerender(<AccountAvatar avatar={{ url: 'https://example.test/avatar.png', status }} />)
+  expect(view.container.querySelector('img')).toBeNull()
   expect(view.container.querySelector('svg')).not.toBeNull()
-  view.rerender(<AccountAvatar url="https://example.test/new.png" />)
-  expect(view.container.querySelector('img')!.getAttribute('src')).toBe('https://example.test/new.png')
-  view.rerender(<AccountAvatar url={null} />)
+  view.rerender(<AccountAvatar avatar={{ url: 'https://example.test/avatar.png', status: 'ready' }} />)
+  expect(view.container.querySelector('img')!.getAttribute('src')).toBe('https://example.test/avatar.png')
+  view.rerender(<AccountAvatar avatar={undefined} />)
   expect(view.container.querySelector('img')).toBeNull()
 })
 

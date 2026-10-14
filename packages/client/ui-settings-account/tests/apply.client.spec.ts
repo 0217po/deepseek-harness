@@ -207,6 +207,39 @@ it('reports the account sampled by the click when a native read outlasts a sign-
   expect(new URL(String(open.mock.calls.at(-1)![0])).searchParams.get('prefill_uid')).toBe('account-user')
 }, 60_000)
 
+it('publishes one avatar load and retries it through the shared Settings refresh action', async ({ start }) => {
+  const images: HTMLImageElement[] = []
+  vi.stubGlobal('Image', function () {
+    const image = document.createElement('img')
+    images.push(image)
+    return image
+  })
+  const c = await start()
+  const actions = operations(c)
+  const picture: AccountDetails['profile'] = {
+    status: 'ready', value: { id: 'account-user' as AccountUserId, name: 'User', contact: null, avatarUrl: 'https://example.test/avatar.png' },
+  }
+  c.mock.remote.account.getProfile.mockResolvedValue(ok(picture))
+  c.mock.streams.push('account/watch', stored)
+  await vi.waitFor(() => { expect(images).toHaveLength(1) })
+  images[0]!.dispatchEvent(new Event('error'))
+  expect(actions.hooks.account.getSnapshot().avatar?.status).toBe('failed')
+  await actions.refreshAccount()
+  await actions.refreshAccount()
+  expect(images).toHaveLength(2)
+  images[1]!.dispatchEvent(new Event('error'))
+  await actions.refreshAccount()
+  expect(images).toHaveLength(3)
+  images[2]!.dispatchEvent(new Event('load'))
+  expect(actions.hooks.account.getSnapshot().avatar).toEqual({ url: picture.value.avatarUrl, status: 'ready' })
+  await actions.refreshAccount()
+  expect(images).toHaveLength(3)
+  c.mock.streams.push('account/watch', view)
+  await vi.waitFor(() => { expect(actions.hooks.account.getSnapshot().view).toEqual(view) })
+  expect(actions.hooks.account.getSnapshot().avatar).toBeUndefined()
+  expect(images[2]!.getAttribute('src')).toBeNull()
+}, 60_000)
+
 it('coalesces refreshes, publishes independent failures, and rejects stale responses after sign-out or unload', async ({ start }) => {
   vi.stubGlobal('dshDesktop', {})
   const c = await start()

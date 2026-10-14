@@ -30,6 +30,7 @@ import { DesktopOnboardingController } from './onboarding-state.ts'
 import { DesktopOnboardingEntry, type DesktopOnboardingInjected } from './DesktopOnboardingEntry.tsx'
 import { readOnboardingApiKeyPresence } from './onboarding-credentials.ts'
 import { refreshAfterReturn } from './account-refresh.ts'
+import { AccountAvatarLoader } from './account-avatar.ts'
 export type { AccountSectionInjected, AccountSectionProps } from './AccountSection.tsx'
 export type { AccountMenuProps } from './AccountMenu.tsx'
 export type { AccountSnapshot } from './AccountSection.tsx'
@@ -56,6 +57,8 @@ export function apply(ctx: Context): void {
   ctx.effect(() => () => { browser.dispose() }, 'account: pending browser window')
   const listeners = new Set<() => void>()
   const publish = (value: AccountSnapshot) => { snapshot = value; for (const listener of listeners) listener() }
+  const avatar = new AccountAvatarLoader((value) => { publish({ ...snapshot, avatar: value }) })
+  ctx.effect(() => () => { avatar.dispose() }, 'account: profile picture lifetime')
   /** @returns the client identity for one account call, read at call time so it carries the language and zone in effect then. */
   const client = () => accountClientMetadata(ctx.locale.getSnapshot().active, process.env.DSH_CLIENT_VERSION)
   // The browser half of the notice lifecycle: reads when the account becomes
@@ -99,6 +102,7 @@ export function apply(ctx: Context): void {
       read('profile', async () => {
         const result = await ctx.remote.account.getProfile(client())
         if (!result.ok) throw new Error('account profile failed')
+        if (generation === revision && result.value?.status === 'ready') avatar.setUrl(result.value.value.avatarUrl)
         return result.value
       }),
       read('balance', async () => {
@@ -121,6 +125,7 @@ export function apply(ctx: Context): void {
     for await (const frame of stream) {
       revision++
       refreshing = undefined
+      avatar.setUrl(undefined)
       const initialize = frame.value.status === 'credential-stored' && frame.value.attempt?.phase === 'succeeded'
         && snapshot.view?.attempt?.phase !== 'succeeded'
       const { notice, ...previous } = snapshot
@@ -150,7 +155,10 @@ export function apply(ctx: Context): void {
   // One account refresh: the recharge/bonus wallet and the unnotified-bonus read,
   // whichever surface asks — a Settings entry, or returning from top-up. Both
   // reads are independent, and a concurrent refresh shares the in-flight request.
-  const refreshAccount = async (): Promise<void> => { await Promise.all([refresh(), notices.refresh()]) }
+  const refreshAccount = async (): Promise<void> => {
+    avatar.retry()
+    await Promise.all([refresh(), notices.refresh()])
+  }
   /**
    * Narrow the shared channel to one surface's post-return read: only a viewer
    * returning from top-up re-reads, so a superseded page or a plugin teardown

@@ -65,7 +65,7 @@ export function AccountMenu({
       anchor={<button ref={trigger} type="button" className={css.trigger} data-collapsed={!wide} data-signed-out={!signedIn} aria-label={t('menu')}
         aria-haspopup="menu" aria-expanded={open} onClick={() => { setOpen(value => !value) }}>
         {signedIn
-          ? <span className={css.avatar}><AccountAvatar url={profile?.status === 'ready' ? profile.value.avatarUrl : null} /></span>
+          ? <span className={css.avatar} data-avatar-status={account.avatar?.status}><AccountAvatar avatar={account.avatar} /></span>
           : <IconEllipsisOutlineMedium size={14} />}
         {wide && <span className={css.label}>{signedIn ? label : t('more')}</span>}
       </button>}
