@@ -41,7 +41,7 @@ The page remembers only the last dismissed Host release, in page memory; nothing
 
 ### Release identity
 
-- Fields: `{ version, commit? }`; two releases are the same only when both fields are equal.
+- Fields: `{ version, commit? }`; two releases are the same only when both fields are equal. Every complete build, released builds included, records the repository commit, so pages compare both fields; a release changes both together.
 - `version` is client-modules' own package.json version. All packages release under one version, so it equals the CLI version.
 - `commit` is fixed at build time. The shared client build preset [tsdown.client.ts](../../../../packages/client/tsdown.client.ts) injects the same public `process.env.DSH_CLIENT_*` values into the Node half of every client package that it injects into the browser half ([`clientBuildValueDefines`](../../../../scripts/client-build-environment.ts) replaces the named variables and leaves `process.env` itself in place). The client-modules Host code reads `process.env.DSH_CLIENT_COMMIT_HASH`, which is a constant in the built artifact.
 - A Host started from TypeScript source has no build step: `pnpm run dev:web` places the build values in the Host process environment, so the Host reads the same commit; a source launch without dev-web publishes the version alone.
@@ -112,7 +112,7 @@ Order of operations:
   - **Service**: `previous` (gray) → `host` (solid), joined by a 1px solid green arrow because the Host already switched.
   - **Page**: `page` (solid) → `host` (gray), joined by a 1px dashed gray arrow because only a reload completes the switch. Both connectors are a fixed 56px and do not stretch across the dialog.
   - Each line shows versions when its two ends differ in version and commits otherwise; a release or field the page cannot read, including one the Host did not publish, shows **Unknown**. Screen readers read the two lines as text; the arrows are decorative.
-- The buttons are **Not now** and **Reload to load the new version** (primary, with `data-modal-autofocus`). The close control, a mask click, and Escape act as **Not now** through the shared `Modal` close behavior.
+- The buttons are **Not now**, which carries `data-modal-autofocus`, and **Reload to load the new version** (primary). The dialog opens without a user gesture, so initial focus keeps the page and an Enter typed into the composer cannot reload it and discard a draft. The close control, a mask click, and Escape act as **Not now** through the shared `Modal` close behavior.
 
 ## Alternatives considered
 

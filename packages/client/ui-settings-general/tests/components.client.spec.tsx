@@ -278,6 +278,8 @@ describe('Host release change confirmation', () => {
     // Changed versions show only the versions.
     expect(dialog.textContent).toContain('Service0.2.20.2.3Page0.2.10.2.3')
     expect(dialog.textContent).toContain(en['hostRelease.description'])
+    // The dialog opens without a user gesture; initial focus keeps the page.
+    expect(document.activeElement?.textContent).toBe('Not now')
     fireEvent.click(screen.getByRole('button', { name: 'Reload to load the new version' }))
     expect(reloadPage).toHaveBeenCalledOnce()
     expect(dismissRelease).not.toHaveBeenCalled()

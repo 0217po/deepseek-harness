@@ -74,8 +74,9 @@ export function HostReleasePrompt({ useReleaseChange, dismissRelease, reloadPage
       className={clsx(css.dialog)}
       footer={(
         <>
-          <Button variant="outline" onClick={dismissRelease}>{t('hostRelease.later')}</Button>
-          <Button variant="primary" data-modal-autofocus onClick={reloadPage}>{t('hostRelease.reload')}</Button>
+          {/* The dialog opens without a user gesture, so focus lands on keeping the page: a pending Enter must not reload it. */}
+          <Button variant="outline" data-modal-autofocus onClick={dismissRelease}>{t('hostRelease.later')}</Button>
+          <Button variant="primary" onClick={reloadPage}>{t('hostRelease.reload')}</Button>
         </>
       )}
     >

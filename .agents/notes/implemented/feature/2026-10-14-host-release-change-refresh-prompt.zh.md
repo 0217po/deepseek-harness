@@ -41,7 +41,7 @@ release 指 Host 的版本身份：版本号加可选的源码 commit。名字�
 
 ### Release 身份
 
-- 字段：`{ version, commit? }`，两个字段都相等才算同一 release。
+- 字段：`{ version, commit? }`，两个字段都相等才算同一 release。每次完整构建（包括正式发布）都会记录仓库 commit，所以页面比较的是两个字段；发布新版本时两者一起变。
 - `version` 取 client-modules 自己 package.json 的版本。所有包同一版本号发布，所以它等于 CLI 版本。
 - `commit` 在构建时固化。共享 client 构建预设 [tsdown.client.ts](../../../../packages/client/tsdown.client.ts) 给每个 client 包的 Node 半侧注入与浏览器半侧相同的公开 `process.env.DSH_CLIENT_*` 取值（[`clientBuildValueDefines`](../../../../scripts/client-build-environment.ts) 只替换具体变量，保留 `process.env` 本身）。client-modules 的 Host 代码读 `process.env.DSH_CLIENT_COMMIT_HASH`，在构建产物里是常量。
 - 从 TypeScript 源码启动的 Host 没有构建这一步：`pnpm run dev:web` 把构建取值放进 Host 进程环境，因此读到的是同一个 commit；不经 dev-web 的源码启动只发布版本号。
@@ -112,7 +112,7 @@ class ClientEntries {
   - **服务**：`previous`（灰）→ `host`（实色），1px 绿色实线箭头，表示 Host 已经切换。
   - **页面**：`page`（实色）→ `host`（灰），1px 灰色虚线箭头，表示刷新后才会切换。两条连接线固定 56px，不撑满对话框。
   - 每行两端版本号不同时显示版本号，否则显示 commit；页面读不出的 release 或字段（包括 Host 没发布的）显示**未解析**。读屏把两行当文字读，箭头只是装饰。
-- 按钮为**暂不刷新**和**刷新以加载新版本**（主按钮，带 `data-modal-autofocus`）。关闭按钮、点击遮罩和 Escape 通过共用的 `Modal` 关闭行为等同**暂不刷新**。
+- 按钮为**暂不刷新**（带 `data-modal-autofocus`）和**刷新以加载新版本**（主按钮）。对话框不是用户操作打开的，初始焦点落在保留页面一侧，用户在输入框里按下的回车不会刷新页面、丢掉草稿。关闭按钮、点击遮罩和 Escape 通过共用的 `Modal` 关闭行为等同**暂不刷新**。
 
 ## Alternatives considered
 
