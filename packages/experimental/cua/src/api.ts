@@ -1,12 +1,12 @@
 /** Object facade over logged native operations; its caller owns evaluator persistence. */
 import { Buffer } from 'node:buffer'
-import type { ZodIssue } from 'zod'
+import type { z } from 'zod'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ScreenshotResult, ShowResult, StateResult, WindowsResult } from './protocol.ts'
 import type { CuaApi, CuaApp, CuaAppHandle, CuaDispatch, CuaObservationOptions, CuaObservationSink, CuaOperation, CuaScreenshot, CuaSurface, CuaWindow } from './types.ts'
 export type * from './types.ts'
 
-function requestIssueMessage(issues: readonly ZodIssue[], parent: readonly PropertyKey[] = []): string {
+function requestIssueMessage(issues: readonly z.core.$ZodIssue[], parent: readonly PropertyKey[] = []): string {
   return [...new Set(issues.map((issue) => {
     const path = [...parent, ...issue.path]
     if (issue.code === 'invalid_union') {
