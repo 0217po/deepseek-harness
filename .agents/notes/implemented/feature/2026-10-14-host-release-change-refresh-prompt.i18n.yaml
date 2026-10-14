@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for 2026-10-14-host-release-change-refresh-prompt.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-14-host-release-change-refresh-prompt.md
+/agent-note-prompt-to-reload-when-the-host-release-changes-instead-of-hot-replacing-across-releases:
+  en: 559df9281e9994e0
+  zh: c51f2b1f9973127f
+/agent-note-prompt-to-reload-when-the-host-release-changes-instead-of-hot-replacing-across-releases/problem:
+  en: d98f5657dd30d9da
+  zh: 19d1210e57eb663b
+/agent-note-prompt-to-reload-when-the-host-release-changes-instead-of-hot-replacing-across-releases/decision:
+  en: d39be9788fe2a0c9
+  zh: 1a68a3ae4d73930d
+/agent-note-prompt-to-reload-when-the-host-release-changes-instead-of-hot-replacing-across-releases/decision/behavior:
+  en: 4c39cb393c7ac431
+  zh: 9c74fef799c008fa
+/agent-note-prompt-to-reload-when-the-host-release-changes-instead-of-hot-replacing-across-releases/decision/release-identity:
+  en: 1b6efaf08ab3dabc
+  zh: a4c8152793542fd4
+/agent-note-prompt-to-reload-when-the-host-release-changes-instead-of-hot-replacing-across-releases/decision/wire:
+  en: 5fb50fc66b231ada
+  zh: 28a72c2b8bdd08e6
+/agent-note-prompt-to-reload-when-the-host-release-changes-instead-of-hot-replacing-across-releases/decision/page-side:
+  en: 820a19ae80b31ca5
+  zh: 0f0df1fa646de36f
+/agent-note-prompt-to-reload-when-the-host-release-changes-instead-of-hot-replacing-across-releases/decision/ui:
+  en: c1780e99dbac5513
+  zh: fa53d0867820bde2
+/agent-note-prompt-to-reload-when-the-host-release-changes-instead-of-hot-replacing-across-releases/alternatives-considered:
+  en: 999b2753fbf7e398
+  zh: 4b5dc90e347db66f
+/agent-note-prompt-to-reload-when-the-host-release-changes-instead-of-hot-replacing-across-releases/consequences:
+  en: cd683709b4c8f293
+  zh: 0d86c525934d5820
