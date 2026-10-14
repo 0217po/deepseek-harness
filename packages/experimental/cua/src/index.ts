@@ -52,6 +52,8 @@ export interface CuaConfig {
   maxAppMatches: number
   /** Maximum bytes preserved from the system clipboard during one paste. */
   maxClipboardBytes: number
+  /** Maximum wait for clipboard data consumption after the Paste command returns. */
+  pasteReadTimeoutMs: number
   /** Maximum UTF-8 bytes admitted for one helper request frame. */
   maxRequestBytes: number
   /** Duration in milliseconds of one same-window drag. */
@@ -82,6 +84,7 @@ export const CuaConfig = Schema.object({
   axTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(3000),
   maxAppMatches: Schema.number().step(1).min(1).max(1000).default(20),
   maxClipboardBytes: Schema.number().step(1).min(1024).default(32 * 1024 * 1024),
+  pasteReadTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(1000),
   maxRequestBytes: Schema.number().step(1).min(1024).default(1024 * 1024),
   dragDurationMs: Schema.number().step(1).min(1).max(5000).default(400),
   dragSteps: Schema.number().step(1).min(1).max(240).default(20),
@@ -224,7 +227,8 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       const nativeParams = method === 'findApps'
         ? { ...params, maxAppMatches: config.maxAppMatches }
         : method === 'paste'
-          ? { ...params, maxClipboardBytes: config.maxClipboardBytes, maxElements: config.maxElements, maxDepth: config.maxDepth }
+          ? { ...params, maxClipboardBytes: config.maxClipboardBytes, pasteReadTimeoutMs: config.pasteReadTimeoutMs,
+            maxElements: config.maxElements, maxDepth: config.maxDepth }
           : method === 'getState'
             ? { ...params, maxElements: config.maxElements, maxDepth: config.maxDepth }
             : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }

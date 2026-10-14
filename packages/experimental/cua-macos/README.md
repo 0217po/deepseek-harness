@@ -47,6 +47,7 @@ The dump command checks profile composition without a model request. For a real 
 | `axTimeoutMs` | `3000` | Deadline per Accessibility system call, configured independently of the complete operation. |
 | `maxRequestBytes` / `maxResponseBytes` | `1048576` / `33554432` | UTF-8 request and response limits. |
 | `maxClipboardBytes` | `33554432` | Maximum original clipboard bytes preserved during a paste; oversized contents reject before replacement. |
+| `pasteReadTimeoutMs` | `1000` | Clipboard read deadline after the Paste command returns; expiry reports `PASTE_NOT_CONSUMED`. |
 | `maxAppMatches` | `20` | Maximum installed-app search matches; broader queries reject and require a narrower name. |
 | `maxElements` / `maxDepth` | `2000` / `25` | Accessibility traversal limits. |
 | `dragDurationMs` / `dragSteps` | `400` / `20` | Duration and movement segments for a drag. |

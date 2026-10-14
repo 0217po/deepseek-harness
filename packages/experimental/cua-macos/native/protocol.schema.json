@@ -718,6 +718,11 @@
               "minimum": 1024,
               "maximum": 9007199254740991
             },
+            "pasteReadTimeoutMs": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2147483647
+            },
             "maxElements": {
               "type": "integer",
               "minimum": 1,
@@ -733,6 +738,7 @@
             "appHandle",
             "text",
             "maxClipboardBytes",
+            "pasteReadTimeoutMs",
             "maxElements",
             "maxDepth"
           ],

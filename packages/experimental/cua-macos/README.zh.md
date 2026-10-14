@@ -47,6 +47,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `axTimeoutMs` | `3000` | 每次 Accessibility 系统调用的截止时间，与完整操作截止独立配置。 |
 | `maxRequestBytes` / `maxResponseBytes` | `1048576` / `33554432` | UTF-8 请求与响应字节限制。 |
 | `maxClipboardBytes` | `33554432` | 粘贴时保存原剪贴板内容的字节上限；超限会在替换前拒绝。 |
+| `pasteReadTimeoutMs` | `1000` | Paste 命令返回后等待剪贴板读取的上限；到期返回 `PASTE_NOT_CONSUMED`。 |
 | `maxAppMatches` | `20` | 已安装应用搜索的结果上限；范围过大的查询会被拒绝，需要缩小名称范围。 |
 | `maxElements` / `maxDepth` | `2000` / `25` | 辅助功能树遍历限制。 |
 | `dragDurationMs` / `dragSteps` | `400` / `20` | 拖动时长和移动分段数。 |

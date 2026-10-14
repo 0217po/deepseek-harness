@@ -117,7 +117,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
   const screenshotConfig = new URL('./fixture-screenshot.json', import.meta.url)
   const customScreenshot = existsSync(screenshotConfig) ? JSON.parse(readFileSync(screenshotConfig, 'utf8')) : undefined
   const snapshots = new Map()
-  const methods = ['getCapabilities', 'listApps', 'getApp', 'activate', 'show', 'listWindows', 'getState', 'hover', 'click', 'setValue', 'typeText', 'pressKey', 'scroll', 'drag', 'screenshot']
+  const methods = ['getCapabilities', 'listApps', 'getApp', 'activate', 'show', 'listWindows', 'getState', 'hover', 'click', 'setValue', 'typeText', 'paste', 'pressKey', 'scroll', 'drag', 'screenshot']
   let acquired = false
   let generation = 0
   let observationChanged = false
@@ -207,6 +207,12 @@ function createApplicationState(socket, record, application, captureBroker, conn
     if (method === 'pressKey' && params.key === 'F11') captureBroker.pendingCapture = true
     if (method === 'pressKey' && params.key === 'F10') captureBroker.pendingCapture = false
     if (method === 'pressKey' && params.key === 'F12') malformedScreenshot = true
+    if (method === 'pressKey' && params.key === 'F9') { application.frontPid = 42; application.frontWindowId = 99 }
+    if (method === 'paste') {
+      if (application.frontPid !== app.pid) refuse('PASTE_NOT_CONSUMED', 'Paste command was dispatched, but clipboard data was not requested within the read deadline. Bring the target app to the foreground and focus its text input. Inspect the contents before deciding whether to retry; a delayed paste may still run.')
+      application.value += params.text
+      return { dispatched: true, verified: false }
+    }
     if (method === 'typeText') application.value += params.text
     else if (!['pressKey', 'scroll', 'drag'].includes(method)) refuse('UNSUPPORTED_OPERATION', method)
     return { dispatched: true, verified: false }

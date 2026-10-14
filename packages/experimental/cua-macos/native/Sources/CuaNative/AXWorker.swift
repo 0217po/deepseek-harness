@@ -52,6 +52,7 @@ struct PastePlan: Sendable {
     let text: String
     let format: String
     let maxBytes: Int
+    let readTimeout: Duration
     let maxElements: Int
     let maxDepth: Int
 }
@@ -319,6 +320,7 @@ actor AXWorker {
         case "paste":
             return .paste(PastePlan(handle: handle, text: try params.string("text"), format: try params.optionalString("format") ?? "text",
                                    maxBytes: try params.integer("maxClipboardBytes", in: 1024...Int.max),
+                                   readTimeout: .milliseconds(try params.integer("pasteReadTimeoutMs", in: 1...2147483647)),
                                    maxElements: try params.integer("maxElements", in: 1...10000), maxDepth: try params.integer("maxDepth", in: 1...100)))
         case "typeText", "pressKey":
             let recipient = try ax().keyboardRecipient(identity, catalog: catalog)

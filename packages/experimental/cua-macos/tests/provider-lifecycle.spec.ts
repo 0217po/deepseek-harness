@@ -55,7 +55,7 @@ vi.mock('@deepseek-ai/dsh-cua/native-client', async importOriginal => ({
 }))
 
 const config = {
-  helperPath: resolve('fixture-helper'), buildTimeoutMs: 300_000, timeoutMs: 10_000, connectTimeoutMs: 5000, screenshotTimeoutMs: 5000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096, maxClipboardBytes: 8192, maxAppMatches: 20,
+  helperPath: resolve('fixture-helper'), buildTimeoutMs: 300_000, timeoutMs: 10_000, connectTimeoutMs: 5000, screenshotTimeoutMs: 5000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096, maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxAppMatches: 20,
   graceMs: 10, textEventIntervalMs: 8, maxElements: 64, maxDepth: 8, dragDurationMs: 200, dragSteps: 10,
 } satisfies Omit<NativeProvider.Config, 'allowedApps'>
 
@@ -337,7 +337,7 @@ it('supplies configured resource bounds and clears registrations on unload', asy
   await f.execute('drag', { appHandle: 'app-one', windowId: 7, fromX: 1, fromY: 2, toX: 3, toY: 4, relative: true })
   expect(native.request).toHaveBeenLastCalledWith('drag', expect.objectContaining({ durationMs: 200, steps: 10 }), expect.any(AbortSignal), ToolCallId('lifecycle-3'))
   await f.execute('paste', { appHandle: 'app-one', text: 'hello', format: 'text' })
-  expect(native.request).toHaveBeenLastCalledWith('paste', expect.objectContaining({ maxClipboardBytes: 8192, maxElements: 64, maxDepth: 8 }), expect.any(AbortSignal), ToolCallId('lifecycle-4'))
+  expect(native.request).toHaveBeenLastCalledWith('paste', expect.objectContaining({ maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxElements: 64, maxDepth: 8 }), expect.any(AbortSignal), ToolCallId('lifecycle-4'))
   await f.execute('findApps', { query: 'Fixture' })
   expect(native.request).toHaveBeenLastCalledWith('findApps', { query: 'Fixture', maxAppMatches: 20 }, expect.any(AbortSignal), ToolCallId('lifecycle-5'))
   await f.provider.dispose()

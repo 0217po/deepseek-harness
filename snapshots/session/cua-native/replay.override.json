@@ -1391,6 +1391,237 @@
       {
         "type": "block-start",
         "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-paste-background",
+          "name": "cua",
+          "arguments": "{\"method\":\"pressKey\",\"params\":{\"appHandle\":\"fixture-app\",\"key\":\"F9\"}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-paste-unread",
+          "name": "cua",
+          "arguments": "{\"method\":\"paste\",\"params\":{\"appHandle\":\"fixture-app\",\"text\":\"fixture paste\"}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-paste-inspect",
+          "name": "cua",
+          "arguments": "{\"method\":\"getState\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-paste-activate",
+          "name": "cua",
+          "arguments": "{\"method\":\"activate\",\"params\":{\"appHandle\":\"fixture-app\"}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-paste-focus",
+          "name": "cua",
+          "arguments": "{\"method\":\"getState\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-paste-consumed",
+          "name": "cua",
+          "arguments": "{\"method\":\"paste\",\"params\":{\"appHandle\":\"fixture-app\",\"text\":\"fixture paste\"}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-paste-verify",
+          "name": "cua",
+          "arguments": "{\"method\":\"getState\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
         "blockType": "text"
       },
       {

@@ -189,7 +189,7 @@ import Darwin
                 try WindowPointerInput.hover(in: route, at: point, checkCancellation: { try latch.check() })
                 result = AXWorker.hoverResult(route: "system-pointer", pointerMoved: true)
             case .paste(let plan):
-                try await clipboard.perform(text: plan.text, format: plan.format, maxBytes: plan.maxBytes,
+                try await clipboard.perform(text: plan.text, format: plan.format, maxBytes: plan.maxBytes, readTimeout: plan.readTimeout,
                     checkCancellation: { try cancellation.check() }) { requireClipboard in
                     try await worker.performPaste(plan, beforeDispatch: requireClipboard)
                 }

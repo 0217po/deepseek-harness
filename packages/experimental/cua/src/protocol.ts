@@ -72,7 +72,7 @@ export const Request = z.discriminatedUnion('method', [
 export const NativeResourceParameters = {
   getState: z.object({ maxElements: z.number().int().min(1).max(10000), maxDepth: z.number().int().min(1).max(100) }).strict(),
   drag: z.object({ durationMs: z.number().int().min(1).max(5000), steps: z.number().int().min(1).max(240) }).strict(),
-  paste: z.object({ maxClipboardBytes: z.number().int().min(1024),
+  paste: z.object({ maxClipboardBytes: z.number().int().min(1024), pasteReadTimeoutMs: z.number().int().min(1).max(2 ** 31 - 1),
     maxElements: z.number().int().min(1).max(10000), maxDepth: z.number().int().min(1).max(100),
   }).strict(),
   findApps: z.object({ maxAppMatches: z.number().int().min(1).max(1000) }).strict(),

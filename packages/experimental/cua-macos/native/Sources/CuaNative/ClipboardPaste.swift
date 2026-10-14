@@ -3,7 +3,7 @@ import AppKit
 import Foundation
 
 private final class PasteDataProvider: NSObject, NSPasteboardItemDataProvider, @unchecked Sendable {
-    private enum Delivery { case pending, supplied, failed }
+    private enum Delivery { case pending, supplied, failed, closed }
     private let data: Data
     private let type: NSPasteboard.PasteboardType
     // AppKit can request promised data on another thread while the AX worker waits.
@@ -11,20 +11,30 @@ private final class PasteDataProvider: NSObject, NSPasteboardItemDataProvider, @
     private var delivery: Delivery = .pending
     init(data: Data, type: NSPasteboard.PasteboardType) { self.data = data; self.type = type }
     func pasteboard(_ pasteboard: NSPasteboard?, item: NSPasteboardItem, provideDataForType type: NSPasteboard.PasteboardType) {
-        let supplied = type == self.type && item.setData(data, forType: type)
         condition.lock()
+        defer { condition.unlock() }
+        guard case .pending = delivery else { return }
+        let supplied = type == self.type && item.setData(data, forType: type)
         delivery = supplied ? .supplied : .failed
-        condition.broadcast()
-        condition.unlock()
     }
-    @MainActor func wait(check: () throws -> Void) async throws {
+    func close() { condition.withLock { delivery = .closed } }
+    @MainActor func wait(timeout: Duration, check: () throws -> Void) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
         while true {
             try check()
-            let state = condition.withLock { delivery }
+            let state = condition.withLock {
+                if case .pending = delivery, clock.now >= deadline { delivery = .closed }
+                return delivery
+            }
             switch state {
             case .supplied: return
             case .failed: throw NativeFailure(code: "CLIPBOARD_UNAVAILABLE", message: "Requested paste data could not be supplied")
-            case .pending: try await Task.sleep(for: .milliseconds(25))
+            case .closed: throw NativeFailure(code: "PASTE_NOT_CONSUMED", message:
+                "Paste command was dispatched, but clipboard data was not requested within the read deadline. " +
+                "Bring the target app to the foreground and focus its text input. Inspect the contents before deciding " +
+                "whether to retry; a delayed paste may still run.")
+            case .pending: try await clock.sleep(until: min(deadline, clock.now.advanced(by: .milliseconds(25))))
             }
         }
     }
@@ -39,7 +49,7 @@ private final class PasteDataProvider: NSObject, NSPasteboardItemDataProvider, @
 
     init(pasteboard: NSPasteboard = .general) { self.pasteboard = pasteboard }
 
-    func perform(text: String, format: String, maxBytes: Int, checkCancellation: () throws -> Void = {},
+    func perform(text: String, format: String, maxBytes: Int, readTimeout: Duration, checkCancellation: () throws -> Void = {},
                  operation: (@escaping @MainActor @Sendable () throws -> Void) async throws -> Void) async throws {
         try checkCancellation()
         let type: NSPasteboard.PasteboardType
@@ -55,6 +65,7 @@ private final class PasteDataProvider: NSObject, NSPasteboardItemDataProvider, @
         let owner = Data(UUID().uuidString.utf8)
         let item = NSPasteboardItem()
         let provider = PasteDataProvider(data: data, type: type)
+        defer { provider.close() }
         guard item.setDataProvider(provider, forTypes: [type]), item.setData(owner, forType: Self.ownerType) else {
             throw NativeFailure(code: "CLIPBOARD_UNAVAILABLE", message: "Could not prepare paste contents")
         }
@@ -79,7 +90,7 @@ private final class PasteDataProvider: NSObject, NSPasteboardItemDataProvider, @
         do {
             try requireOwnership()
             try await operation(requireOwnership)
-            try await provider.wait { try checkCancellation(); try requireOwnership() }
+            try await provider.wait(timeout: readTimeout) { try checkCancellation(); try requireOwnership() }
         } catch {
             if owned() { try restore(saved) }
             throw error

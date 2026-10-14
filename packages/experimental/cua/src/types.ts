@@ -202,6 +202,7 @@ export interface CuaApp extends CuaSurface {
   typeText(text: string): Promise<CuaActionResult>
   /**
    * Paste text or HTML through the application's standard Paste menu command.
+   * PASTE_NOT_CONSUMED means no clipboard read within the configured deadline after dispatch; inspect before retrying.
    * @param text - Clipboard contents in the selected format; defaults to plain text.
    * @param options - Clipboard format. Original contents are restored unless another writer changes them.
    * @returns Dispatch evidence; unsupported Paste commands fail without typing fallback.

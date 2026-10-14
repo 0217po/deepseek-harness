@@ -13,7 +13,7 @@ enum NativeProtocol {
         "launchApp": ["appHandle"],
         "listApps": [],
         "listWindows": ["appHandle"],
-        "paste": ["appHandle", "format", "maxClipboardBytes", "maxDepth", "maxElements", "text"],
+        "paste": ["appHandle", "format", "maxClipboardBytes", "maxDepth", "maxElements", "pasteReadTimeoutMs", "text"],
         "performSecondaryAction": ["action", "appHandle", "elementIndex", "snapshotId"],
         "pressKey": ["appHandle", "key", "modifiers"],
         "screenshot": ["appHandle", "windowId"],

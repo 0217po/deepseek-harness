@@ -90,7 +90,7 @@ def main():
             call("selectText", {**target, "text": "target", "prefix": "第二😀 "})
             selected = wait_for_state(state_file, lambda value: value["selection"] == [17, 6])
             assert selected["text"] == "第一😀 target，第二😀 target.", selected
-            call("paste", {**owner, "text": "替换\n第二行\t保留", "format": "text", "maxClipboardBytes": 33554432, "maxElements": 2000, "maxDepth": 25})
+            call("paste", {**owner, "text": "替换\n第二行\t保留", "format": "text", "maxClipboardBytes": 33554432, "pasteReadTimeoutMs": 1000, "maxElements": 2000, "maxDepth": 25})
             state = wait_for_state(state_file, lambda value: value["text"] == "第一😀 target，第二😀 替换\n第二行\t保留.")
             assert state["pasteAttempts"] == [True], state
             observed = call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
@@ -98,7 +98,7 @@ def main():
             target = {**owner, "snapshotId": observed["snapshotId"], "elementIndex": field["index"]}
             call("selectText", {**target, "text": state["text"]})
             html = '<h1>Heading</h1><p><b>Bold</b> and <a href="https://example.com/">link</a></p>'
-            call("paste", {**owner, "text": html, "format": "html", "maxClipboardBytes": 33554432, "maxElements": 2000, "maxDepth": 25})
+            call("paste", {**owner, "text": html, "format": "html", "maxClipboardBytes": 33554432, "pasteReadTimeoutMs": 1000, "maxElements": 2000, "maxDepth": 25})
             state = wait_for_state(state_file, lambda value: any(run.get("link") == "https://example.com/" for run in value["runs"]))
             assert any(run["bold"] and "Bold" in run["text"] for run in state["runs"]), state
             pad = state["pad"]
