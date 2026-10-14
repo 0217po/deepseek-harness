@@ -91,14 +91,18 @@ int wmain() {
     std::wstring attempts;
     for (int i = 0; i < 30; ++i) attempts += L"restore: Windows error: 5\r\n";
     const std::wstring directoryFull = directory_report::Compose(5, std::wstring(400, L'x').c_str(), L"target", 5, L"backup", attempts);
-    const std::wstring directoryExcerpt = BoundedExcerpt(Lines(directoryFull));
+    const std::wstring directoryExcerpt = BoundedExcerpt(Lines(Trim(directoryFull)));
     assert(Lines(directoryExcerpt).size() <= kExcerptLines + 1);
     assert(directoryExcerpt.size() <= kExcerptChars + 64);
     assert(Contains(directoryExcerpt, L"Restoration error: 5"));
     assert(Contains(directoryExcerpt, L"Preserved backup: backup"));
-    assert(Contains(directoryExcerpt, L"more lines in the saved report"));
+    assert(Contains(directoryExcerpt, L" (29 more lines in the saved report)"));
     assert(Contains(directoryFull, std::wstring(400, L'x')));
     assert(Contains(directoryFull, attempts));
+    const std::wstring longBackup = L"C:\\Users\\long-account-name\\" + std::wstring(200, L'x') + L".old-{12345678-1234-1234-1234-123456789012}";
+    assert(longBackup.size() > kExcerptLineLimit);
+    assert(Contains(directory_report::Content(5, L"Keep this backup:", 5, longBackup.c_str()), longBackup));
+    assert(!Contains(directory_report::Content(5, L"Try again.", 0, longBackup.c_str()), longBackup));
 
     // A cut inside a multi-byte sequence is trimmed back to a code point boundary.
     std::string partial("abc\xE6\x96\x87\xE4\xBB");
