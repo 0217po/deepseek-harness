@@ -59,7 +59,7 @@ interface Release {
 /** Base URL only used to validate relative icon references. */
 const VALIDATION_URL = 'https://index.invalid/index.json'
 /** Part of every cache key; change it when the way entries are derived changes, so cached results are rebuilt. */
-const CACHE_VERSION = 6
+const CACHE_VERSION = 7
 
 /** Why the index format rejects these plugins, or undefined when it accepts them. */
 function invalid(plugins: unknown): string | undefined {
@@ -74,11 +74,12 @@ function invalid(plugins: unknown): string | undefined {
 /** Combine releases of one package into an entry whose display fields come from the highest version. */
 function entryOf(name: string, releases: readonly Release[]): GeneratedEntry {
   const sorted = [...releases].sort((left, right) => semver.rcompare(left.version.version, right.version.version))
-  const { title, description, icon, author, homepage, metadata } = sorted[0]?.display ?? {}
+  const { title, description, icon, author, homepage, repository, metadata } = sorted[0]?.display ?? {}
   return {
     name,
     ...title === undefined ? {} : { title }, ...description === undefined ? {} : { description },
     ...icon === undefined ? {} : { icon }, ...author === undefined ? {} : { author }, ...homepage === undefined ? {} : { homepage },
+    ...repository === undefined ? {} : { repository },
     ...metadata === undefined ? {} : { metadata },
     versions: sorted.map(release => release.version),
   }

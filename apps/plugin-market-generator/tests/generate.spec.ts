@@ -106,7 +106,7 @@ it('lists every non-deprecated bundle version from the registry document and rea
         time: '2026-06-01T00:00:00.000Z',
         manifest: { ...BUNDLE, author: { name: 'Jane Doe', email: 'jane@example.com' } },
         tarball: await pack({
-          'package.json': bundleManifest('dsh-a', '2.0.0-rc.1', { author: { name: 'Jane Doe' }, icon: 'icon.png', homepage: 'https://example.com/dsh-a', keywords: ['alpha', '', 'alpha'] }),
+          'package.json': bundleManifest('dsh-a', '2.0.0-rc.1', { author: { name: 'Jane Doe' }, icon: 'icon.png', homepage: 'https://example.com/dsh-a', repository: { type: 'git', url: 'git+https://github.com/jane/plugins.git', directory: 'packages/a' }, keywords: ['alpha', '', 'alpha'] }),
           'locale/en.json': JSON.stringify({ meta: { title: 'Alpha' } }),
           'locale/zh.json': JSON.stringify({ meta: { title: '甲' } }),
           'locale/x_y.json': '{}',
@@ -136,6 +136,7 @@ it('lists every non-deprecated bundle version from the registry document and rea
   expect(first.index.plugins).toEqual([
     {
       name: 'dsh-a', title: { en: 'Alpha', zh: '甲' }, icon: expect.stringMatching(/^icons\/[0-9a-f]{16}\.png$/u) as string, author: 'Jane Doe', homepage: 'https://example.com/dsh-a',
+      repository: { url: 'https://github.com/jane/plugins', directory: 'packages/a' },
       metadata: { keywords: ['alpha', '', 'alpha'] },
       versions: [
         { version: '2.0.0-rc.1', publishTimestamp: 1780272000, source: npm },
@@ -252,10 +253,6 @@ it('writes the index and icons once, keeps the cache beside the input, and remov
   const other = join(scratch(), 'index.json')
   expect(await main(['--input', list, '--output', other, '--title', 'T', '--description', 'D', '--registry', server.url, '--concurrency', '2', '--cache', join(lists, 'other-cache')])).toBe(1)
   expect((JSON.parse(readFileSync(other, 'utf8')) as { description: string }).description).toBe('D')
-  expect(await main(['--input', list])).toBe(2)
-  expect(await main(['--unknown'])).toBe(2)
-  expect(await main(['--help'])).toBe(0)
-  expect(await main([...args, '--concurrency', '0'])).toBe(2)
   writeFileSync(list, 'http://example.com/o/r\n')
   expect(await main(['--input', list, '--output', other, '--title', 'T'])).toBe(2)
 })

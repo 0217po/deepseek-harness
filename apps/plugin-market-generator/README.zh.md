@@ -37,6 +37,7 @@ pnpm --filter @deepseek-ai/dsh-plugin-market-generator start \
 | `--inline-icon-bytes <n>` | `16384` | 以 `data:` URL 内嵌的图标的最大字节数，不超过格式的内联图标上限 32768。 |
 | `--concurrency <n>` | `4` | 同时读取的来源数。 |
 | `--timeout-ms <n>` | `60000` | 单个请求或 Git 命令的时限。 |
+| `-h`、`--help` | | 打印这些选项和退出状态。 |
 
 所有来源都读取成功时退出状态为 0，有来源无法读取时为 1，参数无效或列表无效时为 2。索引格式会拒绝的列表行属于无效列表，例如 `http:` URL、带凭据、查询或片段的 URL、路径段少于两个的 URL，以及 tarball URL。无法读取的来源保留其上一次成功的结果，因此临时故障不会把插件从索引中移除；生成器仍会报告该失败。
 
@@ -54,7 +55,7 @@ pnpm --filter @deepseek-ai/dsh-plugin-market-generator start \
 
 `engines.dsh` 取 manifest 的 `engines.dsh` 并去掉首尾空白。没有该字段时，它是 manifest 中 `@deepseek-ai/dsh` 和 `@deepseek-ai/dsh-*` 的 `peerDependencies` 范围的合取；恰为 `workspace:*`、`workspace:^` 或 `workspace:~` 的 peer 表示当前运行的 DSH 版本，不增加限制；相同的范围只出现一次。`*` 范围接受所有版本，因此范围全为 `*` 的版本不列出 `engines.dsh`。如果安装时在所有 DSH 版本上都会拒绝某个版本，该版本会被跳过并发出警告：范围为空、`engines.dsh` 中出现 `workspace:` 值或 peer 中出现其他 `workspace:` 范围、范围无效，或者没有任何版本能同时满足这些范围。
 
-展示字段来自最高的列出版本，并遵循 DSH 读取已安装插件时的规则。`./locale/en.json` 和 `./locale/<language>.json` 通过包的 `exports` 映射以 `import`、`node` 和 `default` 条件解析，没有该映射时按字面路径读取，并且每个 locale 文件都必须与英文文件位于同一目录；其 `meta.title` 和 `meta.description` 缺失时回退到 manifest 的 `name` 和 `description`。图标是 manifest 的 `icon`（相对路径），否则是导出的 `./icon`：格式为 SVG、PNG、JPEG 或 WebP，不超过 256 KiB，并位于包内。`author` 是 manifest `author` 字符串中去掉 `<email>` 和 `(url)` 后的名字部分，或 author 对象的 `name`。`homepage` 在 manifest 的 `homepage` 是绝对 http(s) URL 时按原样复制；缺少时不会用 `repository` 等其他字段代替。格式错误的 locale 文件、无效的 locale 名称和被拒绝的图标会作为警告报告。由于该格式要求英文，没有英文文本也没有 manifest 回退值的翻译会被丢弃。每个条目在写出前都经过 [`dsh-plugin-market-index`](../../packages/util/plugin-market-index/README.zh.md) 校验。
+展示字段来自最高的列出版本，并遵循 DSH 读取已安装插件时的规则。`./locale/en.json` 和 `./locale/<language>.json` 通过包的 `exports` 映射以 `import`、`node` 和 `default` 条件解析，没有该映射时按字面路径读取，并且每个 locale 文件都必须与英文文件位于同一目录；其 `meta.title` 和 `meta.description` 缺失时回退到 manifest 的 `name` 和 `description`。图标是 manifest 的 `icon`（相对路径），否则是导出的 `./icon`：格式为 SVG、PNG、JPEG 或 WebP，不超过 256 KiB，并位于包内。`author` 是 manifest `author` 字符串中去掉 `<email>` 和 `(url)` 后的名字部分，或 author 对象的 `name`。`homepage` 在 manifest 的 `homepage` 是绝对 http(s) URL 时按原样复制；缺少时不会用 `repository` 等其他字段代替。`repository` 是 manifest `repository`（如 `github:o/r` 这样的简写或 URL）对应的网页：已知主机通过 [hosted-git-info](https://github.com/npm/hosted-git-info) 转换，并去掉 `#` 后的 committish；其他 http(s) URL 去掉 `git+` 前缀、凭据、查询、片段和 `.git` 后缀。格式接受时复制其 `directory`。没有 http(s) 网页的仓库或不可用的 `directory` 会被报告并省略。格式错误的 locale 文件、无效的 locale 名称和被拒绝的图标会作为警告报告。由于该格式要求英文，没有英文文本也没有 manifest 回退值的翻译会被丢弃。每个条目在写出前都经过 [`dsh-plugin-market-index`](../../packages/util/plugin-market-index/README.zh.md) 校验。
 
 `metadata.keywords` 是用于发现插件的可选字符串数组。按约定使用 npm `package.json` 的 `keywords`；索引生成器可以补充或调整它。本参考生成器原样复制最高列出版本 manifest 的 `keywords`，包括空字符串、重复值和空数组。字段缺省时省略；如果值不是数组，或数组包含任何非字符串成员，则发出警告并省略整个字段，但保留该包。
 

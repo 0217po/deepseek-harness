@@ -171,13 +171,44 @@ describe('readDisplayMetadata', () => {
     })
   })
 
+  it.each([
+    ['github:jane/dsh-a', { url: 'https://github.com/jane/dsh-a' }],
+    ['jane/dsh-a', { url: 'https://github.com/jane/dsh-a' }],
+    ['  github:jane/dsh-a  ', { url: 'https://github.com/jane/dsh-a' }],
+    ['github:jane/dsh-a#semver:^1', { url: 'https://github.com/jane/dsh-a' }],
+    [{ type: 'git', url: 'git+ssh://git@github.com/jane/plugins.git', directory: 'packages/a' }, { url: 'https://github.com/jane/plugins', directory: 'packages/a' }],
+    [{ url: 'git+https://u:p@git.example/g/sub/r.git?x=1#main', directory: './packages/a/' }, { url: 'https://git.example/g/sub/r', directory: 'packages/a' }],
+    [{ url: 'http://git.intranet/o/r' }, { url: 'http://git.intranet/o/r' }],
+  ])('converts the manifest repository %j to its web page', async (repository, expected) => {
+    expect(await readDisplay(tree({}), { name: 'dsh-a', repository })).toEqual({ display: { title: 'dsh-a', repository: expected }, warnings: [] })
+  })
+
+  it.each([
+    'git://git.example/o/r.git',
+    { url: 'ssh://git@git.example/o/r.git' },
+    { directory: 'packages/a' },
+    3,
+  ])('warns and omits a repository %j without an http(s) page', async (repository) => {
+    expect(await readDisplay(tree({}), { name: 'dsh-a', repository })).toEqual({
+      display: { title: 'dsh-a' },
+      warnings: [`package.json repository ${JSON.stringify(repository)} names no http(s) repository page; it is omitted`],
+    })
+  })
+
+  it.each(['../a', 'a/./b', 'a b', 4])('keeps the repository but omits the directory %j', async (directory) => {
+    expect(await readDisplay(tree({}), { name: 'dsh-a', repository: { url: 'https://github.com/o/r', directory } })).toEqual({
+      display: { title: 'dsh-a', repository: { url: 'https://github.com/o/r' } },
+      warnings: [`package.json repository.directory ${JSON.stringify(directory)} is not a relative directory; it is omitted`],
+    })
+  })
+
   it('copies an http(s) homepage as written and reports any other value without a substitute', async () => {
     const homepage = 'https://github.com/jane/dsh-a#readme'
     expect((await readDisplay(tree({}), { name: 'dsh-a', homepage })).display).toEqual({ title: 'dsh-a', homepage })
-    // `repository` is present to show that it does not replace a rejected homepage.
+    // A repository stays its own field and does not replace a rejected homepage.
     const manifest = { name: 'dsh-a', homepage: 'javascript:alert(1)', repository: 'https://github.com/jane/dsh-a' }
     const rejected = await readDisplay(tree({}), manifest)
-    expect(rejected.display).toEqual({ title: 'dsh-a' })
+    expect(rejected.display).toEqual({ title: 'dsh-a', repository: { url: 'https://github.com/jane/dsh-a' } })
     expect(rejected.warnings).toEqual(['package.json homepage "javascript:alert(1)" is not an http(s) URL; it is omitted'])
     expect((await readDisplay(tree({}), { name: 'dsh-a', homepage: 'docs/readme' })).display).toEqual({ title: 'dsh-a' })
   })

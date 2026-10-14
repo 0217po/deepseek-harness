@@ -12,6 +12,7 @@ export interface Manifest {
   readonly icon?: unknown
   readonly author?: unknown
   readonly homepage?: unknown
+  readonly repository?: unknown
   readonly keywords?: unknown
   readonly deprecated?: unknown
   readonly workspaces?: unknown

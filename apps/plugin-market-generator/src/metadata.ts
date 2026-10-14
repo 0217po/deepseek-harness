@@ -5,6 +5,8 @@
 import { createHash } from 'node:crypto'
 import { posix } from 'node:path'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
+import hostedGitInfo from 'hosted-git-info'
+import type { MarketRepository } from '@deepseek-ai/dsh-plugin-market-index'
 import { exports as resolveExports, type Package } from 'resolve.exports'
 import { PackageFiles } from './files.ts'
 import type { Manifest } from './packages.ts'
@@ -20,6 +22,8 @@ export interface Display {
   readonly author?: string
   /** The manifest `homepage`, copied as written. */
   readonly homepage?: string
+  /** The web URL of the manifest `repository`, with its `directory`. */
+  readonly repository?: MarketRepository
   /** Optional discovery metadata; keywords are copied from the manifest as written. */
   readonly metadata?: { readonly keywords: readonly string[] }
 }
@@ -43,6 +47,9 @@ type Fields = { title?: string; description?: string }
 const LANGUAGE_ID = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/u
 const MAX_ICON_BYTES = 256 * 1024
 const ICON_TYPES = new Map([['.svg', 'image/svg+xml'], ['.png', 'image/png'], ['.jpg', 'image/jpeg'], ['.jpeg', 'image/jpeg'], ['.webp', 'image/webp']])
+
+/** One segment of a package directory, as the index format accepts it; keep it equal to the parser's rule. */
+const PATH_SEGMENT = /^[A-Za-z0-9._@+-]+$/u
 
 function text(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() !== '' ? value : undefined
@@ -123,6 +130,43 @@ function localized(field: keyof Fields, locales: Map<string, Fields>, fallback: 
   return Object.fromEntries([['en', english], ...translated]) as LocalizedText
 }
 
+/**
+ * The web URL of a manifest `repository` string or object `url`: a shorthand or URL of a host npm knows becomes its
+ * browse URL without a committish, and any other http(s) URL, after a `git+` prefix, loses its credentials, query, fragment, and `.git`
+ * suffix.
+ */
+function repositoryUrl(declared: string): string | undefined {
+  // A committish such as `#semver:^1` names a revision, not the repository page.
+  const hosted = hostedGitInfo.fromUrl(declared.replace(/#.*$/u, ''))
+  if (hosted !== undefined) return hosted.browse()
+  const plain = declared.replace(/^git\+/u, '')
+  if (!URL.canParse(plain)) return undefined
+  const url = new URL(plain)
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return undefined
+  url.username = ''
+  url.password = ''
+  url.search = ''
+  url.hash = ''
+  url.pathname = url.pathname.replace(/\.git$/u, '')
+  return url.href
+}
+
+/** The repository a manifest declares, or why it is omitted; a directory the format cannot hold is dropped with a warning. */
+function readRepository(value: unknown, warn: (message: string) => void): MarketRepository | undefined {
+  if (value === undefined) return undefined
+  const object = typeof value === 'object' && value !== null ? value as { url?: unknown; directory?: unknown } : undefined
+  const declared = text(object === undefined ? value : object.url)?.trim()
+  const url = declared === undefined ? undefined : repositoryUrl(declared)
+  if (url === undefined) {
+    warn(`package.json repository ${JSON.stringify(value)} names no http(s) repository page; it is omitted`)
+    return undefined
+  }
+  const directory = text(object?.directory)?.replace(/^\.\/|\/$/gu, '')
+  const valid = directory !== undefined && directory.split('/').every(segment => segment !== '.' && segment !== '..' && PATH_SEGMENT.test(segment))
+  if (object?.directory !== undefined && !valid) warn(`package.json repository.directory ${JSON.stringify(object.directory)} is not a relative directory; it is omitted`)
+  return { url, ...valid ? { directory } : {} }
+}
+
 /** The icon a package declares, or why it is not used: the manifest `icon` takes priority over the `./icon` export. */
 async function readIcon(
   files: PackageFiles, manifest: Manifest,
@@ -147,8 +191,10 @@ async function readIcon(
 }
 
 /**
- * Read display metadata, author, homepage, and icon of a package. `homepage` is copied from the manifest as written; a
- * value that is not an absolute http(s) URL is reported and omitted, and nothing else stands in for it.
+ * Read display metadata, author, homepage, repository, and icon of a package. `homepage` is copied from the manifest as
+ * written; a value that is not an absolute http(s) URL is reported and omitted, and nothing else stands in for it.
+ * `repository` becomes the repository's web URL and its directory; one that names no http(s) page is reported and
+ * omitted.
  * Manifest `keywords` arrays containing only strings are copied unchanged into `metadata.keywords`; any other
  * present value is reported and omitted without dropping the package.
  * @param files - the package's files.
@@ -168,12 +214,14 @@ export async function readDisplayMetadata(
   const homepage = text(manifest.homepage)
   const linkable = homepage !== undefined && URL.canParse(homepage) && ['https:', 'http:'].includes(new URL(homepage).protocol)
   if (homepage !== undefined && !linkable) options.warn(`package.json homepage ${JSON.stringify(homepage)} is not an http(s) URL; it is omitted`)
+  const repository = readRepository(manifest.repository, options.warn)
   const keywords = Array.isArray(manifest.keywords) && manifest.keywords.every((keyword): keyword is string => typeof keyword === 'string')
     ? manifest.keywords : undefined
   if (manifest.keywords !== undefined && keywords === undefined) options.warn('package.json keywords must be an array of strings; it is omitted')
   const display = {
     ...title === undefined ? {} : { title }, ...description === undefined ? {} : { description }, ...author === undefined ? {} : { author },
     ...linkable ? { homepage } : {},
+    ...repository === undefined ? {} : { repository },
     ...keywords === undefined ? {} : { metadata: { keywords } },
   }
   const icon = await readIcon(files, manifest)
