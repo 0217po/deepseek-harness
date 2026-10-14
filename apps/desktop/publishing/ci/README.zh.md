@@ -35,7 +35,7 @@ Environment 审批限制此工作流，不限制同一机器账户运行的任�
 
 ## 打包与发布
 
-选择对应平台的 `Package Desktop` 工作流、preset、源码、通道和版本模式。`source_ref` 接受 `master` 或与所选产品版本一致的 `dsh-v*`；源码必须包含这些 CI 适配脚本，因此旧 tag 会在安装依赖前失败。发布器从默认分支运行，单独记录实际源码提交。`version_mode=default` 对 production 选择 product，对 test 选择 auto；product 保留所选源码版本，auto 追加日期/run/attempt，manual 要求填写 `build_version`。latest 包要求稳定版本，因此 test/latest 需选择 product 或稳定的手填版本。可选 `test_release_id` 是测试 URL 前缀：留空沿用机器默认值，同一平台连续升级测试需保持相同值，并应定期轮换默认值。它不是 GitHub run ID。格式校验和轮换限制见[打包配置](../../packaging/README.zh.md#configuration-and-local-builds)。
+选择对应平台的 `Package Desktop` 工作流、preset、源码、通道和版本模式。`source_ref` 接受 `master` 或与所选产品版本一致的 `dsh-v*`；源码必须包含这些 CI 适配脚本，因此旧 tag 会在安装依赖前失败。从 `master` 发起发布；托管路由 job 会在派发到原机器前拒绝其他 ref。实际打包源码提交单独记录。`version_mode=default` 对 production 选择 product，对 test 选择 auto；product 保留所选源码版本，auto 追加日期/run/attempt，manual 要求填写 `build_version`。latest 包要求稳定版本，因此 test/latest 需选择 product 或稳定的手填版本。可选 `test_release_id` 是测试 URL 前缀：留空沿用机器默认值，同一平台连续升级测试需保持相同值，并应定期轮换默认值。它不是 GitHub run ID。格式校验和轮换限制见[打包配置](../../packaging/README.zh.md#configuration-and-local-builds)。
 
 打包只保留文件。成功后，在 `master` 上打开 **Publish Desktop · COS → Run workflow**，填写打包运行 URL 中的 `package_run_id`，并可填写 `package_run_attempt`。留空选择最新尝试，且该尝试必须成功，不会回退到较早的成功尝试；显式填写则选择对应的成功构建。Windows 必须完成签名，macOS 必须完成公证和 stapling。GitHub job 证据确定原 runner，本机清单在审批前提供 preset、版本、源码和通道。不会下载安装包或请求 artifact。旧清单的 `publishRequested=false` 不影响发布资格；本机文件缺失或变化会停止发布。
 

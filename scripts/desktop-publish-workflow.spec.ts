@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import yaml from 'js-yaml'
@@ -53,4 +54,18 @@ it('prepares an approval digest without an Environment and binds the approved jo
   expect(prepare.steps.some(step => step.id === 'key' || step.id === 'app')).toBe(false)
   expect(publish.needs).toEqual(['route', 'prepare'])
   expect(publish.env?.DESKTOP_APPROVED_PACKAGE).toBe('${{ needs.prepare.outputs.approval }}')
+})
+
+
+it('rejects non-master dispatch before scheduling a self-hosted job', () => {
+  const command = workflow.jobs.route!.steps[0]!.run!
+  expect(command.startsWith('node -e "')).toBe(true)
+  const program = command.slice('node -e "'.length, -1)
+  for (const ref of ['refs/heads/master', 'refs/heads/stale-feature']) {
+    const result = spawnSync(process.execPath, ['-e', program], { env: { ...process.env, GITHUB_REF: ref }, encoding: 'utf8' })
+    expect(result.signal).toBeNull()
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(ref === 'refs/heads/master' ? 0 : 1)
+    if (result.status !== 0) expect(result.stderr).toContain('must be dispatched from master')
+  }
 })

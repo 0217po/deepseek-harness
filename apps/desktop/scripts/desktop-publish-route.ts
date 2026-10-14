@@ -14,7 +14,7 @@ const requestSchema = z.object({ source: z.object({
   runnerName: z.string(), target: z.enum(['mac-arm64', 'win-x64']), preset: z.enum(['test', 'production']),
   qualification: z.enum(['signed', 'notarized']),
 }) })
-const jobsSchema = z.array(z.object({ runner_name: z.string().nullable(), conclusion: z.string().nullable() }))
+const jobsSchema = z.array(z.object({ name: z.string(), runner_name: z.string().nullable(), conclusion: z.string().nullable() }))
 const routesSchema = z.record(z.string(), z.object({ label: z.string().regex(/^dsh-[a-z0-9-]+$/u), target: z.enum(['mac-arm64', 'win-x64']) }))
 
 /** Validated values handed to the privileged publisher; no caller-selected shell fragments. */
@@ -32,7 +32,7 @@ export interface DesktopPublishRoute {
 
 /**
  * Match a locally retained manifest to GitHub's attempt/job evidence and configured machine labels.
- * @param repository Current repository, not a value selected by the artifact.
+ * @param repository Current repository, not a value selected by the manifest.
  * @param runValue GitHub response for the exact packaging attempt.
  * @param requestValue Retained manifest read on the original packaging machine.
  * @param jobsValue GitHub jobs for the same packaging attempt.
@@ -58,7 +58,7 @@ export function resolveDesktopPublishRoute(
   if (new Set(Object.values(routes).map(value => value.label)).size !== Object.keys(routes).length) {
     throw new Error('desktop publish: each configured machine needs its own unique runner label')
   }
-  const matches = jobs.filter(job => job.runner_name === source.runnerName && job.conclusion === 'success')
+  const matches = jobs.filter(job => job.name === 'package' && job.runner_name === source.runnerName && job.conclusion === 'success')
   if (matches.length !== 1) throw new Error('desktop publish: original job does not establish a single successful packaging runner')
   return { runId: source.runId, attempt: source.attempt, commit: source.commit, sourceRef: source.sourceRef, channel: source.channel,
     runnerName: source.runnerName,

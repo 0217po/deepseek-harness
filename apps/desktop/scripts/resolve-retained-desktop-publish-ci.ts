@@ -12,7 +12,7 @@ import { resolveDesktopPublishRoute } from './desktop-publish-route.ts'
  * @param api Read-only GitHub API used for source and Environment checks.
  * @returns Complete route whose deployment environment comes from the retained manifest.
  */
-export async function resolveRetainedDesktopPublication(env: NodeJS.ProcessEnv, api: (path: string) => unknown | Promise<unknown>) {
+export async function resolveRetainedDesktopPublication(env: NodeJS.ProcessEnv, api: (path: string) => unknown) {
   const selection = z.object({ run: z.object({ id: z.number().int().positive(), run_attempt: z.number().int().positive() }).passthrough(),
     jobs: z.array(z.unknown()), routes: z.unknown(), runnerName: z.string() }).parse(JSON.parse(env.DESKTOP_PACKAGE_SELECTION || '{}'))
   if (!env.GITHUB_REPOSITORY || env.RUNNER_NAME !== selection.runnerName) throw new Error('desktop publish: task was dispatched to a different machine')

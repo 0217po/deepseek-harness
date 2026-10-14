@@ -1,10 +1,10 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { selectDesktopPackage } from '../scripts/resolve-desktop-publish-ci.ts'
 import { resolveRetainedDesktopPublication } from '../scripts/resolve-retained-desktop-publish-ci.ts'
-import { retainDesktopRelease } from '../scripts/desktop-release-store.ts'
+import { retainDesktopRelease, verifyRetainedDesktopRelease } from '../scripts/desktop-release-store.ts'
 
 function fixture() {
   const run = { id: 42, run_attempt: 2, head_sha: 'a'.repeat(40), status: 'completed', conclusion: 'success',
@@ -96,6 +96,15 @@ it('resolves an old locally retained package with publishRequested=false without
       .rejects.toThrow(/reviewers/u)
     await expect(resolveRetainedDesktopPublication(env, path => path.includes('/compare/') ? { status: 'diverged' } : api(path)))
       .rejects.toThrow(/not on master/u)
+    const manifestPath = join(root, 'releases/42/2/manifest.json')
+    const original = await readFile(manifestPath, 'utf8')
+    const tagged = await verifyRetainedDesktopRelease(join(root, 'releases'), '42', '2')
+    tagged.source.sourceRef = 'dsh-v1.0.0'
+    await writeFile(manifestPath, JSON.stringify(tagged))
+    expect(await resolveRetainedDesktopPublication(env, api)).toMatchObject({ sourceRef: 'dsh-v1.0.0' })
+    await expect(resolveRetainedDesktopPublication(env, path => path.endsWith('/commits/dsh-v1.0.0') ? { sha: 'c'.repeat(40) } : api(path)))
+      .rejects.toThrow(/source tag changed/u)
+    await writeFile(manifestPath, original)
     await writeFile(join(root, 'releases/42/2/installer.dmg'), 'changed')
     await expect(resolveRetainedDesktopPublication(env, api)).rejects.toThrow(/changed file/u)
     await rm(join(root, 'releases/42/2'), { recursive: true })

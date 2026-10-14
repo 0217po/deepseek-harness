@@ -15,6 +15,7 @@ const workflow = yaml.load(readFileSync(resolve(import.meta.dirname, '../.github
 
 it('confines signed Mac packaging to manual dispatch and a dedicated Apple Silicon runner', () => {
   expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
+  expect(workflow.jobs.package).not.toHaveProperty('name')
   expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: { test_release_id: { type: 'string', default: '', required: false } } })
   expect(workflow.on.workflow_dispatch).not.toHaveProperty('inputs.publish')
   expect(workflow.permissions).toEqual({ contents: 'read' })

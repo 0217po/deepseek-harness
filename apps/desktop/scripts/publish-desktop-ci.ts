@@ -1,4 +1,4 @@
-/** Publish a retained package selected by the routing job; --check never reads secrets or contacts COS. */
+/** Publish a retained package selected by the preparation job; --check never reads secrets or contacts COS. */
 import { createHash } from 'node:crypto'
 import { appendFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'

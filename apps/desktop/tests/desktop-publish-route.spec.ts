@@ -7,7 +7,7 @@ function fixture() {
   const source = { repository: 'owner/repo', runId: '42', attempt: '2', commit: run.head_sha, runnerName: 'mini',
     workflowCommit: run.head_sha, sourceRef: 'master', channel: 'nightly',
     target: 'mac-arm64', preset: 'test', publishRequested: true, qualification: 'notarized' }
-  const jobs = [{ runner_name: 'mini', conclusion: 'success', labels: ['self-hosted', 'dsh-mini'] }]
+  const jobs = [{ name: 'package', runner_name: 'mini', conclusion: 'success', labels: ['self-hosted', 'dsh-mini'] }]
   const routes = { mini: { label: 'dsh-mini', target: 'mac-arm64' } }
   return { run, source, jobs, routes }
 }
@@ -37,7 +37,7 @@ it('fails closed when a publishing route or its unique label is missing', () => 
 })
 
 
-it('keeps the artifact source separate from the workflow commit', () => {
+it('keeps the packaged source separate from the workflow commit', () => {
   const f = fixture()
   f.source.commit = 'b'.repeat(40)
   f.source.sourceRef = 'dsh-v1.0.0'
@@ -49,4 +49,10 @@ it('accepts a retained package that did not request publication during packaging
   const f = fixture()
   f.source.publishRequested = false
   expect(resolveDesktopPublishRoute('owner/repo', f.run, { source: f.source }, f.jobs, f.routes)).toMatchObject({ runId: '42' })
+})
+
+it('ignores unrelated successful jobs on the packaging machine', () => {
+  const f = fixture()
+  f.jobs.push({ ...f.jobs[0]!, name: 'diagnostics' })
+  expect(resolveDesktopPublishRoute('owner/repo', f.run, { source: f.source }, f.jobs, f.routes)).toMatchObject({ runnerName: 'mini' })
 })
