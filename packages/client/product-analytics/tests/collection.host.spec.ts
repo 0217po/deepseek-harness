@@ -15,6 +15,7 @@ const environment: EnvironmentAttributes = {
   os_arch: 'arm64', app_arch: 'x64', cpu_model: 'Fixture CPU', cpu_logical_count: 16, cpu_physical_core_count: 8,
   memory_total_bytes: 34359738368, missing_fields: {},
 }
+const { missing_fields: _missingFields, ...commonEnvironment } = environment
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(collectEnvironment).mockResolvedValue(environment) })
 
 const cleanup: (() => Promise<void>)[] = []
@@ -47,16 +48,17 @@ it('reuses login identity and copies only approved common fields', async () => {
   expect(b.getDeviceIdentity).toHaveBeenCalledWith()
   expect(b.emit).toHaveBeenCalledExactlyOnceWith({
     eventName: 'auth_page_click', body: 'auth_page_click', timestamp: 100,
-    attributes: { ...environment, button_name: 'sign_in', device_id: 'login-device', user_id: 'user-1', app_version: 'test-version' },
+    attributes: { ...commonEnvironment, button_name: 'sign_in', device_id: 'login-device', user_id: 'user-1', app_version: 'test-version' },
   })
   expect(JSON.stringify(b.emit.mock.calls)).not.toContain('private-')
+  expect(b.emit.mock.calls[0]![0].attributes).not.toHaveProperty('missing_fields')
 })
 
 it('missing identity does not discard an otherwise valid event', async () => {
   const b = await setup(true)
   b.getDeviceIdentity.mockRejectedValueOnce(new Error('credential store unavailable'))
   await b.ctx.productAnalytics.report({ eventName: 'plugin_add_button_click', timestamp: 100, attributes: {} })
-  expect(b.emit.mock.calls[0]?.[0].attributes).toEqual({ ...environment, app_version: 'test-version' })
+  expect(b.emit.mock.calls[0]?.[0].attributes).toEqual({ ...commonEnvironment, app_version: 'test-version' })
 })
 
 it('unload suppresses an identity lookup that settles after disposal', async () => {
@@ -92,7 +94,10 @@ it('writes the selected event through the real exporter to an isolated collector
   const analytics = await ctx.plugin(Analytics, { enabled: true })
   await ctx.productAnalytics.report({ eventName: 'api_key_save_click', timestamp: 1_800_000_000_000, attributes: {} })
   await analytics.dispose()
-  vi.mocked(collectEnvironment).mockResolvedValueOnce({ ...environment, os_version_full: '10.0.26300.9458' })
+  const { cpu_physical_core_count: _cores, ...partialEnvironment } = environment
+  vi.mocked(collectEnvironment).mockResolvedValueOnce({ ...partialEnvironment, os_version_full: '10.0.26300.9458',
+    missing_fields: { cpu_physical_core_count: 'timeout' },
+  })
   await ctx.plugin(Analytics, { enabled: true })
   await ctx.productAnalytics.report({ eventName: 'api_key_save_click', timestamp: 1_800_000_000_001, attributes: {} })
   await exporter.dispose()
@@ -103,6 +108,8 @@ it('writes the selected event through the real exporter to an isolated collector
   ] }] }] })
   expect(captures[0]).toContain('10.0.26300.9457')
   expect(captures[0]).toContain('10.0.26300.9458')
+  expect(captures[0]).toContain('"stringValue":"cpu_physical_core_count=timeout"')
+  expect(captures[0]).not.toContain('kvlistValue')
   expect(collectEnvironment).toHaveBeenCalledTimes(2)
   expect(captures[0]).not.toContain('device_id')
   expect(captures[0]).not.toContain('app_version')
@@ -205,7 +212,7 @@ it('caches failed environment fields without discarding the event or retrying ea
   for (const timestamp of [1, 2]) await b.ctx.productAnalytics.report({ eventName: 'auth_page_view', timestamp, attributes: {} })
   expect(collectEnvironment).toHaveBeenCalledTimes(1)
   expect(b.emit.mock.calls).toHaveLength(2)
-  expect(b.emit.mock.calls[0]![0].attributes?.missing_fields).toEqual({ os_version_full: 'timeout' })
+  expect(b.emit.mock.calls[0]![0].attributes?.missing_fields).toBe('os_version_full=timeout')
 })
 
 it('aborts and awaits environment sampling on disposal without emitting late results', async () => {
@@ -222,4 +229,14 @@ it('aborts and awaits environment sampling on disposal without emitting late res
   pending.resolve(environment)
   await Promise.all([report, disposal])
   expect(b.emit).not.toHaveBeenCalled()
+})
+
+
+it('encodes failed fields as a sorted scalar and omits an empty failure list', async () => {
+  const b = await setup(true)
+  vi.mocked(collectEnvironment).mockResolvedValueOnce({ ...environment,
+    missing_fields: { os_version_full: 'timeout', cpu_physical_core_count: 'query-failed' },
+  })
+  await b.ctx.productAnalytics.report({ eventName: 'auth_page_view', timestamp: 1, attributes: {} })
+  expect(b.emit.mock.calls[0]![0].attributes?.missing_fields).toBe('cpu_physical_core_count=query-failed,os_version_full=timeout')
 })

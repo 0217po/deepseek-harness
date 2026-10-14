@@ -34,10 +34,14 @@ try {
     await analytics.report({ eventName: 'desktop_app_launch', timestamp: 1_800_000_000_000, attributes: {} })
   } finally { await ctx.fiber.dispose() }
   if (platform() === 'darwin') {
-    reference.os_version_full = (await run('/usr/bin/sw_vers', ['-productVersion'])).stdout.trim()
+    const productVersion = (await run('/usr/bin/sw_vers', ['-productVersion'])).stdout.trim()
+    const { stdout: productInfo } = await run('/usr/bin/sw_vers', [])
+    const extra = productInfo.match(/^ProductVersionExtra:\s*(\([a-z]\))/m)?.[1]
+    reference.os_version_full = extra === undefined || productVersion.endsWith(extra)
+      ? productVersion : `${productVersion} ${extra}`
     reference.os_build = (await run('/usr/bin/sw_vers', ['-buildVersion'])).stdout.trim()
     reference.cpu_physical_core_count = Number((await run('/usr/sbin/sysctl', ['-n', 'hw.physicalcpu'])).stdout.trim())
-    reference.os_arch = (await run('/usr/sbin/sysctl', ['-n', 'hw.optional.arm64'])).stdout.trim() === '1' ? 'arm64' : 'x64'
+    reference.os_arch = (await run('/usr/sbin/sysctl', ['-i', '-n', 'hw.optional.arm64'])).stdout.trim() === '1' ? 'arm64' : 'x64'
   } else if (platform() === 'win32') {
     const systemRoot = process.env.SystemRoot
     if (systemRoot === undefined) throw new Error('Windows fixture requires SystemRoot')

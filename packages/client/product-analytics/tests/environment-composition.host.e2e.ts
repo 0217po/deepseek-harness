@@ -10,8 +10,7 @@ it('adds real system metadata to the existing event through Loader and OTLP', as
   let captured: unknown
   const attribute = z.object({ key: z.string(), value: z.object({
     stringValue: z.string().optional(), intValue: z.number().optional(),
-    kvlistValue: z.object({ values: z.array(z.unknown()) }).optional(),
-  }) })
+  }).strict() })
   const record = z.object({ eventName: z.string(), attributes: z.array(attribute) })
   const batch = z.object({ resourceLogs: z.array(z.object({ scopeLogs: z.array(z.object({ logRecords: z.array(record) })) })) })
   const schema = z.object({ captures: z.array(batch), reference: z.record(z.string(), z.union([z.string(), z.number()])) })
@@ -32,7 +31,7 @@ it('adds real system metadata to the existing event through Loader and OTLP', as
     expect(fields[key]).toEqual(typeof value === 'number' ? { intValue: value } : { stringValue: value })
   }
   if (platform() === 'win32' || platform() === 'darwin') {
-    expect(fields.missing_fields).toEqual({ kvlistValue: { values: [] } })
+    expect(fields).not.toHaveProperty('missing_fields')
     expect(fields.cpu_model?.stringValue).toBeTruthy()
   }
   if (platform() === 'win32') expect(fields.os_version_full?.stringValue).toMatch(/^\d+\.\d+\.\d+\.\d+$/)

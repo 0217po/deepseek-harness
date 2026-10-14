@@ -121,11 +121,11 @@ it('rejects malformed JSON without exposing raw output', async () => {
   expect(JSON.stringify(result)).not.toContain('private')
 })
 
-it.each(['1', '0'])('reports macOS product version and native architecture when arm64=%s', async (arm) => {
+it.each(['1', undefined, '0'])('reports macOS product version and native architecture when arm64=%s', async (arm) => {
   vi.mocked(os.platform).mockReturnValue('darwin')
   vi.mocked(os.release).mockReturnValue('26.0.0')
   vi.mocked(queryEnvironment).mockResolvedValueOnce({ kind: 'value', stdout: macVersion })
-    .mockResolvedValueOnce({ kind: 'value', stdout: macCpu.replace('arm64: 1', `arm64: ${arm}`) })
+    .mockResolvedValueOnce({ kind: 'value', stdout: arm === undefined ? 'hw.physicalcpu: 8\n' : macCpu.replace('arm64: 1', `arm64: ${arm}`) })
   const result = await collectEnvironment(options())
   expect(result).toMatchObject({ os_name: 'macos', os_version: 'darwin 26.0.0', os_version_full: '27.0.1', os_build: '26A434',
     os_arch: arm === '1' ? 'arm64' : 'x64', app_arch: process.arch, cpu_physical_core_count: 8, missing_fields: {} })
@@ -147,7 +147,7 @@ it.each(['', 'ProductVersion: garbage\nBuildVersion: private\nProductVersionExtr
   vi.mocked(queryEnvironment).mockResolvedValueOnce({ kind: 'value', stdout })
     .mockResolvedValueOnce({ kind: 'value', stdout: 'hw.physicalcpu: 0\nhw.optional.arm64: unknown' })
   expect((await collectEnvironment(options())).missing_fields).toEqual({
-    os_version_full: 'invalid-value', os_build: 'invalid-value', cpu_physical_core_count: 'invalid-value', os_arch: 'unavailable',
+    os_version_full: 'invalid-value', os_build: 'invalid-value', cpu_physical_core_count: 'invalid-value', os_arch: 'invalid-value',
   })
 })
 
@@ -174,6 +174,21 @@ it('isolates refused synchronous OS sources', async () => {
 
 it('marks unsupported platform queries without spawning commands', async () => {
   vi.mocked(os.platform).mockReturnValue('linux')
-  expect((await collectEnvironment(options())).missing_fields).toEqual({ os_version_full: 'unsupported', os_build: 'unsupported', cpu_physical_core_count: 'unsupported' })
+  expect((await collectEnvironment(options())).missing_fields).toEqual({ os_version_full: 'unsupported', os_build: 'unsupported', os_arch: 'unsupported', cpu_physical_core_count: 'unsupported' })
   expect(queryEnvironment).not.toHaveBeenCalled()
+})
+
+
+it.each(['', 'ProductVersionExtra: (a)\n', 'ProductVersionExtra:\n'])('accepts an inline macOS response suffix without doubling it: %s', async (extra) => {
+  vi.mocked(os.platform).mockReturnValue('darwin')
+  vi.mocked(queryEnvironment).mockResolvedValueOnce({ kind: 'value', stdout: macVersion.replace('27.0.1', '13.4.1 (a)') + extra })
+    .mockResolvedValueOnce({ kind: 'value', stdout: macCpu })
+  expect((await collectEnvironment(options())).os_version_full).toBe('13.4.1 (a)')
+})
+
+it('rejects conflicting macOS response suffixes', async () => {
+  vi.mocked(os.platform).mockReturnValue('darwin')
+  vi.mocked(queryEnvironment).mockResolvedValueOnce({ kind: 'value', stdout: macVersion.replace('27.0.1', '13.4.1 (a)') + 'ProductVersionExtra: (b)\n' })
+    .mockResolvedValueOnce({ kind: 'value', stdout: macCpu })
+  expect((await collectEnvironment(options())).missing_fields.os_version_full).toBe('invalid-value')
 })

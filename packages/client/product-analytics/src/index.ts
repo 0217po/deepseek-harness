@@ -109,11 +109,15 @@ export default class ProductAnalytics extends TypertRemoteService {
         this.environment, this.ctx.deepseekAccount.getDeviceIdentity().catch(() => undefined),
       ])
       if (!this.enabled()) return
+      const { missing_fields: missingFields, ...metadata } = environment
+      const missing = Object.entries(missingFields).sort(([a], [b]) => a.localeCompare(b))
+        .map(([field, reason]) => `${field}=${reason}`).join(',')
       this.ctx.productTelemetry.emit({
         ...event, body: event.eventName,
         attributes: {
           ...event.attributes,
-          ...environment,
+          ...metadata,
+          ...missing === '' ? {} : { missing_fields: missing },
           ...identity?.deviceId === undefined ? {} : { device_id: identity.deviceId },
           ...identity?.userId === undefined ? {} : { user_id: identity.userId },
           ...this.config.appVersion === undefined ? {} : { app_version: this.config.appVersion },

@@ -29,19 +29,19 @@ Every product event carries available `device_id`, `user_id`, and `app_version` 
 
 | Field | Meaning and source |
 |---|---|
-| `os_name` | `windows` or `macos`; Node platform selects the mapping |
+| `os_name` | `windows` or `macos`; other platforms retain the raw Node platform name (such as `linux`) |
 | `os_version` | Legacy `<Node platform> <kernel release>` from `node:os.release()` |
 | `os_version_full` | Windows registry major/minor/build plus `UBR` revision; macOS `sw_vers` product version including a security-response suffix when present |
 | `os_build` | Windows registry `CurrentBuildNumber`; macOS `sw_vers` build |
-| `os_arch` | Native architecture mapped to `ia32`, `x64`, `arm`, or `arm64`; Windows processor CIM architecture or macOS `hw.optional.arm64`, independent of application emulation |
+| `os_arch` | Native architecture mapped to `ia32`, `x64`, `arm`, or `arm64`; Windows processor CIM architecture or macOS `hw.optional.arm64` (`1` means ARM64; an absent key means Intel x64), independent of application emulation |
 | `app_arch` | Running binary architecture from `process.arch` |
 | `cpu_model` | First logical processor's model from `node:os.cpus()` |
 | `cpu_logical_count` | Number of system-reported logical processors from `node:os.cpus()`, not application parallelism |
 | `cpu_physical_core_count` | Sum of Windows processor CIM `NumberOfCores` across sockets; macOS `hw.physicalcpu` |
 | `memory_total_bytes` | Total physical memory from `node:os.totalmem()`, in bytes without rounding |
-| `missing_fields` | Object mapping omitted environment field names to `unavailable`, `invalid-value`, `query-failed`, `timeout`, `output-limit`, or `unsupported`; empty when all fields are available |
+| `missing_fields` | Sorted comma-separated `field=reason` pairs using `unavailable`, `invalid-value`, `query-failed`, `timeout`, `output-limit`, or `unsupported`; omitted when all fields are available |
 
-The first enabled intake collects one environment snapshot; concurrent and later intakes reuse its successful fields and failures until the plugin remounts or the Host restarts. Intake waits for sampling while callers submit asynchronously; startup does not await collection. Identity changes remain visible on subsequent events. Each metadata command has a configurable `environmentQueryTimeoutMillis` deadline (5,000 ms) and `environmentQueryMaxOutputBytes` bound per output stream (16,384 bytes). Disposal cancels commands and waits for child closure; disabled or disposed intake never emits late results. Missing revision never becomes `.0`, and missing numeric fields never become zero. Only Windows and macOS have full-version and physical-core queries; other platforms mark those fields `unsupported`.
+The first enabled intake collects one environment snapshot; concurrent and later intakes reuse its successful fields and failures until the plugin remounts or the Host restarts. Intake waits for sampling while callers submit asynchronously; startup does not await collection. Identity changes remain visible on subsequent events. Each metadata command has a configurable `environmentQueryTimeoutMillis` deadline (5,000 ms) and `environmentQueryMaxOutputBytes` bound per output stream (16,384 bytes). Disposal cancels commands and waits for child closure; disabled or disposed intake never emits late results. Missing revision never becomes `.0`, and missing numeric fields never become zero. Only Windows and macOS have full-version, native-architecture, and physical-core queries; other platforms mark those fields `unsupported`.
 
 Electron forwards its build-inlined `DSH_CLIENT_VERSION` to the Host; analytics and the exporter reuse this client version. The exporter requires it. The [Desktop composition](../../bundle/web-app/README.md) owns batching and timeout settings, including cancellation at the shutdown deadline.
 
@@ -74,6 +74,8 @@ None; collection does not modify model requests.
 
 Delivery is best effort.
 
+- Environment sampling is one-shot: startup contention can cause a cached timeout for the whole run. `missing_fields` describes sampling failure, not hardware absence; a later event does not retry. Deployments can increase the query deadline; remount or restart samples again.
+- Host security policies can block or terminate the fixed PowerShell queries, producing `query-failed` on managed Windows machines.
 - Disabling stops new collection; it does not clear the exporter queue.
 - Renderer failures are discarded, and the exporter has no durable outbox or warehouse acknowledgement.
 - Native startup reporting waits for Host authentication; a process that fails before Host readiness cannot report its launch.

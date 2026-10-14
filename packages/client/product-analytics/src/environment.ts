@@ -1,5 +1,5 @@
 /** Static Desktop environment fields, independent of account and credential availability. */
-import { cpus, machine, platform, release, totalmem } from 'node:os'
+import { cpus, platform, release, totalmem } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { queryEnvironment, type MissingReason, type QueryOptions, type QueryResult } from './environment-query.ts'
@@ -27,7 +27,7 @@ export interface EnvironmentAttributes {
   /** Total physical memory in bytes. */
   memory_total_bytes?: number
   /** Only failed fields, with no raw commands, output, or errors. */
-  missing_fields: Record<string, MissingReason>
+  missing_fields: Partial<Record<EnvironmentField, MissingReason>>
 }
 
 type EnvironmentField = Exclude<keyof EnvironmentAttributes, 'missing_fields' | 'os_name' | 'app_arch'>
@@ -126,9 +126,12 @@ export async function collectEnvironment(options: QueryOptions): Promise<Environ
     else {
       const values = lines(version.stdout)
       const product = values.get('ProductVersion')
-      const extra = values.get('ProductVersionExtra')
-      if (product !== undefined && /^\d+(?:\.\d+){1,2}$/.test(product) && (extra === undefined || /^\([a-z]\)$/.test(extra))) {
-        fields.os_version_full = extra === undefined ? product : `${product} ${extra}`
+      const extra = values.get('ProductVersionExtra') || undefined
+      const match = product?.match(/^(\d+(?:\.\d+){1,2})(?: (\([a-z]\)))?$/)
+      if (product !== undefined && match !== undefined && match !== null && (extra === undefined || /^\([a-z]\)$/.test(extra))
+        && (match[2] === undefined || extra === undefined || match[2] === extra)) {
+        const suffix = match[2] ?? extra
+        fields.os_version_full = suffix === undefined ? product : `${match[1]} ${suffix}`
       } else missing(['os_version_full'], 'invalid-value')
       const build = values.get('BuildVersion')
       if (build !== undefined && /^\d+[A-Za-z]\d+[a-z]?$/.test(build)) fields.os_build = build
@@ -144,12 +147,11 @@ export async function collectEnvironment(options: QueryOptions): Promise<Environ
       else missing(['cpu_physical_core_count'], 'invalid-value')
       const arm = values.get('hw.optional.arm64')
       if (arm === '1') fields.os_arch = 'arm64'
-      else if (arm === '0') fields.os_arch = 'x64'
-      else missing(['os_arch'], 'unavailable')
+      else if (arm === undefined || arm === '0') fields.os_arch = 'x64'
+      else missing(['os_arch'], 'invalid-value')
     }
   } else {
-    read('os_arch', () => machine())
-    missing(['os_version_full', 'os_build', 'cpu_physical_core_count'], 'unsupported')
+    missing(['os_version_full', 'os_build', 'os_arch', 'cpu_physical_core_count'], 'unsupported')
   }
   return fields
 }
