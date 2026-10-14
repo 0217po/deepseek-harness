@@ -23,7 +23,7 @@ export interface AccountSnapshot {
   /** Sanitized profile and balance query outcomes, absent while loading. */
   details: Partial<AccountDetails> | undefined
   /** Shared picture load; absent until a profile supplies a picture or after sign-out. */
-  avatar?: AccountAvatarSnapshot | undefined
+  avatar: AccountAvatarSnapshot | undefined
   /** Whether the state stream failed. */
   failed: boolean
   /** Explicitly opened account dialog outside onboarding. */
@@ -40,6 +40,8 @@ export interface AccountSnapshot {
 
 /** Host operations injected into the Cordis-free account component. */
 export interface AccountSectionInjected {
+  /** @param snapshot - picture attempt whose rendered image failed; superseded attempts are ignored. */
+  avatarFailed: (snapshot: AccountAvatarSnapshot) => void
   /** Subscribe to live credential-expiry notifications.
    * @param listener - callback after the current credential is removed.
    * @returns listener cleanup.
@@ -88,7 +90,7 @@ export interface AccountSectionInjected {
 export type AccountSectionProps =
   PropsRuntime<'settings.section'> & PropsLocale<'settings.account'> & InjectFace<AccountSectionInjected>
 /** @param props - localized actions, account subscription, and the shared Platform page channel. @returns account settings UI. */
-export function AccountSection({ t, useAccount, useTheme, start, cancel, openPlatformPage }: AccountSectionProps) {
+export function AccountSection({ t, useAccount, useTheme, start, cancel, openPlatformPage, avatarFailed }: AccountSectionProps) {
   const { view: state, details, avatar, failed: streamFailed } = useAccount(value => value)
   const colorScheme = useTheme(snapshot => snapshot.active.colorScheme)
   // The shared host owns the native view; this page holds only its own request,
@@ -163,7 +165,7 @@ export function AccountSection({ t, useAccount, useTheme, start, cancel, openPla
       <div className={css.card}>
         <div className={css.identity}>
           <span className={css.avatar} data-avatar-status={signedIn ? avatar?.status : undefined}>
-            <AccountAvatar avatar={signedIn ? avatar : undefined} />
+            <AccountAvatar avatar={signedIn ? avatar : undefined} avatarFailed={avatarFailed} />
           </span>
           <div className={css.identityCopy}>
             <span className={css.name}>{signedIn ? profile?.name ?? t('signedIn') : t('signedOut')}</span>

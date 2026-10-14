@@ -25,8 +25,10 @@ export class AccountAvatarLoader {
     if (this.disposed) return
     const source = url || undefined
     if (this.snapshot?.url === source) return
-    this.detach()
-    if (source === undefined) this.update(undefined)
+    if (source === undefined) {
+      this.detach()
+      this.update(undefined)
+    }
     else this.load(source)
   }
 
@@ -35,10 +37,26 @@ export class AccountAvatarLoader {
     if (!this.disposed && this.snapshot?.status === 'failed') this.load(this.snapshot.url)
   }
 
+  /**
+   * Return both surfaces to fallback when a rendered picture fails.
+   * @param snapshot - picture attempt rendered by the failing element; superseded attempts are ignored.
+   */
+  failed(snapshot: AccountAvatarSnapshot): void {
+    if (this.disposed || this.snapshot !== snapshot || snapshot.status !== 'ready') return
+    this.detach()
+    this.update({ url: snapshot.url, status: 'failed' })
+  }
+
+  /** Release the picture without publishing; the owner publishes an empty avatar with the replacement account frame. */
+  reset(): void {
+    this.detach()
+    this.snapshot = undefined
+  }
+
   /** Release the browser image and prevent further loads or publications. */
   dispose(): void {
     this.disposed = true
-    this.detach()
+    this.reset()
   }
 
   private load(url: string): void {

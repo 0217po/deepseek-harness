@@ -234,10 +234,19 @@ it('publishes one avatar load and retries it through the shared Settings refresh
   expect(actions.hooks.account.getSnapshot().avatar).toEqual({ url: picture.value.avatarUrl, status: 'ready' })
   await actions.refreshAccount()
   expect(images).toHaveLength(3)
+  const ready = actions.hooks.account.getSnapshot().avatar!
+  actions.avatarFailed(ready)
+  expect(actions.hooks.account.getSnapshot().avatar?.status).toBe('failed')
+  await actions.refreshAccount()
+  expect(images).toHaveLength(4)
+  images[3]!.dispatchEvent(new Event('load'))
+  const successor = actions.hooks.account.getSnapshot().avatar!
+  actions.avatarFailed(ready)
+  expect(actions.hooks.account.getSnapshot().avatar).toBe(successor)
   c.mock.streams.push('account/watch', view)
   await vi.waitFor(() => { expect(actions.hooks.account.getSnapshot().view).toEqual(view) })
   expect(actions.hooks.account.getSnapshot().avatar).toBeUndefined()
-  expect(images[2]!.getAttribute('src')).toBeNull()
+  expect(images[3]!.getAttribute('src')).toBeNull()
 }, 60_000)
 
 it('coalesces refreshes, publishes independent failures, and rejects stale responses after sign-out or unload', async ({ start }) => {

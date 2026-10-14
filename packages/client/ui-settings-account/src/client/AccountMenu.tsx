@@ -22,7 +22,7 @@ export type AccountMenuProps = PropsRuntime<'settings.launcher'> & PropsLocale<'
 export function AccountMenu({
   subscribeSessionExpired, subscribeModelSignInRequired, wide, settingsShortcut, openSettings, openOnboarding, settingsOpen,
   useAccount, useTheme, signOut, hasRunningAccountTasks, refreshAccount, bonusNoticeShown, bonusNoticeDismissed,
-  contactUs, showLogin, start, cancel, t,
+  contactUs, showLogin, start, cancel, avatarFailed, t,
 }: AccountMenuProps) {
   const anchor = useRef<HTMLDivElement>(null)
   // The launcher outlives the panel, so a false-to-true edge is one Settings entry:
@@ -65,7 +65,9 @@ export function AccountMenu({
       anchor={<button ref={trigger} type="button" className={css.trigger} data-collapsed={!wide} data-signed-out={!signedIn} aria-label={t('menu')}
         aria-haspopup="menu" aria-expanded={open} onClick={() => { setOpen(value => !value) }}>
         {signedIn
-          ? <span className={css.avatar} data-avatar-status={account.avatar?.status}><AccountAvatar avatar={account.avatar} /></span>
+          ? <span className={css.avatar} data-avatar-status={account.avatar?.status}>
+            <AccountAvatar avatar={account.avatar} avatarFailed={avatarFailed} />
+          </span>
           : <IconEllipsisOutlineMedium size={14} />}
         {wide && <span className={css.label}>{signedIn ? label : t('more')}</span>}
       </button>}

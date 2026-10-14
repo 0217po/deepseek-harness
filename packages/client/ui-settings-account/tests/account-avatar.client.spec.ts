@@ -81,3 +81,34 @@ it('does not start a load when publication releases its owner', () => {
   expect(image.onload).toBeNull()
   expect(image.onerror).toBeNull()
 })
+
+it('shares rendered-image failures and ignores reports from a superseded picture attempt', () => {
+  const { images, states, loader } = imagesOf()
+  loader.setUrl('https://example.test/avatar.png')
+  const loading = states.at(-1)!
+  loader.failed(loading)
+  expect(states.at(-1)).toBe(loading)
+  images[0]!.dispatchEvent(new Event('load'))
+  const ready = states.at(-1)!
+  loader.failed(ready)
+  expect(states.at(-1)).toEqual({ url: ready.url, status: 'failed' })
+  loader.retry()
+  images[1]!.dispatchEvent(new Event('load'))
+  const successor = states.at(-1)!
+  loader.failed(ready)
+  expect(states.at(-1)).toBe(successor)
+  loader.dispose()
+  loader.failed(successor)
+  expect(states.at(-1)).toBe(successor)
+})
+
+it('resets an account picture without publishing an intermediate account snapshot', () => {
+  const { images, states, loader } = imagesOf()
+  loader.setUrl('https://example.test/avatar.png')
+  const lateLoad = images[0]!.onload!
+  loader.reset()
+  lateLoad.call(images[0]!, new Event('load'))
+  expect(states).toHaveLength(1)
+  loader.setUrl('https://example.test/avatar.png')
+  expect(images).toHaveLength(2)
+})

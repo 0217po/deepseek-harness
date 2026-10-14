@@ -50,7 +50,7 @@ export function apply(ctx: Context): void {
   const page = globalThis as Partial<Record<typeof CONTACT_CONFIG_GLOBAL, unknown>>
   const config = ContactConfig(page[CONTACT_CONFIG_GLOBAL] ?? {})
   let snapshot: AccountSnapshot = {
-    view: undefined, details: undefined, failed: false, loginVisible: false, desktopOnboardingVisible: desktop,
+    view: undefined, details: undefined, avatar: undefined, failed: false, loginVisible: false, desktopOnboardingVisible: desktop,
   }
   // Desktop main opens the authorization page natively; a plain browser opens it in a tab it owns.
   const browser = new BrowserLogin(url => authorizeUrlWithTheme(url, ctx.theme.getTheme().active.colorScheme))
@@ -125,11 +125,11 @@ export function apply(ctx: Context): void {
     for await (const frame of stream) {
       revision++
       refreshing = undefined
-      avatar.setUrl(undefined)
+      avatar.reset()
       const initialize = frame.value.status === 'credential-stored' && frame.value.attempt?.phase === 'succeeded'
         && snapshot.view?.attempt?.phase !== 'succeeded'
       const { notice, ...previous } = snapshot
-      publish({ ...previous, view: frame.value, details: undefined, failed: false,
+      publish({ ...previous, view: frame.value, details: undefined, avatar: undefined, failed: false,
         ...(frame.value.status === 'credential-stored' && notice ? { notice } : {}) })
       browser.update(frame.value)
       frame.accept()
@@ -172,6 +172,7 @@ export function apply(ctx: Context): void {
       if (reason === 'returned' && page === 'top-up') void refreshAfterReturn(refreshing, reRead)
     })
   const operations: AccountSectionInjected = {
+    avatarFailed: (value) => { avatar.failed(value) },
     subscribeSessionExpired: listener => ctx.remote.$on('deepseek-account/session-expired', listener),
     subscribeModelSignInRequired: listener => ctx.remote.$on('deepseek-account/model-sign-in-required', listener),
     ...nativePlatform === undefined ? {} : { openPlatformPage: platformPageOpener(refreshAccount) },

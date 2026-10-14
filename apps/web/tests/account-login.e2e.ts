@@ -143,7 +143,18 @@ describe.skipIf(MODE === 'record')('web e2e: DeepSeek account sign-in in a plain
     await expect.poll(platform.avatarRequests).toBe(1)
     await menu.locator('[data-avatar-status="failed"]').waitFor()
     expect(await menu.locator('img').count()).toBe(0)
-    const states = ['Initial load failed: sidebar=fallback']
+    const states: string[] = []
+    const capture = async (stage: string): Promise<void> => {
+      const sidebar = menu.locator('[data-avatar-status]')
+      const account = page.getByRole('region', { name: 'Account', exact: true })
+      const mounted = await account.count() > 0
+      const settingsStatus = mounted
+        ? await account.locator('[data-avatar-status]').getAttribute('data-avatar-status') : 'unmounted'
+      states.push(`${stage}: sidebar=${await sidebar.getAttribute('data-avatar-status')}, settings=${settingsStatus}, `
+        + `sidebarImages=${await menu.locator('img').count()}, settingsImages=${mounted ? await account.locator('img').count() : 0}, `
+        + `requests=${platform.avatarRequests()}`)
+    }
+    await capture('Initial load')
     await menu.click()
     await page.getByRole('menuitem', { name: 'Settings', exact: true }).click()
     const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
@@ -152,7 +163,7 @@ describe.skipIf(MODE === 'record')('web e2e: DeepSeek account sign-in in a plain
     await account.locator('[data-avatar-status="failed"]').waitFor()
     expect(await menu.locator('img').count()).toBe(0)
     expect(await account.locator('img').count()).toBe(0)
-    states.push('First Settings entry failed: sidebar=fallback, settings=fallback')
+    await capture('First Settings entry')
     await settings.getByRole('button', { name: 'Close', exact: true }).click()
     await settings.waitFor({ state: 'detached' })
     await menu.click()
@@ -164,7 +175,7 @@ describe.skipIf(MODE === 'record')('web e2e: DeepSeek account sign-in in a plain
         element instanceof HTMLImageElement && element.complete && element.naturalWidth > 0)).toBe(true)
       expect(await image.getAttribute('src')).toBe(`${platform.origin}/avatar.svg`)
     }
-    states.push('Second Settings entry succeeded: sidebar=image, settings=image, same URL=true')
+    await capture('Second Settings entry')
     await settings.getByRole('button', { name: 'Close', exact: true }).click()
     await settings.waitFor({ state: 'detached' })
     await menu.click()
@@ -173,7 +184,20 @@ describe.skipIf(MODE === 'record')('web e2e: DeepSeek account sign-in in a plain
     expect(await menu.locator('img').count()).toBe(1)
     expect(await account.locator('img').count()).toBe(1)
     expect(platform.avatarRequests()).toBe(3)
-    states.push('Third Settings entry reused success: sidebar=image, settings=image, requests=3')
+    await capture('Third Settings entry')
+    await menu.locator('img').dispatchEvent('error')
+    await menu.locator('[data-avatar-status="failed"]').waitFor()
+    await account.locator('[data-avatar-status="failed"]').waitFor()
+    expect(await menu.locator('img').count()).toBe(0)
+    expect(await account.locator('img').count()).toBe(0)
+    await capture('Rendered image failure')
+    await settings.getByRole('button', { name: 'Close', exact: true }).click()
+    await settings.waitFor({ state: 'detached' })
+    await menu.click()
+    await page.getByRole('menuitem', { name: 'Settings', exact: true }).click()
+    await expect.poll(() => menu.locator('img').count()).toBe(1)
+    await expect.poll(() => account.locator('img').count()).toBe(1)
+    await capture('Settings entry after rendered failure')
     await compareOrRefreshGolden(AVATAR_EXPECTED, states.join('\n'), MODE)
     expect(console.pageErrors).toEqual([])
     await context.close()
