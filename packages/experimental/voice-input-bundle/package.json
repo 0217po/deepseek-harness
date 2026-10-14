@@ -26,6 +26,8 @@
   },
   "files": [
     "icon.svg",
+    "preview.svg",
+    "preview.zh.svg",
     "locale/*.json",
     "lib/index.js",
     "cordis.patch.yml",
@@ -50,5 +52,9 @@
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
+  },
+  "preview": {
+    "en": "./preview.svg",
+    "zh": "./preview.zh.svg"
   }
 }

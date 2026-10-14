@@ -32,6 +32,7 @@ import {
 import { managementText, noticeText, packageText, registryText, restartText, rowText, type Translate } from './presentation.ts'
 import type { PluginPackageRef, PluginRowRef, PluginsSubject } from './slot-contract.ts'
 import type { ConfigPageForm } from './slot-contract.ts'
+import { previewAddress } from './preview-resource.ts'
 import css from './PluginManagerPage.module.css'
 
 /** Full component props assembled by the main slot renderer. */
@@ -243,6 +244,22 @@ function PackagePreview({ src, title, t }: { readonly src: string; readonly titl
   return failed
     ? <p className={css.reason} role="status">{t('previewUnavailable')}</p>
     : <img className={css.packagePreview} src={src} alt={t('previewAlt', { name: title })} onError={() => { setFailed(true) }} />
+}
+
+/** Only the viewed built-in detail holds artwork; lists and third-party details never request it. */
+function BuiltinPreview({ name, title, t, resolveText, useResource }: {
+  readonly name: string
+  readonly title: string
+  readonly t: Translate
+  readonly resolveText: ResolveText
+  readonly useResource: PluginManagerPageProps['useResource']
+}): ReactNode {
+  const resource = useResource<'builtin-plugin-preview'>(previewAddress(name))
+  if (resource.status === 'failed') return <p className={css.reason} role="status">{t('previewUnavailable')}</p>
+  const preview = resource.value?.preview
+  if (preview === undefined) return <MetadataError error={resource.value?.error} t={t} />
+  const src = resolveText(preview)
+  return <PackagePreview key={src} src={src} title={title} t={t} />
 }
 
 /** A row's switch: locked, saying why, when the Host refuses to address the row through the profile patch. */
@@ -687,12 +704,13 @@ function RowDetail({ pkg, row, t, resolveText, onBack, renderSlot, form }: {
  * and configure controls; and where it comes from.
  */
 function PackageDetail({
-  pkg, t, resolveText, busy, rowBusy, configured, configure, renderSlot, inMore,
+  pkg, t, resolveText, useResource, busy, rowBusy, configured, configure, renderSlot, inMore,
   onBack, onSetEnabled, onUninstall, onUpdate, onSetRowEnabled,
 }: {
   readonly pkg: PackageView
   readonly t: Translate
   readonly resolveText: ResolveText
+  readonly useResource: PluginManagerPageProps['useResource']
   readonly busy: boolean
   /** Whether a row has a write in flight. */
   readonly rowBusy: (row: PackageRow) => boolean
@@ -709,7 +727,6 @@ function PackageDetail({
 }): ReactNode {
   const { title, description, beta } = packageText(pkg, resolveText)
   const status = packageStatus(pkg)
-  const preview = pkg.meta?.preview === undefined ? undefined : resolveText(pkg.meta.preview)
   const subject: PluginsSubject = { kind: 'bundle', pkg: packageRef(pkg) }
   return (
     <div className={css.detail} data-plugin-detail={pkg.name}>
@@ -762,7 +779,8 @@ function PackageDetail({
       <MetadataError error={pkg.meta?.error} t={t} />
       {pkg.error === undefined ? null : <p className={css.reason} role="status">{t('reasonLabel')}: {managementText(pkg.error, t)}</p>}
       {pkg.readOnlyReason === undefined ? null : <p className={css.reason} role="status">{managementText({ code: pkg.readOnlyReason }, t)}</p>}
-      {preview === undefined ? null : <PackagePreview key={preview} src={preview} title={title} t={t} />}
+      {pkg.optional && pkg.availability === 'installation'
+        ? <BuiltinPreview name={pkg.name} title={title} t={t} resolveText={resolveText} useResource={useResource} /> : null}
       <div className={css.detailSections}>
         {configured
           ? (
@@ -1603,6 +1621,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
       {loaded && openPkg !== undefined && openRow === undefined
         ? (
           <PackageDetail
+            useResource={props.useResource}
             pkg={openPkg}
             t={t}
             resolveText={resolveText}

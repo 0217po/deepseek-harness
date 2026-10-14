@@ -378,35 +378,47 @@ describe('plugin locale display metadata', () => {
     }
   })
 
+  it.each(['./missing.svg', { en: './missing.svg', zh: './missing.zh.svg' }])('does not read declared or exported previews in inventory metadata: %j', (preview) => {
+    manifest({ './package.json': './package.json', './preview': './missing-export.svg' }, { icon: './icon.png', preview })
+    file(join(dir, 'icon.png'), 'icon')
+    expect(readPluginMeta('localized', parentURL)).toEqual({
+      title: 'localized', icon: `data:image/png;base64,${Buffer.from('icon').toString('base64')}`,
+    })
+  })
+
   it('reads an optional manifest preview without executing the plugin and preserves its icon', () => {
     manifest({ '.': './index.js', './package.json': './package.json', './preview': './fallback.svg' }, {
-      icon: './icon.png', preview: './preview.svg',
+      icon: './icon.png', preview: { en: './preview.svg', zh: './preview.svg' },
     })
     file(join(dir, 'icon.png'), 'icon')
     file(join(dir, 'preview.svg'), '<svg/>')
-    const meta = readPluginMeta('localized', parentURL)
+    const meta = readPluginMeta('localized', parentURL, true)
     expect(meta).toEqual({
       title: 'localized', icon: `data:image/png;base64,${Buffer.from('icon').toString('base64')}`,
-      preview: `data:image/svg+xml;base64,${Buffer.from('<svg/>').toString('base64')}`,
+      preview: { en: `data:image/svg+xml;base64,${Buffer.from('<svg/>').toString('base64')}`, zh: `data:image/svg+xml;base64,${Buffer.from('<svg/>').toString('base64')}` },
     })
   })
 
   it('reads localized preview paths without evaluating the plugin and normalizes language keys', () => {
     manifest({ '.': './index.js', './package.json': './package.json' }, {
-      preview: { en: './preview.svg', 'ZH-CN': './preview.zh.svg' },
+      preview: { en: './preview.svg', ZH: './preview.zh.svg' },
     })
     file(join(dir, 'preview.svg'), '<svg>English</svg>')
     file(join(dir, 'preview.zh.svg'), '<svg>中文</svg>')
-    expect(readPluginMeta('localized', parentURL)?.preview).toEqual({
+    expect(readPluginMeta('localized', parentURL, true)?.preview).toEqual({
       en: `data:image/svg+xml;base64,${Buffer.from('<svg>English</svg>').toString('base64')}`,
-      'zh-cn': `data:image/svg+xml;base64,${Buffer.from('<svg>中文</svg>').toString('base64')}`,
+      zh: `data:image/svg+xml;base64,${Buffer.from('<svg>中文</svg>').toString('base64')}`,
     })
   })
 
   it.each([
     [{ zh: './preview.svg' }, 'require an English'],
+    [{ en: './preview.svg' }, 'require a Chinese'],
+    ['./preview.svg', 'must map en and zh'],
+    [['./preview.svg'], 'must map en and zh'],
+    [null, 'must map en and zh'],
     [{ en: './preview.svg', EN: './preview.svg' }, 'duplicates locale en'],
-    [{ en: './preview.svg', zh_CN: './preview.svg' }, 'must be a language id'],
+    [{ en: './preview.svg', zh_CN: './preview.svg' }, 'preview keys must be en or zh'],
     [{ en: './preview.svg', zh: '' }, 'must be a non-empty string'],
     [{ en: './preview.svg', zh: '../outside.svg' }, 'inside its manifest directory'],
     [{ en: './preview.svg', zh: 'https://example.test/preview.svg' }, 'relative file path'],
@@ -415,7 +427,7 @@ describe('plugin locale display metadata', () => {
     file(join(dir, 'icon.svg'), '<svg/>')
     file(join(dir, 'preview.svg'), '<svg/>')
     file(join(dir, '../outside.svg'), '<svg/>')
-    const meta = readPluginMeta('localized', parentURL)
+    const meta = readPluginMeta('localized', parentURL, true)
     expect(meta?.preview).toBeUndefined()
     expect(meta?.icon).toBeDefined()
     expect(meta?.title).toBe('localized')
@@ -423,34 +435,32 @@ describe('plugin locale display metadata', () => {
   })
 
   it('bounds the combined size of localized previews at 1 MiB', () => {
-    manifest({ './package.json': './package.json' }, { preview: { en: './en.png', zh: './zh.png' } })
-    writeFileSync(join(dir, 'en.png'), Buffer.alloc(512 * 1024))
-    writeFileSync(join(dir, 'zh.png'), Buffer.alloc(512 * 1024))
-    expect(readPluginMeta('localized', parentURL)?.preview).toBeDefined()
-    writeFileSync(join(dir, 'zh.png'), Buffer.alloc(512 * 1024 + 1))
-    const meta = readPluginMeta('localized', parentURL)
+    manifest({ './package.json': './package.json' }, { preview: { en: './en.svg', zh: './zh.svg' } })
+    writeFileSync(join(dir, 'en.svg'), Buffer.alloc(512 * 1024))
+    writeFileSync(join(dir, 'zh.svg'), Buffer.alloc(512 * 1024))
+    expect(readPluginMeta('localized', parentURL, true)?.preview).toBeDefined()
+    writeFileSync(join(dir, 'zh.svg'), Buffer.alloc(512 * 1024 + 1))
+    const meta = readPluginMeta('localized', parentURL, true)
     expect(meta?.preview).toBeUndefined()
     expect(meta?.error).toContain('localized previews exceed 1024 KiB in total')
   })
 
-  it('reads a subpath preview independently of root artwork', () => {
-    manifest({ './preview': './root.svg', './search/preview': './search.webp' })
+  it('ignores standalone subpath preview exports even during explicit artwork reads', () => {
+    manifest({ './preview': './root.svg', './search/preview': './search.svg' })
     file(join(dir, 'root.svg'), 'root')
-    file(join(dir, 'search.webp'), 'search')
-    expect(readPluginMeta('localized/search', parentURL)).toEqual({
-      preview: `data:image/webp;base64,${Buffer.from('search').toString('base64')}`,
-    })
+    file(join(dir, 'search.svg'), 'search')
+    expect(readPluginMeta('localized/search', parentURL, true)).toBeUndefined()
   })
 
   it.each([
     ['', 'non-empty string'], ['https://example.test/preview.png', 'relative file path'],
-    ['../preview.png', 'inside its manifest directory'], ['./preview.html', 'SVG, PNG, JPEG, or WebP'],
+    ['../preview.png', 'inside its manifest directory'], ['./preview.html', 'preview must be SVG'],
   ])('keeps the icon and text when preview %s is invalid', (preview, diagnostic) => {
-    manifest({ './package.json': './package.json' }, { icon: './icon.svg', preview })
+    manifest({ './package.json': './package.json' }, { icon: './icon.svg', preview: typeof preview === 'string' ? { en: preview, zh: './preview.svg' } : preview })
     file(join(dir, 'icon.svg'), 'icon')
     file(join(dir, '../preview.png'), 'outside')
     file(join(dir, 'preview.html'), 'markup')
-    const meta = readPluginMeta('localized', parentURL)
+    const meta = readPluginMeta('localized', parentURL, true)
     expect(meta?.title).toBe('localized')
     expect(meta?.icon).toBeDefined()
     expect(meta?.preview).toBeUndefined()
@@ -458,12 +468,13 @@ describe('plugin locale display metadata', () => {
   })
 
   it('bounds previews at 1 MiB independently of icons', () => {
-    manifest({ './package.json': './package.json' }, { icon: './missing.svg', preview: './preview.png' })
-    const bytes = Buffer.alloc(1024 * 1024)
-    writeFileSync(join(dir, 'preview.png'), bytes)
-    expect(readPluginMeta('localized', parentURL)?.preview).toBe(`data:image/png;base64,${bytes.toString('base64')}`)
-    writeFileSync(join(dir, 'preview.png'), Buffer.alloc(bytes.length + 1))
-    const meta = readPluginMeta('localized', parentURL)
+    manifest({ './package.json': './package.json' }, { icon: './missing.svg', preview: { en: './preview.svg', zh: './zh.svg' } })
+    const bytes = Buffer.alloc(1024 * 1024 - 6)
+    file(join(dir, 'zh.svg'), '<svg/>')
+    writeFileSync(join(dir, 'preview.svg'), bytes)
+    expect(readPluginMeta('localized', parentURL, true)?.preview?.en).toBe(`data:image/svg+xml;base64,${bytes.toString('base64')}`)
+    writeFileSync(join(dir, 'preview.svg'), Buffer.alloc(1024 * 1024 + 1))
+    const meta = readPluginMeta('localized', parentURL, true)
     expect(meta?.preview).toBeUndefined()
     expect(meta?.error).toContain('missing.svg')
     expect(meta?.error).toContain('preview exceeds 1024 KiB')
@@ -586,7 +597,7 @@ describe('plugin locale display metadata', () => {
     expect(readPluginMeta('localized', parentURL)).toEqual({
       title: { en: 'Resolved resource' }, description: { en: 'Resolved introduction' },
     })
-    const requests = ['localized/locale/en.json', 'localized/locale/en.json', 'localized/package.json', 'localized/icon', 'localized/preview']
+    const requests = ['localized/locale/en.json', 'localized/locale/en.json', 'localized/package.json', 'localized/icon']
     expect(resolveSync.mock.calls).toEqual(requests.map(specifier => version === 'v1'
       ? [specifier, parentURL, {}]
       : [parentURL, { specifier, attributes: {} }]))

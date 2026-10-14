@@ -48,7 +48,10 @@ The static `cordis.patch.yml` adds the four voice rows, selects `sensevoice-loca
 
 -----
 
+Optional English and Chinese feature SVGs show speech becoming a transcript on the plugin detail page, before microphone use or activation. They are explanatory artwork; the transcript is an example, not a recording result.
+
 <a id="model-experience"></a>
+
 ## Model Experience
 
 None, as recordings and preparation remain outside model requests; ordinary user submission owns any later text.

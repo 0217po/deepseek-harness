@@ -4,7 +4,7 @@ import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'n
 import { dirname, extname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ModuleLoader } from '@deepseek-ai/cordis-plugin-loader'
-import type { LocalizedText, PluginLocalizedMeta } from '@deepseek-ai/dsh-package-manifest'
+import type { BilingualPreview, LocalizedText, PluginLocalizedMeta } from '@deepseek-ai/dsh-package-manifest'
 import { barePackageName } from './profile-resolution/resolver.ts'
 import { realModuleFile } from './profile-resolution/legacy-links.ts'
 
@@ -51,7 +51,9 @@ function imageOf(
     target = label = exported
     assertPackageOwned(realModuleFile(target), packageName, field)
   }
-  const mediaType = IMAGE_MEDIA_TYPES.get(extname(target).toLowerCase())
+  const extension = extname(target).toLowerCase()
+  if (field === 'preview' && extension !== '.svg') throw new Error(`${label}: preview must be SVG`)
+  const mediaType = IMAGE_MEDIA_TYPES.get(extension)
   if (mediaType === undefined) throw new Error(`${label}: ${field} must be SVG, PNG, JPEG, or WebP`)
   const file = realModuleFile(target)
   const stat = statSync(file)
@@ -62,18 +64,19 @@ function imageOf(
   return `data:${mediaType};base64,${bytes.toString('base64')}`
 }
 
-/** A translated preview shares the text resolver's language keys and English fallback. */
+/** A single preview has exactly one English and one Chinese SVG resource. */
 function previewOf(
   specifier: string, packageName: string, parentURL: string, manifestPath: string | undefined, value: unknown,
-): LocalizedText | undefined {
-  if (manifestPath === undefined || typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return imageOf('preview', specifier, packageName, parentURL, manifestPath, value)
+): BilingualPreview | undefined {
+  if (manifestPath === undefined || value === undefined) return undefined
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error(`${manifestPath}: preview must map en and zh to SVG file paths`)
   }
   const translations = new Map<string, string>()
   let bytes = 0
   for (const [language, path] of Object.entries(value)) {
-    if (!LANGUAGE_ID.test(language)) throw new Error(`${manifestPath}: preview key ${language} must be a language id`)
     const id = language.toLowerCase()
+    if (id !== 'en' && id !== 'zh') throw new Error(`${manifestPath}: preview keys must be en or zh`)
     if (translations.has(id)) throw new Error(`${manifestPath}: preview duplicates locale ${id}`)
     if (typeof path !== 'string' || path.trim() === '') throw new Error(`${manifestPath}: preview.${language} must be a non-empty string`)
     const image = imageOf('preview', specifier, packageName, parentURL, manifestPath, path)
@@ -83,7 +86,9 @@ function previewOf(
   }
   const en = translations.get('en')
   if (en === undefined) throw new Error(`${manifestPath}: preview translations require an English (en) image`)
-  return { ...Object.fromEntries(translations), en }
+  const zh = translations.get('zh')
+  if (zh === undefined) throw new Error(`${manifestPath}: preview translations require a Chinese (zh) image`)
+  return { en, zh }
 }
 
 /** Require an ancestor of the real file whose package.json names the owning package. */
@@ -190,12 +195,12 @@ function localizedText(
 /**
  * Read plugin locale JSON display text and images without evaluating JavaScript entries.
  * Only a package-root specifier reads its exported package.json: `name`/`description` fill missing
- * locale fields, and declared `icon`/`preview` paths take priority over their exported resources.
- * A subpath specifier never reads package.json; its images come only from `<specifier>/icon` or `/preview`.
+ * locale fields, and a declared `icon` takes priority over its exported resource.
+ * A subpath specifier never reads package.json; its icon comes only from `<specifier>/icon`.
  * Manifest images remain inside their declaring directory; exported images remain inside their
- * owning package after realpath resolution. SVG, PNG, JPEG, and WebP are accepted, up to 256 KiB
- * for icons and 1 MiB total for previews. A manifest preview may map language ids to paths with
- * an English fallback. Each image field failure retains the other fields without falling back.
+ * owning package after realpath resolution. Icons accept SVG, PNG, JPEG, and WebP, up to 256 KiB;
+ * explicitly requested previews accept SVG only, up to 1 MiB total. A manifest preview requires en and zh paths;
+ * standalone preview exports are ignored. Each image field failure retains the other fields without falling back.
  * Non-package specifiers are skipped without invoking the resource resolver.
  * Language files share the directory containing the resolved English resource;
  * each file is resolved through the complete plugin specifier before reading.
@@ -203,9 +208,10 @@ function localizedText(
  * for titles and empty for descriptions.
  * @param specifier - configured plugin module name, including any package subpath.
  * @param parentURL - owning Loader tree's module-resolution base.
+ * @param includePreview - explicitly read artwork for a distribution-owned bundle detail or authoring validation; omitted for inventories.
  * @returns display fields and any resource diagnostic, or undefined for non-package specifiers or absent metadata.
  */
-export function readPluginMeta(specifier: string, parentURL: string): PluginLocalizedMeta | undefined {
+export function readPluginMeta(specifier: string, parentURL: string, includePreview = false): PluginLocalizedMeta | undefined {
   const packageName = barePackageName(specifier)
   if (packageName === undefined) return undefined
   try {
@@ -219,9 +225,10 @@ export function readPluginMeta(specifier: string, parentURL: string): PluginLoca
       ...title === undefined ? {} : { title },
       ...description === undefined ? {} : { description },
     }
-    const images: { icon?: string; preview?: LocalizedText } = {}
+    const images: { icon?: string; preview?: BilingualPreview } = {}
     const errors: string[] = []
     for (const field of ['icon', 'preview'] as const) {
+      if (field === 'preview' && !includePreview) continue
       try {
         if (field === 'icon') {
           const image = imageOf(field, specifier, packageName, parentURL, manifestPath, manifest?.icon)

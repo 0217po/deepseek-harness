@@ -69,13 +69,7 @@ export function generateOfficialBundleCatalog(root: string, names: readonly stri
         }
       }
     }
-    return {
-      packageName,
-      meta: {
-        title: meta.title, description: meta.description, icon: meta.icon,
-        ...meta.preview === undefined ? {} : { preview: meta.preview },
-      },
-    }
+    return { packageName, meta: { title: meta.title, description: meta.description, icon: meta.icon } }
   })
 }
 
@@ -95,7 +89,6 @@ export function renderOfficialBundleCatalog(entries: readonly OfficialBundleCata
       + `      title: ${localized(entry.meta.title)},\n`
       + `      description: ${localized(entry.meta.description)},\n`
       + `      icon: ${quote(entry.meta.icon)},\n`
-      + (entry.meta.preview === undefined ? '' : `      preview: ${localized(entry.meta.preview)},\n`)
       + '    },\n  },\n').join('')
     + ']\n'
 }

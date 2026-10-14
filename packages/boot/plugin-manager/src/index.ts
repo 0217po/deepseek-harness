@@ -30,7 +30,8 @@ import { incompatiblePlugin, ManagementFailure } from './failure.ts'
 import { approveBuilds, recordPendingBuilds } from './build-approval.ts'
 import { checkGithubConnection } from './github-connection.ts'
 import type {
-  BundleInfo, BundleRowInfo, ChangeResult, InspectOptions, InstallBundleOptions, ManagementError, PackageResult, PluginChange,
+  BundleInfo, BundlePreviewInfo, BundleRowInfo, ChangeResult, InspectOptions, InstallBundleOptions, ManagementError,
+  PackageResult, PluginChange,
   PluginEntryId, PluginInfo, PluginInspectProblem, PluginInstallCancellation, PluginInstallProgress, PluginInstallRequestId,
   PluginRegistries, PluginSpecInspection, Registry,
 } from './types.ts'
@@ -383,6 +384,24 @@ export class PluginManager extends TypertRemoteService {
       }
     }
     return Promise.resolve(bundles)
+  }
+
+  /**
+   * Read optional artwork from the installation's own optional bundle, without activating it.
+   * Profile packages and on-demand catalog providers do not supply previews.
+   * @param name - exact package name listed by the installation's optional bundles.
+   * @returns only preview artwork and its diagnostics; an empty object for unsupported packages or absent artwork.
+   */
+  @Remote
+  readBundlePreview(name: string): BundlePreviewInfo {
+    if (!OPTIONAL_BUNDLES.includes(name)) return {}
+    const installation = JSON.parse(readFileSync(this.profile.installAnchor, 'utf8')) as InstallationManifest
+    if (!Object.hasOwn(installation.dependencies ?? {}, name)) return {}
+    const meta = readPluginMeta(name, pathToFileURL(this.profile.installAnchor).href, true)
+    return {
+      ...meta?.preview === undefined ? {} : { preview: meta.preview },
+      ...meta?.error === undefined ? {} : { error: meta.error },
+    }
   }
 
   /** Read the registries this manager asks: the configured first one, its fallbacks in order, and what pnpm's own configuration names.

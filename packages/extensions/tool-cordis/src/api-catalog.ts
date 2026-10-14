@@ -1715,6 +1715,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Package versions, manifest descriptions, the installable spec of profile dependencies, rows, optional display metadata, activation selections, whether the installation offers the bundle, and removal availability.',
       },
       {
+        signature: '@Remote readBundlePreview(name: string): BundlePreviewInfo',
+        description: 'Read optional artwork from the installation\'s own optional bundle, without activating it. Profile packages and on-demand catalog providers do not supply previews.',
+        parameters: [{ name: 'name', description: 'exact package name listed by the installation\'s optional bundles.' }],
+        returns: 'only preview artwork and its diagnostics; an empty object for unsupported packages or absent artwork.',
+      },
+      {
         signature: '@Remote async registries(): Promise<PluginRegistries>',
         description: 'Read the registries this manager asks: the configured first one, its fallbacks in order, and what pnpm\'s own configuration names.',
         parameters: [],
@@ -4909,6 +4915,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface BashEnvVariableInfo extends BashEnvVariable {\n    contributor: string;\n    key: DshEnvironmentKey;\n}',
   },
   {
+    name: 'BilingualPreview',
+    declaration: 'export type BilingualPreview = {\n    readonly en: string;\n    readonly zh: string;\n};',
+  },
+  {
     name: 'BoxProps',
     declaration: 'export interface BoxProps {\n    readonly flexDirection?: \'row\' | \'column\' | undefined;\n    readonly paddingX?: number | undefined;\n    readonly paddingY?: number | undefined;\n    readonly padding?: number | undefined;\n    readonly gap?: number | undefined;\n    readonly border?: boolean | string | undefined;\n    readonly borderColor?: string | undefined;\n    readonly children?: UiNode | undefined;\n}',
   },
@@ -4927,6 +4937,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'BundleInfo',
     declaration: 'export interface BundleInfo {\n    name: string;\n    official: boolean;\n    availability: \'installation\' | \'profile\' | \'missing\';\n    installTarget?: {\n        spec: string;\n        version: string;\n    };\n    version?: string;\n    meta?: PluginLocalizedMeta;\n    description?: string;\n    enabled: boolean;\n    installed: boolean;\n    source?: string;\n    optional: boolean;\n    removable: boolean;\n    readOnlyReason?: ReadOnlyReason;\n    error?: ManagementError;\n    rows: BundleRowInfo[];\n    overrides: string[];\n}',
+  },
+  {
+    name: 'BundlePreviewInfo',
+    declaration: 'export interface BundlePreviewInfo {\n    readonly preview?: BilingualPreview;\n    readonly error?: string;\n}',
   },
   {
     name: 'BundleRowInfo',
@@ -6294,7 +6308,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'PluginLocalizedMeta',
-    declaration: 'export interface PluginLocalizedMeta {\n    readonly title?: LocalizedText;\n    readonly description?: LocalizedText;\n    readonly icon?: string;\n    readonly preview?: LocalizedText;\n    readonly error?: string;\n}',
+    declaration: 'export interface PluginLocalizedMeta {\n    readonly title?: LocalizedText;\n    readonly description?: LocalizedText;\n    readonly icon?: string;\n    readonly preview?: BilingualPreview;\n    readonly error?: string;\n}',
   },
   {
     name: 'PluginOptions',

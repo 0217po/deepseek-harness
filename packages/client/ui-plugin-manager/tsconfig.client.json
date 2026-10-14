@@ -50,6 +50,9 @@
     },
     {
       "path": "../product-analytics/tsconfig.client.json"
+    },
+    {
+      "path": "../resources"
     }
   ],
   "include": [

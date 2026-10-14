@@ -373,6 +373,42 @@ it('names where each installed bundle comes from as a spec pnpm installs', async
   })
 })
 
+it('reads bilingual built-in artwork on demand without including it in bundle or component inventories', async () => {
+  const { ctx, manager, bundle, profile } = await fixture('startup')
+  new PluginPackages(ctx)
+  const name = '@deepseek-ai/dsh-experimental-badge-skill-bundle'
+  bundle(name, [{ id: 'artwork-row', name }], profile.home)
+  const root = join(profile.home, 'node_modules', name)
+  writeFileSync(join(root, 'preview.svg'), '<svg>English</svg>')
+  writeFileSync(join(root, 'preview.zh.svg'), '<svg>中文</svg>')
+  const info = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as Record<string, object>
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ ...info, exports: { './package.json': './package.json' }, preview: { en: './preview.svg', zh: './preview.zh.svg' } }))
+  writeFileSync(profile.installAnchor, JSON.stringify({ name: 'installation', dependencies: { [name]: '1.0.0' } }))
+  const listed = (await manager.listBundles()).find(item => item.name === name)
+  expect(listed).toMatchObject({ enabled: false, optional: true, availability: 'installation' })
+  expect(listed?.meta).not.toHaveProperty('preview')
+  expect(listed?.rows[0]?.meta).not.toHaveProperty('preview')
+  expect(manager.readBundlePreview(name)).toEqual({ preview: {
+    en: `data:image/svg+xml;base64,${Buffer.from('<svg>English</svg>').toString('base64')}`,
+    zh: `data:image/svg+xml;base64,${Buffer.from('<svg>中文</svg>').toString('base64')}`,
+  } })
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ ...info, exports: { './package.json': './package.json' } }))
+  expect(manager.readBundlePreview(name)).toEqual({})
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ ...info, exports: { './package.json': './package.json' }, preview: { en: './missing.svg', zh: './missing.zh.svg' } }))
+  expect(manager.readBundlePreview(name).error).toContain('missing.svg')
+})
+
+it('refuses profile-owned, namespace-only, and on-demand preview sources', async () => {
+  const { manager, bundle, profile } = await fixture('startup')
+  const name = '@deepseek-ai/dsh-experimental-badge-skill-bundle'
+  bundle(name, [])
+  for (const unsupported of [name, 'extra', '@deepseek-ai/dsh-untrusted-plugin', OFFICIAL_ON_DEMAND_CATALOG[0]!.packageName]) {
+    expect(manager.readBundlePreview(unsupported)).toEqual({})
+  }
+  writeFileSync(profile.installAnchor, JSON.stringify({ name: 'installation', dependencies: { extra: '1.0.0' } }))
+  expect(manager.readBundlePreview('extra')).toEqual({})
+})
+
 it.each(['native', 'runtime'] as const)('reads a disabled bundle and its independent exported plugins without running them with %s resolution', async (mode) => {
   const { ctx, manager, dir, bundle, profile } = await fixture('startup')
   bundle('localized', [{ id: 'first', name: 'local-child/first' }, { id: 'second', name: 'local-child/second' }])

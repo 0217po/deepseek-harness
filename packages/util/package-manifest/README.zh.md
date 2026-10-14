@@ -52,11 +52,11 @@ const manifest: DshPackageManifest = {
 | `dsh.manifestVersion` | manifest（元数据清单）格式标识；声明的格式为 `1`，独立于 npm 包版本和 Session 格式版本。 |
 | `engines.dsh` | 作者声明的兼容 DSH 版本，使用 SemVer 范围，也可填写精确的预发布版本。此字段与 `engines.node`、`engines.npm` 并列；engines 对象可省略 `dsh`。 |
 
-`LocalizedText` 携带字面文本或带必需英文回退值的语言映射。`PluginLocalizedMeta` 携带已安装插件的可选展示标题、描述、从包根 `package.json.icon` 或导出的 `<标识>/icon` 解析的图片 data URL，以及元信息诊断。[App boot](../../boot/app-boot/README.zh.md) 读取这些值；本包只提供其类型。
+`LocalizedText` 携带字面文本或带英文回退的语言映射。`PluginLocalizedMeta` 携带可选展示标题、描述、图标 data URL、显式请求的内置配图 data URL，以及用换行连接的诊断。[App boot](../../boot/app-boot/README.zh.md) 读取这些值；本包提供其类型。
 
 公共组合声明定义在 [`src/types.ts`](src/types.ts) 中。内部 `configTrees`、`sessionFormatMigration` 和生成的 `moduleFallback` 元数据分别由镜像打包器、目录生成器和启动器读取方拥有；公共类型不暴露这些字段。
 
-`DshPackageManifest.preview` 可选地指定功能配图，或将语言标识映射到图片路径并提供英文回退。`PluginLocalizedMeta.preview` 携带对应的 data URL 或语言映射，界面像本地化文本一样解析。它与小尺寸 `icon` 相互独立；未提供配图时省略。
+`DshPackageManifest.preview` 是可选的 `BilingualPreview`，必须包含 `en` 和 `zh` 两条 SVG 路径。`PluginLocalizedMeta.preview` 仅在内置详情请求时携带两份 SVG data URL；清单列表省略该字段。格式、尺寸及创作要求见[配图指南](../../../docs/cookbook/adding-a-plugin-preview.zh.md)。
 
 -----
 

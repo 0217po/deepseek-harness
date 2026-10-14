@@ -4,6 +4,7 @@
  */
 
 export type {
+  BilingualPreview,
   DshBundleManifest,
   DshClientManifest,
   DshEnginesManifest,

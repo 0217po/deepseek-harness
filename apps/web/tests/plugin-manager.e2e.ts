@@ -719,6 +719,7 @@ describe('web e2e: plugin manager', () => {
     expect(await preview.getAttribute('src')).toBe(chineseSource)
     await panel.getByRole('button', { name: '返回 实验性插件', exact: true }).click()
     await panel.getByRole('button', { name: '查看 智能体团队', exact: true }).click()
+    // The small detail icon has alt=""; only a feature preview exposes an image role.
     expect(await panel.getByRole('img').count()).toBe(0)
     await panel.getByRole('button', { name: '返回 实验性插件', exact: true }).click()
     expect(tripwire.pageErrors).toEqual([])

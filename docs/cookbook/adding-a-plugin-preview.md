@@ -1,34 +1,34 @@
-# Cookbook: adding a built-in plugin feature preview
+# Cookbook: Add a built-in plugin feature preview
 
 English | [中文](adding-a-plugin-preview.zh.md)
 
-Use this guide when an official built-in or experimental plugin benefits from a visual explanation of its output. Start with a working bundle and its exported package manifest. The result is an optional image in Plugin Manager that users can understand before enabling the bundle.
+Use this guide for an optional bundle shipped with the application, including experimental built-ins. The package must already be part of the installation and its optional-bundle list. Third-party packages and on-demand catalog providers do not support previews. The result is one optional image below the plugin description, available before activation.
 
-## 1. Decide whether a picture helps
+## 1. Decide whether an image helps
 
-Show one concrete capability or recognizable result: a document with attribution, a changed interface, or a concise operation diagram. Leave `preview` absent when the description is sufficient. Do not add an image just to fill space, and do not use a logo enlarged into a banner as the feature explanation. Keep essential usage information in the localized description or configuration UI.
+Show one concrete capability or recognizable result, such as an attributed document, a changed interface, or a simple operation. Omit `preview` when the description is enough. Do not add a placeholder or use a large logo as a feature explanation. Keep essential instructions in localized text or configuration outside the image.
 
-## 2. Compose the artwork
+## 2. Draw one fixed-size SVG
 
-The following conventions apply to official artwork. They guide authoring and review; the metadata validator checks resources and file limits, not composition or aspect ratio. Review a departure from the design canvas with the product designer, together with its real-page rendering.
+Only the following format is supported. `verify-package-meta` rejects other formats, incorrect SVG dimensions, and incomplete language declarations. Composition and visual quality still need review in the real page.
 
-| Item | Convention |
+| Item | Requirement |
 |---|---|
-| Quantity | Zero or one visible feature image per bundle. Language variants are alternatives for that image, not additional slides. No gallery or carousel. |
-| Design canvas | Use a 640 × 300 landscape canvas (32:15) by default. Give SVG that intrinsic size and `viewBox="0 0 640 300"`. A raster export may use the same ratio at 1× or 2× resolution. |
-| Composition | Use one main example; an enlarged detail is optional. Keep essential content about 32 canvas units from the edges. Decorative paper or background shapes may bleed. |
-| Text | Keep wording short and readable at the actual page size. Use clear hierarchy and restrained weight. Secondary labels must not carry the only explanation of the feature. Re-layout English and Chinese rather than squeezing a translation into the original width. |
-| Brand assets | Preserve official marks and the plugin's produced assets. A feature preview may arrange or magnify them, but must not redraw, recolor, or change their wording. |
-| Page framing | Let the page supply its border, rounded corners, and spacing. Do not draw plugin enable switches, installation buttons, or the surrounding management page into the illustration. |
-| Themes | Check the image against both light and dark page backgrounds. One self-contained image serves both; this metadata does not select images by theme. |
+| Count | Zero or one logical feature image per bundle. English and Chinese SVGs are alternatives for that image, not a gallery or carousel. |
+| Format and canvas | SVG only, with `width="640" height="300" viewBox="0 0 640 300"`. PNG/JPEG/WebP files, other dimensions, arrays, and standalone preview exports are unsupported. |
+| Languages | Every declared preview includes both `en` and `zh`. Translate headings, annotations, and example content; keep official brand assets and product names. |
+| Composition | One main example, optionally with one close-up. Keep important content about 32 canvas units from the edge; decorative background or paper may bleed. |
+| Text | Short and readable at actual display size, with restrained weights. Outline all lettering as paths; adjust English and Chinese layouts separately. |
+| Brand assets | Preserve official logos and actual plugin-produced assets. Their scale and placement may change; their artwork, colors, and words may not. |
+| Frame and theme | The page supplies the outer border, radius, and spacing. Keep management controls outside the illustration, and check both light and dark backgrounds. |
 
-Prefer self-contained SVG for diagrams and UI illustrations; use optimized PNG, JPEG, or WebP for screenshots or photographic content. Outline SVG lettering. Do not include fonts, remote images, scripts, event handlers, animation, stylesheets, or `foreignObject`. The combined raw size of all language variants must stay within 1 MiB; this is the accepted maximum, not a target size.
+The SVG is self-contained: no fonts, remote resources, scripts, handlers, animation, stylesheets, `text`, or `foreignObject`. An `image` element inside the SVG may embed an unchanged official raster asset using a PNG/JPEG/WebP base64 data URL; icons remain geometry-only. This allowance preserves existing brand artwork and does not make raster files valid previews. The gate checks this data-URL envelope, not decoded pixels, and the page renders SVG through `<img>`. Both raw language files together must stay within 1 MiB; that is a ceiling, not a target.
 
-The [badge skill bundle](../../packages/experimental/badge-skill-bundle/README.md) is a complete example: one document illustration with a badge detail, in two languages. Its particular colors, paper composition, and title font are not requirements for other plugins.
+The [badge bundle](../../packages/experimental/badge-skill-bundle/README.md) demonstrates a document and badge close-up. The [voice-input bundle](../../packages/experimental/voice-input-bundle/README.md) demonstrates speech becoming text. Other features do not need the same palette, composition, or title font.
 
-## 3. Declare and publish the images
+## 3. Declare and publish both language files
 
-Add `preview` to the exported package manifest and include every referenced file in `files`, retaining the package's existing exports and publication files:
+Add `preview` to the exported package manifest and include both files in `files`, keeping the package’s existing exports and publication entries:
 
 ```json
 {
@@ -40,27 +40,25 @@ Add `preview` to the exported package manifest and include every referenced file
 }
 ```
 
-Artwork with language-dependent content provides both English and Chinese versions. The map requires `en` as the fallback and uses language IDs such as `zh` or `zh-CN`; the existing UI language resolver selects one image. Keep the subject and layout recognizable across languages, but translate titles, annotations, and sample content. Product names, file names, and official brand marks may remain unchanged.
+Use exactly the `en` and `zh` language keys. A single path, missing language, additional language, or file array is rejected. Paths are relative to the declaring manifest and stay within its directory after symlinks resolve; URLs and absolute paths are rejected. Both files must be published. See [plugin display metadata](adding-a-package.md#plugin-display-metadata) for the manifest export and diagnostics.
 
-A language-neutral image can use `"preview": "./preview.svg"`. All paths are relative to the declaring manifest and remain inside its directory after symlink resolution; URLs and absolute paths are rejected. The resource-loading contract, exported-resource alternative, and diagnostics are documented in [plugin display metadata](adding-a-package.md#plugin-display-metadata).
+## 4. Check the real detail page
 
-## 4. Check placement in Plugin Manager
+Open the built-in bundle from Plugins. The [detail component](../../packages/client/ui-plugin-manager/src/client/PluginManagerPage.tsx) and its [styles](../../packages/client/ui-plugin-manager/src/client/PluginManagerPage.module.css) provide these rules:
 
-Open the real bundle detail page through Plugins. The [detail renderer](../../packages/client/ui-plugin-manager/src/client/PluginManagerPage.tsx) and its [styles](../../packages/client/ui-plugin-manager/src/client/PluginManagerPage.module.css) own these rules:
-
-| Item | Current behavior |
+| Item | Page behavior |
 |---|---|
-| Position | After the package description and before the components section, aligned with the description's left edge. |
-| Spacing | 24 px above the image; 32 px before the following detail sections. Authors do not add this outer spacing to the asset. |
-| Display size | Keep the intrinsic aspect ratio, fit within the available content width, and cap image height at 320 px. Use `object-fit: contain`; do not crop or stretch. The design canvas is not a fixed screen width. |
-| Frame | The page supplies its semantic border color and large-radius token (`--dsw-radius-lg`, currently 16 px). |
-| Other views | List cards and component rows keep their small icons. The feature image appears only in bundle details. |
-| Optional and failure states | No image means no reserved image space. It is visible before activation. Read or decode failures leave enablement and configuration available. |
-| Language and accessibility | Switching the UI language selects the matching image, with English fallback. The image has a localized accessible name derived from the plugin title. Essential instructions also remain available as text outside the image. |
+| Position | Below the description, above the components, aligned to the description’s left edge. |
+| Spacing | 24 px above the image, 32 px before the following detail sections. These margins are not part of the SVG. |
+| Display | Preserve the 640:300 aspect ratio, fit the available width, and cap height at 320 px with `object-fit: contain`. No cropping or stretching; narrow windows scale the fixed source canvas. |
+| Border | Semantic border color and the large radius token, `--dsw-radius-lg` (currently 16 px). |
+| Loading | Only a viewed installation-owned optional bundle requests its artwork through the resource channel. Lists, component rows, and Settings carry no preview data. |
+| Optional and failed states | No declaration means no image or reserved space. Read and decode failures leave enablement and configuration usable. Cards and component rows keep their icons. |
+| Language and accessibility | UI language selects the English or Chinese SVG. The image has a localized accessible name derived from the plugin title; essential guidance also remains outside the image. |
 
-## 5. Verify before opening the PR
+## 5. Validate before submitting the PR
 
-1. Run `pnpm run verify-package-meta`, `pnpm run constraints`, and `pnpm run verify-official-bundle-catalog` from the repository root. Include every locale image in publication and resolve resource diagnostics.
-2. Build the real application with `pnpm run build && pnpm run build:web`. Inspect the detail page before and after enabling the plugin, in English and Chinese, on a desktop and a 390 px viewport, and in light and dark themes. Check decoding, legibility, clipping, and image placement; restore temporary display settings.
-3. Check a bundle with no preview and the affected metadata and UI regressions under the [testing policy](../testing.md). A preview must remain optional and cannot block management when it fails.
-4. Follow [official artwork review](../../.agents/skills/dsh-official-plugin-artwork/SKILL.md) and [record-browser-gif](../../.agents/skills/record-browser-gif/SKILL.md). Include a real-page GIF for each language containing translated artwork, recorded against the final PR commit. Show the plugin's actual output when the illustration describes that output.
+1. Run `pnpm run verify-package-meta`, `pnpm run constraints`, and `pnpm run verify-official-bundle-catalog` at the repository root. Fix invalid format, dimensions, language keys, publication entries, and resource diagnostics. The first gate checks both SVGs independently.
+2. Build the real application with `pnpm run build && pnpm run build:web`. Check details before and after enablement, English and Chinese, desktop and 390 px windows, and light and dark themes. Confirm decoding, placement, scale, and readable artwork; restore temporary display settings.
+3. Check a built-in without artwork and a third-party bundle: neither shows an image. Run the relevant metadata and UI regressions under the [testing policy](../testing.md); malformed or missing artwork never blocks management.
+4. Follow [official artwork review](../../.agents/skills/dsh-official-plugin-artwork/SKILL.md) and [record-browser-gif](../../.agents/skills/record-browser-gif/SKILL.md). Attach a real-page GIF for each language, recorded from the PR’s final commit. If the image depicts generated output, demonstrate the plugin’s actual output too.

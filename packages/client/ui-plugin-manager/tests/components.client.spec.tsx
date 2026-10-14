@@ -8,6 +8,9 @@ import type { PluginEntryId, PluginInstallRequestId } from '@deepseek-ai/dsh-api
 import { allowAllAccess, bindSnapshotSelector, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ConfigForm, ConfigFormSnapshot, SettingsMirrorSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { ResourceSnapshot } from '@deepseek-ai/dsh-client-resources/client'
+import type { PluginLocalizedMeta } from '@deepseek-ai/dsh-package-manifest'
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
 import { StrictMode, type ReactNode } from 'react'
 import { createNavigationStore } from '../src/client/navigation-store.ts'
@@ -106,6 +109,10 @@ function renderTab(
   const resolveText: PluginManagerPageProps['resolveText'] = text => locale.resolveText(text)
   const store = createSnapshotStore<PluginManagerState>({ ...READY, ...state })
   const ledger = createSnapshotStore<ConfigLedger>({ ...NO_CONFIG, ...config })
+  const previewStore = createSnapshotStore<ResourceSnapshot<PluginLocalizedMeta>>({ status: 'none', value: undefined, failure: undefined })
+  const usePreview = bindSnapshotSelector(previewStore)
+  // This fixture supplies only the artwork protocol; the production hook is framework-bound.
+  const previewRead = vi.fn((_address: string) => usePreview(snapshot => snapshot))
   const actions = {
     ensure: vi.fn(),
     refresh: vi.fn(),
@@ -138,7 +145,7 @@ function renderTab(
     useSessions: unusedStandardHook,
     useSessionStatus: unusedStandardHook,
     useSessionRetainInfo: unusedStandardHook,
-    useResource: unusedStandardHook,
+    useResource: previewRead as PluginManagerPageProps['useResource'],
     ...allowAllAccess,
   }
   const navigation = createNavigationStore().create()
@@ -189,6 +196,9 @@ function renderTab(
     props,
     unmount,
     store,
+    previewRead,
+    setPreview: (value: PluginLocalizedMeta) => { act(() => { previewStore.set({ status: 'live', value, failure: undefined }) }) },
+    setPreviewState: (snapshot: ResourceSnapshot<PluginLocalizedMeta>) => { act(() => { previewStore.set(snapshot) }) },
     actions,
     set: (next: Partial<PluginManagerState>) => { act(() => { store.set({ ...store.getSnapshot(), ...next }) }) },
     setLanguage: (dict: typeof en) => {
@@ -628,7 +638,7 @@ describe('PluginManagerPage', () => {
 
   it('renders manifest icons for arbitrary bundles and rows, with decode fallback and source recovery', () => {
     const icon = 'data:image/svg+xml;base64,PHN2Zy8+'
-    const updatedIcon = 'data:image/png;base64,cG5n'
+    const updatedIcon = 'data:image/svg+xml;base64,c3Zn'
     const bundle = pkg({ meta: { icon }, rows: [row({ meta: { icon } }), row({ entryId: 'plain' as PluginEntryId, rowId: 'plain', moduleName: 'plain' })] })
     const { set } = renderTab({ packages: [bundle] }, { rows: new Set(['dsh-better-sidebar#sidebar']) })
     const image = () => document.querySelector<HTMLImageElement>('[data-plugin-package] img, [data-plugin-detail] img')!
@@ -660,9 +670,11 @@ describe('PluginManagerPage', () => {
 
   it('shows optional feature previews only in details, including before activation, and recovers after decode failure', () => {
     const preview = 'data:image/svg+xml;base64,PHN2Zy8+'
-    const bundle = pkg({ enabled: false, meta: { preview } })
-    const { set, setLanguage, actions } = renderTab({ packages: [bundle] })
+    const bundle = pkg({ enabled: false, optional: true, installed: false })
+    const { setPreview, setLanguage, actions, previewRead } = renderTab({ packages: [bundle] })
+    setPreview({ preview: { en: preview, zh: preview } })
     expect(screen.queryByRole('img')).toBeNull()
+    expect(previewRead).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'View dsh-better-sidebar' }))
     expect(screen.getByRole('img', { name: en.previewAlt.replace('{name}', bundle.name) }).getAttribute('src')).toBe(preview)
     setLanguage(zh)
@@ -671,27 +683,55 @@ describe('PluginManagerPage', () => {
     expect(screen.getByRole('status').textContent).toBe(zh.previewUnavailable)
     fireEvent.click(screen.getByRole('switch', { name: zh.enableToggle.replace('{name}', bundle.name) }))
     expect(actions.setEnabled).toHaveBeenCalledWith(bundle.name, true)
-    set({ packages: [{ ...bundle, meta: { preview: 'data:image/png;base64,cG5n' } }] })
-    expect(screen.getByRole('img').getAttribute('src')).toBe('data:image/png;base64,cG5n')
+    setPreview({ preview: { en: 'data:image/svg+xml;base64,c3Zn', zh: 'data:image/svg+xml;base64,c3Zn' } })
+    expect(screen.getByRole('img').getAttribute('src')).toBe('data:image/svg+xml;base64,c3Zn')
     expect(screen.queryByText(zh.previewUnavailable)).toBeNull()
-    set({ packages: [{ ...bundle, meta: {} }] })
+    setPreview({})
     expect(screen.queryByRole('img')).toBeNull()
     expect(screen.queryByText(zh.previewUnavailable)).toBeNull()
   })
 
-  it('switches preview artwork with the UI language and uses the English fallback', () => {
+  it('switches preview artwork with the UI language and resets decoding for a replacement resource', () => {
     const enImage = 'data:image/svg+xml;base64,ZW4='
     const zhImage = 'data:image/svg+xml;base64,emg='
-    const bundle = pkg({ meta: { preview: { en: enImage, zh: zhImage } } })
-    const { set, setLanguage } = renderTab({ packages: [bundle] })
+    const bundle = pkg({ optional: true, installed: false })
+    const { setPreview, setLanguage } = renderTab({ packages: [bundle] })
+    setPreview({ preview: { en: enImage, zh: zhImage } })
     fireEvent.click(screen.getByRole('button', { name: 'View dsh-better-sidebar' }))
     expect(screen.getByRole('img').getAttribute('src')).toBe(enImage)
     fireEvent.error(screen.getByRole('img'))
     setLanguage(zh)
     expect(screen.getByRole('img').getAttribute('src')).toBe(zhImage)
     expect(screen.queryByText(zh.previewUnavailable)).toBeNull()
-    set({ packages: [{ ...bundle, meta: { preview: { en: enImage } } }] })
+    setPreview({ preview: { en: enImage, zh: enImage } })
     expect(screen.getByRole('img').getAttribute('src')).toBe(enImage)
+  })
+
+  it.each([
+    { official: false, optional: false, availability: 'profile' as const },
+    { official: true, optional: false, availability: 'profile' as const },
+    { official: true, optional: true, availability: 'profile' as const },
+  ])('does not read or render profile-owned preview declarations: %j', (ownership) => {
+    const bundle = pkg({ ...ownership, meta: { preview: { en: 'data:image/svg+xml;base64,c3Zn', zh: 'data:image/svg+xml;base64,c3Zn' } } })
+    const { previewRead } = renderTab({ packages: [bundle] })
+    fireEvent.click(screen.getByRole('button', { name: 'View dsh-better-sidebar' }))
+    expect(screen.queryByRole('img')).toBeNull()
+    expect(previewRead).not.toHaveBeenCalled()
+  })
+
+  it('keeps built-in controls usable while artwork is loading or fails to read', () => {
+    const bundle = pkg({ optional: true, installed: false, enabled: false })
+    const { setPreviewState, setPreview, actions } = renderTab({ packages: [bundle] })
+    fireEvent.click(screen.getByRole('button', { name: 'View dsh-better-sidebar' }))
+    setPreviewState({ status: 'loading', value: undefined, failure: undefined })
+    expect(screen.queryByRole('img')).toBeNull()
+    expect(screen.queryByText(en.previewUnavailable)).toBeNull()
+    setPreview({ error: 'preview.svg: missing image' })
+    expect(screen.getByText(en.metadataError.replace('{error}', 'preview.svg: missing image'))).toBeTruthy()
+    setPreviewState({ status: 'failed', value: undefined, failure: new RemoteError('plugin-preview/read-failed', 'offline', {}) })
+    expect(screen.getByText(en.previewUnavailable)).toBeTruthy()
+    fireEvent.click(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', bundle.name) }))
+    expect(actions.setEnabled).toHaveBeenCalledWith(bundle.name, true)
   })
 
   it('shows metadata diagnostics without blocking management or displaying legacy descriptions', () => {

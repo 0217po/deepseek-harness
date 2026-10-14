@@ -10,11 +10,13 @@ import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import { allowAllAccess, TestRemote, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
 import * as settings from '@deepseek-ai/dsh-client-ui-settings/client'
+import * as resources from '@deepseek-ai/dsh-client-resources/client'
 import { apply, inject, NS, PANEL_ID } from '../src/client/index.ts'
 import { PluginManagerPage } from '../src/client/PluginManagerPage.tsx'
 import { PluginRefreshToast, type PluginRefreshToastFace } from '../src/client/PluginRefreshToast.tsx'
 import { PluginsPanelIcon } from '../src/client/PluginsPanelIcon.tsx'
 import type { PluginManagerFace } from '../src/client/manager-store.ts'
+import { previewAddress } from '../src/client/preview-resource.ts'
 
 usePinnedBrowserLanguages('zh-CN')
 beforeEach(() => { localStorage.clear() })
@@ -24,6 +26,7 @@ async function bench() {
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose() })
   await ctx.plugin(SlotRegistry).await()
+  await ctx.plugin(resources).await()
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
   class LocaleHolder extends Service {
@@ -63,6 +66,16 @@ function declare(slots: SlotRegistry): () => void {
 }
 
 describe('ui-plugin-manager browser plugin', () => {
+  it('registers built-in preview resources and removes the provider when the plugin unloads', async () => {
+    const b = await bench()
+    const source = b.ctx.resources.source(previewAddress('@deepseek-ai/dsh-experimental-badge-skill-bundle'))
+    expect(source.getSnapshot().status).toBe('none')
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    expect(source.getSnapshot().status).toBe('loading')
+    await fiber.dispose()
+    expect(source.getSnapshot().status).toBe('none')
+  })
   it('resets bundle selection when leaving Plugins and releases its panel observer with the registration', async () => {
     const b = await bench()
     const removeRoot = declare(b.slots)
@@ -124,7 +137,7 @@ describe('ui-plugin-manager browser plugin', () => {
   })
 
   it('declares only the services the page and its Remote methods use', () => {
-    expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.pluginManager', 'remote.pluginInventory', 'remote.pluginRegistryProbe', 'configForms', 'layout'])
+    expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.pluginManager', 'remote.pluginInventory', 'remote.pluginRegistryProbe', 'configForms', 'layout', 'resources'])
   })
 
   it('registers the sidebar entry and its page, which reads the Host only once rendered and follows Host changes', async () => {

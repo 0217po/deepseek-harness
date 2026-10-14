@@ -9,7 +9,7 @@ Draw recognizable artwork that belongs beside the existing official icons. Offic
 
 ## Optional feature previews
 
-For a larger image below a bundle's description, follow [adding a built-in plugin feature preview](../../../docs/cookbook/adding-a-plugin-preview.md). It owns optionality, image count, design canvas, display size and position, language variants, asset limits, and acceptance. The icon dimensions below do not apply to previews. Inspect the real feature, preserve its produced assets, and keep the preview in its owning package.
+Before drawing a larger image below a built-in bundle's description, read and follow [adding a built-in plugin feature preview](../../../docs/cookbook/adding-a-plugin-preview.md). It owns optionality, image count, design canvas, display size and position, language variants, asset limits, and acceptance. The guide also owns the embedded-raster exception for SVG previews; small icons remain geometry-only. The icon dimensions below do not apply to previews. Inspect the real feature, preserve its produced assets, and keep the preview in its owning package.
 
 ## Establish the subject
 

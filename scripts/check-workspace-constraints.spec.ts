@@ -318,8 +318,13 @@ describe('package payload constraints', () => {
     ])
   })
 
-  it.each(['icon.svg', 'preview.svg', 'preview.zh.svg'])('accepts the badge skill artwork payload and rejects omission of %s', (image) => {
-    const dir = 'packages/experimental/badge-skill-bundle'
+  it.each([
+    ['agent-team-profile', 'icon.svg'],
+    ['badge-skill-bundle', 'icon.svg'],
+    ['badge-skill-bundle', 'preview.svg'],
+    ['badge-skill-bundle', 'preview.zh.svg'],
+  ])('accepts %s artwork payload and rejects omission of %s', (name, image) => {
+    const dir = `packages/experimental/${name}`
     const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
     expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
     expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, files: manifest.files!.filter(file => file !== image) } }))

@@ -2,21 +2,21 @@
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/cookbook/adding-a-plugin-preview.md
-/cookbook-adding-a-built-in-plugin-feature-preview:
-  en: 82ed682904a1d057
-  zh: ff57caf76fbb90d0
-/cookbook-adding-a-built-in-plugin-feature-preview/1-decide-whether-a-picture-helps:
-  en: 252930c66658693b
-  zh: 9653c6d06f6ed4de
-/cookbook-adding-a-built-in-plugin-feature-preview/2-compose-the-artwork:
-  en: 91b10f6e1478decb
-  zh: f518f2c91ec4df74
-/cookbook-adding-a-built-in-plugin-feature-preview/3-declare-and-publish-the-images:
-  en: 0358d3b6758d2403
-  zh: 0276cbb3cd3bacd7
-/cookbook-adding-a-built-in-plugin-feature-preview/4-check-placement-in-plugin-manager:
-  en: e845ac0902191a44
-  zh: ad66a8e63b5976f5
-/cookbook-adding-a-built-in-plugin-feature-preview/5-verify-before-opening-the-pr:
-  en: 66118c9ff5a75210
-  zh: 07d947b8d7027b66
+/cookbook-add-a-built-in-plugin-feature-preview:
+  en: d73047491885fccb
+  zh: c84965ba6b058cf6
+/cookbook-add-a-built-in-plugin-feature-preview/1-decide-whether-an-image-helps:
+  en: 92ed0cd0b9caeede
+  zh: 5165535f21e2b823
+/cookbook-add-a-built-in-plugin-feature-preview/2-draw-one-fixed-size-svg:
+  en: a3f137a5386cae6b
+  zh: cd6b281a860fff3b
+/cookbook-add-a-built-in-plugin-feature-preview/3-declare-and-publish-both-language-files:
+  en: 59d03fe0bcb5de02
+  zh: 8dcde42f4da6adab
+/cookbook-add-a-built-in-plugin-feature-preview/4-check-the-real-detail-page:
+  en: 1c645689cf164514
+  zh: 4e1e58b5127e4f8d
+/cookbook-add-a-built-in-plugin-feature-preview/5-validate-before-submitting-the-pr:
+  en: d78a78895c2e0600
+  zh: 64ee3a92ada2b84e

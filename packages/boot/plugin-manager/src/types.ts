@@ -1,6 +1,6 @@
 /** Public plugin management records shared with clients. */
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type { PluginLocalizedMeta } from '@deepseek-ai/dsh-package-manifest'
+import type { BilingualPreview, PluginLocalizedMeta } from '@deepseek-ai/dsh-package-manifest'
 import type { PluginInventoryEntry } from '@deepseek-ai/dsh-host-plugin-inventory/types'
 export type { PluginEntryId } from '@deepseek-ai/dsh-host-plugin-inventory/types'
 import type { PluginEntryId } from '@deepseek-ai/dsh-host-plugin-inventory/types'
@@ -50,6 +50,14 @@ export interface BundleRowInfo {
   meta?: PluginLocalizedMeta
   /** The Loader entry carrying this row, when exactly one live entry has its id. */
   entryId?: PluginEntryId
+}
+
+/** Artwork requested for one viewed distribution-owned optional bundle. */
+export interface BundlePreviewInfo {
+  /** One viewed built-in bundle's English and Chinese SVG data URLs. */
+  readonly preview?: BilingualPreview
+  /** Artwork or metadata read diagnostics; bundle management stays available. */
+  readonly error?: string
 }
 
 /** One shipped, profile-installed, or discoverable on-demand bundle. */

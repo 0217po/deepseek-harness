@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import { packageMetaProblems } from './verify-package-meta.ts'
 
 const validSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><defs><linearGradient id="ink"><stop stop-color="#69B9FF" /></linearGradient></defs><path d="M8 8H28V28H8Z" fill="url(#ink)" /></svg>'
+const validPreview = validSvg.replace('width="36"', 'width="640"').replace('height="36"', 'height="300"').replace('viewBox="0 0 36 36"', 'viewBox="0 0 640 300"')
 
 let root: string
 let dir: string
@@ -52,36 +53,66 @@ it.each(['legacy.svg', './legacy.svg'])('accepts a manifest-only icon %s', (icon
   expect(packageMetaProblems(root)).toEqual([])
 })
 
-it.each(['manifest', 'export'])('accepts optional wide preview artwork selected by %s', (selection) => {
-  manifest({
-    ...selection === 'manifest' ? { preview: './preview.svg' } : {},
-    exports: { './package.json': './package.json', './preview': './preview.svg' }, files: ['preview.svg'],
-  })
-  file('preview.svg', validSvg.replaceAll('36', '960'))
+it('accepts one fixed-size SVG preview with English and Chinese resources', () => {
+  manifest({ preview: { en: './preview.svg', zh: './preview.zh.svg' }, files: ['preview.svg', 'preview.zh.svg'] })
+  file('preview.svg', validPreview)
+  file('preview.zh.svg', validPreview)
   expect(packageMetaProblems(root)).toEqual([])
 })
 
-it('requires optional preview files to be published', () => {
-  manifest({ preview: './preview.png' })
-  file('preview.png', 'image')
-  expect(packageMetaProblems(root)).toEqual([`${join(dir, 'package.json')}: files must include preview.png`])
+it.each([
+  ['./preview.svg', 'must map en and zh'],
+  [['./preview.svg'], 'must map en and zh'],
+  [{ en: './preview.svg' }, 'require a Chinese'],
+  [{ zh: './preview.svg' }, 'require an English'],
+  [{ en: './preview.svg', zh: './preview.zh.svg', fr: './preview.svg' }, 'keys must be en or zh'],
+])('rejects incomplete or unsupported preview declarations: %j', (preview, diagnostic) => {
+  manifest({ preview, files: ['preview.svg', 'preview.zh.svg'] })
+  file('preview.svg', validPreview)
+  file('preview.zh.svg', validPreview)
+  expect(packageMetaProblems(root).join('\n')).toContain(diagnostic)
 })
 
-it('validates every localized preview and requires each variant in the published package', () => {
-  const preview = { en: './preview.svg', ZH: './preview.zh.svg' }
+it.each(['png', 'jpg', 'jpeg', 'webp'])('rejects raster preview file %s', (extension) => {
+  manifest({ preview: { en: `./preview.${extension}`, zh: './preview.zh.svg' }, files: ['preview*'] })
+  file(`preview.${extension}`, 'image')
+  file('preview.zh.svg', validPreview)
+  expect(packageMetaProblems(root).join('\n')).toContain('preview must be SVG')
+})
+
+it.each([
+  ['width', validPreview.replace('width="640"', 'width="960"')],
+  ['height', validPreview.replace('height="300"', 'height="450"')],
+  ['viewBox', validPreview.replace('0 0 640 300', '0 0 960 450')],
+])('rejects a preview with the wrong %s', (_field, source) => {
+  manifest({ preview: { en: './preview.svg', zh: './preview.zh.svg' }, files: ['preview*'] })
+  file('preview.svg', validPreview)
+  file('preview.zh.svg', source)
+  expect(packageMetaProblems(root).join('\n')).toContain('SVG preview must use width="640" height="300" viewBox="0 0 640 300"')
+})
+
+it('validates every language variant and its publication', () => {
+  const preview = { en: './preview.svg', zh: './preview.zh.svg' }
   manifest({ preview, files: ['preview.svg'] })
-  file('preview.svg', validSvg)
-  file('preview.zh.svg', validSvg)
+  file('preview.svg', validPreview)
+  file('preview.zh.svg', validPreview)
   expect(packageMetaProblems(root)).toEqual([`${join(dir, 'package.json')}: files must include preview.zh.svg`])
   manifest({ preview, files: ['preview*.svg'] })
   expect(packageMetaProblems(root)).toEqual([])
-  file('preview.zh.svg', validSvg.replace('<path ', '<script>run()</script><path '))
+  file('preview.zh.svg', validPreview.replace('<path ', '<script>run()</script><path '))
   expect(packageMetaProblems(root).join('\n')).toContain('preview.zh.svg: SVG preview must use self-contained geometry')
 })
 
+it('rejects a standalone preview export without a bilingual declaration', () => {
+  manifest({ exports: { './package.json': './package.json', './preview': './preview.svg' }, files: ['preview.svg'] })
+  file('preview.svg', validPreview)
+  expect(packageMetaProblems(root).join('\n')).toContain('previews must be declared through package.json with en and zh SVG paths')
+})
+
 it('requires preview declarations to be discoverable', () => {
-  manifest({ preview: './preview.png', exports: { '.': './lib/index.js' }, files: ['preview.png'] })
-  file('preview.png', 'image')
+  manifest({ preview: { en: './preview.svg', zh: './preview.zh.svg' }, exports: { '.': './lib/index.js' }, files: ['preview*'] })
+  file('preview.svg', validPreview)
+  file('preview.zh.svg', validPreview)
   expect(packageMetaProblems(root).join('\n')).toContain('exports must expose its preview declaration')
 })
 
@@ -89,18 +120,26 @@ it.each([
   ['data:image/png;base64,aW1hZ2U=', true],
   ['https://example.test/badge.png', false],
   ['data:image/svg+xml;base64,PHN2Zy8+', false],
-])('only permits embedded raster images in previews: %s', (href, accepted) => {
-  manifest({ preview: './preview.svg', files: ['preview.svg'] })
-  file('preview.svg', validSvg.replace('</svg>', `<image href="${href}"/></svg>`))
+])('only permits embedded raster data URLs inside SVG previews: %s', (href, accepted) => {
+  manifest({ preview: { en: './preview.svg', zh: './preview.zh.svg' }, files: ['preview*'] })
+  file('preview.svg', validPreview.replace('</svg>', `<image href="${href}"/></svg>`))
+  file('preview.zh.svg', validPreview)
   const problems = packageMetaProblems(root)
   if (accepted) expect(problems).toEqual([])
   else expect(problems.join('\n')).toContain('must name a local id')
 })
 
 it('rejects executable SVG content in official previews', () => {
-  manifest({ preview: './preview.svg', files: ['preview.svg'] })
-  file('preview.svg', validSvg.replace('<path ', '<script>alert(1)</script><path '))
+  manifest({ preview: { en: './preview.svg', zh: './preview.zh.svg' }, files: ['preview*'] })
+  file('preview.svg', validPreview.replace('<path ', '<script>alert(1)</script><path '))
+  file('preview.zh.svg', validPreview)
   expect(packageMetaProblems(root).join('\n')).toContain('SVG preview must use self-contained geometry')
+})
+
+it('names the forbidden image element when rejecting an icon', () => {
+  manifest({ icon: './icon.svg', files: ['icon.svg'] })
+  file('icon.svg', validSvg.replace('</svg>', '<image href="data:image/png;base64,aW1hZ2U="/></svg>'))
+  expect(packageMetaProblems(root).join('\n')).toContain('without scripts, styles, images, foreignObject, text, or animation')
 })
 
 it.each(['manifest', 'export'])('accepts SVG geometry and local references selected by %s', (selection) => {

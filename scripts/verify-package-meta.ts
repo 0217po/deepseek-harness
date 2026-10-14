@@ -76,7 +76,7 @@ function published(file: string, files: string[]): boolean {
     && !files.some(pattern => pattern.startsWith('!') && covered(pattern.slice(1)))
 }
 
-/** Structural artwork conventions only; not an SVG sanitizer or a rendered-pixel check. */
+/** Structural artwork checks, not a sanitizer; previews admit embedded raster data URLs, while icons reject images. */
 function svgArtworkProblems(image: string, parser: DOMParser, field: 'icon' | 'preview'): string[] {
   const prefix = 'data:image/svg+xml;base64,'
   if (!image.startsWith(prefix)) return []
@@ -87,15 +87,17 @@ function svgArtworkProblems(image: string, parser: DOMParser, field: 'icon' | 'p
     return [`SVG ${field} must have an svg root in the SVG namespace`]
   }
   const problems: string[] = []
-  if (field === 'icon' && (svg.getAttribute('viewBox') !== '0 0 36 36' || svg.getAttribute('width') !== '36' || svg.getAttribute('height') !== '36')) {
-    problems.push('SVG icon must use width="36" height="36" viewBox="0 0 36 36"')
+  const canvas = field === 'icon' ? { width: '36', height: '36' } : { width: '640', height: '300' }
+  const viewBox = `0 0 ${canvas.width} ${canvas.height}`
+  if (svg.getAttribute('viewBox') !== viewBox || svg.getAttribute('width') !== canvas.width || svg.getAttribute('height') !== canvas.height) {
+    problems.push(`SVG ${field} must use width="${canvas.width}" height="${canvas.height}" viewBox="${viewBox}"`)
   }
   if (svg.querySelector('path, rect, circle, ellipse, line, polyline, polygon') === null) {
     problems.push(`SVG ${field} must contain geometry`)
   }
   const forbidden = 'script, style, foreignObject, text, animate, animateTransform, animateMotion, set'
   if (svg.querySelector(field === 'icon' ? `${forbidden}, image` : forbidden) !== null) {
-    problems.push(`SVG ${field} must use self-contained geometry without scripts, styles, foreignObject, text, or animation`)
+    problems.push(`SVG ${field} must use self-contained geometry without scripts, styles, ${field === 'icon' ? 'images, ' : ''}foreignObject, text, or animation`)
   }
   const elements = [svg, ...svg.querySelectorAll('*')]
   const ids = elements.flatMap(element => element.hasAttribute('id') ? [element.id] : [])
@@ -185,6 +187,9 @@ function packageProblems(manifestPath: string, parser: DOMParser): string[] {
         problems.push(`${manifestPath}: exports must expose its ${field} declaration through ${pkg.name}/package.json`)
       }
       const resource = `${candidate}/${field}`
+      if (field === 'preview' && exported.some(([key]) => key === resource)) {
+        problems.push(`${manifestPath}: previews must be declared through package.json with en and zh SVG paths`)
+      }
       if (exported.some(([key]) => key === resource) && lookup(`${specifier}/${field}`) === undefined) {
         problems.push(`${manifestPath}: exports["${resource}"] must resolve to a file`)
       }
@@ -196,7 +201,7 @@ function packageProblems(manifestPath: string, parser: DOMParser): string[] {
       problems.push(`${specifier}/package.json: display manifest must resolve to source JSON, received ${displayManifest}`)
     }
     if (sourceManifest && resources.every(({ file }) => byPath.has(file))) {
-      const meta = readPluginMeta(specifier, parentURL)
+      const meta = readPluginMeta(specifier, parentURL, true)
       if (meta?.error !== undefined) problems.push(meta.error)
       const imageTargets = imageFields.flatMap((field) => {
         const image = meta?.[field]

@@ -261,7 +261,7 @@ export function expectedDshPackageFiles(manifest: PackageManifest): readonly str
   const images = [
     ...[manifest.icon, manifest.preview].flatMap(targets).map(image => image.replace(/^\.\//u, '')),
     ...Object.entries(manifest.exports ?? {}).filter(([key]) => /^\.\/(?:.+\/)?(?:icon|preview)$/u.test(key))
-      .flatMap(([, target]) => targets(target)).filter(icon => icon.startsWith('./')).map(icon => icon.slice(2)),
+      .flatMap(([, target]) => targets(target)).filter(image => image.startsWith('./')).map(image => image.slice(2)),
   ]
   return [
     ...new Set(images),

@@ -15,10 +15,10 @@ export interface DshPackageManifest {
   /** SVG, PNG, JPEG, or WebP file relative to this manifest's directory, at most 256 KiB and contained there after realpath resolution. */
   icon?: string
   /**
-   * Feature image path, or language-to-path map with an English fallback.
-   * SVG/PNG/JPEG/WebP files stay in this directory, up to 1 MiB total.
+   * Optional built-in feature image paths, with required English and Chinese versions.
+   * SVG files use a 640×300 canvas and stay in this directory, up to 1 MiB total.
    */
-  preview?: LocalizedText
+  preview?: BilingualPreview
   /** Prevent npm publication, for example for local profile projects. */
   private?: boolean
   /** Packages installed alongside this package. */
@@ -46,6 +46,12 @@ export interface DshManifest {
 /** Literal text or translations indexed by lowercase language id, with a required English fallback. */
 export type LocalizedText = string | { readonly en: string; readonly [locale: string]: string }
 
+/** One logical preview's English and Chinese versions; callers own whether values are file paths or data URLs. */
+export type BilingualPreview = {
+  readonly en: string
+  readonly zh: string
+}
+
 /** Validated plugin display fields and diagnostics from exported locales, manifests, or image files. */
 export interface PluginLocalizedMeta {
   /** Display title; omission preserves the consumer's technical-name fallback. */
@@ -54,9 +60,9 @@ export interface PluginLocalizedMeta {
   readonly description?: LocalizedText
   /** Base64 image data URL from a package root's manifest icon or an exported `<specifier>/icon`; render as an image, not inline markup. */
   readonly icon?: string
-  /** Base64 image data URL or language-to-data-URL map with an English fallback; read before activation and rendered as an image. */
-  readonly preview?: LocalizedText
-  /** Unmodified local metadata diagnostic; the plugin remains manageable. */
+  /** Built-in detail artwork read on demand as English and Chinese SVG data URLs; omitted from inventories. */
+  readonly preview?: BilingualPreview
+  /** Local metadata diagnostics joined with newlines; the plugin remains manageable. */
   readonly error?: string
 }
 

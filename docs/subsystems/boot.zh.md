@@ -162,6 +162,14 @@ Manage profile files and apply their declared reload lifecycle.
  */
 @Remote listBundles(): Promise<BundleInfo[]>
 
+/**
+ * Read optional artwork from the installation's own optional bundle, without activating it.
+ * Profile packages and on-demand catalog providers do not supply previews.
+ * @param name - exact package name listed by the installation's optional bundles.
+ * @returns only preview artwork and its diagnostics; an empty object for unsupported packages or absent artwork.
+ */
+@Remote readBundlePreview(name: string): BundlePreviewInfo
+
 /** Read the registries this manager asks: the configured first one, its fallbacks in order, and what pnpm's own configuration names.
  * @returns The registries in pnpm's comparison form; null is the one pnpm's own configuration names, `resolved` as pnpm reads it now.
  */

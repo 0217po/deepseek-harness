@@ -55,29 +55,13 @@ describe('Official bundle catalog generation', () => {
     expect(renderOfficialBundleCatalog(entries)).not.toContain('1.2.3')
   })
 
-  it('preserves an optional package-owned preview for offline discovery', () => {
+  it.each(['./missing-preview.svg', { en: './missing-en.svg', zh: './missing-zh.svg' }])('excludes on-demand previews from offline inventory metadata: %j', (preview) => {
     const root = fixture()
     const name = ON_DEMAND_BUNDLES[0]!
-    updateManifest(root, name, { preview: './preview.png' })
-    write(root, `${directory(name)}/preview.png`, 'preview')
+    updateManifest(root, name, { preview })
     const entries = generateOfficialBundleCatalog(root)
-    const preview = `data:image/png;base64,${Buffer.from('preview').toString('base64')}`
-    expect(entries[0]?.meta.preview).toBe(preview)
-    expect(entries[1]?.meta.preview).toBeUndefined()
-    expect(renderOfficialBundleCatalog(entries)).toContain(`preview: '${preview}'`)
-  })
-
-  it('preserves translated preview images in offline discovery', () => {
-    const root = fixture()
-    const name = ON_DEMAND_BUNDLES[0]!
-    updateManifest(root, name, { preview: { en: './preview.png', zh: './preview.zh.png' } })
-    write(root, `${directory(name)}/preview.png`, 'English')
-    write(root, `${directory(name)}/preview.zh.png`, '中文')
-    const entries = generateOfficialBundleCatalog(root)
-    const en = `data:image/png;base64,${Buffer.from('English').toString('base64')}`
-    const zh = `data:image/png;base64,${Buffer.from('中文').toString('base64')}`
-    expect(entries[0]?.meta.preview).toEqual({ en, zh })
-    expect(renderOfficialBundleCatalog(entries)).toContain(`preview: { 'en': '${en}', 'zh': '${zh}' }`)
+    expect(entries[0]?.meta).not.toHaveProperty('preview')
+    expect(renderOfficialBundleCatalog(entries)).not.toContain('preview:')
   })
 
   it.each(['private', 'not-bundle', 'missing', 'duplicate'])('rejects %s catalog membership', (kind) => {

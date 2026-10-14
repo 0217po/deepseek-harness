@@ -27,6 +27,7 @@ import { configLedgerSource } from './config-ledger.ts'
 import { PluginManagerController } from './manager-store.ts'
 import { en, zh, type PluginManagerLocaleKey } from './locales.ts'
 import { createNavigationStore } from './navigation-store.ts'
+import { previewResourceProvider } from './preview-resource.ts'
 import type {} from './slot-contract.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -66,7 +67,7 @@ export const NS = 'pluginManager'
 export const PANEL_ID = 'plugins' as MainPanelId
 
 /** Services required by the sidebar registration and the Remote methods; the inventory says whether the Host manages a profile. */
-export const inject = ['slots', 'locale', 'remote', 'remote.pluginManager', 'remote.pluginInventory', 'remote.pluginRegistryProbe', 'configForms', 'layout']
+export const inject = ['slots', 'locale', 'remote', 'remote.pluginManager', 'remote.pluginInventory', 'remote.pluginRegistryProbe', 'configForms', 'layout', 'resources']
 
 /**
  * Contribute the Plugins entry to the sidebar with the management page it
@@ -75,6 +76,7 @@ export const inject = ['slots', 'locale', 'remote', 'remote.pluginManager', 'rem
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-plugin-manager: dictionaries')
+  ctx.effect(() => ctx.resources.register(previewResourceProvider(ctx.remote.pluginManager)), 'ui-plugin-manager: previews')
   const t = ctx.locale.bind(NS)
   const controller = new PluginManagerController(ctx)
   ctx.effect(() => () => { controller.dispose() }, 'ui-plugin-manager: controller')
