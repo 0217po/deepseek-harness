@@ -26,6 +26,9 @@ const LIVE_EXPECTED = join(SNAPSHOT_DIR, 'live-enabled.expected.md')
 const EXPORTS_EXPECTED = join(SNAPSHOT_DIR, 'exports.expected.md')
 const EXPORTS_EN_EXPECTED = join(SNAPSHOT_DIR, 'exports-en.expected.md')
 const FIXTURE_PLUGINS = fileURLToPath(new URL('./fixtures/plugins', import.meta.url))
+const { version: badgeVersion } = JSON.parse(await readFile(
+  new URL('../../../packages/experimental/badge-skill-bundle/package.json', import.meta.url), 'utf8',
+)) as { version: string }
 const MODE = webSnapshotMode()
 /** The profile manifest's bundles as the scaffold initializes them. */
 const SCAFFOLD_BUNDLES = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', SCAFFOLD_DEFAULTS_BUNDLE]
@@ -704,8 +707,12 @@ describe('web e2e: plugin manager', () => {
       return bounds.width > 0 && bounds.height > 0 && bounds.left >= parent.left && bounds.right <= parent.right + 1
     })
     expect(fits).toBe(true)
+    await detail.getByText(`v${badgeVersion}`, { exact: true }).waitFor()
+    await detail.getByText(badgeVersion, { exact: true }).waitFor()
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'preview.expected.md'),
-      await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd), MODE)
+      await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd, {
+        replacements: [[badgeVersion, '{{version}}']],
+      }), MODE)
     const chineseSource = await preview.getAttribute('src')
     try {
       await setLanguage('en')
