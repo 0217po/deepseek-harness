@@ -2,7 +2,7 @@
 import type { GlobalStandardProps, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createContext, useContext, type ReactNode } from 'react'
-import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionListState, SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
@@ -689,6 +689,18 @@ describe('ConversationRoot resident composer', () => {
     // The agent-preset chip sits in the same row, for the same reason: both
     // choices are only open before the first message.
     expect(b.slotCalls).toContain('conversation.hero.agentPreset')
+    expect(b.slotCalls).toContain('conversation.hero.options')
+  })
+
+  it('seats the New Session options after the agent-preset chip, and only for a Session', () => {
+    const b = mount(sessionSnapshotOf({ blank: true }))
+    const preset = within(b.view.container).getByTestId('view-conversation.hero.agentPreset')
+    const options = within(b.view.container).getByTestId('view-conversation.hero.options')
+    expect(options.parentElement?.previousElementSibling).toBe(preset)
+
+    const cold = mount(sessionSnapshotOf(), [], undefined, { sessionId: undefined })
+    expect(cold.slotCalls).toContain('conversation.hero.agentPreset')
+    expect(cold.slotCalls).not.toContain('conversation.hero.options')
   })
 
   it('prompt failure renders the promptError strip (ordinary failure, no transaction UI)', () => {

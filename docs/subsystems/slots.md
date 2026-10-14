@@ -171,7 +171,8 @@ Factory: conversation.content [ConversationContent]
 ├─ conversation.hero.brand.mark
 ├─ conversation.hero.workspace
 │  └─ conversation.hero.workspace.directoryFlow
-└─ conversation.hero.agentPreset
+├─ conversation.hero.agentPreset
+└─ conversation.hero.options
 
 Factory: conversation.chat.user.content [UserContent]
 ├─ conversation.chat.user.images [MessageImages]
