@@ -91,14 +91,19 @@ export const PROFILE_ROOT_FILENAME = 'cordis.yml'
  * Replace the named custom profile with a fresh copy of one shipped template.
  * This copies only the template's bundle list; local state from the
  * same-named shipped profile is not read, and no inheritance metadata is
- * persisted. The new profile is assembled in a staging directory under the
- * profiles directory and moved into place; only then is any previous target
- * directory, including its dependencies and user patch, deleted. Shipped
- * profile names are reserved.
+ * persisted. The new profile is assembled in a `.<name>.staging-*` directory
+ * under the profiles directory and moved into place; only then is any previous
+ * target directory, including its dependencies and user patch, deleted. A
+ * failed move restores the previous directory; when restoring also fails, it
+ * stays in the staging directory. Shipped profile names, compared without
+ * case, are reserved. Concurrent replacements leave one complete copy; each
+ * one either succeeds or reports the concurrent recreation.
  * @param name - the profile name to create or replace.
  * @param fromDefaultProfile - shipped profile template to copy.
  * @param home - Harness home containing the profile directory.
- * @throws when the template is unknown, the target name is shipped, or another process recreates the target concurrently.
+ * @throws when the template is unknown, the target name is shipped, another process recreates the target
+ *   between the two renames, or a file-system operation fails; a restore failure is an `AggregateError`
+ *   that names the staging path holding the previous profile.
  */
 export function initializeProfileFromDefault(
   name: string,
@@ -115,9 +120,11 @@ export function initializeProfileFromDefault(
       `${NAME}: unknown default profile ${JSON.stringify(fromDefaultProfile)}; expected one of ${expected}`,
     )
   }
-  if (Object.hasOwn(PROFILE_TEMPLATES, name)) {
+  // Case-insensitive file systems resolve a case variant such as `Web` to the shipped directory.
+  const shipped = Object.keys(PROFILE_TEMPLATES).find(shippedName => shippedName.toLowerCase() === name.toLowerCase())
+  if (shipped !== undefined) {
     throw new Error(
-      `${NAME}: profile ${JSON.stringify(name)} is shipped and cannot be a custom profile target; `
+      `${NAME}: profile ${JSON.stringify(name)} names shipped profile ${JSON.stringify(shipped)} and cannot be a custom profile target; `
       + 'omit --from-default-profile to use it',
     )
   }
@@ -138,8 +145,8 @@ export function initializeProfileFromDefault(
     try {
       renameSync(fresh, dir)
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code
-      if (code === 'EEXIST' || code === 'ENOTEMPTY') {
+      // Windows reports EPERM instead of EEXIST or ENOTEMPTY, so the target's state identifies a concurrent winner.
+      if (existsSync(dir)) {
         // The concurrent replacement supersedes the previous profile.
         rmSync(previous, { recursive: true, force: true })
         throw new Error(`${NAME}: profile ${JSON.stringify(name)} was recreated concurrently at ${dir}`, { cause: error })
@@ -161,7 +168,12 @@ export function initializeProfileFromDefault(
     if (!existsSync(previous)) rmSync(staging, { recursive: true, force: true })
     throw error
   }
-  rmSync(staging, { recursive: true, force: true })
+  try {
+    rmSync(staging, { recursive: true, force: true })
+  } catch (error) {
+    // The replacement is complete; leftover files only occupy space.
+    process.stderr.write(`${NAME}: replaced profile ${JSON.stringify(name)} but could not remove ${staging}: ${String(error)}\n`)
+  }
 }
 
 /**
