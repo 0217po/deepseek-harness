@@ -333,7 +333,7 @@
   border-radius: 4px;
   background: var(--dsw-alias-bg-module-platform);
   box-decoration-break: clone;
-  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-family: var(--ds-font-family-code);
   font-size: 12px;
 }
 

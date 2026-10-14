@@ -79,15 +79,26 @@ export interface PluginActivationOwnerProps {
   readonly onOpenDetails: () => void
 }
 
+/** An exact version a tab asks the Plugins page to install, with the text the install dialog shows for it. */
+export interface PluginTabInstall {
+  /** The install spec, such as `name@version` or a pinned `git+https` URL. */
+  readonly spec: string
+  /** The registry to ask first for this install only; absent keeps the dialog's registry choice. */
+  readonly registry?: string
+  /** Display name of the plugin, already localized. */
+  readonly title: string
+  /** The version being installed. */
+  readonly version: string
+}
+
 /** Owner props of a page tab another plugin contributes, such as Discover. */
 export interface PluginTabProps {
   /**
-   * Install an exact spec the person already confirmed: the page's install dialog opens at its check and progress
-   * screens, without the spec form.
-   * @param spec - the install spec, such as `name@version`.
-   * @param registry - the registry to ask first for this install only; absent keeps the dialog's registry choice.
+   * Install an exact version the person already confirmed: the page's install dialog opens at its check and progress
+   * screens, without the spec form, and names the plugin and version above the spec.
+   * @param target - the spec, optional registry, and display text.
    */
-  readonly install: (spec: string, registry?: string) => void
+  readonly install: (target: PluginTabInstall) => void
   /**
    * Switch to the Installed tab and open a bundle's page.
    * @param packageName - npm package name of the bundle.

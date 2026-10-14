@@ -589,7 +589,10 @@ export function DiscoverSection(props: DiscoverSectionProps): ReactNode {
       {body}
       <SourcesDialog state={state} t={t} face={face} />
       <ConfirmDialog choice={confirming} t={t} face={face} onCancel={() => { setConfirming(null) }}
-        onConfirm={({ version }) => { setConfirming(null); install(version.install.spec, version.install.registry) }} />
+        onConfirm={({ entry, version }) => {
+          setConfirming(null)
+          install({ ...version.install, title: entryTitle(entry, face), version: version.version })
+        }} />
     </div>
   )
 }

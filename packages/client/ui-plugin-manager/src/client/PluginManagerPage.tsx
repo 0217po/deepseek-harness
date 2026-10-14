@@ -928,17 +928,42 @@ function failureText(failure: InstallState['failure'], t: Translate, install?: P
   return failure.reason === '' ? t('installFailureGeneric') : failure.reason
 }
 
-/** The package the install is about: its name, one-liner, and version, as the Host read them before installing. */
-function SubjectCard({ subject, t }: { readonly subject: InstallSubject; readonly t: Translate }): ReactNode {
-  const title = subject.name ?? subject.spec
-  const kindKey = SUBJECT_KIND_KEYS[subject.kind]
-  const description = subject.description ?? (kindKey === undefined ? undefined : t(kindKey))
+interface SubjectLines {
+  readonly spec: string
+  readonly title: string
+  readonly description?: string | undefined
+  readonly version?: string | undefined
+  /** A confirmed version is named by its tab, so the spec follows as reference text. */
+  readonly showSpec: boolean
+}
+
+/** The package an install is about: its name, one-liner, version, and, when `showSpec` is set, its spec. */
+function SubjectBlock({ lines, t }: { readonly lines: SubjectLines; readonly t: Translate }): ReactNode {
   return (
-    <div className={css.subject} data-install-subject={subject.spec}>
-      <p className={css.subjectName}>{title}</p>
-      {description === undefined ? null : <p className={css.subjectDesc}>{description}</p>}
-      {subject.version === undefined ? null : <p className={css.subjectMeta}>{t('installVersion', { version: subject.version })}</p>}
+    <div className={css.subject} data-install-subject={lines.spec}>
+      <p className={css.subjectName}>{lines.title}</p>
+      {lines.description === undefined ? null : <p className={css.subjectDesc}>{lines.description}</p>}
+      {lines.version === undefined ? null : <p className={css.subjectMeta}>{t('installVersion', { version: lines.version })}</p>}
+      {lines.showSpec ? <p className={css.subjectSpec}>{lines.spec}</p> : null}
     </div>
+  )
+}
+
+/** The checked package as the Host read it before installing; a confirmed version keeps its tab's name and version. */
+function SubjectCard({ subject, confirmed, t }: {
+  readonly subject: InstallSubject
+  readonly confirmed: InstallState['confirmed']
+  readonly t: Translate
+}): ReactNode {
+  const kindKey = SUBJECT_KIND_KEYS[subject.kind]
+  return (
+    <SubjectBlock t={t} lines={{
+      spec: subject.spec,
+      title: confirmed?.title ?? subject.name ?? subject.spec,
+      description: subject.description ?? (kindKey === undefined ? undefined : t(kindKey)),
+      version: subject.version ?? confirmed?.version,
+      showSpec: confirmed !== undefined,
+    }} />
   )
 }
 
@@ -1045,9 +1070,9 @@ function InstallDialog({
       />
     )
   }
-  if ((phase === 'idle' || phase === 'checking') && install.confirmed === true) {
-    // A confirmed spec has no form to return to: the dialog shows the spec with its check, a refusal with a retry, or,
-    // after a cancelled run, the spec with Install.
+  if ((phase === 'idle' || phase === 'checking') && install.confirmed !== undefined) {
+    // A confirmed spec has no form to return to: the dialog names the plugin and version above the spec, with its
+    // check, a refusal with a retry, or, after a cancelled run, Install.
     const checking = phase === 'checking'
     const problem = install.inputError
     return (
@@ -1065,7 +1090,7 @@ function InstallDialog({
         )}
       >
         <div className={css.installBody} data-install-phase={phase}>
-          <p className={css.subjectName}>{install.spec}</p>
+          <SubjectBlock t={t} lines={{ spec: install.spec, ...install.confirmed, showSpec: true }} />
           {checking
             ? <p className={`${css.status} ${css.statusWithDot}`} role="status"><StateDot state="ongoing" />{t('installChecking')}</p>
             : problem === null
@@ -1309,19 +1334,19 @@ function InstallDialog({
     })
     : null
   // Another registry is worth offering only for a failure the Host laid at the one it asked.
-  const changeable = phase === 'failed' && !approvable && install.failure?.failedAt === 'registry' && install.confirmed !== true
+  const changeable = phase === 'failed' && !approvable && install.failure?.failedAt === 'registry' && install.confirmed === undefined
   const subject = install.subject
   return (
     <Modal open={install.open} onClose={onClose} title={heading} headless className={css.installDialog as string}>
       <div className={css.wizard} data-install-phase={phase}>
         <div className={css.wizardHead}>
-          {phase === 'done' || (install.confirmed === true && !pending)
+          {phase === 'done' || (install.confirmed !== undefined && !pending)
             ? <span />
             : (
-              <button type="button" className={css.wizardBack} aria-label={t(install.confirmed === true ? 'cancel' : pending ? 'installCancelAndEdit' : 'installEditAria')}
+              <button type="button" className={css.wizardBack} aria-label={t(install.confirmed !== undefined ? 'cancel' : pending ? 'installCancelAndEdit' : 'installEditAria')}
                 disabled={!stoppable} onClick={onCancel}>
                 <IconChevronLeftOutlineMedium aria-hidden="true" />
-                <span>{t(install.confirmed === true ? 'cancel' : pending ? 'installCancelAndEdit' : 'installEdit')}</span>
+                <span>{t(install.confirmed !== undefined ? 'cancel' : pending ? 'installCancelAndEdit' : 'installEdit')}</span>
               </button>
             )}
           <button
@@ -1350,7 +1375,7 @@ function InstallDialog({
           </div>
           {subject === null
             ? null
-            : <SubjectCard subject={phase === 'done' && install.installedVersion !== null ? { ...subject, version: install.installedVersion } : subject} t={t} />}
+            : <SubjectCard subject={phase === 'done' && install.installedVersion !== null ? { ...subject, version: install.installedVersion } : subject} confirmed={install.confirmed} t={t} />}
           {approvable
             ? (
               <section className={css.approval} role="group" aria-labelledby={approvalId} data-install-approval>

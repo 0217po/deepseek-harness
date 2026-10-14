@@ -212,7 +212,7 @@ describe('PluginManagerPage', () => {
         const tab = owner as PluginTabProps
         return (
           <>
-            <button type="button" onClick={() => { tab.install('dsh-a@1.0.0', 'https://r.example/') }}>Discover install</button>
+            <button type="button" onClick={() => { tab.install({ spec: 'dsh-a@1.0.0', registry: 'https://r.example/', title: 'Alpha', version: '1.0.0' }) }}>Discover install</button>
             <button type="button" onClick={() => { tab.openPackage('dsh-better-sidebar') }}>Discover open</button>
           </>
         )
@@ -228,7 +228,7 @@ describe('PluginManagerPage', () => {
     expect(document.querySelector('[data-plugin-group="bundles"]')).toBeNull()
     expect(screen.queryByRole('button', { name: en.refresh })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Discover install' }))
-    expect(actions.installFrom).toHaveBeenCalledWith('dsh-a@1.0.0', 'https://r.example/')
+    expect(actions.installFrom).toHaveBeenCalledWith({ spec: 'dsh-a@1.0.0', registry: 'https://r.example/', title: 'Alpha', version: '1.0.0' })
     fireEvent.click(screen.getByRole('button', { name: 'Discover open' }))
     expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-better-sidebar' } })
     expect(document.querySelector('[data-plugin-detail="dsh-better-sidebar"]')).not.toBeNull()
@@ -270,10 +270,12 @@ describe('PluginManagerPage', () => {
     expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
   })
 
-  it('shows a confirmed spec as a check and a refusal with retry, without the spec form or another registry', () => {
-    const confirmed: InstallState = { ...IDLE_INSTALL, open: true, spec: 'dsh-a@1.0.0', confirmed: true, registries: REGISTRIES }
+  it('shows a confirmed version by name above its spec, as a check and a refusal with retry, without the spec form or another registry', () => {
+    const confirmed: InstallState = { ...IDLE_INSTALL, open: true, spec: 'dsh-a@1.0.0', confirmed: { title: 'Alpha', version: '1.0.0' }, registries: REGISTRIES }
     const { actions, set } = renderTab({ install: { ...confirmed, phase: 'checking' } })
-    expect(screen.getByRole('dialog', { name: en.installConfirmedTitle })).toBeTruthy()
+    const dialog = screen.getByRole('dialog', { name: en.installConfirmedTitle })
+    expect([...dialog.querySelectorAll('[data-install-subject] p')].map(line => line.textContent))
+      .toEqual(['Alpha', en.installVersion.replace('{version}', '1.0.0'), 'dsh-a@1.0.0'])
     expect(screen.getByRole('status').textContent).toBe(en.installChecking)
     expect(screen.queryByRole('textbox')).toBeNull()
     expect(screen.queryByRole('button', { name: en.retry })).toBeNull()
@@ -311,6 +313,9 @@ describe('PluginManagerPage', () => {
     })
     expect(screen.getByText(en.installFailedTitle)).toBeTruthy()
     expect(screen.queryByRole('button', { name: en.installUseGithubMirror })).toBeNull()
+    // A Git spec checks without a name or version; the confirmed name and version head the card, above the spec.
+    expect([...document.querySelectorAll('[data-install-subject] p')].map(line => line.textContent))
+      .toEqual(['Alpha', en.installSubjectGit, en.installVersion.replace('{version}', '1.0.0'), 'git+https://github.com/o/r.git#abc'])
     set({
       install: {
         ...confirmed, phase: 'running', requestId: 'r' as never,

@@ -41,7 +41,7 @@ Host 的 [`pluginMarket.search`](../../boot/plugin-market/README.zh.md#use-this-
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-本插件把标签为**发现**的 `discover` 条目注册到 `plugins.tab`，即 [`ui-plugin-manager`](../ui-plugin-manager/README.zh.md) 声明的标签页 slot；owner props 提供 `install(spec, registry?)` 和 `openPackage(name)`。一个不依赖 React 的控制器在快照存储中拥有索引源读取、索引源编辑，以及所选索引的查询和已加载的页；选择另一个插件市场时从初始查询开始。之后的页发送第一页的 `fetchedAt`，来自已替换文档的页会让列表重新加载一次；再次被替换时读取失败。列表保留其结果所回答的查询，因此新查询加载期间或失败后，空状态文案仍与显示的结果一致；**重试**重新执行失败的读取：某个查询的前几页，或下一页。profile 的组合包变化时，重新加载所有已加载的页以刷新安装状态；索引不再声明的过滤条件或排序键会从查询中移除。尚未发送的搜索文本、打开的条目和确认对话框是组件状态。`presentation.ts` 中的纯函数根据文本得出查询顺序、移除未声明的 id、使用当前界面语言的 `Intl.Collator` 对声明排序，以及列出来源信息。图标以 `referrerpolicy="no-referrer"` 延迟加载，失败时回退到默认插画。
+本插件把标签为**发现**的 `discover` 条目注册到 `plugins.tab`，即 [`ui-plugin-manager`](../ui-plugin-manager/README.zh.md) 声明的标签页 slot；owner props 提供 `install({ spec, registry?, title, version })` 和 `openPackage(name)`；发现页传入条目的本地化标题和所选版本。一个不依赖 React 的控制器在快照存储中拥有索引源读取、索引源编辑，以及所选索引的查询和已加载的页；选择另一个插件市场时从初始查询开始。之后的页发送第一页的 `fetchedAt`，来自已替换文档的页会让列表重新加载一次；再次被替换时读取失败。列表保留其结果所回答的查询，因此新查询加载期间或失败后，空状态文案仍与显示的结果一致；**重试**重新执行失败的读取：某个查询的前几页，或下一页。profile 的组合包变化时，重新加载所有已加载的页以刷新安装状态；索引不再声明的过滤条件或排序键会从查询中移除。尚未发送的搜索文本、打开的条目和确认对话框是组件状态。`presentation.ts` 中的纯函数根据文本得出查询顺序、移除未声明的 id、使用当前界面语言的 `Intl.Collator` 对声明排序，以及列出来源信息。图标以 `referrerpolicy="no-referrer"` 延迟加载，失败时回退到默认插画。
 
 -----
 

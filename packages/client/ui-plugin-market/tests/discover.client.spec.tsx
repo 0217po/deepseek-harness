@@ -145,7 +145,7 @@ describe('DiscoverSection', () => {
     expect(install).not.toHaveBeenCalled()
     fireEvent.click(card('dsh-a').getByRole('button', { name: 'Install Alpha' }))
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: en.install }))
-    expect(install).toHaveBeenCalledWith('dsh-a@1.0.0', 'https://r.example/')
+    expect(install).toHaveBeenCalledWith({ spec: 'dsh-a@1.0.0', registry: 'https://r.example/', title: 'Alpha', version: '1.0.0' })
     expect(screen.queryByRole('dialog')).toBeNull()
     for (const [name, label] of [['dsh-b', en.statusInstalled], ['dsh-c', en.statusUpdate], ['dsh-f', en.statusProvided]] as const) {
       fireEvent.click(card(name).getByRole('button', { name: `View ${name} in Installed` }))
@@ -346,7 +346,7 @@ describe('DiscoverSection', () => {
     const dialog = within(screen.getByRole('dialog'))
     expect(dialog.getByText('dsh-v@3.0.0-rc.1')).toBeTruthy()
     fireEvent.click(dialog.getByRole('button', { name: en.install }))
-    expect(install).toHaveBeenCalledWith('dsh-v@3.0.0-rc.1', undefined)
+    expect(install).toHaveBeenCalledWith({ spec: 'dsh-v@3.0.0-rc.1', title: 'dsh-v', version: '3.0.0-rc.1' })
   })
 
   it('marks exempted versions and offers no version of a bundle DSH provides', () => {

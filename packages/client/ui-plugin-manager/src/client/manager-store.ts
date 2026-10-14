@@ -33,6 +33,7 @@ import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { LocalizedText, PluginLocalizedMeta } from '@deepseek-ai/dsh-package-manifest'
 import type { SettingsDescribeFace, ConfigForms } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { ConfigLedger } from './config-ledger.ts'
+import type { PluginTabInstall } from './slot-contract.ts'
 import type { PluginTab } from './tab-ledger.ts'
 import { shortName } from './presentation.ts'
 
@@ -199,8 +200,11 @@ export interface InstallState {
   readonly spec: string
   /** The spec form was reopened after switching away from a failed GitHub address. */
   readonly mirrorRecovery?: boolean
-  /** The spec came from a confirmed entry of another tab: the dialog shows no spec form, only its check and outcome. */
-  readonly confirmed?: boolean
+  /**
+   * The spec came from a confirmed entry of another tab, with that entry's name and version: the dialog shows no spec
+   * form, only its check and outcome.
+   */
+  readonly confirmed?: { readonly title: string; readonly version: string }
   /** The registries the Host configured, read when the dialog opens; null until the Host answered. */
   readonly registries: PluginRegistries | null
   /** The registry this install asks first: the one last used, else the Host's first. */
@@ -272,7 +276,7 @@ export function isInstallPending(phase: InstallState['phase']): boolean {
  */
 export function githubRecoveryRegistry(install: InstallState): Registry | undefined {
   // The mirror recovery reopens the spec form, which a confirmed spec does not have.
-  if (install.confirmed === true || install.phase !== 'failed' || install.failure?.failedAt !== 'spec-host'
+  if (install.confirmed !== undefined || install.phase !== 'failed' || install.failure?.failedAt !== 'spec-host'
     || (install.failure.kind !== 'network' && install.failure.kind !== 'timeout')) return undefined
   const host = install.subject?.host?.toLowerCase().split(':')[0]
   if (host !== 'github.com' && !host?.endsWith('.github.com')) return undefined
@@ -338,12 +342,12 @@ export interface PluginManagerFace {
   refresh: () => void
   openInstall: () => void
   /**
-   * Open the install dialog with a spec the person confirmed elsewhere, such as a Discover entry, and start checking
-   * it; the dialog shows no spec form. A hidden installation reopens instead.
-   * @param spec - the exact install spec.
-   * @param registry - the registry to ask first for this dialog only, never remembered; absent keeps the dialog's choice.
+   * Open the install dialog with a version the person confirmed elsewhere, such as a Discover entry, and start
+   * checking it; the dialog shows no spec form. A hidden installation reopens instead. The registry is asked first for
+   * this dialog only and never remembered.
+   * @param target - the exact spec, optional registry, and the name and version the dialog shows.
    */
-  installFrom: (spec: string, registry?: string) => void
+  installFrom: (target: PluginTabInstall) => void
   /** Hide immediately, abort a check, or request cancellation while retaining the Host-owned installation. */
   closeInstall: () => void
   editInstallSpec: (text: string) => void
@@ -613,11 +617,11 @@ export class PluginManagerController {
         this.ctx.get('productAnalytics')?.track('plugin_add_button_click', {})
         this.openDialog()
       },
-      installFrom: (spec, registry) => {
+      installFrom: ({ spec, registry, title, version }) => {
         // A hidden installation reopens as it is; only one installation runs at a time.
         if (!this.openDialog()) return
         this.transientRegistry = registry !== undefined
-        this.patchInstall({ spec, confirmed: true, ...registry === undefined ? {} : { registry: { kind: 'custom', url: registry } } })
+        this.patchInstall({ spec, confirmed: { title, version }, ...registry === undefined ? {} : { registry: { kind: 'custom', url: registry } } })
         void this.runInstall()
       },
       closeInstall: () => {

@@ -1017,6 +1017,15 @@ label.registryOption {
   overflow-wrap: anywhere;
 }
 
+.subjectSpec {
+  margin: 0;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow-wrap: anywhere;
+}
+
 .subjectDesc,
 .subjectMeta {
   margin: 0;
