@@ -2,7 +2,7 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { z } from 'zod'
-import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ShowResult, WindowsResult } from './protocol.ts'
+import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ScreenshotResult, ShowResult, WindowsResult } from './protocol.ts'
 
 /** Helper-issued application selection; public app objects bind it to one process lifetime. */
 export type CuaAppHandle = Branded<'CuaAppHandle'>
@@ -14,12 +14,8 @@ type CuaParameters<M extends CuaOperation['method']> = Extract<CuaOperation, { m
 /** Dispatch exactly once; a failed action must not be retried implicitly. */
 export type CuaDispatch = (operation: CuaOperation) => Promise<JsonValue>
 /** Encoded model-request image with the format, pixel dimensions and window reported by the Host. */
-export interface CuaScreenshot {
+export type CuaScreenshot = Pick<z.output<typeof ScreenshotResult>, 'mimeType' | 'pixelWidth' | 'pixelHeight' | 'windowId'> & {
   bytes: Uint8Array
-  mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
-  pixelWidth: number
-  pixelHeight: number
-  windowId: number
 }
 /** Optional output owned by the caller; persistence and image admission are external. */
 export interface CuaObservationSink {
