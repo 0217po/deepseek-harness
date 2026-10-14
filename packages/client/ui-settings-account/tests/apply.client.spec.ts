@@ -74,6 +74,7 @@ it('registers account sign-in in a plain browser without the Desktop-only surfac
     expect(quotaNoticeEntry(c)).toBeDefined()
     expect(platformHostEntry(c)).toBeUndefined()
     expect(c.ctx.slots.entries('shell.overlay').some(entry => entry.options.id === 'desktop-onboarding')).toBe(false)
+    expect(operations(c).hooks.account.getSnapshot().desktopOnboardingVisible).toBe(false)
   }
 }, 60_000)
 
@@ -649,6 +650,12 @@ for (const native of [false, true]) it(`exposes desktop progress actions and dis
   const c = await start()
   const entry = c.ctx.slots.entries('shell.overlay').find(entry => entry.options.id === 'desktop-onboarding')!
   const injected = (entry.inject!() as object) as DesktopOnboardingInjected
+  expect(injected.hooks.account.getSnapshot().desktopOnboardingVisible).toBe(true)
+  injected.setVisible(false)
+  expect(injected.hooks.account.getSnapshot().desktopOnboardingVisible).toBe(false)
+  const revealed = injected.hooks.account.getSnapshot()
+  injected.setVisible(false)
+  expect(injected.hooks.account.getSnapshot()).toBe(revealed)
   // Onboarding requests the shared native page through the one host; it holds no
   // bridge of its own.
   if (native) expect(injected.openPlatformPage).toBeDefined()

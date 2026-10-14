@@ -27,8 +27,12 @@ export interface AccountSnapshot {
   loginVisible?: boolean
   /** Latest explicit start request failed before a Host state was available. */
   loginFailed?: boolean
-  /** Mounted onboarding owns the dialog while active. */
+  /** Model credential onboarding owns the login dialog and delays bonus notices while mounted. */
   onboarding?: boolean
+  /** Desktop introduction covers the workspace during loading, saving, and exit animation.
+   * True on Desktop until shell.overlay reports visibility, false in browsers; Desktop layouts must render that slot.
+   */
+  desktopOnboardingVisible?: boolean
 }
 
 /** Host operations injected into the Cordis-free account component. */

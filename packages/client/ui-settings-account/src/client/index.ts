@@ -48,7 +48,9 @@ export function apply(ctx: Context): void {
   const t = ctx.locale.bind('settings.account')
   const page = globalThis as Partial<Record<typeof CONTACT_CONFIG_GLOBAL, unknown>>
   const config = ContactConfig(page[CONTACT_CONFIG_GLOBAL] ?? {})
-  let snapshot: AccountSnapshot = { view: undefined, details: undefined, failed: false, loginVisible: false }
+  let snapshot: AccountSnapshot = {
+    view: undefined, details: undefined, failed: false, loginVisible: false, desktopOnboardingVisible: desktop,
+  }
   // Desktop main opens the authorization page natively; a plain browser opens it in a tab it owns.
   const browser = new BrowserLogin(url => authorizeUrlWithTheme(url, ctx.theme.getTheme().active.colorScheme))
   ctx.effect(() => () => { browser.dispose() }, 'account: pending browser window')
@@ -264,6 +266,9 @@ export function apply(ctx: Context): void {
       name: 'shell.overlay', id: 'desktop-onboarding', locale: 'settings.account',
       inject: (): DesktopOnboardingInjected => ({
         hooks: { account: operations.hooks.account, onboarding: controller.state },
+        setVisible: (visible: boolean) => {
+          if (snapshot.desktopOnboardingVisible !== visible) publish({ ...snapshot, desktopOnboardingVisible: visible })
+        },
         // Onboarding's recharge return re-reads profile and balance only.
         ...nativePlatform === undefined ? {} : { openPlatformPage: platformPageOpener(refresh) },
         update: (change: OnboardingChange) => controller.update(change),

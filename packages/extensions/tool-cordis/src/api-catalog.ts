@@ -917,7 +917,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'abstract getProfile(client: AccountClientMetadata): Promise<AccountDetails[\'profile\'] | null>',
-        description: 'Query Platform profile independently of wallet balances. A ready result whose stable profile ID first becomes available or changes notifies watch consumers, so identity consumers re-read getPlatformSession; repeated IDs stay silent.',
+        description: 'Query Platform profile independently of wallet balances. A ready result whose stable profile ID first becomes available or changes notifies identity-enabled watch consumers, so they re-read getPlatformSession; repeated IDs stay silent.',
         parameters: [{ name: 'client', description: 'identity of the requesting UI for this call.' }],
         returns: 'profile outcome, or null if signed out or the grant changed during the query.',
       },
@@ -958,9 +958,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the signed-out state after local removal; remote failures never restore the grant.',
       },
       {
-        signature: 'abstract watch(signal: AbortSignal): AsyncIterable<AccountView>',
+        signature: 'abstract watch(signal: AbortSignal, includeIdentityChanges?: boolean): AsyncIterable<AccountView>',
         description: 'Subscribe to snapshots including a complete initial state.',
-        parameters: [{ name: 'signal', description: 'subscription lifetime; ending it never cancels login.' }],
+        parameters: [{ name: 'signal', description: 'subscription lifetime; ending it never cancels login.' }, { name: 'includeIdentityChanges', description: 'also notify when cached Platform identity changes; defaults to false.' }],
         returns: 'complete snapshots as account state changes.',
       },
       {
