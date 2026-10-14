@@ -888,7 +888,7 @@ describe('LocalSubprocessRuntime', () => {
     const probeLinuxNative = vi.fn((): string[] => [])
     const probeWindowsJob = vi.fn(() => true)
     const prepareManagedProcessBinding = vi.fn(() => ({ spillDir: '/tmp/dsh-test-spill' }))
-    const handles = [true, false, false].map((failFirstWait) => {
+    const handles = [true, false, false, false].map((failFirstWait) => {
       let waits = 0
       return {
         collected: {},
@@ -953,14 +953,17 @@ describe('LocalSubprocessRuntime', () => {
       windowsRuntime.internals = { platform: 'win32' }
       await windowsRuntime.spawn(spec('true')).done
       await new Promise(resolve => setImmediate(resolve))
-      expect(probeWindowsJob).toHaveBeenCalledOnce()
-      expect(launchWindowsJob).toHaveBeenCalledOnce()
+      await windowsRuntime.spawn(spec('true')).done
+      await new Promise(resolve => setImmediate(resolve))
+      expect(probeWindowsJob).toHaveBeenCalledTimes(2)
+      expect(launchWindowsJob).toHaveBeenCalledTimes(2)
       expect(bindManagedProcess.mock.calls.map(([, launch]) => launch)).toEqual([
         linuxLaunch,
         linuxLaunch,
         windowsLaunch,
+        windowsLaunch,
       ])
-      expect(prepareManagedProcessBinding).toHaveBeenCalledTimes(4)
+      expect(prepareManagedProcessBinding).toHaveBeenCalledTimes(5)
       expect(spawnSubprocess).not.toHaveBeenCalled()
     } finally {
       for (const fiber of fibers.reverse()) await fiber.dispose()

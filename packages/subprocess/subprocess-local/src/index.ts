@@ -67,7 +67,10 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
   internals: SpawnInternals = {}
   /** Provider-lifetime latch suppressing repeated weaker-containment warnings. */
   private fallbackWarningIssued = false
-  /** Provider-lifetime result of the synchronous Linux native probe; false when native containment is unavailable. */
+  /**
+   * Provider-lifetime result of the Linux native probe; false when native containment is unavailable.
+   * Each probe is a spawnSync that blocks the event loop and forks the host, so no later spawn repeats it.
+   */
   private linuxScope: LiteralArgvOptions | false | undefined
   /** Test hook for platform process inspection; production resolves lazily on terminal spawn. */
   terminalInspector: ProcessInspector | undefined
@@ -211,7 +214,7 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
     return handle
   }
 
-  /** Run the Linux native probe on the first eligible spawn and keep its result for the provider lifetime. */
+  /** Run the Linux native probe on the first eligible ordinary or terminal spawn and keep its result for the provider lifetime. */
   private linuxScopeOptions(): LiteralArgvOptions | undefined {
     this.linuxScope ??= probeLinuxNative() ?? false
     return this.linuxScope === false ? undefined : this.linuxScope
