@@ -250,61 +250,61 @@ describe('current version', () => {
 })
 
 describe('Host release change confirmation', () => {
-  type Build = { version: string; commit?: string }
-  type Change = { page: Build | undefined; current: Build | undefined; next: Build | undefined } | undefined
+  type Release = { version: string; commit?: string }
+  type Change = { page: Release | undefined; previous: Release | undefined; host: Release | undefined } | undefined
   function prompt(change: Change, dictionary: Record<string, string> = en) {
-    const acceptRelease = vi.fn()
+    const dismissRelease = vi.fn()
     const reloadPage = vi.fn()
     const props: HostReleasePromptProps = {
       ...kit,
       t: key => dictionary[key] ?? key,
       useReleaseChange: select => select(change),
-      acceptRelease,
+      dismissRelease,
       reloadPage,
     }
-    return { acceptRelease, reloadPage, view: render(<HostReleasePrompt {...props} />) }
+    return { dismissRelease, reloadPage, view: render(<HostReleasePrompt {...props} />) }
   }
 
-  it('stays hidden while no build change is pending', () => {
+  it('stays hidden while no release change is announced', () => {
     prompt(undefined)
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('shows the service and page transitions and either reloads or keeps the page', () => {
-    const { acceptRelease, reloadPage } = prompt({
-      page: { version: '0.2.1' }, current: { version: '0.2.2' }, next: { version: '0.2.3', commit: 'abc1234' },
+    const { dismissRelease, reloadPage } = prompt({
+      page: { version: '0.2.1' }, previous: { version: '0.2.2' }, host: { version: '0.2.3', commit: 'abc1234' },
     })
     const dialog = screen.getByRole('dialog', { name: 'Service version changed' })
     // Changed versions show only the versions.
     expect(dialog.textContent).toContain('Service0.2.20.2.3Page0.2.10.2.3')
-    expect(dialog.textContent).toContain('After the connection was re-established, versions changed as follows.')
+    expect(dialog.textContent).toContain(en['hostRelease.description'])
     fireEvent.click(screen.getByRole('button', { name: 'Reload to load the new version' }))
     expect(reloadPage).toHaveBeenCalledOnce()
-    expect(acceptRelease).not.toHaveBeenCalled()
+    expect(dismissRelease).not.toHaveBeenCalled()
     const keep = screen.getAllByRole('button', { name: 'Not now' })
     // The footer action and the dialog's close control both keep the page.
     expect(keep).toHaveLength(2)
     for (const button of keep) fireEvent.click(button)
     fireEvent.keyDown(document, { key: 'Escape' })
-    expect(acceptRelease).toHaveBeenCalledTimes(3)
+    expect(dismissRelease).toHaveBeenCalledTimes(3)
   })
 
   it('shows commits for a transition within one version and labels what the Host did not publish', () => {
     prompt({
       page: { version: '0.2.0' },
-      current: { version: '0.2.1', commit: 'aaaaaaa' },
-      next: { version: '0.2.1', commit: 'bbbbbbb' },
+      previous: { version: '0.2.1', commit: 'aaaaaaa' },
+      host: { version: '0.2.1', commit: 'bbbbbbb' },
     })
     expect(screen.getByRole('dialog').textContent).toContain('Serviceaaaaaaabbbbbbb' + 'Page0.2.00.2.1')
     cleanup()
-    prompt({ page: { version: '0.2.1' }, current: { version: '0.2.1' }, next: { version: '0.2.1', commit: 'bbbbbbb' } }, zh)
+    prompt({ page: { version: '0.2.1' }, previous: { version: '0.2.1' }, host: { version: '0.2.1', commit: 'bbbbbbb' } }, zh)
     expect(screen.getByRole('dialog', { name: '服务版本变化' }).textContent)
       .toContain('服务未标注bbbbbbb页面未标注bbbbbbb')
     cleanup()
-    prompt({ page: undefined, current: undefined, next: { version: '0.2.1' } })
+    prompt({ page: undefined, previous: undefined, host: { version: '0.2.1' } })
     expect(screen.getByRole('dialog').textContent).toContain('ServiceNot labeled0.2.1PageNot labeled0.2.1')
     cleanup()
-    prompt({ page: { version: '0.2.1' }, current: { version: '0.2.1' }, next: undefined })
+    prompt({ page: { version: '0.2.1' }, previous: { version: '0.2.1' }, host: undefined })
     expect(screen.getByRole('dialog').textContent).toContain('Service0.2.1Not labeledPage0.2.1Not labeled')
   })
 })

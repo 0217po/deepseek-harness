@@ -44,7 +44,7 @@ application combo 脚本只携带每个插件的 `client.js` 入口，并在启�
 <a id="host-release-changes"></a>
 ### Host release 变化
 
-每个图都以 `release` 携带 Host 的 release 身份：本包的 `version`（各包发布时与 CLI 共用同一版本号），以及 client 构建固化进 Host 构建产物的源码 `commit`。两个字段都相等才算同一个 release。页面只应用其上次应用的 release 的图，初始为页面启动时的 release。页面重连到另一个 release 的 Host 后，会暂存该 release 的最新图、忽略它的 rebuilt 帧，通过 `ctx.modules.entries.releaseChange` 发布页面启动时的 release、上次应用的 release 和新 release，并让当前插件继续运行。`acceptRelease()` 把暂存的 release 设为当前 release 并应用其图；刷新页面则直接启动新 release。收到当前 release 的图会撤回待确认的变化。当前 release 只保存在页面内存中。
+每个图都以 `release` 携带 Host 的 release 身份：本包的 `version`（各包发布时与 CLI 共用同一版本号），以及 client 构建固化进 Host 构建产物的源码 `commit`。两个字段都相等才算同一个 release。只有当前连接的 Host 提供的是页面启动时的 release，页面才应用图和 rebuilt 帧，因此页面运行的每个模块都属于这个 release；Host 回到该 release 时，照常按 revision 对比，只替换变化了的模块。Host 提供另一个 release 期间，页面不应用它的任何内容，当前插件继续运行，并通过 `ctx.modules.entries.releaseChange` 发布页面启动时的 release、Host 之前的 release 和当前的 release；只有刷新页面才会加载另一个 release。`dismissRelease()` 撤回提示，并在出现其他 release 之前不再为该 Host release 提示；它只在页面内存里记住最近一次撤回的 release。
 
 ### 共享模块
 
@@ -86,7 +86,7 @@ bundle 路由随注入的 `webServer` 生命周期注册：服务就绪时注册
 
 ### 条目所有权
 
-`ClientEntries` 记录启动时创建的条目，并在同一个 Loader 上串行执行完整图更新、重试和代码重载。本地代际阻止旧下载在目标条目或代码变化后挂载；目标相同的快照共用进行中的加载。来自其他 release 的图不进入队列：重试继续调和上次应用的图，页面接受该 release 之前一律忽略 rebuilt 帧。新增模块使用单资源 URL，不会重新执行可能重复注册现有 factory 的启动 batch。Factory 在条目创建前就保留产物 revision；图更新会在导入消费者前丢弃未归属条目的陈旧 factory、其样式和失败的到达目标。清理会保留每个剩余 Loader 条目的已声明及已观察到的传递模块依赖。其可观察状态不导入运行时库，因为 modules bootstrap 在平台种子可用之前物化。
+`ClientEntries` 记录启动时创建的条目，并在同一个 Loader 上串行执行完整图更新、重试和代码重载。本地代际阻止旧下载在目标条目或代码变化后挂载；目标相同的快照共用进行中的加载。来自启动 release 以外 release 的图不进入队列：重试继续调和上次应用的图，Host 提供该 release 期间忽略 rebuilt 帧。新增模块使用单资源 URL，不会重新执行可能重复注册现有 factory 的启动 batch。Factory 在条目创建前就保留产物 revision；图更新会在导入消费者前丢弃未归属条目的陈旧 factory、其样式和失败的到达目标。清理会保留每个剩余 Loader 条目的已声明及已观察到的传递模块依赖。其可观察状态不导入运行时库，因为 modules bootstrap 在平台种子可用之前物化。
 
 ### 源码索引
 

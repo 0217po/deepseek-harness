@@ -31,7 +31,7 @@ Users reach the shell through the sidebar's bottom Settings control; feature plu
 
 Settings uses the [frame’s shared overlay inset](../ui-layout/README.md#window-chrome-seat) and keeps at least 24px of viewport margin. Its mask leaves the Windows caption unpainted; the full-viewport layer still blocks background clicks.
 
-When the page reconnects to a Host running another release, a **Service version changed** dialog draws two lines: **Service** from the last applied release (gray) to the new release, joined by a thin solid green arrow because the switch already happened, and **Page** from the release this page booted from to the new release (gray), joined by an equally thin dashed gray arrow because only a reload completes it. A line shows versions when they differ and commits otherwise. **Reload to load the new version** loads the new release; **Not now**, the close control, a mask click, and Escape keep the page and apply the new release's plugin updates, after which reconnecting to that release no longer asks. Plugin updates stay paused until one of these choices.
+When the page reconnects to a Host running another release, a **Service version changed** dialog draws two lines: **Service** from the Host's previous release (gray) to its current release, joined by a thin solid green arrow because the Host already switched, and **Page** from the release this page booted from to the Host's release (gray), joined by an equally thin dashed gray arrow because only a reload completes it. A line shows versions when its two versions differ and commits otherwise. The page applies no plugin update from that release. **Reload to load the new version** loads it; **Not now**, the close control, a mask click, and Escape keep the page at its own release and stop asking about that Host release. When the Host returns to the page's release, the dialog closes and live updates resume.
 
 When the section navigation exceeds the panel's available height, the list scrolls independently of the settings content and keeps the Settings title fixed.
 
@@ -77,7 +77,7 @@ The shell is an explicit recovery consumer, so it injects Connection directly ra
 
 ### Host release changes
 
-The `shell.overlay` entry `host-release-change` binds `ctx.modules.entries.releaseChange` in its hooks compartment and receives two callbacks: one calls `ctx.modules.entries.acceptRelease()`, the other reloads the page. Release identities are Host data and render verbatim; [Client Modules](../modules/README.md#host-release-changes) owns which release counts as current.
+The `shell.overlay` entry `host-release-change` binds `ctx.modules.entries.releaseChange` in its hooks compartment and receives two callbacks: one calls `ctx.modules.entries.dismissRelease()`, the other reloads the page. Release identities are Host data and render verbatim; [Client Modules](../modules/README.md#host-release-changes) owns which release counts as current.
 
 ### Document availability
 

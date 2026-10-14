@@ -240,9 +240,9 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     children: { 'settings.general.item': { kind: 'list', scope: 'root' } },
   }, GeneralSection))
-  // The page's module system holds another Host release's plugin updates until this dialog's decision.
+  // The page's module system applies no plugin update from another Host release; this dialog offers the reload.
   const releasePromptInjected = (): HostReleasePromptInjected => ({
-    acceptRelease: () => { void ctx.modules.entries.acceptRelease().catch((error: unknown) => { ctx.logger.error(error) }) },
+    dismissRelease: () => { ctx.modules.entries.dismissRelease() },
     reloadPage: () => { globalThis.location.reload() },
     hooks: { releaseChange: ctx.modules.entries.releaseChange },
   })

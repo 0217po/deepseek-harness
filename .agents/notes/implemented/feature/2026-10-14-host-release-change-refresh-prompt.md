@@ -25,16 +25,19 @@ The change touches three owners: client-modules (producing, publishing, and comp
 
 ### Behavior
 
+A page applies Host graphs and rebuilt frames only while the connected Host serves the release the page booted from. Every module the page runs therefore belongs to its boot release: either the boot artifacts unchanged, or the boot artifacts plus hot replacements published by a Host of that same release.
+
 | Situation | Behavior |
 |---|---|
-| Reconnect to the same release | Unchanged: plugins hot-replace by `rev`. |
-| Reconnect to another release | Plugin replacement pauses and a dialog shows the service and page version changes. |
-| The user chooses **Reload to load the new version** | `location.reload()` loads the new shell and plugins from the new Host. |
-| The user chooses **Not now**, the close control, a mask click, or Escape | The dialog closes, the new release becomes the page's current release, and hot replacement resumes from the latest graph. |
-| Reconnect to the current release later | No prompt; plugins hot-replace directly. |
-| Reconnect to any release other than the current one, the boot release included | The dialog appears again. |
+| The Host serves the boot release; its graph equals the applied graph | Nothing happens. |
+| The Host serves the boot release; some module revisions differ | Hot replacement of exactly the changed modules, as before; a shown dialog closes. |
+| The Host serves another release (version or commit differs) | Nothing from it is applied, rebuilt frames are ignored, and a dialog shows the Host's and the page's transition. |
+| The user chooses **Reload to load the new version** | `location.reload()` boots the page from the Host's release. |
+| The user chooses **Not now**, the close control, a mask click, or Escape | The dialog closes; the page stays at its boot release and applies nothing from that Host release; later graphs of that release no longer ask. |
+| The Host returns to the boot release | The dialog closes and the usual revision comparison replaces exactly the changed modules; unchanged modules stay. |
+| The Host moves to a release other than the dismissed one | The dialog appears again. |
 
-The page remembers one current release, the release of the latest graph it applied, in page memory only; nothing is written to localStorage or IndexedDB. After a reload, the new boot release is the current release.
+The page remembers only the last dismissed Host release, in page memory; nothing is written to localStorage or IndexedDB. After a reload, the new boot release is the comparison basis.
 
 ### Release identity
 
@@ -57,59 +60,57 @@ BootManifest { ...; release?: WebBootRelease }
 ```
 
 - [ClientModuleRegistry](../../../../packages/client/modules/src/index.ts) computes the release once at construction and `compose()` writes it into every graph; `release` stays outside `graph.rev`. There is no new config field and the composition is unchanged.
-- `__DSH_BOOT__` and every SSE `graph` frame carry the field; the client-hmr Host half is unchanged.
+- `__DSH_BOOT__` and every SSE `graph` frame carry the field, so one graph frame carries both the Host release and its complete module graph; the client-hmr Host half is unchanged. A rebuilt frame comes from the same Host process as the graph frame before it on that SSE connection, so it inherits that frame's release.
 - `parseBootManifest` accepts an absent `release`, rejects a non-string `version` or `commit`, and drops members outside the identity, so equality compares only those two fields. Older pages that do not know the field ignore it.
 
 ### Page side
 
-The decision logic lives in [release-change.ts](../../../../packages/client/modules/src/client/release-change.ts); `ClientEntries` consults it from `sync`, `reload`, and `acceptRelease`.
+The release comparison lives in [release-change.ts](../../../../packages/client/modules/src/client/release-change.ts); `ClientEntries` consults it from `sync` and `reload`.
 
 ```
 interface ClientReleaseChange {
-  /** Release this page booted from; its shell and static modules stay at it until a reload. */
+  /** Release this page booted from; every module the page runs belongs to it. */
   readonly page: WebBootRelease | undefined
-  /** Release of the latest graph this page applied: its boot release or an accepted one. */
-  readonly current: WebBootRelease | undefined
-  /** Release of the latest Host graph. */
-  readonly next: WebBootRelease | undefined
+  /** Release the Host served before its latest release change. */
+  readonly previous: WebBootRelease | undefined
+  /** Release of the connected Host. */
+  readonly host: WebBootRelease | undefined
 }
 
 class ReleaseChangeGate {
-  /** Pending release change; undefined while no change is pending. */
+  /** Release change to announce; undefined while the Host serves the boot release or a dismissed one. */
   readonly change: ObservableSnapshot<ClientReleaseChange | undefined>
-  /** Whether a graph of another release is held. */
-  get holding(): boolean
-  /** Pass a graph of the current release; hold any other one and announce each new release once. */
-  admit(manifest: BootManifest): boolean
-  /** Release the held graph; undefined when no change is pending. */
-  accept(): BootManifest | undefined
-  /** Record an applied graph as the current release and withdraw the pending change. */
-  applied(manifest: BootManifest): void
+  /** Whether the connected Host serves the boot release; graphs and rebuilt frames apply only then. */
+  get matches(): boolean
+  /** Record a received graph's release and update the announcement; true when the graph may be applied. */
+  observe(release: WebBootRelease | undefined): boolean
+  /** Stop announcing the connected Host's release. */
+  dismiss(): void
 }
 
 class ClientEntries {
   /** The gate's change. */
   readonly releaseChange: ObservableSnapshot<ClientReleaseChange | undefined>
-  /** Accept the pending release and apply its latest graph; resolves at once without a pending change. */
-  acceptRelease(): Promise<void>
+  /** Stop announcing the connected Host's release; updates stay paused until the Host returns or the page reloads. */
+  dismissRelease(): void
 }
 ```
 
 Order of operations:
 
 1. `ClientEntries` creates the gate from the boot manifest's `release`.
-2. `sync(graph)` parses the graph and passes it to `admit`. A graph of the current release reconciles as before. A graph of another release is held; its first appearance logs the old and new identities through `console.warn` and publishes the change without entering the reconciliation queue. Later graph frames of the held release replace the held graph without publishing again; `retry()` keeps reconciling the last applied graph.
-3. While a graph is held, `reload(id, rev)` (a rebuilt frame) is ignored, because every Host rebuild is followed by a complete graph frame.
-4. When a graph of the current release arrives (including a Host that returned to it), or `acceptRelease()` takes the held graph, `ClientEntries` calls `applied` and reconciles as usual.
+2. `sync(graph)` parses the graph and passes its release to `observe`. A graph of the boot release reconciles as before, and the existing revision comparison replaces exactly the changed modules. A graph of another release returns without entering the reconciliation queue; its first appearance logs the Host's previous and current identities through `console.warn` and publishes the change unless that release was the last one dismissed.
+3. `reload(id, rev)` (a rebuilt frame) returns at once while the Host serves another release.
+4. `retry()` keeps reconciling the last applied graph, which always belongs to the boot release.
 5. The UI's inject face reloads the page through `location.reload()`; `ClientEntries` does not navigate.
 
 ### UI
 
 - Owner: [ui-settings-general](../../../../packages/client/ui-settings-general/src/client/index.ts), which already owns the connection pill (`ConnectionIndicator`) and the Desktop update prompt; its `inject` adds `modules`.
-- It registers the `shell.overlay` entry `host-release-change` through `ctx.slots.inject('shell.overlay', ...)` and renders it with `Modal`. The inject face provides `hooks: { releaseChange: ctx.modules.entries.releaseChange }`, `acceptRelease`, and `reloadPage`.
-- Copy lives in the zh/en locale dictionaries. The title is **Service version changed** (服务版本变化); the description is "After the connection was re-established, versions changed as follows." (连接重新建立后版本信息变化如下). Two gray-labelled lines follow:
-  - **Service**: `current` (gray) → `next` (solid), joined by a 1px solid green arrow because the service already switched.
-  - **Page**: `page` (solid) → `next` (gray), joined by a 1px dashed gray arrow because only a reload completes the switch. Both connectors are a fixed 56px and do not stretch across the dialog.
+- It registers the `shell.overlay` entry `host-release-change` through `ctx.slots.inject('shell.overlay', ...)` and renders it with `Modal`. The inject face provides `hooks: { releaseChange: ctx.modules.entries.releaseChange }`, `dismissRelease`, and `reloadPage`.
+- Copy lives in the zh/en locale dictionaries: a title, one sentence stating that live updates are paused until a reload, and two gray-labelled lines:
+  - **Service**: `previous` (gray) → `host` (solid), joined by a 1px solid green arrow because the Host already switched.
+  - **Page**: `page` (solid) → `host` (gray), joined by a 1px dashed gray arrow because only a reload completes the switch. Both connectors are a fixed 56px and do not stretch across the dialog.
   - Each line shows versions when its two ends differ in version and commits otherwise; a release or field the Host did not publish shows **Not labeled**. Screen readers read the two lines as text; the arrows are decorative.
 - The buttons are **Not now** and **Reload to load the new version** (primary, with `data-modal-autofocus`). The close control, a mask click, and Escape act as **Not now** through the shared `Modal` close behavior.
 
@@ -121,20 +122,22 @@ Order of operations:
 - **Add a client-modules `commit` config field set from `!!js process.env.DSH_CLIENT_COMMIT_HASH` in the composition**: it reads the environment at run time, and released `dsh web` launches do not set the variable; the commit must be fixed at build time.
 - **Read the CLI version by depending on app-boot from client-modules**: it adds a dependency edge, a dependency-policy classification, a tsconfig reference, and a lockfile change, while the package's own version is the same number.
 - **Keep the decision logic inside `ClientEntries`**: reconciliation and release comparison are independent concerns; the separate gate keeps `ClientEntries` to a few added lines.
+- **Let Not now apply the other release's plugin updates**: the page would run plugins of one release on the shell and static libraries of another, its state could no longer be named by one release, and returning to the boot release would need a second prompt whose two choices end in the same state.
 - **Name the field `build`**: it is easily confused with the build process and build artifacts.
 - **Reopen a permanently closed SSE stream in client-hmr**: in end-to-end restarts the 404 window never appeared, because the browser's own retry covered connection refusals; the gap is a documented limitation.
 - **Store the decision in localStorage**: the decision concerns one page's code, and a reload replaces that code, so it should not outlive the page.
-- **Remember a set of accepted releases (the boot release plus every accepted one)**: after accepting B, a Host back on boot release A would not prompt although the page runs B's plugins; one current release is simpler and accurate.
+- **Remember every dismissed release**: a page that moves between several Host releases is rare, and asking again after another release appeared costs one click.
 - **Keep the identity an opaque string and let the page split version and commit**: the display rule needs the two parts separately, and parsing a concatenated string breaks whenever its format changes.
 - **Create a separate UI package**: it needs three more registrations, while ui-settings-general already owns connection state and update prompts.
 
 ## Consequences
 
-- An upgraded Host or a dev Host at another commit no longer hot-replaces plugin code into a page whose shell belongs to another release without asking; the user decides when to reload.
-- **Not now** keeps hot-replacing across releases, with the same risk as before this change, by the user's choice.
-- A composition without the dialog registered only pauses hot replacement and logs the warning; the user sees no prompt.
+- An upgraded Host or a dev Host at another commit never hot-replaces plugin code into a page of another release; the page keeps working at its own release until the user reloads.
+- While the Host serves another release, plugin updates, including enabling or disabling a plugin on the Host, reach the page only after a reload.
+- When a Host returns to the page's release, only modules whose revisions differ are replaced. Revisions come from artifact metadata, so a rebuild of identical code still replaces the rebuilt modules once, without a prompt.
+- A composition without the dialog registered still pauses updates from another release and logs the warning; the user sees no prompt.
 - The API connection and SSE are independent channels, so an old page can show a protocol error before the dialog appears.
-- If a restarting Host answers `/plugins/events` with a non-200 status before registering the route, the browser closes that SSE stream for good, and the page cannot detect the release change until it reloads.
+- If a restarting Host answers `/plugins/events` with a non-200 status before registering the route, the browser closes that SSE stream for good, and the page cannot detect a release change until it reloads.
 - A source launch without dev-web has no commit, so development detection falls back to version changes.
 - Each tab prompts and remembers independently.
-- Unit tests pin the gate's behavior through `ClientEntries`, the manifest parser, the Host-published release, the shared preset's Node-half defines, and the dialog's rendering and callbacks; the end-to-end restart scenario was verified against a real Host.
+- Unit tests pin the gate through `ClientEntries` (same-release replacement, another release applying nothing, the return to the boot release replacing only changed modules, dismissal, absent releases), the manifest parser, the Host-published release, the shared preset's Node-half defines, and the dialog's rendering and callbacks.

@@ -31,7 +31,7 @@ kind: "package-reference"
 
 设置面板使用[框架共享的浮层起点](../ui-layout/README.zh.md#window-chrome-seat)，视口边距至少为 24px。其遮罩不绘制 Windows 顶栏区域，覆盖整个视口的模态层仍阻挡背景点击。
 
-页面重连到运行另一个 release 的 Host 时，会弹出**服务版本变化**对话框，画出两条线：**服务**从上次应用的 release（灰色）指向新 release，用细的绿色实线箭头连接，表示切换已经完成；**页面**从页面启动时的 release 指向新 release（灰色），用同样细的灰色虚线箭头连接，表示要刷新后才完成。版本号不同时显示版本号，否则显示 commit。**刷新以加载新版本**加载新 release；**暂不刷新**、关闭按钮、点击遮罩和 Escape 都保留当前页面并应用新 release 的插件更新，之后重连到该 release 不再提示。做出选择之前，插件更新保持暂停。
+页面重连到运行另一个 release 的 Host 时，会弹出**服务版本变化**对话框，画出两条线：**服务**从 Host 之前的 release（灰色）指向它当前的 release，用细的绿色实线箭头连接，表示 Host 已经切换；**页面**从页面启动时的 release 指向 Host 的 release（灰色），用同样细的灰色虚线箭头连接，表示要刷新后才完成。每行两端版本号不同时显示版本号，否则显示 commit。页面不应用该 release 的任何插件更新。**刷新以加载新版本**加载它；**暂不刷新**、关闭按钮、点击遮罩和 Escape 都让页面保持自己的 release，并不再为该 Host release 提示。Host 回到页面的 release 时，对话框关闭，热更新恢复。
 
 当分区导航超出面板可用高度时，列表独立于设置内容滚动，并保持「设置」标题固定。
 
@@ -77,7 +77,7 @@ Web 与桌面端的通用设置底部显示当前发布版本，使用构建注�
 
 ### Host release 变化
 
-`shell.overlay` 条目 `host-release-change` 在其 hooks compartment 中绑定 `ctx.modules.entries.releaseChange`，并接收两个回调：一个调用 `ctx.modules.entries.acceptRelease()`，另一个刷新页面。release 身份是 Host 数据，按原样显示；哪个 release 算当前由 [Client Modules](../modules/README.zh.md#host-release-changes) 决定。
+`shell.overlay` 条目 `host-release-change` 在其 hooks compartment 中绑定 `ctx.modules.entries.releaseChange`，并接收两个回调：一个调用 `ctx.modules.entries.dismissRelease()`，另一个刷新页面。release 身份是 Host 数据，按原样显示；哪个 release 算当前由 [Client Modules](../modules/README.zh.md#host-release-changes) 决定。
 
 ### 文档可用性
 

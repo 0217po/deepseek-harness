@@ -281,31 +281,25 @@ describe('ui-settings-general apply', () => {
     expect(c.ctx.slots.spec('settings.general.item')).toBeUndefined()
   })
 
-  it('asks about an unaccepted Host release in the shell overlay and resumes plugin updates once kept', async ({ mock, start }) => {
+  it('asks about another Host release in the shell overlay and stops asking once dismissed', async ({ mock, start }) => {
     const { c } = await client(mock, start)
     const overlay = () => c.ctx.slots.entries('shell.overlay').find(row => row.options.id === 'host-release-change')
     expect(overlay()?.component).toBe(HostReleasePrompt)
     expect(overlay()?.locale).toBe(NS)
     const face = overlay()!.inject!()
-    const { acceptRelease, reloadPage, hooks } = face
-    if (typeof acceptRelease !== 'function' || typeof reloadPage !== 'function' || typeof hooks !== 'object' || hooks === null) {
+    const { dismissRelease, reloadPage, hooks } = face
+    if (typeof dismissRelease !== 'function' || typeof reloadPage !== 'function' || typeof hooks !== 'object' || hooks === null) {
       throw new TypeError('host-release-change inject face is incomplete')
     }
-    const injected = { acceptRelease, reloadPage, hooks } as HostReleasePromptInjected
+    const injected = { dismissRelease, reloadPage, hooks } as HostReleasePromptInjected
     expect(injected.hooks.releaseChange).toBe(c.ctx.modules.entries.releaseChange)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const release = { version: '2.0.0' }
     await c.ctx.modules.entries.sync({ ...graphFromRoster(webApp.rows), release })
-    expect(injected.hooks.releaseChange.getSnapshot()).toEqual({ page: undefined, current: undefined, next: release })
+    expect(injected.hooks.releaseChange.getSnapshot()).toEqual({ page: undefined, previous: undefined, host: release })
     expect(warn).toHaveBeenCalledOnce()
-    injected.acceptRelease()
-    await vi.waitFor(() => { expect(injected.hooks.releaseChange.getSnapshot()).toBeUndefined() })
-    // A rejected acceptance is reported rather than left unhandled.
-    const failed = new Error('acceptance failed')
-    vi.spyOn(c.ctx.modules.entries, 'acceptRelease').mockRejectedValueOnce(failed)
-    const logged = vi.spyOn(c.ctx.logger, 'error').mockImplementation(() => {})
-    injected.acceptRelease()
-    await vi.waitFor(() => { expect(logged).toHaveBeenCalledWith(failed) })
+    injected.dismissRelease()
+    expect(injected.hooks.releaseChange.getSnapshot()).toBeUndefined()
     const reload = vi.fn()
     vi.stubGlobal('location', { reload })
     onTestFinished(() => { vi.unstubAllGlobals() })

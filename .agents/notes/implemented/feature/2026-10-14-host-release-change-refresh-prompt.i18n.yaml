@@ -12,23 +12,23 @@
   en: d39be9788fe2a0c9
   zh: 1a68a3ae4d73930d
 /agent-note-prompt-to-reload-when-the-host-release-changes-instead-of-hot-replacing-across-releases/decision/behavior:
-  en: 4c39cb393c7ac431
-  zh: 9c74fef799c008fa
+  en: f85ebe23d677ae93
+  zh: a829e0692e711660
 /agent-note-prompt-to-reload-when-the-host-release-changes-instead-of-hot-replacing-across-releases/decision/release-identity:
   en: 1b6efaf08ab3dabc
-  zh: a4c8152793542fd4
+  zh: 96330f89144c5dbd
 /agent-note-prompt-to-reload-when-the-host-release-changes-instead-of-hot-replacing-across-releases/decision/wire:
-  en: 5fb50fc66b231ada
-  zh: 28a72c2b8bdd08e6
+  en: 3e99fce22c1e52f4
+  zh: 5c1b5b82fed001f8
 /agent-note-prompt-to-reload-when-the-host-release-changes-instead-of-hot-replacing-across-releases/decision/page-side:
-  en: 820a19ae80b31ca5
-  zh: 0f0df1fa646de36f
+  en: ffe1d95f71f1f4da
+  zh: ba377dac4bd3a517
 /agent-note-prompt-to-reload-when-the-host-release-changes-instead-of-hot-replacing-across-releases/decision/ui:
-  en: c1780e99dbac5513
-  zh: fa53d0867820bde2
+  en: 90bc33052e84f162
+  zh: 749bad3e829698e2
 /agent-note-prompt-to-reload-when-the-host-release-changes-instead-of-hot-replacing-across-releases/alternatives-considered:
-  en: 999b2753fbf7e398
-  zh: 4b5dc90e347db66f
+  en: abb9d7ab9ef1df15
+  zh: 1704732daf5f2886
 /agent-note-prompt-to-reload-when-the-host-release-changes-instead-of-hot-replacing-across-releases/consequences:
-  en: cd683709b4c8f293
-  zh: 0d86c525934d5820
+  en: 815b41dc4f9ffcee
+  zh: b57388264cc459c7

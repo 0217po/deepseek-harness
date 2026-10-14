@@ -7,14 +7,14 @@ import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@dee
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import css from './HostReleasePrompt.module.css'
 
-/** Registrant-private face: the page's pending release change and its two decisions. */
+/** Registrant-private face: the page's release change and its two decisions. */
 export type HostReleasePromptInjected = {
-  /** Keep this page and apply the new release's plugin updates; later graphs of that release apply without asking. */
-  acceptRelease: () => void
+  /** Keep this page at its boot release and stop asking about the connected Host's release. */
+  dismissRelease: () => void
   /** Reload the page from the Host. */
   reloadPage: () => void
   hooks: {
-    /** Pending Host release change owned by the page's module system. */
+    /** Host release change owned by the page's module system. */
     releaseChange: HostObservable<ClientReleaseChange | undefined>
   }
 }
@@ -53,28 +53,28 @@ function Transition({ label, from, to, done }: { label: string; from: string; to
 
 /**
  * Ask whether to reload after the Host changed releases; closing the dialog keeps the page.
- * The service line shows the completed switch from the last applied release; the page line shows the
- * pending switch from the release this page booted from.
- * @param props - the pending change, both decisions, and localized copy.
- * @returns the dialog while a change is pending; otherwise nothing.
+ * The service line shows the Host's completed switch from its previous release; the page line shows the
+ * switch from the page's boot release that only a reload completes.
+ * @param props - the release change, both decisions, and localized copy.
+ * @returns the dialog while a change is announced; otherwise nothing.
  */
-export function HostReleasePrompt({ useReleaseChange, acceptRelease, reloadPage, t }: HostReleasePromptProps) {
+export function HostReleasePrompt({ useReleaseChange, dismissRelease, reloadPage, t }: HostReleasePromptProps) {
   const change = useReleaseChange(value => value)
   if (change === undefined) return null
   const unknown = t('hostRelease.unknown')
-  const [serviceFrom, serviceTo] = transitionText(change.current, change.next, unknown)
-  const [pageFrom, pageTo] = transitionText(change.page, change.next, unknown)
+  const [serviceFrom, serviceTo] = transitionText(change.previous, change.host, unknown)
+  const [pageFrom, pageTo] = transitionText(change.page, change.host, unknown)
   return (
     <Modal
       open
       title={t('hostRelease.title')}
       description={t('hostRelease.description')}
       closeLabel={t('hostRelease.later')}
-      onClose={acceptRelease}
+      onClose={dismissRelease}
       className={clsx(css.dialog)}
       footer={(
         <>
-          <Button variant="outline" onClick={acceptRelease}>{t('hostRelease.later')}</Button>
+          <Button variant="outline" onClick={dismissRelease}>{t('hostRelease.later')}</Button>
           <Button variant="primary" data-modal-autofocus onClick={reloadPage}>{t('hostRelease.reload')}</Button>
         </>
       )}

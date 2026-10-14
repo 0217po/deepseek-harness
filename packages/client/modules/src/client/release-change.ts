@@ -1,15 +1,15 @@
-/** Host release changes held back from a page whose code belongs to another release. */
+/** Which Host graphs a page may apply: only graphs of the release the page booted from. */
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { BootManifest, WebBootRelease } from './manifest.ts'
+import type { WebBootRelease } from './manifest.ts'
 
-/** A Host graph whose release differs from the release this page last applied; its code waits for acceptance or a page reload. */
+/** The connected Host serves another release than the one this page booted from; plugin updates wait for a page reload. */
 export interface ClientReleaseChange {
-  /** Release this page booted from; its shell and static modules stay at this release until a reload. */
+  /** Release this page booted from; every module the page runs belongs to it. */
   readonly page: WebBootRelease | undefined
-  /** Release of the latest graph this page applied: its boot release or an accepted one. */
-  readonly current: WebBootRelease | undefined
-  /** Release of the latest Host graph. */
-  readonly next: WebBootRelease | undefined
+  /** Release the Host served before its latest release change. */
+  readonly previous: WebBootRelease | undefined
+  /** Release of the connected Host. */
+  readonly host: WebBootRelease | undefined
 }
 
 /** Whether two releases are the same: both absent, or equal in every field. */
@@ -23,12 +23,12 @@ function describeRelease(release: WebBootRelease | undefined): string {
 }
 
 /**
- * Holds the latest Host graph of another release than the one this page last applied. The owner applies
- * only graphs that {@link admit} passes or {@link accept} releases, and reports each one through
- * {@link applied}. The current release lives in page memory, so a reload starts from the new boot release.
+ * Tracks the connected Host's release against the page's boot release. The page applies graphs and
+ * rebuilt frames only while both match, so every module it runs belongs to its boot release; another
+ * release waits for a page reload. A mismatch is announced unless the page dismissed that Host release.
  */
 export class ReleaseChangeGate {
-  /** Pending Host release change; undefined while every received graph carries the current release. */
+  /** Prompt-worthy release change; undefined while the Host serves the boot release or a dismissed one. */
   readonly change: ObservableSnapshot<ClientReleaseChange | undefined> = {
     getSnapshot: () => this.snapshot,
     subscribe: (listener) => {
@@ -38,53 +38,46 @@ export class ReleaseChangeGate {
   }
   private snapshot: ClientReleaseChange | undefined
   private readonly listeners = new Set<() => void>()
-  private current: WebBootRelease | undefined
-  private held: BootManifest | undefined
+  private host: WebBootRelease | undefined
+  /** Host release the page last dismissed; a holder because an unpublished release is itself a value. */
+  private dismissed: { readonly release: WebBootRelease | undefined } | undefined
 
   /**
-   * Start from the release the page booted from.
+   * Start with the Host that served the boot graph.
    * @param page - boot graph's release identity.
    */
   constructor(private readonly page: WebBootRelease | undefined) {
-    this.current = page
+    this.host = page
   }
 
-  /** Whether a graph of another release is held; its rebuilt frames carry nothing the next graph frame lacks. */
-  get holding(): boolean {
-    return this.held !== undefined
+  /** Whether the connected Host serves the page's boot release; graphs and rebuilt frames apply only then. */
+  get matches(): boolean {
+    return sameRelease(this.host, this.page)
   }
 
   /**
-   * Pass a graph of the current release; hold any other one and announce each new release once.
-   * @param manifest - parsed Host graph.
-   * @returns true when the owner applies the graph now.
+   * Record the release of a received Host graph and update the announced change.
+   * @param release - release identity of the received graph.
+   * @returns true when the graph belongs to the page's boot release and may be applied.
    */
-  admit(manifest: BootManifest): boolean {
-    if (sameRelease(manifest.release, this.current)) return true
-    this.held = manifest
-    if (this.snapshot === undefined || !sameRelease(this.snapshot.next, manifest.release)) {
-      console.warn(`client-modules: Host release changed from ${describeRelease(this.current)} to ${describeRelease(manifest.release)}; plugin updates pause until this page accepts it or reloads`)
-      this.publish({ page: this.page, current: this.current, next: manifest.release })
+  observe(release: WebBootRelease | undefined): boolean {
+    const previous = this.host
+    this.host = release
+    const quiet = this.matches || (this.dismissed !== undefined && sameRelease(release, this.dismissed.release))
+    if (quiet) {
+      if (this.snapshot !== undefined) this.publish(undefined)
+    } else if (this.snapshot === undefined || !sameRelease(this.snapshot.host, release)) {
+      console.warn(`client-modules: Host release changed from ${describeRelease(previous)} to ${describeRelease(release)}; plugin updates pause until this page reloads`)
+      this.publish({ page: this.page, previous, host: release })
     }
-    return false
+    return this.matches
   }
 
-  /**
-   * Release the held graph for the owner to apply.
-   * @returns the held graph, or undefined when no release change is pending.
-   */
-  accept(): BootManifest | undefined {
-    return this.held
-  }
-
-  /**
-   * Record a graph the owner applied as the current release, withdrawing any pending change.
-   * @param manifest - graph about to be reconciled.
-   */
-  applied(manifest: BootManifest): void {
-    this.held = undefined
-    this.current = manifest.release
-    if (this.snapshot !== undefined) this.publish(undefined)
+  /** Stop announcing the connected Host's release; the page keeps its boot release and still applies no other release. */
+  dismiss(): void {
+    if (this.snapshot === undefined) return
+    this.dismissed = { release: this.host }
+    this.publish(undefined)
   }
 
   private publish(snapshot: ClientReleaseChange | undefined): void {
