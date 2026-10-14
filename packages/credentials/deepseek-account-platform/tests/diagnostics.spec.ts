@@ -1,5 +1,7 @@
 import { expect, it, vi } from 'vitest'
-import { browserUrl, requestPlatform } from '../src/protocol.ts'
+import { browserUrl, logoutAccount, requestAccount, requestBonusNotified, requestPlatform, requestUnnotifiedBonuses } from '../src/protocol.ts'
+import type { AccountBonusOrderId } from '@deepseek-ai/dsh-deepseek-account/types'
+import { readAccountDetail, readUnnotifiedBonuses } from '../src/details.ts'
 
 it.each(['/dsh/authorize', '/dsh/authorized'])('maps %s to the configured development origin and preserves query bytes', (path) => {
   const origin = 'http://localhost:8081'
@@ -18,7 +20,7 @@ it.each(['/dsh/authorize', '/dsh/authorized'])('maps %s to the configured develo
 })
 
 it('reports business failure codes without credentials or response messages', async () => {
-  const output = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+  const output = vi.spyOn(console, 'error').mockImplementation(() => undefined)
   const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
     code: 0, data: { biz_code: 40123, biz_data: { token: 'response-secret' } }, message: 'private-message',
   })))
@@ -40,7 +42,7 @@ it('reports business failure codes without credentials or response messages', as
 })
 
 it('reports transport failure without exposing the thrown error', async () => {
-  const output = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+  const output = vi.spyOn(console, 'error').mockImplementation(() => undefined)
   const fetcher = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('private-network-detail'))
   try {
     await expect(requestPlatform('https://platform.deepseek.com', 'auth_init', {},
@@ -56,7 +58,7 @@ it('reports transport failure without exposing the thrown error', async () => {
 
 
 it('identifies invalid envelope fields without logging response values', async () => {
-  const output = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+  const output = vi.spyOn(console, 'error').mockImplementation(() => undefined)
   const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
     code: 0, data: { biz_code: 'private-code', biz_data: { token: 'private-token' } },
   })))
@@ -76,7 +78,7 @@ it('identifies invalid envelope fields without logging response values', async (
 })
 
 it('reports browser URL rejection rules without exposing the destination', () => {
-  const output = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+  const output = vi.spyOn(console, 'error').mockImplementation(() => undefined)
   try {
     expect(() => browserUrl('https://private.example/wrong?code=private-code',
       'https://platform.deepseek.com', '/dsh/authorize')).toThrow('account: protocol')
@@ -102,11 +104,85 @@ it.each([
     start(controller) { controller.error(new Error('private-stream-error')) },
   })), code: 'protocol' },
 ])('rejects $name without exposing response data', async ({ response, code }) => {
-  const output = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+  const output = vi.spyOn(console, 'error').mockImplementation(() => undefined)
   const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue(response())
   try {
     await expect(requestPlatform('https://platform.deepseek.com', 'auth_init', {},
       new AbortController().signal, {})).rejects.toThrow(`account: ${code}`)
+    expect(output).toHaveBeenCalled()
+    expect(JSON.stringify(output.mock.calls)).not.toContain('private-')
+  } finally {
+    fetcher.mockRestore()
+    output.mockRestore()
+  }
+})
+
+it('keeps successful authorization, account, bonus and logout requests silent', async () => {
+  const output = ['log', 'info', 'error'] as const
+  const spies = output.map(method => vi.spyOn(console, method).mockImplementation(() => undefined))
+  const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({
+    code: 0, data: { biz_code: 0, biz_data: null },
+  })))
+  try {
+    const origin = 'https://platform.deepseek.com'
+    const signal = new AbortController().signal
+    for (const method of ['auth_init', 'auth_exchange', 'auth_cancel']) {
+      await requestPlatform(origin, method, {}, signal, {})
+    }
+    for (const path of ['/auth-api/v0/users/current', '/api/v0/users/get_user_summary'] as const) {
+      await requestAccount(origin, path, 'private-token', signal, {})
+    }
+    await requestUnnotifiedBonuses(origin, 'private-token', signal, {})
+    await requestBonusNotified(origin, 'private-token', 'fixture-order' as AccountBonusOrderId, signal, {})
+    await logoutAccount(origin, 'private-token', signal, {})
+    fetcher.mockResolvedValueOnce(new Response(JSON.stringify({
+      code: 0, data: { biz_code: 0, biz_data: { email: 'private-email' } },
+    })))
+    expect(await readAccountDetail('profile', origin, 'private-token', signal, {})).toMatchObject({ status: 'ready' })
+    fetcher.mockResolvedValueOnce(new Response(JSON.stringify({
+      code: 0, data: { biz_code: 0, biz_data: { normal_wallets: [], bonus_wallets: [] } },
+    })))
+    expect(await readAccountDetail('balance', origin, 'private-token', signal, {})).toMatchObject({ status: 'ready' })
+    for (const spy of spies) expect(spy).not.toHaveBeenCalled()
+  } finally {
+    fetcher.mockRestore()
+    for (const spy of spies) spy.mockRestore()
+  }
+})
+
+it.each([
+  { name: 'HTTP rejection', status: 401, payload: 'private-body' },
+  { name: 'authorization code rejection', status: 200, payload: JSON.stringify({ code: 40003 }) },
+])('reports $name on the error console without the credential or body', async ({ status, payload }) => {
+  const output = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+  const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(payload, { status }))
+  try {
+    await expect(requestAccount('https://platform.deepseek.com', '/auth-api/v0/users/current',
+      'private-token', new AbortController().signal, {})).rejects.toThrow('account: expired')
+    expect(output).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      path: '/auth-api/v0/users/current', status,
+    }))
+    expect(JSON.stringify(output.mock.calls)).not.toContain('private-')
+    expect(info).not.toHaveBeenCalled()
+  } finally {
+    fetcher.mockRestore()
+    info.mockRestore()
+    output.mockRestore()
+  }
+})
+
+
+it('reports invalid bonus fields without logging bonus data', async () => {
+  const output = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+    code: 0, data: { biz_code: 0, biz_data: [{ order_id: 'private-order', msg: 'private-message' }] },
+  })))
+  try {
+    await expect(readUnnotifiedBonuses('https://platform.deepseek.com', 'private-token',
+      new AbortController().signal, {})).rejects.toThrow('account: protocol')
+    expect(output.mock.calls[0]?.[0]).toBe('[deepseek-account] bonus schema rejected')
+    expect(JSON.stringify(output.mock.calls)).toContain('order_id')
     expect(JSON.stringify(output.mock.calls)).not.toContain('private-')
   } finally {
     fetcher.mockRestore()

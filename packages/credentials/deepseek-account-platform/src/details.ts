@@ -44,7 +44,12 @@ const queries: { [K in keyof AccountDetails]: {
   profile: { path: '/auth-api/v0/users/current', parse: value => ({ status: 'ready', value: profile(value) }) },
   balance: { path: '/api/v0/users/get_user_summary', parse: (value) => {
     const parsed = summary.safeParse(value)
-    if (!parsed.success) throw new PlatformAuthError('protocol')
+    if (!parsed.success) {
+      console.error('[deepseek-account] balance schema rejected', {
+        issues: parsed.error.issues.map(issue => ({ path: issue.path, code: issue.code })),
+      })
+      throw new PlatformAuthError('protocol')
+    }
     return { status: 'ready', value: parsed.data.normal_wallets, bonusWallets: parsed.data.bonus_wallets }
   } },
 }
@@ -64,6 +69,7 @@ export async function readAccountDetail<K extends keyof AccountDetails>(field: K
   const query = queries[field]
   try { return query.parse(await requestAccount(origin, query.path, token, signal, headers)) }
   catch (error) {
+    console.error('[deepseek-account] detail failed', { field })
     if (error instanceof AccountUnauthorizedError) throw error
     return { status: 'failed' }
   }
@@ -80,7 +86,12 @@ export async function readAccountDetail<K extends keyof AccountDetails>(field: K
 export async function readUnnotifiedBonuses(origin: string, token: string,
   signal: AbortSignal, headers: Record<string, string>): Promise<readonly AccountBonusNotification[]> {
   const parsed = unnotified.safeParse(await requestUnnotifiedBonuses(origin, token, signal, headers))
-  if (!parsed.success) throw new PlatformAuthError('protocol')
+  if (!parsed.success) {
+    console.error('[deepseek-account] bonus schema rejected', {
+      issues: parsed.error.issues.map(issue => ({ path: issue.path, code: issue.code })),
+    })
+    throw new PlatformAuthError('protocol')
+  }
   return parsed.data.map(row => ({
     orderId: row.order_id as AccountBonusOrderId, campaign: row.campaign, amount: row.amount,
     currency: row.currency, grantedAt: row.granted_at, expiresAt: row.expires_at, message: row.msg,
