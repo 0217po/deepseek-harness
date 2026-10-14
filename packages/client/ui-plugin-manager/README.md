@@ -153,6 +153,7 @@ None; this package neither assembles nor sends a provider request.
 
 ## Known Limitations and Deferred Work
 
+- Feature previews have one image per language and no dark-theme variant, so the badge skill preview keeps its light background in dark theme.
 - Ping response time does not measure package-download throughput. Probes use the Host fetch route, which pnpm-specific proxy settings can differ from; users can always choose the registry manually, and installation retains its existing fallback rules.
 
 <a id="known-limitations-and-deferred-work"></a>

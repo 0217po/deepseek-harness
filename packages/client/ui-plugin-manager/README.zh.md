@@ -153,6 +153,7 @@ Host 入口通过生成的 Remote 接口暴露 `pluginRegistryProbe.fastest()`�
 
 ## 已知限制与延期工作
 
+- 功能配图每种语言只有一张，没有深色主题版本，因此徽章技能配图在深色主题中仍为浅色背景。
 - Ping 响应时间不代表包下载吞吐量。探测使用 Host fetch 的网络路径，pnpm 专用代理设置可能使用不同路径；用户始终可以手动选择安装源，安装仍遵循现有回退规则。
 
 <a id="known-limitations-and-deferred-work"></a>

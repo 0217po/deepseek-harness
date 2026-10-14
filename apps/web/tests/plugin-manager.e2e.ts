@@ -688,6 +688,7 @@ describe('web e2e: plugin manager', () => {
   })
 
   it('shows an optional feature preview before activation and leaves other plugin details unchanged', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-preview'))
     const panel = await openPluginsPanel()
     await panel.getByRole('button', { name: '更多', exact: true }).click()
     await panel.getByRole('button', { name: '查看 DSH 徽章技能', exact: true }).click()
