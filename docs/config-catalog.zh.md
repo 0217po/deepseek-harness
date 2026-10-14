@@ -500,7 +500,7 @@ export interface Config {
 
 - `inject`: `deepseekAccount` · `productTelemetry`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/client/product-analytics/src/index.ts:14`](../packages/client/product-analytics/src/index.ts)
+- `source`: [`packages/client/product-analytics/src/index.ts:15`](../packages/client/product-analytics/src/index.ts)
 
 ```ts config-catalog
 /** Application-owned collection policy; no user settings surface. */
@@ -509,6 +509,10 @@ export interface Config {
   enabled: Volatile<boolean>
   /** Running Desktop release, absent when unavailable. */
   appVersion?: string
+  /** Maximum execution time per static environment query, in milliseconds. */
+  environmentQueryTimeoutMillis: number
+  /** Maximum captured bytes per environment query output stream. */
+  environmentQueryMaxOutputBytes: number
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-product-analytics -->
