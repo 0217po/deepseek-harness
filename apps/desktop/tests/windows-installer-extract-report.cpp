@@ -5,6 +5,7 @@
 #include <cassert>
 #include <string>
 #include "../installer/extract-report.h"
+#include "../installer/directory-report.h"
 
 extern "C" __declspec(dllimport) int __cdecl InstallerReportExtractFailure(
     HWND parent, int code, LPCWSTR archive, LPCWSTR destination, LPCWSTR log, LPCWSTR reportPath, int show,
@@ -87,6 +88,17 @@ int wmain() {
     assert(!Contains(excerpt, L"Archive: "));
     assert(Excerpt(Compose(2, L"a", L"b", L"one\r\ntwo", L"t", L"w")) == L"Result: 7-Zip exit code 2 (fatal error)\r\none\r\ntwo");
     assert(Excerpt(Compose(2, L"a", L"b", std::wstring(2000, L'x'), L"t", L"w")).size() < 64 + kExcerptLineLimit + 64);
+    std::wstring attempts;
+    for (int i = 0; i < 30; ++i) attempts += L"restore: Windows error: 5\r\n";
+    const std::wstring directoryFull = directory_report::Compose(5, std::wstring(400, L'x').c_str(), L"target", 5, L"backup", attempts);
+    const std::wstring directoryExcerpt = BoundedExcerpt(Lines(directoryFull));
+    assert(Lines(directoryExcerpt).size() <= kExcerptLines + 1);
+    assert(directoryExcerpt.size() <= kExcerptChars + 64);
+    assert(Contains(directoryExcerpt, L"Restoration error: 5"));
+    assert(Contains(directoryExcerpt, L"Preserved backup: backup"));
+    assert(Contains(directoryExcerpt, L"more lines in the saved report"));
+    assert(Contains(directoryFull, std::wstring(400, L'x')));
+    assert(Contains(directoryFull, attempts));
 
     // A cut inside a multi-byte sequence is trimmed back to a code point boundary.
     std::string partial("abc\xE6\x96\x87\xE4\xBB");
