@@ -3,7 +3,7 @@
 import { controlPipe } from './control-spawn.ts'
 import { execFile, spawn, spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { setTimeout as sleepMs } from 'node:timers/promises'
 import type {
@@ -186,7 +186,7 @@ export function probeLinuxManager(internals: LinuxScopeInternals = {}): boolean 
 function unixSocketListener(path: string, table: string): string | undefined {
   let text: string
   try {
-    text = readFileSync(table, 'latin1')
+    text = readFileSync(table, 'utf8')
   } catch (_unreadableSocketTable) {
     // Without the socket table nothing is known, so callers fall back to systemctl or keep their verdict.
     return undefined
@@ -216,6 +216,30 @@ export function linuxManagerListener(internals: LinuxScopeInternals = {}): strin
 }
 
 /**
+ * Identify the systemd-run binary that scope launches resolve through PATH, so a package upgrade
+ * that replaces it triggers another probe of its literal-argv options.
+ * @param internals - optional systemd-run seam used by tests.
+ * @returns the device, inode, size, and modification time of the first match, or undefined when none resolves.
+ */
+export function systemdRunIdentity(internals: LinuxScopeInternals = {}): string | undefined {
+  const command = internals.systemdRun ?? 'systemd-run'
+  const candidates = command.includes('/')
+    ? [command]
+    : (childEnv().PATH ?? '').split(':').filter(directory => directory !== '').map(directory => join(directory, command))
+  for (const candidate of candidates) {
+    let stats: ReturnType<typeof statSync>
+    try {
+      stats = statSync(candidate, { throwIfNoEntry: false })
+    } catch (_unreadableCandidate) {
+      // A PATH entry that is not a searchable directory cannot hold systemd-run.
+      continue
+    }
+    if (stats?.isFile() === true) return `${String(stats.dev)}:${String(stats.ino)}:${String(stats.size)}:${String(stats.mtimeMs)}`
+  }
+  return undefined
+}
+
+/**
  * Confirm the user manager before a scope launch. A listener on its private socket confirms it
  * without a child process; otherwise one systemctl query decides. A hung manager that still
  * listens passes, and its scope launch fails with LinuxScopeNotStartedError.
@@ -237,8 +261,6 @@ interface DirectRange {
 /** A scope launch whose bootstrap never consumed its launch request, so its target never ran. */
 export class LinuxScopeNotStartedError extends Error {
   override readonly name = 'LinuxScopeNotStartedError'
-  /** Stable code for callers that classify failures without instanceof. */
-  readonly code = 'ERR_SUBPROCESS_SCOPE_NOT_STARTED'
 }
 
 class LinuxScopeStartup {

@@ -41,8 +41,10 @@ import {
   prepareLinuxTerminalScope,
   probeLinuxNative,
   signalLinuxDirectProcess,
+  systemdRunIdentity,
 } from './linux-scope.ts'
-import type { LiteralArgvOptions } from './linux-scope.ts'
+import { LinuxScopeSelector } from './linux-scope-selector.ts'
+import type { LinuxScopeDecision } from './linux-scope-selector.ts'
 import { launchWindowsJob, probeWindowsJob } from './windows-job.ts'
 import { targetEnvironment } from './runner-launch.ts'
 import { createProcessInspector } from './process-inspector.ts'
@@ -70,18 +72,18 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
   internals: SpawnInternals = {}
   /** Provider-lifetime latch suppressing repeated weaker-containment warnings. */
   private fallbackWarningIssued = false
-  /** Whether linuxLiteralArgv holds a Linux native probe result; cleared when that result must be probed again. */
-  private linuxProbed = false
   /**
-   * Latest Linux native probe result: literal-argv scope options, or undefined when unavailable. Each probe is a
-   * spawnSync that blocks the event loop and forks the host, so it reruns only after a scope never started its
-   * target or a new user-manager listener appeared; a positive result otherwise only confirms the manager per spawn.
+   * Linux native containment decisions. Each probe is a spawnSync that blocks the event loop and forks the
+   * host, so the selector reruns it only after an event invalidates the previous verdict.
    */
-  private linuxLiteralArgv: LiteralArgvOptions | undefined
-  /** Count of Linux native probes; a failed scope launch resets the result only for the probe it launched under. */
-  private linuxProbeGeneration = 0
-  /** User-manager listener seen when the probe last failed; only a different listener triggers another probe. */
-  private linuxUnavailableListener: string | undefined
+  private readonly linuxScope = new LinuxScopeSelector({
+    probe: () => probeLinuxNative(),
+    managerListener: () => linuxManagerListener(),
+    confirmManager: () => confirmLinuxManager(),
+    launcherIdentity: () => systemdRunIdentity(),
+  })
+  /** Scope decision of the launch in progress; selectContainmentMode sets it immediately before the launch reads it. */
+  private linuxScopeDecision: Extract<LinuxScopeDecision, { kind: 'scope' }> | undefined
   /** Test hook for platform process inspection; production resolves lazily on terminal spawn. */
   terminalInspector: ProcessInspector | undefined
 
@@ -202,12 +204,12 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
       handle = spawnSubprocess(spec, internals)
     } else {
       const binding = prepareManagedProcessBinding(internals)
-      const linuxScope = containmentMode === 'linux-scope' ? this.linuxLiteralArgv : undefined
+      const linuxScope = containmentMode === 'linux-scope' ? this.linuxScopeDecision : undefined
       const launch = linuxScope === undefined
         ? launchWindowsJob(spec, env)
-        : launchLinuxScope(spec, env, linuxScope)
+        : launchLinuxScope(spec, env, linuxScope.literalArgv)
       handle = bindManagedProcess(spec, launch, binding)
-      if (linuxScope !== undefined) this.watchLinuxScopeStart(handle.done)
+      if (linuxScope !== undefined) this.watchLinuxScopeStart(handle.done, linuxScope.generation)
     }
     this.live.add(handle)
     const control = handle.control
@@ -225,31 +227,10 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
     return handle
   }
 
-  /**
-   * Probe on the first eligible ordinary or terminal spawn. After a positive result, confirm the user manager
-   * before each launch; after a negative one, probe again only when a new user-manager listener appears.
-   */
-  private linuxScopeAvailable(): boolean {
-    if (this.linuxProbed && this.linuxLiteralArgv === undefined) {
-      const listener = linuxManagerListener()
-      if (listener === undefined || listener === this.linuxUnavailableListener) return false
-      this.linuxProbed = false
-    }
-    if (!this.linuxProbed) {
-      this.linuxProbed = true
-      this.linuxProbeGeneration += 1
-      this.linuxLiteralArgv = probeLinuxNative()
-      if (this.linuxLiteralArgv === undefined) this.linuxUnavailableListener = linuxManagerListener()
-      return this.linuxLiteralArgv !== undefined
-    }
-    return confirmLinuxManager()
-  }
-
-  /** Probe again before the next launch when a scope launched under the current probe never started its target. */
-  private watchLinuxScopeStart(done: Promise<unknown>): void {
-    const generation = this.linuxProbeGeneration
+  /** Probe again before the next launch when a scope launched under generation never started its target. */
+  private watchLinuxScopeStart(done: Promise<unknown>, generation: number): void {
     void done.catch((error: unknown) => {
-      if (error instanceof LinuxScopeNotStartedError && generation === this.linuxProbeGeneration) this.linuxProbed = false
+      if (error instanceof LinuxScopeNotStartedError) this.linuxScope.scopeNotStarted(generation)
     })
   }
 
@@ -259,7 +240,13 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
     const platform = this.internals.platform ?? process.platform
     let fallbackReason: string | undefined
     if (platform === 'linux') {
-      if (this.linuxScopeAvailable()) return 'linux-scope'
+      const decision = this.linuxScope.select()
+      const probe = decision.probe === undefined ? '' : `, probed after ${decision.probe}`
+      this.ctx.logger.debug(`linux native containment: ${decision.kind} (${decision.reason}${probe})`)
+      if (decision.kind === 'scope') {
+        this.linuxScopeDecision = decision
+        return 'linux-scope'
+      }
       fallbackReason = 'the current user-systemd scope or private bootstrap is unavailable'
     }
     if (kind === 'ordinary' && platform === 'win32') {
@@ -324,13 +311,13 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
       // verbatim, see [Agent Note](../../../../.agents/notes/implemented/bug-fix/2026-09-28-pty-bundled-console-host.md).
       ...(platform === 'win32' ? { useConptyDll: true } : {}),
     }
+    const linuxScope = containmentMode === 'linux-scope' ? this.linuxScopeDecision : undefined
     let scope: ReturnType<typeof prepareLinuxTerminalScope> | undefined
     let terminal: NodePty.IPty
     try {
-      const linuxScope = containmentMode === 'linux-scope' ? this.linuxLiteralArgv : undefined
       scope = linuxScope === undefined
         ? undefined
-        : prepareLinuxTerminalScope(launch, { ...activity?.env ?? env, PWD: spec.cwd, TERM: spec.terminalType }, linuxScope)
+        : prepareLinuxTerminalScope(launch, { ...activity?.env ?? env, PWD: spec.cwd, TERM: spec.terminalType }, linuxScope.literalArgv)
       if (scope !== undefined) { options.cwd = scope.cwd; options.env = scope.env }
       terminal = requireNodePty().spawn(
         scope?.command ?? file,
@@ -363,7 +350,7 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
       spec.shellActivity === true,
     )
     this.terminals.add(handle)
-    if (scope !== undefined) this.watchLinuxScopeStart(handle.done)
+    if (linuxScope !== undefined) this.watchLinuxScopeStart(handle.done, linuxScope.generation)
     const release = async (): Promise<void> => {
       // terminate() can wait on this direct-exit promise.
       directSettlement.resolve()

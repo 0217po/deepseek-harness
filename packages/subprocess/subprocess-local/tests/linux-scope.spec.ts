@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -17,6 +17,7 @@ import {
   probeLinuxNative,
   probeLinuxScope,
   signalLinuxDirectProcess,
+  systemdRunIdentity,
 } from '../src/linux-scope.ts'
 import type { LinuxScopeInternals } from '../src/linux-scope.ts'
 import {
@@ -283,7 +284,7 @@ describe('Linux native capability selection', () => {
   })
 
   it.skipIf(process.platform !== 'linux')('reads a real listening socket from the kernel socket table', async () => {
-    const runtime = mkdtempSync(join(tmpdir(), 'dsh-runtime-'))
+    const runtime = mkdtempSync(join(tmpdir(), 'dsh-运行时-'))
     directories.push(runtime)
     mkdirSync(join(runtime, 'systemd'))
     const server = createServer()
@@ -305,6 +306,54 @@ describe('Linux native capability selection', () => {
     } finally {
       vi.unstubAllEnvs()
       if (server.listening) server.close()
+    }
+  })
+
+  it('matches a socket path outside ASCII in the kernel socket table', () => {
+    const runtime = mkdtempSync(join(tmpdir(), 'dsh-运行时-'))
+    directories.push(runtime)
+    const table = join(runtime, 'unix')
+    writeFileSync(table, `0000000048ab7e3a: 00000002 00000000 00010000 0001 01 77 ${join(runtime, 'systemd', 'private')}\n`)
+    try {
+      vi.stubEnv('XDG_RUNTIME_DIR', runtime)
+      expect(linuxManagerListener({ unixSocketTable: table })).toBe('77')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it.skipIf(process.platform === 'win32')('identifies the systemd-run binary that PATH resolves', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-path-'))
+    directories.push(root)
+    const fileEntry = join(root, 'file-entry')
+    writeFileSync(fileEntry, '')
+    // A self-referencing symlink makes stat fail with ELOOP instead of reporting no entry.
+    const loop = join(root, 'loop')
+    symlinkSync(loop, loop)
+    const shadow = join(root, 'shadow')
+    mkdirSync(join(shadow, 'systemd-run'), { recursive: true })
+    const bin = join(root, 'bin')
+    mkdirSync(bin)
+    const binary = join(bin, 'systemd-run')
+    writeFileSync(binary, 'v253')
+    try {
+      vi.stubEnv('PATH', ['', join(root, 'missing'), fileEntry, loop, shadow, bin].join(':'))
+      const installed = systemdRunIdentity()
+      expect(installed).toMatch(/^\d+:\d+:4:/u)
+      expect(systemdRunIdentity()).toBe(installed)
+      // A package upgrade replaces the file, which changes its identity.
+      rmSync(binary)
+      writeFileSync(binary, 'v258.1')
+      const upgraded = systemdRunIdentity()
+      expect(upgraded).not.toBe(installed)
+      expect(systemdRunIdentity({ systemdRun: binary })).toBe(upgraded)
+
+      vi.stubEnv('PATH', join(root, 'missing'))
+      expect(systemdRunIdentity()).toBeUndefined()
+      vi.stubEnv('PATH', undefined)
+      expect(systemdRunIdentity()).toBeUndefined()
+    } finally {
+      vi.unstubAllEnvs()
     }
   })
 
