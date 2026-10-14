@@ -98,6 +98,8 @@ ctx.slots.inject('plugins.detail.section', () => ctx.slots.register({
 
 -----
 
+内置配图遵循[功能配图创作指引](../../../docs/cookbook/adding-a-plugin-preview.zh.md)：可选，每种语言一张 640×300 SVG，必须同时提供英文和中文。内部映射及素材测试约束格式，包没有配图声明接口。
+
 <a id="understand-the-implementation"></a>
 ## 理解实现
 

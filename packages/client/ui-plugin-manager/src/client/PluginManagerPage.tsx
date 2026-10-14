@@ -11,7 +11,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { PluginInstallFailureKind, Registry } from '@deepseek-ai/dsh-api-remotes/client'
-import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import {
   Button, IconCheckCircleFillRegular, IconChevronDownOutlineRegular, IconChevronLeftOutlineMedium,
   IconChevronRightOutlineRegular, IconCloseOutlineMedium,
@@ -36,6 +35,8 @@ import type { ConfigPageForm } from './slot-contract.ts'
 import css from './PluginManagerPage.module.css'
 import badgeSkillPreview from './assets/badge-skill-preview.svg'
 import badgeSkillPreviewZh from './assets/badge-skill-preview.zh.svg'
+import voiceInputPreview from './assets/voice-input-preview.svg'
+import voiceInputPreviewZh from './assets/voice-input-preview.zh.svg'
 
 /** Full component props assembled by the main slot renderer. */
 export type PluginManagerPageProps =
@@ -158,8 +159,9 @@ function orderOptionalBundles(packages: readonly PackageView[]): PackageView[] {
 }
 
 /** Feature previews of official bundles, shown on their detail pages and selected by UI language. */
-const BUNDLE_PREVIEWS = new Map<string, LocalizedText>([
+const BUNDLE_PREVIEWS = new Map<string, Readonly<Record<'en' | 'zh', string>>>([
   ['@deepseek-ai/dsh-experimental-badge-skill-bundle', { en: badgeSkillPreview, zh: badgeSkillPreviewZh }],
+  ['@deepseek-ai/dsh-experimental-voice-input-bundle', { en: voiceInputPreview, zh: voiceInputPreviewZh }],
 ])
 
 /** How long a toast holds: long enough to read a failure that names what broke. */

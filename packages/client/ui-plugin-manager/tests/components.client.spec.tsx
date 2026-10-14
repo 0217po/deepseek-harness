@@ -684,6 +684,21 @@ describe('PluginManagerPage', () => {
     expect(screen.queryByRole('img')).toBeNull()
   })
 
+  it('places the new voice illustration after its description and switches the single image with the UI language', () => {
+    const name = '@deepseek-ai/dsh-experimental-voice-input-bundle'
+    const description = 'Turn speech into local notes.'
+    const { setLanguage } = renderTab({ packages: [pkg({ name, enabled: false, meta: { description }, rows: [row()] })] })
+    fireEvent.click(screen.getByRole('button', { name: `View ${name}` }))
+    const image = screen.getByRole('img')
+    expect(image.getAttribute('src')).toMatch(/voice-input-preview\.svg$/u)
+    expect(screen.getByText(description).compareDocumentPosition(image) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(image.compareDocumentPosition(screen.getByRole('heading', { name: en.partsLabel })) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy()
+    setLanguage(zh)
+    expect(screen.getAllByRole('img')).toHaveLength(1)
+    expect(screen.getByRole('img').getAttribute('src')).toMatch(/voice-input-preview\.zh\.svg$/u)
+  })
+
   it('shows metadata diagnostics without blocking management or displaying legacy descriptions', () => {
     const error = 'locale/zh.json: invalid title'
     const { actions, set, setLanguage } = renderTab({
