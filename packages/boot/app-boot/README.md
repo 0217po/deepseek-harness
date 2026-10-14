@@ -88,7 +88,7 @@ Use `readPluginMeta(specifier, parentURL)` or `ctx.pluginPackages.metaOf(specifi
 
 `ON_DEMAND_BUNDLES` names the public Official packages installed only on request. `OFFICIAL_ON_DEMAND_CATALOG` embeds their package-owned localized metadata and icons for offline discovery; `pnpm gen-official-bundle-catalog` explicitly updates generated content, and `verify-official-bundle-catalog` checks resource completeness and freshness; builds consume the committed catalog without importing provider code. The catalog contains no install target: [Plugin Manager](../plugin-manager/README.md#use-this-package) derives it from the running version and installation and uses the ordinary bundle installer. The [product-use check](../../../scripts/verify-product-use.ts) composes shipped and on-demand selections against Web without executing providers.
 
-The optional `preview` field follows the same package resource lookup and confinement as `icon`, with a 1 MiB limit. Each image is read independently: a preview failure retains valid text and the icon, and an icon failure retains a valid preview. Neither image requires plugin activation.
+The optional `preview` field follows the same package resource lookup and confinement as `icon`. A manifest may provide one path or a language-to-path map with a required English fallback; all variants together are limited to 1 MiB. Each image field is read independently: an invalid preview retains valid text and the icon, and an invalid icon retains a valid preview. Neither image requires plugin activation.
 
 <a id="startup-and-reload-failures"></a>
 ### Startup and reload failures

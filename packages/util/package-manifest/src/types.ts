@@ -14,8 +14,11 @@ export interface DshPackageManifest {
   description?: string
   /** SVG, PNG, JPEG, or WebP file relative to this manifest's directory, at most 256 KiB and contained there after realpath resolution. */
   icon?: string
-  /** Feature preview image relative to this manifest, SVG/PNG/JPEG/WebP up to 1 MiB and contained in its directory. */
-  preview?: string
+  /**
+   * Feature image path, or language-to-path map with an English fallback.
+   * SVG/PNG/JPEG/WebP files stay in this directory, up to 1 MiB total.
+   */
+  preview?: LocalizedText
   /** Prevent npm publication, for example for local profile projects. */
   private?: boolean
   /** Packages installed alongside this package. */
@@ -51,8 +54,8 @@ export interface PluginLocalizedMeta {
   readonly description?: LocalizedText
   /** Base64 image data URL from a package root's manifest icon or an exported `<specifier>/icon`; render as an image, not inline markup. */
   readonly icon?: string
-  /** Base64 image data URL for the bundle detail preview; read without enabling the plugin and rendered as an image. */
-  readonly preview?: string
+  /** Base64 image data URL or language-to-data-URL map with an English fallback; read before activation and rendered as an image. */
+  readonly preview?: LocalizedText
   /** Unmodified local metadata diagnostic; the plugin remains manageable. */
   readonly error?: string
 }

@@ -95,7 +95,7 @@ export function renderOfficialBundleCatalog(entries: readonly OfficialBundleCata
       + `      title: ${localized(entry.meta.title)},\n`
       + `      description: ${localized(entry.meta.description)},\n`
       + `      icon: ${quote(entry.meta.icon)},\n`
-      + (entry.meta.preview === undefined ? '' : `      preview: ${quote(entry.meta.preview)},\n`)
+      + (entry.meta.preview === undefined ? '' : `      preview: ${localized(entry.meta.preview)},\n`)
       + '    },\n  },\n').join('')
     + ']\n'
 }

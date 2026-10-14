@@ -391,6 +391,48 @@ describe('plugin locale display metadata', () => {
     })
   })
 
+  it('reads localized preview paths without evaluating the plugin and normalizes language keys', () => {
+    manifest({ '.': './index.js', './package.json': './package.json' }, {
+      preview: { en: './preview.svg', 'ZH-CN': './preview.zh.svg' },
+    })
+    file(join(dir, 'preview.svg'), '<svg>English</svg>')
+    file(join(dir, 'preview.zh.svg'), '<svg>中文</svg>')
+    expect(readPluginMeta('localized', parentURL)?.preview).toEqual({
+      en: `data:image/svg+xml;base64,${Buffer.from('<svg>English</svg>').toString('base64')}`,
+      'zh-cn': `data:image/svg+xml;base64,${Buffer.from('<svg>中文</svg>').toString('base64')}`,
+    })
+  })
+
+  it.each([
+    [{ zh: './preview.svg' }, 'require an English'],
+    [{ en: './preview.svg', EN: './preview.svg' }, 'duplicates locale en'],
+    [{ en: './preview.svg', zh_CN: './preview.svg' }, 'must be a language id'],
+    [{ en: './preview.svg', zh: '' }, 'must be a non-empty string'],
+    [{ en: './preview.svg', zh: '../outside.svg' }, 'inside its manifest directory'],
+    [{ en: './preview.svg', zh: 'https://example.test/preview.svg' }, 'relative file path'],
+  ])('keeps other metadata when localized previews are invalid: %j', (preview, diagnostic) => {
+    manifest({ './package.json': './package.json' }, { icon: './icon.svg', preview })
+    file(join(dir, 'icon.svg'), '<svg/>')
+    file(join(dir, 'preview.svg'), '<svg/>')
+    file(join(dir, '../outside.svg'), '<svg/>')
+    const meta = readPluginMeta('localized', parentURL)
+    expect(meta?.preview).toBeUndefined()
+    expect(meta?.icon).toBeDefined()
+    expect(meta?.title).toBe('localized')
+    expect(meta?.error).toContain(diagnostic)
+  })
+
+  it('bounds the combined size of localized previews at 1 MiB', () => {
+    manifest({ './package.json': './package.json' }, { preview: { en: './en.png', zh: './zh.png' } })
+    writeFileSync(join(dir, 'en.png'), Buffer.alloc(512 * 1024))
+    writeFileSync(join(dir, 'zh.png'), Buffer.alloc(512 * 1024))
+    expect(readPluginMeta('localized', parentURL)?.preview).toBeDefined()
+    writeFileSync(join(dir, 'zh.png'), Buffer.alloc(512 * 1024 + 1))
+    const meta = readPluginMeta('localized', parentURL)
+    expect(meta?.preview).toBeUndefined()
+    expect(meta?.error).toContain('localized previews exceed 1024 KiB in total')
+  })
+
   it('reads a subpath preview independently of root artwork', () => {
     manifest({ './preview': './root.svg', './search/preview': './search.webp' })
     file(join(dir, 'root.svg'), 'root')

@@ -705,6 +705,18 @@ describe('web e2e: plugin manager', () => {
     expect(fits).toBe(true)
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'preview.expected.md'),
       await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd), MODE)
+    const chineseSource = await preview.getAttribute('src')
+    try {
+      await setLanguage('en')
+      const englishPreview = detail.getByRole('img', { name: 'DSH badge skill feature preview', exact: true })
+      await englishPreview.waitFor()
+      await englishPreview.evaluate(async (image: HTMLImageElement) => { await image.decode() })
+      expect(await englishPreview.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(640)
+      expect(await englishPreview.getAttribute('src')).not.toBe(chineseSource)
+    } finally {
+      await setLanguage('zh')
+    }
+    expect(await preview.getAttribute('src')).toBe(chineseSource)
     await panel.getByRole('button', { name: '返回 实验性插件', exact: true }).click()
     await panel.getByRole('button', { name: '查看 智能体团队', exact: true }).click()
     expect(await panel.getByRole('img').count()).toBe(0)

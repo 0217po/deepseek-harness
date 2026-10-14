@@ -679,6 +679,21 @@ describe('PluginManagerPage', () => {
     expect(screen.queryByText(zh.previewUnavailable)).toBeNull()
   })
 
+  it('switches preview artwork with the UI language and uses the English fallback', () => {
+    const enImage = 'data:image/svg+xml;base64,ZW4='
+    const zhImage = 'data:image/svg+xml;base64,emg='
+    const bundle = pkg({ meta: { preview: { en: enImage, zh: zhImage } } })
+    const { set, setLanguage } = renderTab({ packages: [bundle] })
+    fireEvent.click(screen.getByRole('button', { name: 'View dsh-better-sidebar' }))
+    expect(screen.getByRole('img').getAttribute('src')).toBe(enImage)
+    fireEvent.error(screen.getByRole('img'))
+    setLanguage(zh)
+    expect(screen.getByRole('img').getAttribute('src')).toBe(zhImage)
+    expect(screen.queryByText(zh.previewUnavailable)).toBeNull()
+    set({ packages: [{ ...bundle, meta: { preview: { en: enImage } } }] })
+    expect(screen.getByRole('img').getAttribute('src')).toBe(enImage)
+  })
+
   it('shows metadata diagnostics without blocking management or displaying legacy descriptions', () => {
     const error = 'locale/zh.json: invalid title'
     const { actions, set, setLanguage } = renderTab({

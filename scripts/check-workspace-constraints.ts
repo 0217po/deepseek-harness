@@ -18,7 +18,7 @@ import {
   PRIVATE_EXPERIMENTAL_PACKAGE_DIRECTORIES,
 } from './experimental-package-policy.ts'
 import { hasTypertRemoteNavigation, isForbiddenPublicationFile } from './publication-payload.ts'
-import type { DshBundleManifest } from '../packages/util/package-manifest/src/types.ts'
+import type { DshBundleManifest, LocalizedText } from '../packages/util/package-manifest/src/types.ts'
 import { OPTIONAL_BUNDLES, bundlePatchFiles } from '../packages/boot/app-boot/src/profile.ts'
 import { collectProjectReferenceFaceViolations } from './project-reference-faces.ts'
 
@@ -85,7 +85,7 @@ export interface PackageManifest {
   exports?: Record<string, ExportTarget | undefined>
   files?: string[]
   icon?: string
-  preview?: string
+  preview?: LocalizedText
   publishConfig?: { access?: string }
   repository?: { type?: string; url?: string; directory?: string }
   peerDependencies?: Record<string, string>
@@ -259,7 +259,7 @@ export function expectedDshPackageFiles(manifest: PackageManifest): readonly str
   const targets = (value: ExportTarget | undefined): string[] => typeof value === 'string' ? [value]
     : typeof value === 'object' && value !== null ? Object.values(value).flatMap(targets) : []
   const images = [
-    ...[manifest.icon, manifest.preview].flatMap(image => typeof image === 'string' ? [image.replace(/^\.\//u, '')] : []),
+    ...[manifest.icon, manifest.preview].flatMap(targets).map(image => image.replace(/^\.\//u, '')),
     ...Object.entries(manifest.exports ?? {}).filter(([key]) => /^\.\/(?:.+\/)?(?:icon|preview)$/u.test(key))
       .flatMap(([, target]) => targets(target)).filter(icon => icon.startsWith('./')).map(icon => icon.slice(2)),
   ]

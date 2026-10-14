@@ -67,6 +67,19 @@ describe('Official bundle catalog generation', () => {
     expect(renderOfficialBundleCatalog(entries)).toContain(`preview: '${preview}'`)
   })
 
+  it('preserves translated preview images in offline discovery', () => {
+    const root = fixture()
+    const name = ON_DEMAND_BUNDLES[0]!
+    updateManifest(root, name, { preview: { en: './preview.png', zh: './preview.zh.png' } })
+    write(root, `${directory(name)}/preview.png`, 'English')
+    write(root, `${directory(name)}/preview.zh.png`, '中文')
+    const entries = generateOfficialBundleCatalog(root)
+    const en = `data:image/png;base64,${Buffer.from('English').toString('base64')}`
+    const zh = `data:image/png;base64,${Buffer.from('中文').toString('base64')}`
+    expect(entries[0]?.meta.preview).toEqual({ en, zh })
+    expect(renderOfficialBundleCatalog(entries)).toContain(`preview: { 'en': '${en}', 'zh': '${zh}' }`)
+  })
+
   it.each(['private', 'not-bundle', 'missing', 'duplicate'])('rejects %s catalog membership', (kind) => {
     const root = fixture()
     const name = ON_DEMAND_BUNDLES[0]!

@@ -20,6 +20,13 @@ const IMAGE_MEDIA_TYPES = new Map([
   ['.jpeg', 'image/jpeg'], ['.webp', 'image/webp'],
 ])
 
+// A declared image resolves or throws; only an absent optional export returns undefined.
+function imageOf(
+  field: ImageField, specifier: string, packageName: string, parentURL: string, manifestPath: string, value: string,
+): string
+function imageOf(
+  field: ImageField, specifier: string, packageName: string, parentURL: string, manifestPath: string | undefined, value: unknown,
+): string | undefined
 function imageOf(
   field: ImageField, specifier: string, packageName: string, parentURL: string, manifestPath: string | undefined, value: unknown,
 ): string | undefined {
@@ -53,6 +60,30 @@ function imageOf(
   const bytes = readFileSync(file)
   if (bytes.length > IMAGE_LIMIT_KIB[field] * 1024) throw new Error(`${label}: ${field} exceeds ${IMAGE_LIMIT_KIB[field]} KiB`)
   return `data:${mediaType};base64,${bytes.toString('base64')}`
+}
+
+/** A translated preview shares the text resolver's language keys and English fallback. */
+function previewOf(
+  specifier: string, packageName: string, parentURL: string, manifestPath: string | undefined, value: unknown,
+): LocalizedText | undefined {
+  if (manifestPath === undefined || typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return imageOf('preview', specifier, packageName, parentURL, manifestPath, value)
+  }
+  const translations = new Map<string, string>()
+  let bytes = 0
+  for (const [language, path] of Object.entries(value)) {
+    if (!LANGUAGE_ID.test(language)) throw new Error(`${manifestPath}: preview key ${language} must be a language id`)
+    const id = language.toLowerCase()
+    if (translations.has(id)) throw new Error(`${manifestPath}: preview duplicates locale ${id}`)
+    if (typeof path !== 'string' || path.trim() === '') throw new Error(`${manifestPath}: preview.${language} must be a non-empty string`)
+    const image = imageOf('preview', specifier, packageName, parentURL, manifestPath, path)
+    bytes += Buffer.byteLength(image.slice(image.indexOf(',') + 1), 'base64')
+    if (bytes > IMAGE_LIMIT_KIB.preview * 1024) throw new Error(`${manifestPath}: localized previews exceed 1024 KiB in total`)
+    translations.set(id, image)
+  }
+  const en = translations.get('en')
+  if (en === undefined) throw new Error(`${manifestPath}: preview translations require an English (en) image`)
+  return { ...Object.fromEntries(translations), en }
 }
 
 /** Require an ancestor of the real file whose package.json names the owning package. */
@@ -163,7 +194,8 @@ function localizedText(
  * A subpath specifier never reads package.json; its images come only from `<specifier>/icon` or `/preview`.
  * Manifest images remain inside their declaring directory; exported images remain inside their
  * owning package after realpath resolution. SVG, PNG, JPEG, and WebP are accepted, up to 256 KiB
- * for icons and 1 MiB for previews. Each image failure retains the other fields without falling back.
+ * for icons and 1 MiB total for previews. A manifest preview may map language ids to paths with
+ * an English fallback. Each image field failure retains the other fields without falling back.
  * Non-package specifiers are skipped without invoking the resource resolver.
  * Language files share the directory containing the resolved English resource;
  * each file is resolved through the complete plugin specifier before reading.
@@ -187,12 +219,17 @@ export function readPluginMeta(specifier: string, parentURL: string): PluginLoca
       ...title === undefined ? {} : { title },
       ...description === undefined ? {} : { description },
     }
-    const images: Partial<Record<ImageField, string>> = {}
+    const images: { icon?: string; preview?: LocalizedText } = {}
     const errors: string[] = []
     for (const field of ['icon', 'preview'] as const) {
       try {
-        const image = imageOf(field, specifier, packageName, parentURL, manifestPath, manifest?.[field])
-        if (image !== undefined) images[field] = image
+        if (field === 'icon') {
+          const image = imageOf(field, specifier, packageName, parentURL, manifestPath, manifest?.icon)
+          if (image !== undefined) images.icon = image
+        } else {
+          const image = previewOf(specifier, packageName, parentURL, manifestPath, manifest?.preview)
+          if (image !== undefined) images.preview = image
+        }
       } catch (error) {
         errors.push(`Plugin metadata for ${specifier}: ${String(error)}`)
       }

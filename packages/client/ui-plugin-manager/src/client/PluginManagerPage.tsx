@@ -709,6 +709,7 @@ function PackageDetail({
 }): ReactNode {
   const { title, description, beta } = packageText(pkg, resolveText)
   const status = packageStatus(pkg)
+  const preview = pkg.meta?.preview === undefined ? undefined : resolveText(pkg.meta.preview)
   const subject: PluginsSubject = { kind: 'bundle', pkg: packageRef(pkg) }
   return (
     <div className={css.detail} data-plugin-detail={pkg.name}>
@@ -761,7 +762,7 @@ function PackageDetail({
       <MetadataError error={pkg.meta?.error} t={t} />
       {pkg.error === undefined ? null : <p className={css.reason} role="status">{t('reasonLabel')}: {managementText(pkg.error, t)}</p>}
       {pkg.readOnlyReason === undefined ? null : <p className={css.reason} role="status">{managementText({ code: pkg.readOnlyReason }, t)}</p>}
-      {pkg.meta?.preview === undefined ? null : <PackagePreview key={pkg.meta.preview} src={pkg.meta.preview} title={title} t={t} />}
+      {preview === undefined ? null : <PackagePreview key={preview} src={preview} title={title} t={t} />}
       <div className={css.detailSections}>
         {configured
           ? (

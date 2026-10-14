@@ -312,7 +312,13 @@ describe('package payload constraints', () => {
     ])
   })
 
-  it.each(['icon.svg', 'preview.svg'])('accepts the badge skill artwork payload and rejects omission of %s', (image) => {
+  it('includes each localized preview in the published payload without duplicate paths', () => {
+    expect(expectedDshPackageFiles({ preview: { en: './preview.svg', zh: './preview.zh.svg', fr: './preview.svg' } })).toEqual([
+      'preview.svg', 'preview.zh.svg', 'lib/index.js', 'lib/types/**/*.d.ts',
+    ])
+  })
+
+  it.each(['icon.svg', 'preview.svg', 'preview.zh.svg'])('accepts the badge skill artwork payload and rejects omission of %s', (image) => {
     const dir = 'packages/experimental/badge-skill-bundle'
     const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
     expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])

@@ -88,7 +88,7 @@ profile 导入插件前，DSH 会检查其 `peerDependencies` 中对 `@deepseek-
 
 `ON_DEMAND_BUNDLES` 列出仅按需安装的官方公开包。`OFFICIAL_ON_DEMAND_CATALOG` 内嵌这些包拥有的本地化元信息和图标，支持离线发现；`pnpm gen-official-bundle-catalog` 显式更新生成内容，`verify-official-bundle-catalog` 检查资源完整性与新鲜度；构建只读取已提交的目录，不导入提供者代码。目录不保存安装目标；[插件管理器](../plugin-manager/README.zh.md#use-this-package)根据当前版本和安装位置确定目标，并使用普通组合包安装器。[产品用途检查](../../../scripts/verify-product-use.ts)将随附和按需选择与 Web 组合，但不执行提供者。
 
-可选的 `preview` 字段沿用 `icon` 的包资源查询和路径限制，上限为 1 MiB。每张图片独立读取：配图出错时保留有效文本与图标，图标出错时保留有效配图。读取两类图片均无需激活插件。
+可选的 `preview` 字段沿用 `icon` 的包资源查询和路径限制。清单可提供单一路径或包含英文回退的语言路径映射，各语言图片合计上限为 1 MiB。每个图片字段独立读取：配图出错时保留有效文本与图标，图标出错时保留有效配图。读取两类图片均无需激活插件。
 
 <a id="startup-and-reload-failures"></a>
 ### 启动与重载失败

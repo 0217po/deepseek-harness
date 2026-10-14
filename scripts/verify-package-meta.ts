@@ -198,16 +198,21 @@ function packageProblems(manifestPath: string, parser: DOMParser): string[] {
     if (sourceManifest && resources.every(({ file }) => byPath.has(file))) {
       const meta = readPluginMeta(specifier, parentURL)
       if (meta?.error !== undefined) problems.push(meta.error)
-      const imageTargets = imageFields.map((field) => {
+      const imageTargets = imageFields.flatMap((field) => {
         const image = meta?.[field]
-        if (image === undefined) return undefined
-        const path = displayDocument?.[field]
-        const target = displayManifest !== undefined && typeof path === 'string'
-          ? resolve(dirname(displayManifest), path) : lookup(`${specifier}/${field}`)
-        if (pkg.name.startsWith('@deepseek-ai/dsh-')) {
-          problems.push(...svgArtworkProblems(image, parser, field).map(problem => `${target ?? specifier}: ${problem}`))
-        }
-        return target
+        if (image === undefined) return []
+        const declaration = displayDocument?.[field]
+        const variants = typeof image === 'string' ? [['', image] as const] : Object.entries(image)
+        return variants.map(([language, data]) => {
+          const path: unknown = typeof declaration === 'object' && declaration !== null
+            ? Object.entries(declaration).find(([key]) => key.toLowerCase() === language)?.[1] : declaration
+          const target = displayManifest !== undefined && typeof path === 'string'
+            ? resolve(dirname(displayManifest), path) : lookup(`${specifier}/${field}`)
+          if (pkg.name.startsWith('@deepseek-ai/dsh-')) {
+            problems.push(...svgArtworkProblems(data, parser, field).map(problem => `${target ?? specifier}: ${problem}`))
+          }
+          return target
+        })
       })
       for (const target of [displayManifest, ...imageTargets]) {
         if (target === undefined) continue

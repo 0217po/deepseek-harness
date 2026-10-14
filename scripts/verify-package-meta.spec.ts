@@ -67,6 +67,18 @@ it('requires optional preview files to be published', () => {
   expect(packageMetaProblems(root)).toEqual([`${join(dir, 'package.json')}: files must include preview.png`])
 })
 
+it('validates every localized preview and requires each variant in the published package', () => {
+  const preview = { en: './preview.svg', ZH: './preview.zh.svg' }
+  manifest({ preview, files: ['preview.svg'] })
+  file('preview.svg', validSvg)
+  file('preview.zh.svg', validSvg)
+  expect(packageMetaProblems(root)).toEqual([`${join(dir, 'package.json')}: files must include preview.zh.svg`])
+  manifest({ preview, files: ['preview*.svg'] })
+  expect(packageMetaProblems(root)).toEqual([])
+  file('preview.zh.svg', validSvg.replace('<path ', '<script>run()</script><path '))
+  expect(packageMetaProblems(root).join('\n')).toContain('preview.zh.svg: SVG preview must use self-contained geometry')
+})
+
 it('requires preview declarations to be discoverable', () => {
   manifest({ preview: './preview.png', exports: { '.': './lib/index.js' }, files: ['preview.png'] })
   file('preview.png', 'image')
