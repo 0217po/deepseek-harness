@@ -609,6 +609,20 @@ describe('Host release changes', () => {
     expect(effects.mounted).toBe(1)
   })
 
+  it('announces a graph of another release even when its format cannot be read', async () => {
+    const effects = { mounted: 0, disposed: 0, hits: 0 }
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const b = await bench(built(r1, row('pet')), { pet: visible('pet', effects) })
+    await b.modules.entries.sync({ rev: 'next', release: r3, entries: 'another format' })
+    expect(b.modules.entries.releaseChange.getSnapshot()).toEqual({ page: r1, previous: r1, host: r3 })
+    // A release that cannot be read counts as absent and still differs from the boot release.
+    await b.modules.entries.sync({ release: { version: 3 } })
+    expect(b.modules.entries.releaseChange.getSnapshot()).toEqual({ page: r1, previous: r3, host: undefined })
+    expect(effects.mounted).toBe(1)
+    // A graph of the boot release is still fully validated.
+    expect(() => b.modules.entries.sync({ rev: 'next', release: r1, entries: 'another format' })).toThrow('entries must be an array')
+  })
+
   it('treats an absent release as one identity', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const b = await bench(graph(), {})

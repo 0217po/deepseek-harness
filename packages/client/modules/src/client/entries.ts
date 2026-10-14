@@ -2,9 +2,10 @@
 import type { FiberState } from '@deepseek-ai/cordis'
 import type { Entry, Loader } from '@deepseek-ai/cordis-plugin-loader'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import { parseBootManifest } from './manifest.ts'
+import { parseBootManifest, readRelease } from './manifest.ts'
 import type { BootManifest, ClientModuleLoader } from './manifest.ts'
 import { ReleaseChangeGate, type ClientReleaseChange } from './release-change.ts'
+import { notifySubscribers } from './notify.ts'
 import { removeOwnedStyles, tearDownEntryFiber } from './entry-lifecycle.ts'
 
 /** Page-local failures do not change the Host's bundle enablement. */
@@ -100,13 +101,14 @@ export class ClientEntries {
 
   /**
    * Validate and apply the latest full Host graph. Changed targets cancel obsolete mounts; identical targets share pending loads.
-   * A graph of another release than the page's boot release is not applied; {@link releaseChange} announces it.
+   * The release is compared before the rest of the graph is validated: a graph of another release, including one whose
+   * format this page cannot read, is not applied and {@link releaseChange} announces it.
    * @param graph - JSON-decoded graph received from the Host.
    * @returns after the queued reconciliation, or at once for another release; per-package failures remain available in {@link state}.
    */
   sync(graph: unknown): Promise<void> {
+    if (!this.release.observe(readRelease(graph))) return Promise.resolve()
     const manifest = parseBootManifest(graph)
-    if (!this.release.observe(manifest.release)) return Promise.resolve()
     if (entryTargets(manifest) !== entryTargets(this.desired)) this.generation++
     this.desired = manifest
     const generation = this.generation
@@ -155,14 +157,7 @@ export class ClientEntries {
 
   private publish(snapshot: ClientEntryState): void {
     this.snapshot = snapshot
-    for (const listener of [...this.listeners]) {
-      try {
-        listener()
-      } catch (error) {
-        // The page controller has no owning plugin Context for a scoped logger.
-        console.error('client-modules: synchronization subscriber failed', error)
-      }
-    }
+    notifySubscribers(this.listeners, 'synchronization')
   }
 
   private enqueue(task: () => Promise<void>, subject = 'graph'): Promise<void> {

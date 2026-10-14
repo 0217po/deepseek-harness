@@ -61,7 +61,7 @@ BootManifest { ...; release?: WebBootRelease }
 
 - [ClientModuleRegistry](../../../../packages/client/modules/src/index.ts) 在构造时计算一次 release，由 `compose()` 写入每个 graph；`release` 不计入 `graph.rev`。不新增配置项，组合配置不变。
 - `__DSH_BOOT__` 和每个 SSE `graph` 帧都带这个字段，所以一个 graph 帧同时携带 Host 的 release 和完整模块图；client-hmr 的 Host 半侧不变。rebuilt 帧与同一条 SSE 连接上前一个 graph 帧来自同一个 Host 进程，因此沿用那一帧的 release。
-- `parseBootManifest` 允许 `release` 缺省，拒绝非字符串的 `version` 或 `commit`，并丢弃身份以外的成员，因此相等判断只看这两个字段。不认识该字段的旧页面会忽略它。
+- `parseBootManifest` 允许 `release` 缺省，拒绝非字符串的 `version` 或 `commit`，并丢弃身份以外的成员，因此相等判断只看这两个字段。`readRelease` 只读取收到的 graph 的 `release` 成员，所以页面先比较 release，再校验其余内容；读不出的 release 视为缺省。不认识该字段的旧页面会忽略它。
 
 ### 页面侧
 
@@ -99,7 +99,7 @@ class ClientEntries {
 调用顺序：
 
 1. `ClientEntries` 以启动 manifest 的 `release` 创建 gate。
-2. `sync(graph)` 解析 graph 后把它的 release 交给 `observe`。启动 release 的 graph 照常调和，原有的 revision 对比只替换变化了的模块。其他 release 的 graph 直接返回，不进入调和队列；它首次出现时用 `console.warn` 记录 Host 之前和当前的身份并发布变化，除非它就是最近一次撤回的 release。
+2. `sync(graph)` 先用 `readRelease` 读出 graph 的 release 交给 `observe`，再解析其余部分，所以即使页面读不懂另一个 release 的格式也会弹框。启动 release 的 graph 经过解析后照常调和，原有的 revision 对比只替换变化了的模块。其他 release 的 graph 直接返回，不进入调和队列；它首次出现时用 `console.warn` 记录 Host 之前和当前的身份并发布变化，除非它就是最近一次撤回的 release。
 3. Host 提供其他 release 期间，`reload(id, rev)`（rebuilt 帧）立即返回。
 4. `retry()` 继续调和上次应用的 graph，它始终属于启动 release。
 5. UI 的 inject 面通过 `location.reload()` 刷新页面；`ClientEntries` 不负责导航。
@@ -111,7 +111,7 @@ class ClientEntries {
 - 文案在中英 locale 字典里：一个标题、一句说明热更新已暂停直到刷新，以及两行灰色标签的版本：
   - **服务**：`previous`（灰）→ `host`（实色），1px 绿色实线箭头，表示 Host 已经切换。
   - **页面**：`page`（实色）→ `host`（灰），1px 灰色虚线箭头，表示刷新后才会切换。两条连接线固定 56px，不撑满对话框。
-  - 每行两端版本号不同时显示版本号，否则显示 commit；Host 没发布的 release 或字段显示**未标注**。读屏把两行当文字读，箭头只是装饰。
+  - 每行两端版本号不同时显示版本号，否则显示 commit；页面读不出的 release 或字段（包括 Host 没发布的）显示**未解析**。读屏把两行当文字读，箭头只是装饰。
 - 按钮为**暂不刷新**和**刷新以加载新版本**（主按钮，带 `data-modal-autofocus`）。关闭按钮、点击遮罩和 Escape 通过共用的 `Modal` 关闭行为等同**暂不刷新**。
 
 ## Alternatives considered

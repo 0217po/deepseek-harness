@@ -27,7 +27,7 @@ export type {
   BootManifest, BootModuleRow, BootPluginRow, ClientBootstrapModule, ClientBundleRegistration,
   ClientModuleCreateOptions, ClientModuleLoader, ClientModuleLoaderTarget, ClientModuleRecord,
   ClientModuleSystemOptions, DshWindow,
-  WebBootRelease, WebBootEntry, WebBootGraph,
+  WebBootEntry, WebBootGraph, WebBootRelease,
 } from './manifest.ts'
 
 /**

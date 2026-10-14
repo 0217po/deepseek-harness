@@ -61,7 +61,7 @@ BootManifest { ...; release?: WebBootRelease }
 
 - [ClientModuleRegistry](../../../../packages/client/modules/src/index.ts) computes the release once at construction and `compose()` writes it into every graph; `release` stays outside `graph.rev`. There is no new config field and the composition is unchanged.
 - `__DSH_BOOT__` and every SSE `graph` frame carry the field, so one graph frame carries both the Host release and its complete module graph; the client-hmr Host half is unchanged. A rebuilt frame comes from the same Host process as the graph frame before it on that SSE connection, so it inherits that frame's release.
-- `parseBootManifest` accepts an absent `release`, rejects a non-string `version` or `commit`, and drops members outside the identity, so equality compares only those two fields. Older pages that do not know the field ignore it.
+- `parseBootManifest` accepts an absent `release`, rejects a non-string `version` or `commit`, and drops members outside the identity, so equality compares only those two fields. `readRelease` reads only the `release` member of a received graph, so a page compares releases before it validates anything else; a release it cannot read counts as absent. Older pages that do not know the field ignore it.
 
 ### Page side
 
@@ -99,7 +99,7 @@ class ClientEntries {
 Order of operations:
 
 1. `ClientEntries` creates the gate from the boot manifest's `release`.
-2. `sync(graph)` parses the graph and passes its release to `observe`. A graph of the boot release reconciles as before, and the existing revision comparison replaces exactly the changed modules. A graph of another release returns without entering the reconciliation queue; its first appearance logs the Host's previous and current identities through `console.warn` and publishes the change unless that release was the last one dismissed.
+2. `sync(graph)` reads the graph's release with `readRelease` and passes it to `observe` before parsing the rest, so a graph of another release is announced even when this page cannot read its format. A graph of the boot release is parsed and reconciles as before, and the existing revision comparison replaces exactly the changed modules. A graph of another release returns without entering the reconciliation queue; its first appearance logs the Host's previous and current identities through `console.warn` and publishes the change unless that release was the last one dismissed.
 3. `reload(id, rev)` (a rebuilt frame) returns at once while the Host serves another release.
 4. `retry()` keeps reconciling the last applied graph, which always belongs to the boot release.
 5. The UI's inject face reloads the page through `location.reload()`; `ClientEntries` does not navigate.
@@ -111,7 +111,7 @@ Order of operations:
 - Copy lives in the zh/en locale dictionaries: a title, one sentence stating that live updates are paused until a reload, and two gray-labelled lines:
   - **Service**: `previous` (gray) → `host` (solid), joined by a 1px solid green arrow because the Host already switched.
   - **Page**: `page` (solid) → `host` (gray), joined by a 1px dashed gray arrow because only a reload completes the switch. Both connectors are a fixed 56px and do not stretch across the dialog.
-  - Each line shows versions when its two ends differ in version and commits otherwise; a release or field the Host did not publish shows **Not labeled**. Screen readers read the two lines as text; the arrows are decorative.
+  - Each line shows versions when its two ends differ in version and commits otherwise; a release or field the page cannot read, including one the Host did not publish, shows **Unknown**. Screen readers read the two lines as text; the arrows are decorative.
 - The buttons are **Not now** and **Reload to load the new version** (primary, with `data-modal-autofocus`). The close control, a mask click, and Escape act as **Not now** through the shared `Modal` close behavior.
 
 ## Alternatives considered

@@ -1,6 +1,7 @@
 /** Which Host graphs a page may apply: only graphs of the release the page booted from. */
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { WebBootRelease } from './manifest.ts'
+import { notifySubscribers } from './notify.ts'
 
 /** The connected Host serves another release than the one this page booted from; plugin updates wait for a page reload. */
 export interface ClientReleaseChange {
@@ -82,13 +83,6 @@ export class ReleaseChangeGate {
 
   private publish(snapshot: ClientReleaseChange | undefined): void {
     this.snapshot = snapshot
-    for (const listener of [...this.listeners]) {
-      try {
-        listener()
-      } catch (error) {
-        // The page controller has no owning plugin Context for a scoped logger.
-        console.error('client-modules: release change subscriber failed', error)
-      }
-    }
+    notifySubscribers(this.listeners, 'release change')
   }
 }
