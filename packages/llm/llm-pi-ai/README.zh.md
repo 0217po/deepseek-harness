@@ -149,7 +149,7 @@ Config 更新严格验证发生变化的 provider。初始加载将已存储的�
 | [`src/login.ts`](src/login.ts) | 面向提供登录的已安装提供方的授权流程 |
 | [`src/config.ts`](src/config.ts) | Profile schema、解析与可服务性校验 |
 | [`src/catalog.ts`](src/catalog.ts) | 已安装目录集成与漂移门禁 |
-| [`src/native-auth.ts`](src/native-auth.ts) | 每个已安装提供方原生认证读取的环境变量 |
+| [`src/provider-data.ts`](src/provider-data.ts) | 配置界面使用的认证与端点生成数据 |
 | [`src/models.ts`](src/models.ts) | 基于 pi-ai 窄入口的 model collection、静态 provider 与 reasoning level |
 | [`src/provider.ts`](src/provider.ts) | 受支持协议表与提供方构建 |
 | [`src/context.ts`](src/context.ts) | Harness 到 pi-ai 的上下文转换、图片处理、回放恢复 |
@@ -159,7 +159,26 @@ Config 更新严格验证发生变化的 provider。初始加载将已存储的�
 
 ### 注册与目录
 
-插件会在可配置提供方目录中声明它能认证的每个已安装目录提供方，并加入当前 profile 声明的每条路由，因此配置界面可以在任何路由存在之前提供完整目录。目录列出了模型却没有聊天模型的提供方（例如只有分类器模型）不进入目录，也不注册登录流程，因为本适配器只分派聊天请求。每个条目都携带 `declared`——pi-ai 是否在该键下不提供任何内容——因为只有适配器能区分手工声明路由与收窄目录路由。目录条目在 pi-ai 为该提供方提供固定端点时还携带 `defaultBaseURL`，并携带 `nativeAuth`：提供方自身认证按查找顺序读取的环境变量，以及它是否提供 OAuth 登录。pi-ai 不导出这些变量名的列表，因此由 `src/native-auth.ts` 维护一份，`tests/native-auth.spec.ts` 运行每个已安装提供方的解析器，变量名或顺序变化时测试失败。路由注册具有原子性：与其他适配器冲突的候选集合会让此前路由继续服务。零路由的裸挂载即休眠姿态：settings 分节提供 profile 前不注册任何内容，分节清空时路由随之消失。
+插件会在可配置提供方目录中声明它能认证的每个已安装目录提供方，并加入当前 profile 声明的每条路由，因此配置界面可以在任何路由存在之前提供完整目录。目录列出了模型却没有聊天模型的提供方（例如只有分类器模型）不进入目录，也不注册登录流程，因为本适配器只分派聊天请求。每个条目都携带 `declared`——pi-ai 是否在该键下不提供任何内容——因为只有适配器能区分手工声明路由与收窄目录路由。目录条目以 `defaultBaseURL` 表示提供方的固定端点或全部模型共用的固定端点，以 `baseURLEnv` 表示端点配置变量，以 `nativeAuth` 表示认证变量和 OAuth 可用性。不同模型的端点和未展开的 URL 模板不会显示为单一固定默认值。路由注册具有原子性：与其他适配器冲突的候选集合会让此前路由继续服务。零路由的裸挂载即休眠姿态：settings 分节提供 profile 前不注册任何内容，分节清空时路由随之消失。
+
+<a id="generated-provider-metadata"></a>
+### 生成的提供方元数据
+
+[`scripts/gen-provider-data.ts`](scripts/gen-provider-data.ts) 负责生成 [`src/provider-data.generated.ts`](src/provider-data.generated.ts)。它通过公开 resolver 和模拟的 `AuthContext` 回答，探测空配置、单个变量及变量后缀组合下的环境读取。resolver 失败时使用临时兼容入口的 `findEnvKeys`。当前所有认证变量都来自 resolver，无需认证变量补充。生成器会报告回退；缺少回退数据时生成失败。它不读取真实凭据，不启动登录流程，也不发送模型请求。探测覆盖已安装的 resolver，不能证明所有依赖具体变量值的分支。
+
+端点数据来自公开的提供方及模型目录，以及 URL 中的大写变量占位符。Azure、Vertex 和 Bedrock 需补充认证上下文之外读取的变量。运行时读取目录不执行探测。依赖范围保持不变。用户安装的新版本新增提供方时，重新生成之前不显示其认证变量提示。已有提供方的环境变量名和端点发生变化时，也会继续使用生成快照，直到重新生成。环境提示只检查列出的凭据引用，不检查 AWS profile 或 Google 应用默认凭据等提供方管理的文件。
+
+更新 pi-ai 或修改生成器后，先按更新的锁文件安装依赖，再从仓库根目录运行以下命令：
+
+```sh
+pnpm run gen-provider-data
+pnpm run verify-provider-data
+git add packages/llm/llm-pi-ai/src/provider-data.generated.ts
+```
+
+检查生成的 diff，并一同暂存依赖或生成器的改动。不要手工编辑生成文件。生成失败时，先解决错误再提交。
+
+暂存 `pnpm-lock.yaml`、本包的 `package.json`、生成器或生成文件时，`pre-commit` 钩子会直接运行 `node_modules/.bin/tsx packages/llm/llm-pi-ai/scripts/gen-provider-data.ts --check --cached`，无需 Git 客户端的 PATH 中有 `pnpm`。它将暂存的生成文件与基于已安装依赖和当前生成器计算的预期数据比较，不改写或暂存文件。只更新工作区文件还不够；生成文件也必须暂存。检查报告元数据过期时，请重新运行上述命令，再尝试提交。即使本地钩子未触发，CI 仍会基于检出文件和按锁文件安装的依赖运行 `pnpm run verify-provider-data`。
 
 ### 回放与词汇
 

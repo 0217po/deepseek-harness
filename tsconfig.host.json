@@ -207,6 +207,7 @@
     "packages/*/*/tests/**/*.ts",
     "packages/experimental/claude-code-mods/examples/*/index.ts",
     "packages/experimental/inspector/scripts/**/*.ts",
+    "packages/llm/llm-pi-ai/scripts/**/*.ts",
     "scripts/**/*.ts",
     "website/**/*.ts",
     "website/.vitepress/**/*.ts"

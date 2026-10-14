@@ -510,6 +510,8 @@ interface LlmConfigurableProvider {
    * Absent when the route has no fixed endpoint.
    */
   defaultBaseURL?: string
+  /** Environment variables used to construct a provider endpoint; absent when none are reported. */
+  baseURLEnv?: readonly string[]
   /** Authentication the adapter performs when the profile names no credential reference; absent when it reports none. */
   nativeAuth?: LlmNativeAuth
   /** Configuration diagnostic for repair; unaffected models may remain serviceable. */
@@ -517,7 +519,7 @@ interface LlmConfigurableProvider {
 }
 ```
 
-设置编辑器在提供方配置未设置端点或凭据引用时显示 `defaultBaseURL` 和 `nativeAuth`。`nativeAuth` 只列出环境变量名，不包含变量值。
+设置编辑器在提供方配置未设置端点或凭据引用时显示 `defaultBaseURL`、`baseURLEnv` 中的端点配置变量，以及 `nativeAuth`。两个变量列表都只包含名称，不包含值。
 
 ```ts type-equiv
 /** Authentication a provider route performs without a credential reference in its profile. */
