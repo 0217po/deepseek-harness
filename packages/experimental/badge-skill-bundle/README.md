@@ -29,6 +29,8 @@ In Web or Desktop, open Plugins and enable **DSH badge skill** in Official. Swit
 
 The switch adds or removes a Host-wide skill provider for existing and new Agents. Presets that expose skill loading can use the badge; minimal keeps its tool catalog unchanged.
 
+The optional `preview.svg` illustrates the official attribution badge at the end of a document. Plugin details display it before activation; the skill owns the badge assets and usage instructions.
+
 -----
 
 <a id="understand-the-implementation"></a>

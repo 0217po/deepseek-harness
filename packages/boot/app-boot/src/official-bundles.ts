@@ -8,8 +8,8 @@ export { ON_DEMAND_BUNDLES } from './official-bundle-packages.ts'
 export interface OfficialBundleCatalogEntry {
   /** Exact npm package name accepted by the existing bundle installer. */
   readonly packageName: string
-  /** Package-owned localized text and a self-contained icon, embedded without provider code. */
-  readonly meta: Required<Pick<PluginLocalizedMeta, 'title' | 'description' | 'icon'>>
+  /** Package-owned localized text and self-contained images, embedded without provider code. */
+  readonly meta: Required<Pick<PluginLocalizedMeta, 'title' | 'description' | 'icon'>> & Pick<PluginLocalizedMeta, 'preview'>
 }
 
 export { OFFICIAL_ON_DEMAND_CATALOG } from './official-bundles.generated.ts'

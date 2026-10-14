@@ -11,6 +11,7 @@ interface Manifest {
   exports?: unknown
   files?: string[]
   icon?: unknown
+  preview?: unknown
 }
 
 interface SourceJson {
@@ -18,6 +19,7 @@ interface SourceJson {
   metadata: boolean
   invalid: boolean
   icon?: unknown
+  preview?: unknown
   packageName?: string
 }
 
@@ -37,6 +39,7 @@ function sourceJsonFiles(dir: string): SourceJson[] {
     return {
       file, metadata: Object.hasOwn(contents, 'meta'), invalid: false,
       icon: 'icon' in contents ? contents.icon : undefined,
+      preview: 'preview' in contents ? contents.preview : undefined,
       ...basename(file) === 'package.json' && typeof name === 'string' && name.trim() !== '' ? { packageName: name } : {},
     }
   })
@@ -74,37 +77,40 @@ function published(file: string, files: string[]): boolean {
 }
 
 /** Structural artwork conventions only; not an SVG sanitizer or a rendered-pixel check. */
-function svgArtworkProblems(icon: string, parser: DOMParser): string[] {
+function svgArtworkProblems(image: string, parser: DOMParser, field: 'icon' | 'preview'): string[] {
   const prefix = 'data:image/svg+xml;base64,'
-  if (!icon.startsWith(prefix)) return []
-  const document = parser.parseFromString(Buffer.from(icon.slice(prefix.length), 'base64').toString('utf8'), 'image/svg+xml')
-  if (document.querySelector('parsererror') !== null) return ['SVG icon must contain well-formed XML']
+  if (!image.startsWith(prefix)) return []
+  const document = parser.parseFromString(Buffer.from(image.slice(prefix.length), 'base64').toString('utf8'), 'image/svg+xml')
+  if (document.querySelector('parsererror') !== null) return [`SVG ${field} must contain well-formed XML`]
   const svg = document.documentElement
   if (svg.localName !== 'svg' || svg.namespaceURI !== 'http://www.w3.org/2000/svg') {
-    return ['SVG icon must have an svg root in the SVG namespace']
+    return [`SVG ${field} must have an svg root in the SVG namespace`]
   }
   const problems: string[] = []
-  if (svg.getAttribute('viewBox') !== '0 0 36 36' || svg.getAttribute('width') !== '36' || svg.getAttribute('height') !== '36') {
+  if (field === 'icon' && (svg.getAttribute('viewBox') !== '0 0 36 36' || svg.getAttribute('width') !== '36' || svg.getAttribute('height') !== '36')) {
     problems.push('SVG icon must use width="36" height="36" viewBox="0 0 36 36"')
   }
   if (svg.querySelector('path, rect, circle, ellipse, line, polyline, polygon') === null) {
-    problems.push('SVG icon must contain geometry')
+    problems.push(`SVG ${field} must contain geometry`)
   }
-  if (svg.querySelector('script, style, image, foreignObject, text, animate, animateTransform, animateMotion, set') !== null) {
-    problems.push('SVG icon must use self-contained geometry without scripts, styles, images, foreignObject, text, or animation')
+  const forbidden = 'script, style, foreignObject, text, animate, animateTransform, animateMotion, set'
+  if (svg.querySelector(field === 'icon' ? `${forbidden}, image` : forbidden) !== null) {
+    problems.push(`SVG ${field} must use self-contained geometry without scripts, styles, foreignObject, text, or animation`)
   }
   const elements = [svg, ...svg.querySelectorAll('*')]
   const ids = elements.flatMap(element => element.hasAttribute('id') ? [element.id] : [])
   const uniqueIds = new Set(ids)
-  if (uniqueIds.size !== ids.length) problems.push('SVG icon must use unique ids')
+  if (uniqueIds.size !== ids.length) problems.push(`SVG ${field} must use unique ids`)
   for (const element of elements) {
     for (const attribute of element.attributes) {
-      if (/^on/iu.test(attribute.name)) problems.push(`SVG icon must not use event handler ${attribute.name}`)
+      if (/^on/iu.test(attribute.name)) problems.push(`SVG ${field} must not use event handler ${attribute.name}`)
       const references = [...attribute.value.matchAll(/url\(([^)]+)\)/gu)].map(match => (match[1] ?? '').replace(/['"]/gu, '').trim())
       if (attribute.localName === 'href') references.push(attribute.value)
       for (const reference of references) {
+        if (field === 'preview' && element.localName === 'image' && attribute.localName === 'href'
+          && /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z\d+/]+=*$/u.test(reference)) continue
         if (!reference.startsWith('#') || !uniqueIds.has(reference.slice(1))) {
-          problems.push(`SVG icon reference ${reference} must name a local id`)
+          problems.push(`SVG ${field} reference ${reference} must name a local id`)
         }
       }
     }
@@ -130,7 +136,9 @@ function packageProblems(manifestPath: string, parser: DOMParser): string[] {
     if (!key.startsWith('.')) continue
     if (!key.includes('*')) {
       candidates.add(key)
-      if (key.endsWith('/icon')) candidates.add(key.slice(0, -'/icon'.length))
+      for (const field of ['icon', 'preview']) {
+        if (key.endsWith(`/${field}`)) candidates.add(key.slice(0, -`/${field}`.length))
+      }
     }
     const plugin = pluginOf(key)
     if (plugin !== undefined && !plugin.includes('*')) candidates.add(plugin)
@@ -171,39 +179,49 @@ function packageProblems(manifestPath: string, parser: DOMParser): string[] {
       return file === undefined ? [] : [{ filename, file }]
     })
     const displayManifest = candidate === '.' ? lookup(`${specifier}/package.json`) : undefined
-    if (candidate === '.' && pkg.icon !== undefined && displayManifest !== join(dir, 'package.json')) {
-      problems.push(`${manifestPath}: exports must expose its icon declaration through ${pkg.name}/package.json`)
+    const imageFields = ['icon', 'preview'] as const
+    for (const field of imageFields) {
+      if (candidate === '.' && pkg[field] !== undefined && displayManifest !== join(dir, 'package.json')) {
+        problems.push(`${manifestPath}: exports must expose its ${field} declaration through ${pkg.name}/package.json`)
+      }
+      const resource = `${candidate}/${field}`
+      if (exported.some(([key]) => key === resource) && lookup(`${specifier}/${field}`) === undefined) {
+        problems.push(`${manifestPath}: exports["${resource}"] must resolve to a file`)
+      }
     }
-    const iconExport = `${candidate}/icon`
-    const exportsIcon = exported.some(([key]) => key === iconExport)
-    if (exportsIcon && lookup(`${specifier}/icon`) === undefined) {
-      problems.push(`${manifestPath}: exports["${iconExport}"] must resolve to a file`)
-    }
-    const iconDocument = displayManifest === undefined ? undefined : byPath.get(displayManifest)
+    const displayDocument = displayManifest === undefined ? undefined : byPath.get(displayManifest)
     // Build output is not validated source; reading it would make the result depend on stale artifacts.
-    const sourceManifest = displayManifest === undefined || iconDocument !== undefined
+    const sourceManifest = displayManifest === undefined || displayDocument !== undefined
     if (!sourceManifest) {
       problems.push(`${specifier}/package.json: display manifest must resolve to source JSON, received ${displayManifest}`)
     }
     if (sourceManifest && resources.every(({ file }) => byPath.has(file))) {
       const meta = readPluginMeta(specifier, parentURL)
       if (meta?.error !== undefined) problems.push(meta.error)
-      const iconTarget = meta?.icon === undefined ? undefined
-        : displayManifest !== undefined && typeof iconDocument?.icon === 'string'
-          ? resolve(dirname(displayManifest), iconDocument.icon)
-          : lookup(`${specifier}/icon`)
-      if (pkg.name.startsWith('@deepseek-ai/dsh-') && meta?.icon !== undefined) {
-        problems.push(...svgArtworkProblems(meta.icon, parser).map(problem => `${iconTarget ?? specifier}: ${problem}`))
-      }
-      for (const target of [displayManifest, iconTarget]) {
+      const imageTargets = imageFields.map((field) => {
+        const image = meta?.[field]
+        if (image === undefined) return undefined
+        const path = displayDocument?.[field]
+        const target = displayManifest !== undefined && typeof path === 'string'
+          ? resolve(dirname(displayManifest), path) : lookup(`${specifier}/${field}`)
+        if (pkg.name.startsWith('@deepseek-ai/dsh-')) {
+          problems.push(...svgArtworkProblems(image, parser, field).map(problem => `${target ?? specifier}: ${problem}`))
+        }
+        return target
+      })
+      for (const target of [displayManifest, ...imageTargets]) {
         if (target === undefined) continue
         const file = relative(dir, target).replaceAll('\\', '/')
         if (file !== 'package.json' && pkg.files !== undefined && !published(file, pkg.files)) {
           problems.push(`${manifestPath}: files must include ${file}`)
         }
       }
-    } else if (sourceManifest && (exportsIcon || iconDocument?.icon !== undefined)) {
-      problems.push(`${specifier}: icon metadata requires locale resources to resolve to source JSON`)
+    } else if (sourceManifest) {
+      for (const field of imageFields) {
+        if (exported.some(([key]) => key === `${candidate}/${field}`) || displayDocument?.[field] !== undefined) {
+          problems.push(`${specifier}: ${field} metadata requires locale resources to resolve to source JSON`)
+        }
+      }
     }
     if (!resources.some(({ file }) => byPath.get(file)?.metadata || byPath.get(file)?.invalid)) continue
     for (const { file } of resources) claimed.add(file)
@@ -257,8 +275,8 @@ function packageProblems(manifestPath: string, parser: DOMParser): string[] {
 
 /**
  * Check workspace and named nested package metadata without evaluating plugin entries or reading built output.
- * Selected SVG icons in @deepseek-ai/dsh-* packages follow official artwork conventions.
- * Other packages and supported raster icons keep their metadata and publication checks.
+ * Selected SVG images in @deepseek-ai/dsh-* packages follow official artwork conventions.
+ * Other packages and supported raster images keep their metadata and publication checks.
  * @param root - repository or fixture root.
  * @returns diagnostics for an empty package corpus, invalid metadata or SVG artwork, inaccessible resources, or omitted publication files.
  */

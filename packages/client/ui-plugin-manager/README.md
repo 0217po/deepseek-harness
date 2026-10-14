@@ -96,6 +96,8 @@ ctx.slots.inject('plugins.detail.section', () => ctx.slots.register({
 
 A row's page exists only while a `plugins.row.config` entry names the row, so a contribution meant for a row renders on the page that configuration opens.
 
+Bundle details display an optional package-owned feature preview below the description, including before activation. No preview means no image or reserved space; a decode failure shows a localized message without blocking configuration or enablement. Cards and component rows keep their small icons.
+
 -----
 
 <a id="understand-the-implementation"></a>

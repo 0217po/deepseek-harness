@@ -56,6 +56,8 @@ const manifest: DshPackageManifest = {
 
 公共组合声明定义在 [`src/types.ts`](src/types.ts) 中。内部 `configTrees`、`sessionFormatMigration` 和生成的 `moduleFallback` 元数据分别由镜像打包器、目录生成器和启动器读取方拥有；公共类型不暴露这些字段。
 
+`DshPackageManifest.preview` 可选地指定功能配图，`PluginLocalizedMeta.preview` 携带解析后的 data URL。它与小尺寸 `icon` 相互独立；未提供配图时省略。
+
 -----
 
 <a id="understand-the-implementation"></a>

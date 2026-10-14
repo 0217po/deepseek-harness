@@ -658,6 +658,27 @@ describe('PluginManagerPage', () => {
     expect(detailImage.width).toBe(36)
   })
 
+  it('shows optional feature previews only in details, including before activation, and recovers after decode failure', () => {
+    const preview = 'data:image/svg+xml;base64,PHN2Zy8+'
+    const bundle = pkg({ enabled: false, meta: { preview } })
+    const { set, setLanguage, actions } = renderTab({ packages: [bundle] })
+    expect(screen.queryByRole('img')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'View dsh-better-sidebar' }))
+    expect(screen.getByRole('img', { name: en.previewAlt.replace('{name}', bundle.name) }).getAttribute('src')).toBe(preview)
+    setLanguage(zh)
+    fireEvent.error(screen.getByRole('img', { name: zh.previewAlt.replace('{name}', bundle.name) }))
+    expect(screen.queryByRole('img')).toBeNull()
+    expect(screen.getByRole('status').textContent).toBe(zh.previewUnavailable)
+    fireEvent.click(screen.getByRole('switch', { name: zh.enableToggle.replace('{name}', bundle.name) }))
+    expect(actions.setEnabled).toHaveBeenCalledWith(bundle.name, true)
+    set({ packages: [{ ...bundle, meta: { preview: 'data:image/png;base64,cG5n' } }] })
+    expect(screen.getByRole('img').getAttribute('src')).toBe('data:image/png;base64,cG5n')
+    expect(screen.queryByText(zh.previewUnavailable)).toBeNull()
+    set({ packages: [{ ...bundle, meta: {} }] })
+    expect(screen.queryByRole('img')).toBeNull()
+    expect(screen.queryByText(zh.previewUnavailable)).toBeNull()
+  })
+
   it('shows metadata diagnostics without blocking management or displaying legacy descriptions', () => {
     const error = 'locale/zh.json: invalid title'
     const { actions, set, setLanguage } = renderTab({

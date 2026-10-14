@@ -85,6 +85,7 @@ export interface PackageManifest {
   exports?: Record<string, ExportTarget | undefined>
   files?: string[]
   icon?: string
+  preview?: string
   publishConfig?: { access?: string }
   repository?: { type?: string; url?: string; directory?: string }
   peerDependencies?: Record<string, string>
@@ -238,9 +239,9 @@ function sameStringList(actual: readonly string[] | undefined, expected: readonl
 }
 
 /**
- * Compute canonical publication patterns, including declared and exported icon paths and exported locale JSON resources.
+ * Compute canonical publication patterns, including declared and exported image paths and exported locale JSON resources.
  * @param manifest - workspace package manifest.
- * @returns the icon and deduplicated locale targets followed by runtime and declaration payloads.
+ * @returns the images and deduplicated locale targets followed by runtime and declaration payloads.
  */
 export function expectedDshPackageFiles(manifest: PackageManifest): readonly string[] {
   const localeFiles = new Set<string>()
@@ -257,13 +258,13 @@ export function expectedDshPackageFiles(manifest: PackageManifest): readonly str
   ]
   const targets = (value: ExportTarget | undefined): string[] => typeof value === 'string' ? [value]
     : typeof value === 'object' && value !== null ? Object.values(value).flatMap(targets) : []
-  const icons = [
-    ...typeof manifest.icon === 'string' ? [manifest.icon.replace(/^\.\//u, '')] : [],
-    ...Object.entries(manifest.exports ?? {}).filter(([key]) => /^\.\/(?:.+\/)?icon$/u.test(key))
+  const images = [
+    ...[manifest.icon, manifest.preview].flatMap(image => typeof image === 'string' ? [image.replace(/^\.\//u, '')] : []),
+    ...Object.entries(manifest.exports ?? {}).filter(([key]) => /^\.\/(?:.+\/)?(?:icon|preview)$/u.test(key))
       .flatMap(([, target]) => targets(target)).filter(icon => icon.startsWith('./')).map(icon => icon.slice(2)),
   ]
   return [
-    ...new Set(icons),
+    ...new Set(images),
     ...[...localeFiles].sort(),
     'lib/index.js',
     ...manifest.bin ? ['lib/bin.js'] : [],

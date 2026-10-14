@@ -52,6 +52,45 @@ it.each(['legacy.svg', './legacy.svg'])('accepts a manifest-only icon %s', (icon
   expect(packageMetaProblems(root)).toEqual([])
 })
 
+it.each(['manifest', 'export'])('accepts optional wide preview artwork selected by %s', (selection) => {
+  manifest({
+    ...selection === 'manifest' ? { preview: './preview.svg' } : {},
+    exports: { './package.json': './package.json', './preview': './preview.svg' }, files: ['preview.svg'],
+  })
+  file('preview.svg', validSvg.replaceAll('36', '960'))
+  expect(packageMetaProblems(root)).toEqual([])
+})
+
+it('requires optional preview files to be published', () => {
+  manifest({ preview: './preview.png' })
+  file('preview.png', 'image')
+  expect(packageMetaProblems(root)).toEqual([`${join(dir, 'package.json')}: files must include preview.png`])
+})
+
+it('requires preview declarations to be discoverable', () => {
+  manifest({ preview: './preview.png', exports: { '.': './lib/index.js' }, files: ['preview.png'] })
+  file('preview.png', 'image')
+  expect(packageMetaProblems(root).join('\n')).toContain('exports must expose its preview declaration')
+})
+
+it.each([
+  ['data:image/png;base64,aW1hZ2U=', true],
+  ['https://example.test/badge.png', false],
+  ['data:image/svg+xml;base64,PHN2Zy8+', false],
+])('only permits embedded raster images in previews: %s', (href, accepted) => {
+  manifest({ preview: './preview.svg', files: ['preview.svg'] })
+  file('preview.svg', validSvg.replace('</svg>', `<image href="${href}"/></svg>`))
+  const problems = packageMetaProblems(root)
+  if (accepted) expect(problems).toEqual([])
+  else expect(problems.join('\n')).toContain('must name a local id')
+})
+
+it('rejects executable SVG content in official previews', () => {
+  manifest({ preview: './preview.svg', files: ['preview.svg'] })
+  file('preview.svg', validSvg.replace('<path ', '<script>alert(1)</script><path '))
+  expect(packageMetaProblems(root).join('\n')).toContain('SVG preview must use self-contained geometry')
+})
+
 it.each(['manifest', 'export'])('accepts SVG geometry and local references selected by %s', (selection) => {
   manifest({
     ...selection === 'manifest' ? { icon: './icon.svg' } : {},

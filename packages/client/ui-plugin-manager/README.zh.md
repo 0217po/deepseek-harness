@@ -96,6 +96,8 @@ ctx.slots.inject('plugins.detail.section', () => ctx.slots.register({
 
 行页只在某个 `plugins.row.config` 条目点名这一行时存在，因此给行的贡献渲染在该配置打开的页面上。
 
+组合包详情在描述下方展示可选的包内功能配图，未启用时也可查看。没有配图就不显示图片或预留空位；解码失败时显示本地化提示，不影响配置或启用。卡片与组件行保留小尺寸图标。
+
 -----
 
 <a id="understand-the-implementation"></a>

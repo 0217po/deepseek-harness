@@ -1,4 +1,4 @@
-/** Read plugin display text and icons through exported resources without evaluating plugin code. */
+/** Read plugin display text and images through exported resources without evaluating plugin code. */
 
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { dirname, extname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path'
@@ -12,54 +12,55 @@ const LANGUAGE_ID = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/u
 
 type DisplayFields = Record<'title' | 'description', string | undefined>
 
-/** Maximum raw icon bytes admitted to plugin metadata. */
-const MAX_ICON_BYTES = 256 * 1024
-const ICON_MEDIA_TYPES = new Map([
+/** Raw image limits keep plugin metadata bounded before base64 encoding. */
+const IMAGE_LIMIT_KIB = { icon: 256, preview: 1024 } as const
+type ImageField = keyof typeof IMAGE_LIMIT_KIB
+const IMAGE_MEDIA_TYPES = new Map([
   ['.svg', 'image/svg+xml'], ['.png', 'image/png'], ['.jpg', 'image/jpeg'],
   ['.jpeg', 'image/jpeg'], ['.webp', 'image/webp'],
 ])
 
-function iconOf(
-  specifier: string, packageName: string, parentURL: string, manifestPath: string | undefined, value: unknown,
+function imageOf(
+  field: ImageField, specifier: string, packageName: string, parentURL: string, manifestPath: string | undefined, value: unknown,
 ): string | undefined {
-  const icon = manifestPath === undefined ? undefined : textOf(value, `${manifestPath}: icon`)
+  const image = manifestPath === undefined ? undefined : textOf(value, `${manifestPath}: ${field}`)
   let target: string
   // Diagnostics name the file the author edits: the declaring manifest or the exported image.
   let label: string
-  if (manifestPath !== undefined && icon !== undefined) {
-    if (isAbsolute(icon) || win32.isAbsolute(icon) || /^[A-Za-z][A-Za-z\d+.-]*:/u.test(icon)) {
-      throw new Error(`${manifestPath}: icon must be a relative file path`)
+  if (manifestPath !== undefined && image !== undefined) {
+    if (isAbsolute(image) || win32.isAbsolute(image) || /^[A-Za-z][A-Za-z\d+.-]*:/u.test(image)) {
+      throw new Error(`${manifestPath}: ${field} must be a relative file path`)
     }
     label = manifestPath
     const root = realpathSync(dirname(manifestPath))
-    target = resolve(root, icon)
+    target = resolve(root, image)
     const local = relative(root, realModuleFile(target))
     if (local === '..' || local.startsWith(`..${sep}`) || isAbsolute(local)) {
-      throw new Error(`${label}: icon must remain inside its manifest directory`)
+      throw new Error(`${label}: ${field} must remain inside its manifest directory`)
     }
   } else {
-    const exported = optionalResourcePath(`${specifier}/icon`, parentURL)
+    const exported = optionalResourcePath(`${specifier}/${field}`, parentURL)
     if (exported === undefined) return undefined
     target = label = exported
-    assertPackageOwned(realModuleFile(target), packageName)
+    assertPackageOwned(realModuleFile(target), packageName, field)
   }
-  const mediaType = ICON_MEDIA_TYPES.get(extname(target).toLowerCase())
-  if (mediaType === undefined) throw new Error(`${label}: icon must be SVG, PNG, JPEG, or WebP`)
+  const mediaType = IMAGE_MEDIA_TYPES.get(extname(target).toLowerCase())
+  if (mediaType === undefined) throw new Error(`${label}: ${field} must be SVG, PNG, JPEG, or WebP`)
   const file = realModuleFile(target)
   const stat = statSync(file)
-  if (!stat.isFile()) throw new Error(`${label}: icon must be a regular file`)
-  if (stat.size > MAX_ICON_BYTES) throw new Error(`${label}: icon exceeds 256 KiB`)
+  if (!stat.isFile()) throw new Error(`${label}: ${field} must be a regular file`)
+  if (stat.size > IMAGE_LIMIT_KIB[field] * 1024) throw new Error(`${label}: ${field} exceeds ${IMAGE_LIMIT_KIB[field]} KiB`)
   const bytes = readFileSync(file)
-  if (bytes.length > MAX_ICON_BYTES) throw new Error(`${label}: icon exceeds 256 KiB`)
+  if (bytes.length > IMAGE_LIMIT_KIB[field] * 1024) throw new Error(`${label}: ${field} exceeds ${IMAGE_LIMIT_KIB[field]} KiB`)
   return `data:${mediaType};base64,${bytes.toString('base64')}`
 }
 
 /** Require an ancestor of the real file whose package.json names the owning package. */
-function assertPackageOwned(file: string, name: string): void {
+function assertPackageOwned(file: string, name: string, field: ImageField): void {
   for (let directory = dirname(file); ; directory = dirname(directory)) {
     const manifest = join(directory, 'package.json')
     if (existsSync(manifest) && readObject(manifest).name === name) return
-    if (dirname(directory) === directory) throw new Error(`${file}: icon must remain inside its package directory`)
+    if (dirname(directory) === directory) throw new Error(`${file}: ${field} must remain inside its package directory`)
   }
 }
 
@@ -156,13 +157,13 @@ function localizedText(
 }
 
 /**
- * Read plugin locale JSON display text and icon without evaluating JavaScript entries.
+ * Read plugin locale JSON display text and images without evaluating JavaScript entries.
  * Only a package-root specifier reads its exported package.json: `name`/`description` fill missing
- * locale fields, and a declared `icon` takes priority over the `<specifier>/icon` resource.
- * A subpath specifier never reads package.json; its icon comes only from `<specifier>/icon`.
- * Manifest icons remain inside their declaring directory; exported icons remain inside their
- * owning package after realpath resolution. Both accept SVG, PNG, JPEG, or WebP up to 256 KiB.
- * Icon failures retain display text without falling back.
+ * locale fields, and declared `icon`/`preview` paths take priority over their exported resources.
+ * A subpath specifier never reads package.json; its images come only from `<specifier>/icon` or `/preview`.
+ * Manifest images remain inside their declaring directory; exported images remain inside their
+ * owning package after realpath resolution. SVG, PNG, JPEG, and WebP are accepted, up to 256 KiB
+ * for icons and 1 MiB for previews. Each image failure retains the other fields without falling back.
  * Non-package specifiers are skipped without invoking the resource resolver.
  * Language files share the directory containing the resolved English resource;
  * each file is resolved through the complete plugin specifier before reading.
@@ -186,14 +187,18 @@ export function readPluginMeta(specifier: string, parentURL: string): PluginLoca
       ...title === undefined ? {} : { title },
       ...description === undefined ? {} : { description },
     }
-    let icon: string | undefined
-    try {
-      icon = iconOf(specifier, packageName, parentURL, manifestPath, manifest?.icon)
-    } catch (error) {
-      return { ...text, error: `Plugin metadata for ${specifier}: ${String(error)}` }
+    const images: Partial<Record<ImageField, string>> = {}
+    const errors: string[] = []
+    for (const field of ['icon', 'preview'] as const) {
+      try {
+        const image = imageOf(field, specifier, packageName, parentURL, manifestPath, manifest?.[field])
+        if (image !== undefined) images[field] = image
+      } catch (error) {
+        errors.push(`Plugin metadata for ${specifier}: ${String(error)}`)
+      }
     }
-    if (title === undefined && description === undefined && icon === undefined) return undefined
-    return { ...text, ...icon === undefined ? {} : { icon } }
+    if (title === undefined && description === undefined && Object.keys(images).length === 0 && errors.length === 0) return undefined
+    return { ...text, ...images, ...errors.length === 0 ? {} : { error: errors.join('\n') } }
   } catch (error) {
     return { error: `Plugin metadata for ${specifier}: ${String(error)}` }
   }

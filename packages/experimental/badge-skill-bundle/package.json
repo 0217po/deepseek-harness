@@ -3,6 +3,7 @@
   "description": "Let agents add a “powered by dsh” badge to documents, pull requests, and other outputs.",
   "version": "0.2.1-alpha.2",
   "icon": "./icon.svg",
+  "preview": "./preview.svg",
   "publishConfig": {
     "access": "public"
   },
@@ -26,6 +27,7 @@
   },
   "files": [
     "icon.svg",
+    "preview.svg",
     "locale/*.json",
     "lib/index.js",
     "cordis.patch.yml",

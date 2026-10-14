@@ -237,6 +237,14 @@ function PackageArtwork({ src, row = false, size = row ? ROW_ARTWORK_SIZE : CARD
     : <img className={css.packageImage} src={src} width={size} height={size} alt="" onError={() => { setFailedSource(src) }} />
 }
 
+/** A package-owned preview stays available before activation and never inserts markup into the page. */
+function PackagePreview({ src, title, t }: { readonly src: string; readonly title: string; readonly t: Translate }): ReactNode {
+  const [failed, setFailed] = useState(false)
+  return failed
+    ? <p className={css.reason} role="status">{t('previewUnavailable')}</p>
+    : <img className={css.packagePreview} src={src} alt={t('previewAlt', { name: title })} onError={() => { setFailed(true) }} />
+}
+
 /** A row's switch: locked, saying why, when the Host refuses to address the row through the profile patch. */
 function RowSwitch({ row, title, t, busy, onChange }: {
   readonly row: PackageRow
@@ -753,6 +761,7 @@ function PackageDetail({
       <MetadataError error={pkg.meta?.error} t={t} />
       {pkg.error === undefined ? null : <p className={css.reason} role="status">{t('reasonLabel')}: {managementText(pkg.error, t)}</p>}
       {pkg.readOnlyReason === undefined ? null : <p className={css.reason} role="status">{managementText({ code: pkg.readOnlyReason }, t)}</p>}
+      {pkg.meta?.preview === undefined ? null : <PackagePreview key={pkg.meta.preview} src={pkg.meta.preview} title={title} t={t} />}
       <div className={css.detailSections}>
         {configured
           ? (

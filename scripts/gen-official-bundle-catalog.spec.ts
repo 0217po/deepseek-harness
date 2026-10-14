@@ -55,6 +55,18 @@ describe('Official bundle catalog generation', () => {
     expect(renderOfficialBundleCatalog(entries)).not.toContain('1.2.3')
   })
 
+  it('preserves an optional package-owned preview for offline discovery', () => {
+    const root = fixture()
+    const name = ON_DEMAND_BUNDLES[0]!
+    updateManifest(root, name, { preview: './preview.png' })
+    write(root, `${directory(name)}/preview.png`, 'preview')
+    const entries = generateOfficialBundleCatalog(root)
+    const preview = `data:image/png;base64,${Buffer.from('preview').toString('base64')}`
+    expect(entries[0]?.meta.preview).toBe(preview)
+    expect(entries[1]?.meta.preview).toBeUndefined()
+    expect(renderOfficialBundleCatalog(entries)).toContain(`preview: '${preview}'`)
+  })
+
   it.each(['private', 'not-bundle', 'missing', 'duplicate'])('rejects %s catalog membership', (kind) => {
     const root = fixture()
     const name = ON_DEMAND_BUNDLES[0]!

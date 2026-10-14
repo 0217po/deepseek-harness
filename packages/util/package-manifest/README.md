@@ -56,6 +56,8 @@ The following metadata fields are optional. Omitting them leaves the format vers
 
 Public composition declarations are defined in [`src/types.ts`](src/types.ts). Internal `configTrees`, `sessionFormatMigration`, and generated `moduleFallback` metadata remain owned by their image-packer, catalog, and launcher readers; the public types do not expose them.
 
+`DshPackageManifest.preview` optionally names a feature image, and `PluginLocalizedMeta.preview` carries its resolved data URL. It is independent of the small `icon` and is omitted when no preview is supplied.
+
 -----
 
 <a id="understand-the-implementation"></a>

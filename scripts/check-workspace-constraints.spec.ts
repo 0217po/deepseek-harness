@@ -306,11 +306,17 @@ describe('package payload constraints', () => {
     ])
   })
 
-  it('accepts the Agent Team icon payload and rejects its omission', () => {
-    const dir = 'packages/experimental/agent-team-profile'
+  it('includes optional manifest and exported previews in the published payload', () => {
+    expect(expectedDshPackageFiles({ preview: './preview.svg', exports: { './preview': './preview.svg', './search/preview': './search.png' } })).toEqual([
+      'preview.svg', 'search.png', 'lib/index.js', 'lib/types/**/*.d.ts',
+    ])
+  })
+
+  it.each(['icon.svg', 'preview.svg'])('accepts the badge skill artwork payload and rejects omission of %s', (image) => {
+    const dir = 'packages/experimental/badge-skill-bundle'
     const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
     expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
-    expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, files: manifest.files!.filter(file => file !== 'icon.svg') } }))
+    expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, files: manifest.files!.filter(file => file !== image) } }))
       .toEqual([expect.stringContaining('package.json files must be')])
   })
 

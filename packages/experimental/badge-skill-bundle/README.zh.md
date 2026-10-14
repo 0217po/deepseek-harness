@@ -29,6 +29,8 @@ kind: "package-bundle"
 
 开关为已有和新建智能体添加或移除 Host 级技能提供方。提供技能加载能力的预设可以使用徽章；minimal 的工具目录保持不变。
 
+可选的 `preview.svg` 示意在文档末尾添加官方署名徽章的效果，插件未启用时详情页也可展示。徽章资源和使用说明由技能拥有。
+
 -----
 
 <a id="understand-the-implementation"></a>

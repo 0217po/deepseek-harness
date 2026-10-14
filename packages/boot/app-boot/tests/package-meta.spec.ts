@@ -378,6 +378,55 @@ describe('plugin locale display metadata', () => {
     }
   })
 
+  it('reads an optional manifest preview without executing the plugin and preserves its icon', () => {
+    manifest({ '.': './index.js', './package.json': './package.json', './preview': './fallback.svg' }, {
+      icon: './icon.png', preview: './preview.svg',
+    })
+    file(join(dir, 'icon.png'), 'icon')
+    file(join(dir, 'preview.svg'), '<svg/>')
+    const meta = readPluginMeta('localized', parentURL)
+    expect(meta).toEqual({
+      title: 'localized', icon: `data:image/png;base64,${Buffer.from('icon').toString('base64')}`,
+      preview: `data:image/svg+xml;base64,${Buffer.from('<svg/>').toString('base64')}`,
+    })
+  })
+
+  it('reads a subpath preview independently of root artwork', () => {
+    manifest({ './preview': './root.svg', './search/preview': './search.webp' })
+    file(join(dir, 'root.svg'), 'root')
+    file(join(dir, 'search.webp'), 'search')
+    expect(readPluginMeta('localized/search', parentURL)).toEqual({
+      preview: `data:image/webp;base64,${Buffer.from('search').toString('base64')}`,
+    })
+  })
+
+  it.each([
+    ['', 'non-empty string'], ['https://example.test/preview.png', 'relative file path'],
+    ['../preview.png', 'inside its manifest directory'], ['./preview.html', 'SVG, PNG, JPEG, or WebP'],
+  ])('keeps the icon and text when preview %s is invalid', (preview, diagnostic) => {
+    manifest({ './package.json': './package.json' }, { icon: './icon.svg', preview })
+    file(join(dir, 'icon.svg'), 'icon')
+    file(join(dir, '../preview.png'), 'outside')
+    file(join(dir, 'preview.html'), 'markup')
+    const meta = readPluginMeta('localized', parentURL)
+    expect(meta?.title).toBe('localized')
+    expect(meta?.icon).toBeDefined()
+    expect(meta?.preview).toBeUndefined()
+    expect(meta?.error).toContain(diagnostic)
+  })
+
+  it('bounds previews at 1 MiB independently of icons', () => {
+    manifest({ './package.json': './package.json' }, { icon: './missing.svg', preview: './preview.png' })
+    const bytes = Buffer.alloc(1024 * 1024)
+    writeFileSync(join(dir, 'preview.png'), bytes)
+    expect(readPluginMeta('localized', parentURL)?.preview).toBe(`data:image/png;base64,${bytes.toString('base64')}`)
+    writeFileSync(join(dir, 'preview.png'), Buffer.alloc(bytes.length + 1))
+    const meta = readPluginMeta('localized', parentURL)
+    expect(meta?.preview).toBeUndefined()
+    expect(meta?.error).toContain('missing.svg')
+    expect(meta?.error).toContain('preview exceeds 1024 KiB')
+  })
+
   it('keeps separate plugin exports independent even when their JavaScript entries share a directory', () => {
     manifest({
       './search': './lib/search.js', './review': './lib/review.js',
@@ -495,7 +544,7 @@ describe('plugin locale display metadata', () => {
     expect(readPluginMeta('localized', parentURL)).toEqual({
       title: { en: 'Resolved resource' }, description: { en: 'Resolved introduction' },
     })
-    const requests = ['localized/locale/en.json', 'localized/locale/en.json', 'localized/package.json', 'localized/icon']
+    const requests = ['localized/locale/en.json', 'localized/locale/en.json', 'localized/package.json', 'localized/icon', 'localized/preview']
     expect(resolveSync.mock.calls).toEqual(requests.map(specifier => version === 'v1'
       ? [specifier, parentURL, {}]
       : [parentURL, { specifier, attributes: {} }]))
