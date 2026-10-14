@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -244,27 +245,54 @@ describe('Linux native capability selection', () => {
     })).toBe(false)
   })
 
-  it('confirms the user manager from its socket file before querying systemctl', () => {
+  it('confirms the user manager from a listening socket before querying systemctl', () => {
     const runtime = mkdtempSync(join(tmpdir(), 'dsh-runtime-'))
     directories.push(runtime)
+    const socket = join(runtime, 'systemd', 'private')
+    const table = join(runtime, 'unix')
+    const header = 'Num       RefCount Protocol Flags    Type St Inode Path\n'
+    const row = (flags: string, path: string) => `0000000048ab7e3a: 00000002 00000000 ${flags} 0001 01 2088859725 ${path}\n`
     const failedQuery = vi.fn(() => ({ status: 1, error: undefined }))
     try {
       vi.stubEnv('XDG_RUNTIME_DIR', runtime)
-      expect(confirmLinuxManager({ spawnSync: failedQuery as never })).toBe(false)
+      // A bound path without a listener, as a stopped manager leaves it, and another path's listener need the query.
+      writeFileSync(table, header + row('00000000', socket) + row('00010000', `listener ${socket}`))
+      expect(confirmLinuxManager({ spawnSync: failedQuery as never, unixSocketTable: table })).toBe(false)
       expect(failedQuery).toHaveBeenCalledOnce()
-      mkdirSync(join(runtime, 'systemd'))
-      writeFileSync(join(runtime, 'systemd', 'private'), '')
-      expect(confirmLinuxManager({ spawnSync: failedQuery as never })).toBe(true)
+      writeFileSync(table, header + row('00010000', socket))
+      expect(confirmLinuxManager({ spawnSync: failedQuery as never, unixSocketTable: table })).toBe(true)
       expect(failedQuery).toHaveBeenCalledOnce()
+      expect(confirmLinuxManager({ spawnSync: failedQuery as never, unixSocketTable: join(runtime, 'missing') })).toBe(false)
+      expect(failedQuery).toHaveBeenCalledTimes(2)
 
       for (const value of ['', undefined]) {
         vi.stubEnv('XDG_RUNTIME_DIR', value)
         const query = vi.fn(() => ({ status: 0, error: undefined }))
-        expect(confirmLinuxManager({ spawnSync: query as never })).toBe(true)
+        expect(confirmLinuxManager({ spawnSync: query as never, unixSocketTable: table })).toBe(true)
         expect(query).toHaveBeenCalledOnce()
       }
     } finally {
       vi.unstubAllEnvs()
+    }
+  })
+
+  it.skipIf(process.platform !== 'linux')('reads a real listening socket from the kernel socket table', async () => {
+    const runtime = mkdtempSync(join(tmpdir(), 'dsh-runtime-'))
+    directories.push(runtime)
+    mkdirSync(join(runtime, 'systemd'))
+    const server = createServer()
+    await new Promise<void>((resolve) => { server.listen(join(runtime, 'systemd', 'private'), resolve) })
+    const query = vi.fn(() => ({ status: 1, error: undefined }))
+    try {
+      vi.stubEnv('XDG_RUNTIME_DIR', runtime)
+      expect(confirmLinuxManager({ spawnSync: query as never })).toBe(true)
+      expect(query).not.toHaveBeenCalled()
+      await new Promise<void>((resolve) => { server.close(() => { resolve() }) })
+      expect(confirmLinuxManager({ spawnSync: query as never })).toBe(false)
+      expect(query).toHaveBeenCalledOnce()
+    } finally {
+      vi.unstubAllEnvs()
+      if (server.listening) server.close()
     }
   })
 

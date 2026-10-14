@@ -981,7 +981,7 @@ describe('LocalSubprocessRuntime', () => {
         windowsLaunch,
       ])
       expect(prepareManagedProcessBinding).toHaveBeenCalledTimes(5)
-      expect(probeLinuxNative).toHaveBeenCalledOnce()
+      expect(spawnSubprocess).toHaveBeenCalledOnce()
     } finally {
       for (const fiber of fibers.reverse()) await fiber.dispose()
       vi.doUnmock('../src/linux-scope.ts')

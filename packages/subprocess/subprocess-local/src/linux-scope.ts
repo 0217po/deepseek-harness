@@ -3,7 +3,7 @@
 import { controlPipe } from './control-spawn.ts'
 import { execFile, spawn, spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { setTimeout as sleepMs } from 'node:timers/promises'
 import type {
@@ -41,6 +41,8 @@ export interface LinuxScopeInternals {
   runnerAvailable?: (invocation: RunnerInvocation) => boolean
   loadLinuxExecve?: typeof loadLinuxExecve
   sleep?: (delayMs: number, signal?: AbortSignal) => Promise<void>
+  /** Kernel unix socket table read by the user-manager confirmation; defaults to /proc/net/unix. */
+  unixSocketTable?: string
 }
 
 interface SystemctlResult {
@@ -58,6 +60,8 @@ const LITERAL_ARGV_OPTION = '--expand-environment=no'
 const LITERAL_ARGV_OPTION_REJECTED = /unrecognized option\b.*expand-environment/u
 // The spelling before systemctl v252 and an unambiguous prefix of the later `--kill-whom`.
 const KILL_ALL_MEMBERS = '--kill-who=all'
+/** Flags bit that /proc/net/unix sets on a listening socket (__SO_ACCEPTCON). */
+const UNIX_SOCKET_ACCEPTING = 0x10000
 
 /** systemd-run options that keep target argv literal; empty where scope mode never expands argv. */
 export type LiteralArgvOptions = readonly string[]
@@ -175,17 +179,40 @@ export function probeLinuxManager(internals: LinuxScopeInternals = {}): boolean 
 }
 
 /**
- * Confirm the user manager before a scope launch. The manager's socket file at
- * `$XDG_RUNTIME_DIR/systemd/private` disappears when the manager stops, so its
- * presence answers without a child process; otherwise one systemctl query decides.
- * A crashed manager that leaves its socket file passes, and its scope launch fails.
- * @param internals - optional systemctl seam used by tests.
+ * Report whether a process in this network namespace listens on a unix socket bound to path.
+ * The kernel lists a bound socket only while a process holds it open, so a socket file that
+ * a stopped or crashed listener left behind does not count.
+ */
+function unixSocketListening(path: string, table: string): boolean {
+  let text: string
+  try {
+    text = readFileSync(table, 'latin1')
+  } catch (_unreadableSocketTable) {
+    // Without the socket table nothing is known, so the caller queries systemctl.
+    return false
+  }
+  const suffix = ` ${path}`
+  return text.split('\n').some((line) => {
+    if (!line.endsWith(suffix)) return false
+    const fields = line.trim().split(/\s+/u)
+    return fields.slice(7).join(' ') === path && (Number.parseInt(String(fields[3]), 16) & UNIX_SOCKET_ACCEPTING) !== 0
+  })
+}
+
+/**
+ * Confirm the user manager before a scope launch. `systemd-run --user` connects through
+ * `$XDG_RUNTIME_DIR/systemd/private`; when the kernel socket table shows a process listening
+ * there, the confirmation needs no child process. Otherwise one systemctl query decides.
+ * A hung manager that still listens passes, and its scope launch fails.
+ * @param internals - optional socket-table and systemctl seams used by tests.
  * @returns whether a scope launch can reach the user manager.
  */
 export function confirmLinuxManager(internals: LinuxScopeInternals = {}): boolean {
   const runtimeDirectory = childEnv().XDG_RUNTIME_DIR
-  if (runtimeDirectory !== undefined && runtimeDirectory !== ''
-    && existsSync(join(runtimeDirectory, 'systemd', 'private'))) {
+  if (runtimeDirectory !== undefined && runtimeDirectory !== '' && unixSocketListening(
+    join(runtimeDirectory, 'systemd', 'private'),
+    internals.unixSocketTable ?? '/proc/net/unix',
+  )) {
     return true
   }
   return probeLinuxManager(internals)
@@ -210,7 +237,7 @@ class LinuxScopeStartup {
     if (existsSync(this.files.requestPath)
       && !(outcome.signal !== null && this.terminationSignals.has(outcome.signal))) {
       throw new Error(
-        `${this.kind} scope exited before its bootstrap consumed the launch request; if the user-systemd manager stopped after the provider probed it, restart the provider to probe native containment again`,
+        `${this.kind} scope exited before its bootstrap consumed the launch request; if the user-systemd manager is no longer reachable, restart the provider to probe native containment again`,
       )
     }
     return outcome
