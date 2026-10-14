@@ -93,6 +93,7 @@ export function apply(ctx: Context): void {
       let value: AccountDetails[K] | null
       try { value = await query() }
       catch { value = { status: 'failed' } }
+      if (value?.status === 'failed') console.error('[deepseek-account] account read failed', { field })
       if (generation === revision && value !== null) publish({ ...snapshot, details: { ...snapshot.details, [field]: value } })
     }
     const request = Promise.all([
@@ -133,9 +134,9 @@ export function apply(ctx: Context): void {
       if (initialize) void (async () => {
         try {
           const initialized = await ctx.remote.session.initializeDefaultModel()
-          if (!initialized.ok) console.info('[deepseek-account] default model initialization failed', { reason: 'refused' })
+          if (!initialized.ok) console.error('[deepseek-account] default model initialization failed', { reason: 'refused' })
         } catch (_error) {
-          console.info('[deepseek-account] default model initialization failed', { reason: 'disconnected' })
+          console.error('[deepseek-account] default model initialization failed', { reason: 'disconnected' })
         }
       })()
       void refresh()
