@@ -96,7 +96,7 @@ describe('application discovery', () => {
 
   it.each(['', '   '])('names the invalid search parameter without exposing schema internals: %j', async (query) => {
     const f = fixture()
-    await expect(f.api.findApps(query)).rejects.toThrow('findApps query: Expected a non-empty search string')
+    await expect(f.api.findApps(query)).rejects.toMatchObject({ name: 'Error', message: 'findApps query: Expected a non-empty search string' })
     expect(f.dispatch).not.toHaveBeenCalled()
   })
 
@@ -483,7 +483,7 @@ describe('input actions', () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     f.dispatch.mockClear()
-    await expect(run(app)).rejects.toThrow(message)
+    await expect(run(app)).rejects.toMatchObject({ name: 'Error', message })
     expect(f.dispatch).not.toHaveBeenCalled()
   })
 
