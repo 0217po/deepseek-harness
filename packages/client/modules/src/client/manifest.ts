@@ -82,10 +82,20 @@ export interface WebBootBatch {
   entries: string[]
 }
 
+/** Host release identity; two releases are the same when both fields are equal. */
+export interface WebBootRelease {
+  /** Release version label. */
+  version: string
+  /** Source commit fixed in when the Host was built; absent when the build recorded none. */
+  commit?: string
+}
+
 /** The composed client entry graph the host injects as `window.__DSH_BOOT__`. */
 export interface WebBootGraph {
   /** Consistency anchor over the current entry and batch descriptors. */
   rev: string
+  /** Host release identity; absent from a Host that publishes none. */
+  release?: WebBootRelease
   /**
    * Composed entries in module-graph order — a dynamic package row precedes
    * rows whose `external` requests that package. Cordis activation order is
@@ -126,6 +136,8 @@ export interface BootPluginRow {
 export interface BootManifest {
   /** Consistency anchor over the whole graph. */
   rev: string
+  /** Host release identity carried by the graph; absent when the Host publishes none. */
+  release?: WebBootRelease
   /** Rows as the module table consumes them. */
   modules: BootModuleRow[]
   /** Rows as entry composition consumes them. */
@@ -222,6 +234,7 @@ export function parseBootManifest(wire: unknown): BootManifest {
   if (typeof graph.rev !== 'string') {
     throw new Error('client-modules: boot manifest rev must be a string')
   }
+  const release = parseRelease(graph.release)
   if (!Array.isArray(graph.entries)) {
     throw new Error('client-modules: boot manifest entries must be an array')
   }
@@ -302,7 +315,18 @@ export function parseBootManifest(wire: unknown): BootManifest {
     }
     return { ...row, initialUrl }
   })
-  return { rev: graph.rev, modules, plugins }
+  return { rev: graph.rev, ...(release === undefined ? {} : { release }), modules, plugins }
+}
+
+/** Validate the optional wire release identity and drop members outside {@link WebBootRelease}. */
+function parseRelease(value: unknown): WebBootRelease | undefined {
+  if (value === undefined) return undefined
+  const release = typeof value === 'object' && value !== null ? value as Record<string, unknown> : undefined
+  const commit = release?.commit
+  if (release === undefined || typeof release.version !== 'string' || (commit !== undefined && typeof commit !== 'string')) {
+    throw new Error('client-modules: boot manifest release must carry a string version and an optional string commit')
+  }
+  return { version: release.version, ...(commit === undefined ? {} : { commit }) }
 }
 
 /** Module resolver passed into a registered Client bundle factory. */

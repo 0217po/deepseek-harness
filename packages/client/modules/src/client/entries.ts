@@ -4,6 +4,7 @@ import type { Entry, Loader } from '@deepseek-ai/cordis-plugin-loader'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import { parseBootManifest } from './manifest.ts'
 import type { BootManifest, ClientModuleLoader } from './manifest.ts'
+import { ReleaseChangeGate, type ClientReleaseChange } from './release-change.ts'
 import { removeOwnedStyles, tearDownEntryFiber } from './entry-lifecycle.ts'
 
 /** Page-local failures do not change the Host's bundle enablement. */
@@ -43,6 +44,8 @@ export class ClientEntries {
   // The modules bootstrap factory cannot request platform libraries before the shell supplies its seed.
   private snapshot: ClientEntryState = { syncing: false, failures: [] }
   private readonly listeners = new Set<() => void>()
+  /** Holds graphs of another Host release until the page accepts that release. */
+  private readonly release: ReleaseChangeGate
   private readonly managed = new Map<string, Entry>()
   private readonly revisions = new Map<string, string>()
   private loader: Loader | undefined
@@ -58,6 +61,12 @@ export class ClientEntries {
    */
   constructor(private readonly modules: ClientModuleLoader, private readonly index: ModuleIndex) {
     this.desired = modules.manifest
+    this.release = new ReleaseChangeGate(modules.manifest.release)
+  }
+
+  /** Pending Host release change; undefined while every received graph carries the release this page last applied. */
+  get releaseChange(): ObservableSnapshot<ClientReleaseChange | undefined> {
+    return this.release.change
   }
 
   /**
@@ -86,15 +95,22 @@ export class ClientEntries {
 
   /**
    * Validate and apply the latest full Host graph. Changed targets cancel obsolete mounts; identical targets share pending loads.
+   * A graph of another release than the last applied one is held and announced through {@link releaseChange} instead.
    * @param graph - JSON-decoded graph received from the Host.
-   * @returns after the queued reconciliation; per-package failures remain available in {@link state}.
+   * @returns after the queued reconciliation, or at once for a held graph; per-package failures remain available in {@link state}.
    */
   sync(graph: unknown): Promise<void> {
     const manifest = parseBootManifest(graph)
-    if (entryTargets(manifest) !== entryTargets(this.desired)) this.generation++
-    this.desired = manifest
-    const generation = this.generation
-    return this.enqueue(() => this.reconcile(generation))
+    return this.release.admit(manifest) ? this.adopt(manifest) : Promise.resolve()
+  }
+
+  /**
+   * Accept the pending Host release and apply its latest graph; later graphs of that release apply without asking.
+   * @returns after the queued reconciliation; resolves at once when no release change is pending.
+   */
+  acceptRelease(): Promise<void> {
+    const held = this.release.accept()
+    return held === undefined ? Promise.resolve() : this.adopt(held)
   }
 
   /**
@@ -109,11 +125,13 @@ export class ClientEntries {
   /**
    * Replace one entry's code in the same queue as graph updates; duplicate revisions are ignored.
    * Entries missing after a failed import are reconciled; bootstrap replacement fails before teardown.
+   * While a release change is pending the frame is ignored: the Host's graph frame that follows every rebuild carries the revision.
    * @param id - Package id from a rebuilt frame.
    * @param rev - Opaque revision selecting the rebuilt artifact.
    * @returns after queued work; replacement errors reject, while per-package reconciliation errors remain in {@link state}.
    */
   reload(id: string, rev: string): Promise<void> {
+    if (this.release.holding) return Promise.resolve()
     this.desired = {
       ...this.desired,
       modules: this.desired.modules.map(row => row.id === id ? { ...row, rev } : row),
@@ -145,6 +163,15 @@ export class ClientEntries {
         console.error('client-modules: synchronization subscriber failed', error)
       }
     }
+  }
+
+  /** Reconcile a graph the release gate let through. */
+  private adopt(manifest: BootManifest): Promise<void> {
+    this.release.applied(manifest)
+    if (entryTargets(manifest) !== entryTargets(this.desired)) this.generation++
+    this.desired = manifest
+    const generation = this.generation
+    return this.enqueue(() => this.reconcile(generation))
   }
 
   private enqueue(task: () => Promise<void>, subject = 'graph'): Promise<void> {

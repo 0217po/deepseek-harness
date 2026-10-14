@@ -25,7 +25,10 @@
   zh: 94dd7d9abbdbccf3
 /deepseek-ai-dsh-client-modules/use-this-package/live-plugin-composition:
   en: 45740a56e931d094
-  zh: b3362af77c804459
+  zh: fa44cf77c86019af
+/deepseek-ai-dsh-client-modules/use-this-package/host-release-changes:
+  en: e83691968fb417d0
+  zh: 060a859360cc064f
 /deepseek-ai-dsh-client-modules/use-this-package/sharing-modules:
   en: 1778b5a63ecde5e8
   zh: 537b4f8c755af8ad
@@ -48,8 +51,8 @@
   en: 253d9f265cd83ed0
   zh: 9d0f8df84d9d3ac9
 /deepseek-ai-dsh-client-modules/understand-the-implementation/entry-ownership:
-  en: ae59769034d692fa
-  zh: f71914d6f39b033a
+  en: 208e528dc3e0ed92
+  zh: 82b0ef93f282eacd
 /deepseek-ai-dsh-client-modules/understand-the-implementation/source-map:
   en: fabe9db8c44e2d90
   zh: 89ca94a8161f57ed
@@ -63,8 +66,8 @@
   en: ca75c51c89c2c9b0
   zh: de54f3467ef3b9be
 /deepseek-ai-dsh-client-modules/known-limitations-and-deferred-work:
-  en: d0908712f037c479
-  zh: 14034e5df3c34e7f
+  en: 764a83c20b8fe401
+  zh: 368b553a56e46dfc
 /deepseek-ai-dsh-client-modules/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

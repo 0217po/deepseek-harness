@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apply as provideModules, createClientModuleSystem } from '../src/client/index.ts'
-import type { ClientBundleRegistration, ClientModuleLoaderTarget, WebBootEntry, WebBootGraph } from '../src/client/index.ts'
+import type { ClientBundleRegistration, ClientModuleLoaderTarget, WebBootRelease, WebBootEntry, WebBootGraph } from '../src/client/index.ts'
 
 const contexts: Context[] = []
 afterEach(async () => {
@@ -514,4 +514,101 @@ it('cleans styles from a materialized factory superseded before its entry is cre
   expect(b.fetched).toEqual([row('a').url, row('a', 'r1').url])
   expect(effects).toEqual({ mounted: 1, disposed: 0, hits: 0 })
   expect(document.querySelectorAll('style[data-plugin=a]')).toHaveLength(1)
+})
+
+describe('Host release changes', () => {
+  const built = (release: WebBootRelease | undefined, ...entries: WebBootEntry[]): WebBootGraph => ({
+    ...graph(...entries), ...(release === undefined ? {} : { release }),
+  })
+  const b1: WebBootRelease = { version: '1.0.0', commit: 'aaaaaaa' }
+  const b2: WebBootRelease = { version: '1.0.0', commit: 'bbbbbbb' }
+  const b3: WebBootRelease = { version: '2.0.0' }
+
+  it('pauses code replacement for another release until the page accepts it', async () => {
+    const effects = { mounted: 0, disposed: 0, hits: 0 }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const b = await bench(built(b1, row('pet')), { pet: visible('pet', effects) })
+    const listener = vi.fn()
+    const unsubscribe = b.modules.entries.releaseChange.subscribe(listener)
+    expect(b.modules.entries.releaseChange.getSnapshot()).toBeUndefined()
+    // A different commit of the same version is another release.
+    await b.modules.entries.sync(built(b2, row('pet', 'r1')))
+    // Rebuilt frames of the pending release are ignored; its next graph frame carries the revision.
+    await b.modules.entries.reload('pet', 'r2')
+    expect(effects).toEqual({ mounted: 1, disposed: 0, hits: 0 })
+    expect(b.modules.entries.releaseChange.getSnapshot()).toEqual({ page: b1, current: b1, next: b2 })
+    expect(listener).toHaveBeenCalledOnce()
+    expect(warn).toHaveBeenCalledWith(`client-modules: Host release changed from ${JSON.stringify(b1)} to ${JSON.stringify(b2)}; plugin updates pause until this page accepts it or reloads`)
+    // Repeated frames for the pending release neither replace code nor announce again.
+    await b.modules.entries.sync(built({ ...b2 }, row('pet', 'r2')))
+    expect(listener).toHaveBeenCalledOnce()
+    await b.modules.entries.acceptRelease()
+    expect(b.modules.entries.releaseChange.getSnapshot()).toBeUndefined()
+    expect(listener).toHaveBeenCalledTimes(2)
+    expect(effects).toEqual({ mounted: 2, disposed: 1, hits: 0 })
+    expect(b.fetched.at(-1)).toBe(row('pet', 'r2').url)
+    // The accepted release replaces code without asking again.
+    await b.modules.entries.sync(built(b2, row('pet', 'r2')))
+    await b.modules.entries.reload('pet', 'r3')
+    expect(effects).toEqual({ mounted: 3, disposed: 2, hits: 0 })
+    expect(listener).toHaveBeenCalledTimes(2)
+    // An unsubscribed listener hears no later change; the page keeps its boot release.
+    unsubscribe()
+    await b.modules.entries.sync(built(b3, row('pet', 'r3')))
+    expect(b.modules.entries.releaseChange.getSnapshot()).toEqual({ page: b1, current: b2, next: b3 })
+    expect(listener).toHaveBeenCalledTimes(2)
+  })
+
+  it('asks for every release other than the last applied one, including the boot release', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const b = await bench(built(b1, row('pet')), { pet: () => ({ apply() {} }) })
+    await b.modules.entries.sync(built(b2, row('pet')))
+    await b.modules.entries.acceptRelease()
+    await b.modules.entries.sync(built(b1, row('pet')))
+    expect(b.modules.entries.releaseChange.getSnapshot()).toEqual({ page: b1, current: b2, next: b1 })
+    await b.modules.entries.sync(built(b3, row('pet')))
+    expect(b.modules.entries.releaseChange.getSnapshot()).toEqual({ page: b1, current: b2, next: b3 })
+  })
+
+  it('withdraws a pending prompt when the Host returns to the applied release', async () => {
+    const effects = { mounted: 0, disposed: 0, hits: 0 }
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const b = await bench(built(b1, row('pet')), { pet: visible('pet', effects) })
+    const listener = vi.fn()
+    b.modules.entries.releaseChange.subscribe(listener)
+    await b.modules.entries.sync(built(b2, row('pet', 'r1')))
+    await b.modules.entries.sync(built(b1, row('pet', 'r1')))
+    expect(b.modules.entries.releaseChange.getSnapshot()).toBeUndefined()
+    expect(listener).toHaveBeenCalledTimes(2)
+    expect(effects).toEqual({ mounted: 2, disposed: 1, hits: 0 })
+    // Accepting without a pending change leaves the page unchanged.
+    await b.modules.entries.acceptRelease()
+    expect(effects.mounted).toBe(2)
+  })
+
+  it('treats an absent release as one identity', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const b = await bench(graph(), {})
+    await b.modules.entries.sync(graph())
+    expect(b.modules.entries.releaseChange.getSnapshot()).toBeUndefined()
+    await b.modules.entries.sync(built(b3))
+    expect(b.modules.entries.releaseChange.getSnapshot()).toEqual({ page: undefined, current: undefined, next: b3 })
+    expect(warn).toHaveBeenCalledWith(`client-modules: Host release changed from none to ${JSON.stringify(b3)}; plugin updates pause until this page accepts it or reloads`)
+    await b.modules.entries.acceptRelease()
+    await b.modules.entries.sync(graph())
+    expect(b.modules.entries.releaseChange.getSnapshot()).toEqual({ page: undefined, current: b3, next: undefined })
+  })
+
+  it('notifies every subscriber when one of them throws', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const b = await bench(built(b1), {})
+    const failure = new Error('subscriber')
+    const listener = vi.fn()
+    b.modules.entries.releaseChange.subscribe(() => { throw failure })
+    b.modules.entries.releaseChange.subscribe(listener)
+    await b.modules.entries.sync(built(b2))
+    expect(listener).toHaveBeenCalledOnce()
+    expect(error).toHaveBeenCalledWith('client-modules: release change subscriber failed', failure)
+  })
 })

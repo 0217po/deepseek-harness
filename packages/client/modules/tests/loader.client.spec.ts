@@ -694,6 +694,19 @@ describe('boot manifest wire', () => {
       .toThrow('client-modules: boot manifest batches must be an array')
   })
 
+  it('carries an optional Host release and rejects a malformed one', () => {
+    const wire = { rev: 'graph', entries: [], batches: [] }
+    expect(parseBootManifest(wire)).not.toHaveProperty('release')
+    expect(parseBootManifest({ ...wire, release: { version: '1.0.0' } }).release).toEqual({ version: '1.0.0' })
+    // Members outside the identity are dropped so equality compares only version and commit.
+    expect(parseBootManifest({ ...wire, release: { version: '1.0.0', commit: 'abc1234', label: 'x' } }).release)
+      .toEqual({ version: '1.0.0', commit: 'abc1234' })
+    for (const release of ['1.0.0', null, {}, { version: 1 }, { version: '1.0.0', commit: 7 }]) {
+      expect(() => parseBootManifest({ ...wire, release }))
+        .toThrow('client-modules: boot manifest release must carry a string version and an optional string commit')
+    }
+  })
+
   it('rejects malformed batch phases', () => {
     const entry = { id: 'a', url: '/a.js', rev: '1' }
     expect(() => parseBootManifest({ rev: 'graph', entries: [entry], batches: [null] }))
