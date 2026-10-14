@@ -66,9 +66,14 @@ try {
           $pluginPath = "$target.plugin-dir"
           if (Test-Path -LiteralPath $pluginPath) {
             $trace = Join-Path ([IO.File]::ReadAllText($pluginPath)) 'directory-operations.log'
-            if ((Test-Path -LiteralPath $trace) -and [IO.File]::ReadAllText($trace) -match 'Windows error: (5|32|33)\b') {
-              $observedFailure = $true
-              break
+            if (Test-Path -LiteralPath $trace) {
+              $stream = [IO.File]::Open($trace, 'Open', 'Read', 'ReadWrite')
+              $reader = [IO.StreamReader]::new($stream)
+              try { $attempts = $reader.ReadToEnd() } finally { $reader.Dispose() }
+              if ($attempts -match 'Windows error: (5|32|33)\b') {
+                $observedFailure = $true
+                break
+              }
             }
           }
           Start-Sleep -Milliseconds 20
