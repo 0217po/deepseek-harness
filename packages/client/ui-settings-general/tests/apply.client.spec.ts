@@ -286,7 +286,12 @@ describe('ui-settings-general apply', () => {
     const overlay = () => c.ctx.slots.entries('shell.overlay').find(row => row.options.id === 'host-release-change')
     expect(overlay()?.component).toBe(HostReleasePrompt)
     expect(overlay()?.locale).toBe(NS)
-    const injected = (overlay()!.inject as unknown as () => HostReleasePromptInjected)()
+    const face = overlay()!.inject!()
+    const { acceptRelease, reloadPage, hooks } = face
+    if (typeof acceptRelease !== 'function' || typeof reloadPage !== 'function' || typeof hooks !== 'object' || hooks === null) {
+      throw new TypeError('host-release-change inject face is incomplete')
+    }
+    const injected = { acceptRelease, reloadPage, hooks } as HostReleasePromptInjected
     expect(injected.hooks.releaseChange).toBe(c.ctx.modules.entries.releaseChange)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const release = { version: '2.0.0' }
