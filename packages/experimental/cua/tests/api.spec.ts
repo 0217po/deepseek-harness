@@ -94,6 +94,12 @@ describe('application discovery', () => {
     await expect(f.api.findApps('   ')).rejects.toThrow()
   })
 
+  it.each(['', '   '])('names the invalid search parameter without exposing schema internals: %j', async (query) => {
+    const f = fixture()
+    await expect(f.api.findApps(query)).rejects.toThrow('findApps query: Expected a non-empty search string')
+    expect(f.dispatch).not.toHaveBeenCalled()
+  })
+
   it('rejects malformed discovery and capability results', async () => {
     const f = fixture()
     f.dispatch.mockResolvedValueOnce({ platform: 'macos' })
@@ -467,6 +473,20 @@ describe('input actions', () => {
     ['extra plus delimiter', app => app.pressKey('cmd+++')],
     ['unknown modifier', app => app.pressKey('unknown+a')],
   ]
+  it.each<[string, (app: CuaApp) => Promise<unknown>]>([
+    ['getState windowId: Too small: expected number to be >0', app => app.getWindow(0)],
+    ['selectText text: Too small: expected string to have >=1 characters', app => app.selectText(0, '')],
+    ['hover x: Invalid input: expected number, received NaN', app => app.hover([NaN, 0])],
+    ['hover x: Too big: expected number to be <=1000', app => app.hover([1001, 0], { relative: true })],
+    ['click relative: not accepted for these arguments', app => app.click(650, { relative: true })],
+  ])('reports a readable validation failure: %s', async (message, run) => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.dispatch.mockClear()
+    await expect(run(app)).rejects.toThrow(message)
+    expect(f.dispatch).not.toHaveBeenCalled()
+  })
+
   it.each(invalidActions)('rejects %s without invoking native input', async (_label, run) => {
     const f = fixture()
     const app = await f.api.getApp('Editor')

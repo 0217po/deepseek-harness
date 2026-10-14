@@ -29,7 +29,8 @@ const imageBase64 = z.string().min(1).refine(value => Buffer.from(value, 'base64
 
 /** Model-submittable operation parameters; Host resource fields and private continuations are separate. */
 export const Request = z.discriminatedUnion('method', [
-  operation('getCapabilities', {}), operation('listApps', {}), operation('findApps', { query: z.string().min(1).regex(/\S/) }),
+  operation('getCapabilities', {}), operation('listApps', {}),
+  operation('findApps', { query: z.string().min(1, 'Expected a non-empty search string').regex(/\S/, 'Expected a non-empty search string') }),
   operation('getApp', { selector: z.string().min(1) }),
   operation('activate', app),
   operation('show', { ...app, windowId: id.optional() }),

@@ -1,9 +1,27 @@
 /** Object facade over logged native operations; its caller owns evaluator persistence. */
 import { Buffer } from 'node:buffer'
+import type { ZodIssue } from 'zod'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ScreenshotResult, ShowResult, StateResult, WindowsResult } from './protocol.ts'
 import type { CuaApi, CuaApp, CuaAppHandle, CuaDispatch, CuaObservationOptions, CuaObservationSink, CuaOperation, CuaScreenshot, CuaSurface, CuaWindow } from './types.ts'
 export type * from './types.ts'
+
+function requestIssueMessage(issues: readonly ZodIssue[], parent: readonly PropertyKey[] = []): string {
+  return [...new Set(issues.map((issue) => {
+    const path = [...parent, ...issue.path]
+    if (issue.code === 'invalid_union') {
+      const fewest = Math.min(...issue.errors.map(branch => branch.length))
+      return [...new Set(issue.errors.filter(branch => branch.length === fewest)
+        .map(branch => requestIssueMessage(branch, path)))].join(' or ')
+    }
+    // The facade supplies the method and wrapper; failures belong to params.
+    const fields = path.slice(1)
+    if (issue.code === 'unrecognized_keys') {
+      return `${issue.keys.map(key => [...fields, key].join('.')).join(', ')}: not accepted for these arguments`
+    }
+    return `${fields.join('.')}: ${issue.message}`
+  }))].join('; ')
+}
 
 function keyChord(chord: string): { key: string; modifiers: string[] } {
   const parts = chord.split('+')
@@ -33,7 +51,11 @@ function keyChord(chord: string): { key: string; modifiers: string[] } {
  * @returns Objects independent of variable storage and evaluator lifecycle.
  */
 export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): CuaApi {
-  const call = (method: CuaOperation['method'], params: Record<string, JsonValue>) => dispatch(Request.parse({ method, params }))
+  const call = (method: CuaOperation['method'], params: Record<string, JsonValue>) => {
+    const request = Request.safeParse({ method, params })
+    if (!request.success) throw new Error(`${method} ${requestIssueMessage(request.error.issues)}`)
+    return dispatch(request.data)
+  }
   const action = async (method: CuaOperation['method'], params: Record<string, JsonValue>) => ActionResult.parse(await call(method, params))
   async function emit(value: object, options?: CuaObservationOptions): Promise<void> {
     if (options?.emit !== false) await sink?.text(JSON.stringify(value))
