@@ -634,27 +634,25 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
     const write = handle.write.bind(handle)
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
-    const drained = Promise.withResolvers<undefined>()
-    const input = `printf 'BUFFER_%s\\n' OK # ${'a'.repeat(3000)}`
-    let received = ''
+    const burst = `printf 'BUFFER_%s\\n' OK # ${'a'.repeat(3000)}`
+    let delivered = ''
     const paused = vi.spyOn(handle, 'write').mockImplementation(async (data) => {
       entered.resolve(undefined)
       await release.promise
       await write(data)
-      received += data
-      if (received.length >= input.length + 1) drained.resolve(undefined)
+      delivered += data
     })
     try {
       await page.locator('.xterm-helper-textarea:visible').click()
-      await page.keyboard.type(input)
+      await page.keyboard.type(burst)
+      await page.keyboard.press('Enter')
       await entered.promise
       expect(paused).toHaveBeenCalledTimes(1)
       release.resolve(undefined)
-      await page.keyboard.press('Enter')
-      await drained.promise
-      expect(received).toBe(`${input}\r`)
-      // PTY write completion does not imply that the shell's output has reached xterm.
-      await page.locator('.xterm-rows:visible').getByText('BUFFER_OK', { exact: true }).waitFor()
+      // The concurrent browser lane needs separate completion waits for queued input and rendered output.
+      await expect.poll(() => delivered.endsWith('\r'), { timeout: 30_000, message: 'The queued Enter must reach the PTY' }).toBe(true)
+      expect(delivered).toBe(`${burst}\r`)
+      await page.locator('.xterm-rows:visible').filter({ hasText: 'BUFFER_OK' }).waitFor({ timeout: 30_000 })
       expect(handles).toHaveLength(1)
       expect(tripwire.pageErrors).toEqual([])
     } finally {

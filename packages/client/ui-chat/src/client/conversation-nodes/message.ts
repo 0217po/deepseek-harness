@@ -118,14 +118,14 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
     // Human input claimed for Step 1 opens an exchange; Notice-woken Turns and
     // later steering stay in the current exchange, so they never fold earlier Turns.
     const location = contextLocation(context)
-    const opensExchange = (context.state.kind === 'user' || context.state.kind === 'steering')
-      && location.kind === 'step' && location.step.step === 1
+    const human = context.state.kind === 'user' || context.state.kind === 'steering'
+    const opensExchange = human && location.kind === 'step' && location.step.step === 1
     return chatNode(
       context,
       waking ? 'turn-trigger' : context.state.kind,
       context.state.seq,
       context.state,
-      { location, groupTree: opensExchange ? 'exchange' : undefined },
+      { location, groupTree: opensExchange ? 'exchange' : (human || waking) ? 'input' : undefined },
     )
   },
 }

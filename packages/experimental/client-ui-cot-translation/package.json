@@ -86,6 +86,7 @@
     "react-dom": "^18.2.0",
     "@testing-library/react": "^16.3.3",
     "@deepseek-ai/dsh-session": "workspace:*",
+    "@deepseek-ai/dsh-api-remote-access": "workspace:*",
     "@deepseek-ai/dsh-api-session-controller": "workspace:*",
     "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
     "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:*",

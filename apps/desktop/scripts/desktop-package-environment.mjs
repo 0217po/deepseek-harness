@@ -35,6 +35,7 @@ export function localMacOSPackageEnvironment(environment = process.env) {
 
 /**
  * Read a machine preset when selected, otherwise the target's required dotenv; no ambient release fallback.
+ * PACKAGE_TEST_RELEASE_ID overrides the test preset only; blank retains its configured ID.
  * @param {'win32' | 'darwin'} platform Target platform.
  * @param {NodeJS.ProcessEnv} environment Parent environment, retained only for unrelated build tools.
  * @param {string} appRoot Desktop application directory; relative credential paths resolve here.
@@ -67,9 +68,16 @@ export function loadDesktopPackageEnvironment(platform, environment = process.en
           : MACOS_SETTING.test(name) && !publicPlatformSetting.test(name)))
     }
   }
+  const releaseId = environment.PACKAGE_TEST_RELEASE_ID?.trim()
+  if (releaseId) {
+    if (preset !== 'test') throw new Error('desktop package: test release ID override requires the test preset')
+    if (!/^[a-f0-9]{32}$/u.test(releaseId)) throw new Error('desktop package: test release ID must contain 32 lowercase hexadecimal characters')
+    settings.DOWNLOAD_TEST_RELEASE_ID = releaseId
+  }
   return {
     ...Object.fromEntries(Object.entries(environment).filter(([name]) => !AMBIENT_RELEASE_SETTING.test(name))),
     ...settings,
+    ...(environment.DSH_DESKTOP_UPDATE_CHANNEL === undefined ? {} : { DSH_DESKTOP_UPDATE_CHANNEL: environment.DSH_DESKTOP_UPDATE_CHANNEL }),
     ...(preset === undefined ? {} : { DSH_PACKAGING_PRESET: preset }),
   }
 }
@@ -122,7 +130,7 @@ function requireReadableFile(environment, name) {
  * Validate the packaging mode before preparation without invoking a token or Apple's services.
  * @param {NodeJS.ProcessEnv} environment Selected local defaults or file-owned release settings.
  * @param {{ platform: 'win32' | 'darwin', arch: string }} target Selected release target.
- * @param {{ unsigned?: boolean, prepareOnly?: boolean }} options Explicit packaging mode.
+ * @param {{ unsigned?: boolean, prepareOnly?: boolean, skipNotarization?: boolean }} options Explicit packaging mode.
  * @returns {void}
  */
 export function validateDesktopPackageEnvironment(environment, target, options = {}) {
@@ -144,17 +152,19 @@ export function validateDesktopPackageEnvironment(environment, target, options =
   } else {
     if (environment.DSH_DESKTOP_MACOS_SIGNATURE_CACHE_DIR !== undefined) validateMacOSSignatureCacheDirectory(environment.DSH_DESKTOP_MACOS_SIGNATURE_CACHE_DIR)
     resolveMacOSSigningEnvironment(environment)
-    const strategies = [
-      ['APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID'],
-      ['APPLE_API_KEY', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER'],
-      ['APPLE_KEYCHAIN_PROFILE', 'APPLE_KEYCHAIN'],
-    ]
-    if (strategies.filter(names => names.some(name => environment[name] !== undefined)).length > 1) {
-      throw new Error('desktop package: configure exactly one macOS notarization strategy; comment out the other strategies')
+    if (!options.skipNotarization) {
+      const strategies = [
+        ['APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID'],
+        ['APPLE_API_KEY', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER'],
+        ['APPLE_KEYCHAIN_PROFILE', 'APPLE_KEYCHAIN'],
+      ]
+      if (strategies.filter(names => names.some(name => environment[name] !== undefined)).length > 1) {
+        throw new Error('desktop package: configure exactly one macOS notarization strategy; comment out the other strategies')
+      }
+      const credentials = resolveMacOSNotarizationEnvironment(environment)
+      if ('appleApiKey' in credentials) requireReadableFile(environment, 'APPLE_API_KEY')
+      if ('keychain' in credentials) requireReadableFile(environment, 'APPLE_KEYCHAIN')
     }
-    const credentials = resolveMacOSNotarizationEnvironment(environment)
-    if ('appleApiKey' in credentials) requireReadableFile(environment, 'APPLE_API_KEY')
-    if ('keychain' in credentials) requireReadableFile(environment, 'APPLE_KEYCHAIN')
     requireReadableFile(environment, 'CSC_LINK')
     if (environment.CSC_KEY_PASSWORD === undefined) {
       throw new Error('desktop package: CSC_KEY_PASSWORD must be set to the p12 export password (use an explicit empty value for an unencrypted p12)')

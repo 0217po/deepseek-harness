@@ -1,8 +1,8 @@
 #!/bin/bash
 # Run an already registered Apple Silicon runner with explicit tools and machine configuration.
 set -euo pipefail
-if [[ $# -lt 3 || $# -gt 4 || (${4:-} != '' && ${4:-} != '--check') ]]; then
-  echo 'Usage: bash start-macos-packaging-runner.sh RUNNER_ROOT CONFIG_ROOT NODE_BIN [--check]' >&2
+if [[ $# -lt 3 || $# -gt 4 || (${4:-} != '' && ${4:-} != '--check' && ${4:-} != '--service') ]]; then
+  echo 'Usage: bash start-macos-packaging-runner.sh RUNNER_ROOT CONFIG_ROOT NODE_BIN [--check|--service]' >&2
   exit 1
 fi
 runner_root=$1
@@ -29,9 +29,14 @@ if [[ ${4:-} = '--check' ]]; then
   exit 0
 fi
 [[ -f "$runner_root/.runner" && -x "$runner_root/run.sh" ]] || { echo 'Register the runner before starting' >&2; exit 1; }
+entry=./run.sh
+if [[ ${4:-} = '--service' ]]; then
+  [[ -x "$runner_root/runsvc.sh" ]] || { echo 'Install the runner service first' >&2; exit 1; }
+  entry=./runsvc.sh
+fi
 cd "$runner_root"
 exec /usr/bin/env -i HOME="$HOME" USER="$(id -un)" LOGNAME="$(id -un)" \
   PATH="$node_bin:/usr/bin:/bin:/usr/sbin:/sbin" TMPDIR="${TMPDIR:-/tmp}" \
   DEVELOPER_DIR="$developer_dir" SDKROOT="$sdk_root" \
-  LANG=en_US.UTF-8 DSH_PACKAGING_CONFIG_DIR="$config_root" DSH_TELEMETRY_DISABLED=1 \
-  /usr/bin/caffeinate -i ./run.sh
+  ACTIONS_RUNNER_SVC="${ACTIONS_RUNNER_SVC:-0}" LANG=en_US.UTF-8 DSH_PACKAGING_CONFIG_DIR="$config_root" DSH_TELEMETRY_DISABLED=1 \
+  /usr/bin/caffeinate -i "$entry"

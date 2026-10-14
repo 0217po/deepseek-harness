@@ -27,7 +27,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-用侧边栏浏览 Workspace 及其 Session、重排它们并新建会话；在 Session Intent 主视觉区用选择器为新会话选择 Workspace。打开的 Workspace 默认显示五条空闲的非空白 Session。正在运行的 Session（包括有子会话正在运行的父会话）始终按原顺序显示，不占用这五条配额；当前选中的空白**新会话**在首条提示词落地前也作为额外行。每次点击**展开其余**最多再显示五条空闲 Session；全部显示后，**收起**恢复初始行数，但仍显示正在运行的 Session。关闭再打开 Workspace 也会恢复该折叠投影。
+用侧边栏浏览 Workspace 及其 Session、重排它们并新建会话；在 Session Intent 主视觉区用选择器为新会话选择 Workspace。打开的 Workspace 按列表顺序显示前面的非空白 Session，直到该 Workspace 自己的水位线，水位线初始为五。水位线会升高，以覆盖前 50 条中最后一条正在运行、有子会话正在运行、等待用户、有未读完成提醒或在主视图中打开的 Session；从搜索打开的 Session 会把水位线升高到该 Session，无论其位置。水位线是一个行数，不会自行回落，因此运行或通知结束后这些行仍保持可见；重排若把某个 Session 移到水位线之后，该 Session 会被隐藏。每次点击**展开其余**将水位线升高五条，不受 50 行限制；剩余五条或更少时显示全部；最后一批显示后，**收起**重置水位线。折叠 Workspace 会重置其水位线及其嵌套 Workspace 的水位线；重置后的水位线仍覆盖符合条件的 Session。当前选中的空白**新会话**在首条提示词落地前是水位线之外的额外行。水位线不持久化；分组树的任何卸载都会重置水位线。
 
 未保存标题的历史会话显示本地化名称「未命名 / Untitled」，不使用目录名兜底。当前空会话仍显示「新会话」，其他空会话仍隐藏。重命名草稿使用已保存标题，无标题时留空；无标题行不提供标题复制。
 
@@ -81,6 +81,8 @@ Workspace 和 Session 的启动基线均就绪后，空安装环境调用 `works
 
 首次使用的目录名与其存储标题都是固定的，都不跟随读者语言：`workspaces.initializeDefault` 不携带任何名称，同一安装环境在切换语言后仍只有一个磁盘路径和一个存储标题。仍保留该自动标题的工作区，在本包展示它的所有位置——侧栏行及其悬浮卡片、搜索结果元信息、hero 选择器菜单、重命名与删除对话框——都通过控制器的 `workspaceDisplayTitle` 显示为本地化的默认名称。重命名对话框以屏幕上的标签作为初值，而判断确认是否需要保存用的是存储标题，因此对这类工作区直接确认未改动的初值即可固定该名称，该行不再跟随语言；重名检查按工作区身份而非标题排除目标自身。
 
+本包注入 Client `remoteAccess` 服务，并提供根作用域标准 Hook `useWorkspaceAccess(workspaceId, action)`，回答当前 Peer 能否在某个 Workspace 资源上调用 `action`；其快照语义归 [`dsh-api-remote-access`](../../api/remote-access/README.zh.md#client-face)。
+
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
@@ -101,7 +103,7 @@ Workspace 和 Session 的启动基线均就绪后，空安装环境调用 `works
 
 Session 行的 "..." 菜单和行尾悬停按钮是 WorkspaceBrowser 注册项声明的两个 `list` slot：`sidebar.workspaces.session.menu.item` 与 `sidebar.workspaces.session.row.action`。每一个菜单行、每一个悬停按钮都是条目，本包自己的 action 也不例外：`apply` 以客户端插件注册自己 action 的同一方式注册 `pin`（菜单 100、按钮 200）、`rename`（200）、`fork`（300）、`archive`（菜单 400、按钮 100）和 `session-id`（450），因此插件 action 落在其 `order` 所指的位置，以另一个 `priority` 复用内置 id 则遮蔽该 action。
 
-条目只接收行身份（`sessionId`、`displayTitle`），其余一切自己负责：用自己注入的 hook 读自己关心的 Host 状态（置顶与归档集合，以每次 Workspace 快照只派生一次的 Set 形式），自己决定是否显示（Host 规定归档与置顶互斥，所以 pin 在归档行上不渲染），整套行为放在注册项自己的 `inject` face 里（置顶成功后顺带把会话推到保存顺序最前，归档成功后发提示），浮层也自己带——重命名对话框、停止并归档对话框和行 action 的提示是本包注册在 `shell.overlay` 的条目，由 action 注入的请求驱动。菜单条目渲染一个 `role="menuitem"` 的按钮（本包自己的行用 ui-primitives 的 `MenuItemButton`，它带宿主样式，开启新分组的行加 `separatorBefore`，分隔线随行一起出现和消失），并通过 slot 级 `useMenuOpenState` hook（菜单自身的打开状态，从该行的渲染出现处绑定）关闭菜单；悬停按钮条目渲染一个图标按钮，按钮条会拦住点击、不让它打开该行。browser 不再向行传任何 action 回调，它剩下的动作只有搜索结果里的恢复按钮和标题双击，后者发出的是同一个重命名请求。
+条目只接收行身份（`sessionId`、`displayTitle`），其余一切自己负责：用自己注入的 hook 读自己关心的 Host 状态（置顶与归档集合，以每次 Workspace 快照只派生一次的 Set 形式），自己决定是否显示（Host 规定归档与置顶互斥，所以 pin 在归档行上不渲染；`useSessionAccess(sessionId, 'session/fork')` 为 false 时 fork 不渲染），整套行为放在注册项自己的 `inject` face 里（置顶成功后顺带把会话推到保存顺序最前，归档成功后发提示），浮层也自己带——重命名对话框、停止并归档对话框和行 action 的提示是本包注册在 `shell.overlay` 的条目，由 action 注入的请求驱动。菜单条目渲染一个 `role="menuitem"` 的按钮（本包自己的行用 ui-primitives 的 `MenuItemButton`，它带宿主样式，开启新分组的行加 `separatorBefore`，分隔线随行一起出现和消失），并通过 slot 级 `useMenuOpenState` hook（菜单自身的打开状态，从该行的渲染出现处绑定）关闭菜单；悬停按钮条目渲染一个图标按钮，按钮条会拦住点击、不让它打开该行。browser 不再向行传任何 action 回调，它剩下的动作只有搜索结果里的恢复按钮和标题双击，后者发出的是同一个重命名请求。
 
 现有通知浮层按通知 kind 分派 `workspace.toast`。各 keyed 注册注入本地化展示映射与自己的操作，只有归档通知订阅查看筛选状态。它们渲染包内的 `workspace.toast.content` Factory，所有展示共用一处 Toast primitive。现有通知状态、显示序号、最新提示替换及关闭逻辑仍共享；语言或筛选变化不会重新启动同一条提示的计时。
 
@@ -182,7 +184,7 @@ Workspace 基线就绪后，浏览器持久化的展开状态和 Session 顺序�
 
 ### 悬浮卡片
 
-Workspace 与 Session 悬浮卡片会复制对应行被截断的值：激活 Workspace 卡片会写入其完整目录路径，激活非空白 Session 卡片则会写入其完整显示标题。临时的空白「新会话」卡片保持只读，因为其本地化标签是占位文案，并非会话内容。 Session 卡片在卡片打开期间还会在相对时间与行尾状态行之间渲染 `sidebar.session.row.hover` seat，与行自身状态无关。
+Workspace 与 Session 悬浮卡片会复制对应行被截断的值：激活 Workspace 卡片会写入其完整目录路径，激活非空白 Session 卡片则会写入其完整显示标题。临时的空白「新会话」卡片保持只读，因为其本地化标签是占位文案，并非会话内容。 Session 卡片在卡片打开期间还会在相对时间与行尾状态行之间渲染 `sidebar.session.row.hover` seat，与行自身状态无关。同一物理列表中的首张 Workspace 或 Session 卡片等待 800ms；实际显示一张后，移到该列表的其他 Workspace 或 Session 会立即替换卡片。列表与其当前活动的 portal 卡片构成一次指针交互：进入卡片阅读或复制后，移到相邻 Workspace 或 Session 仍会立即切换。指针离开两者后，共享等待在活动卡片通过原有指针宽限及关闭生命周期关闭时重置，不另设分组计时器。列表没有活动卡片时，指针离开便立即重置等待。小型操作提示与右侧悬浮卡片同时显示；置顶、归档、Workspace 新建会话及搜索结果取消归档的提示通过 portal 保持在卡片上层。悬停操作按钮（包括「更多」）保留卡片；打开「更多」菜单或开始拖拽 Session 会关闭卡片。
 
 </details>
 

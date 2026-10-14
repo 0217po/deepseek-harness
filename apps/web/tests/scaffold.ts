@@ -310,6 +310,8 @@ export interface LaunchOptions {
   openInAppEnvironment?: LaunchEnvironmentSnapshot
   /** Compare the replayed root Session; `read-only` also forbids refresh writes to a borrowed fixture. */
   compareReplaySession?: boolean | 'read-only'
+  /** Fixed JSON-quoted workspace path length for compaction estimates; omitted values use the ordinary prefix. */
+  workspacePathLength?: number
   /**
    * Optional product overlay applied after the shipped Web surface and before
    * the scaffold's hermetic test patches, matching the launcher's `--patch`
@@ -502,7 +504,15 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       process.env.DEEPSEEK_API_KEY = originalDeepSeekCredential
     }
   }
-  const workspaceCwd = await realpath(await mkdtemp(join(tmpdir(), 'dsh-web-e2e-ws-')))
+  const workspaceParent = await realpath(tmpdir())
+  let workspacePrefix = 'dsh-web-e2e-ws-'
+  if (options.workspacePathLength !== undefined) {
+    // mkdtemp appends six characters; JSON quoting is part of the runtime-context text.
+    const paddingLength = options.workspacePathLength - JSON.stringify(join(workspaceParent, `${workspacePrefix}XXXXXX`)).length
+    if (paddingLength < 0) throw new Error('compaction snapshot temporary root exceeds its fixed cwd text length')
+    workspacePrefix += '-'.repeat(paddingLength)
+  }
+  const workspaceCwd = await realpath(await mkdtemp(join(workspaceParent, workspacePrefix)))
   // Isolated harness home: the settings/credentials rows resolve $DSH_HOME
   // paths at load, and an in-process boot must NEVER touch the developer's
   // real ~/.dsh document or credential file.
@@ -998,8 +1008,10 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
 /**
  * Serialize a live session to the canonical raw session-JSONL layout — the
  * in-memory record-mode harvest, so the on-disk zstd default never matters.
+ * @param session - Captured live Session, including any inherited fork prefix.
+ * @returns Current-writer Session JSONL.
  */
-function rawSessionLog(session: Session): string {
+export function rawSessionLog(session: Session): string {
   const encodedEvents = (session.snapshotEvents() as unknown as readonly SessionFormatEvent[])
     .map(event => sessionFormatCatalog.encodeCurrentEvent(event))
   const header = sessionFormatCatalog.encodeCurrentHeader({

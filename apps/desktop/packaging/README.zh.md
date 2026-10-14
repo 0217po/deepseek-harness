@@ -61,13 +61,15 @@ pnpm --dir apps/desktop run package:win:x64 --build-version 0.1.6-alpha.1.202609
 
 production 发布使用产品版本本身，不传 `--build-version`。其上传成功后会把打包所用 commit 打成 `desktop-v<版本>` 标签；来自有改动工作区的构建不打标签，打标签失败也只打印手工命令，不会让已完成的上传变成失败。test 与本地构建有意不留标签，而所有产物的清单都记录 `dshBuildCommit` 与 `dshBuildDirty`，直接分发的构建同样可溯源。
 
-版本派生不改变固定更新通道，也不改变 `nightly.yml` / `nightly-mac.yml` 文件名。SemVer 排序为 `0.1.6-alpha.1 < 0.1.6-alpha.1.20260916.1 < 0.1.6-alpha.2`，稳定基础版本的测试版低于该稳定版。客户端只接受更高版本：替换 feed 无法让已安装的较高版本更新到较低的纠正版。这类客户端需要手动安装；保持自动降级关闭。[已归档的版本决策](../../../.agents/notes/archived/process/2026-09-16-desktop-release-version-derivation.md)解释为什么不能用通道名替换预发布标识。
+安装包独立于版本和发布环境内置 `DSH_DESKTOP_UPDATE_CHANNEL`（默认 `nightly`，也可选择 `latest`）。自动更新始终保留该通道，即使安装的是稳定版本；手动安装另一通道的包才会切换。latest 包拒绝预发布版本。稳定产品可生成 nightly 的 `-test.<date>.<sequence>` 构建，但该版本低于稳定基准，不能升级已安装的更高版本。保持自动降级关闭；稳定修复版需要提升产品版本。CI 版本选择与发布见 [CI 发布](../publishing/ci/README.zh.md#package-and-publish)。
 
 <a id="configuration-and-local-builds"></a>
 
 ## 配置与本地构建
 
 本地 Windows 命令通过 `DSH_PACKAGING_CONFIG_DIR` 指定机器配置绝对目录，通过 `DSH_PACKAGING_PRESET` 选择 `test` 或 `production`。加载器读取 `presets/<preset>.env`；签名命令另读 `secrets/windows-signing.env`。相对证书和 SignTool 路径以声明它们的文件所在目录为基准。公开 preset 拒绝凭据，签名文件不能覆盖公开配置。配置缺失立即失败，不回退到 `.env.windows`；不选择 preset 的命令保留原 dotenv 行为。未签名和仅准备 preset 不读取签名文件。缓存维护也只读取公开 preset 配置。签名测试包还需现有下载 origin 和 release ID，但无需上传凭据。本地 preset 命令使用 `--build-version auto` 时仅按本地产物编号；Actions 使用运行编号和重试次数。
+
+两个手动打包工作流都接受 `test_release_id`。留空沿用机器 preset；非空值必须是 32 位小写十六进制字符串，且仅允许 test preset。加载器通过 `PACKAGE_TEST_RELEASE_ID` 应用覆盖值，不修改 preset 文件。同一平台连续升级测试需使用相同值。轮换默认值只影响后续构建：已安装客户端保留原更新地址，旧对象仍可访问，除非另行删除。随机前缀降低地址的可发现性，但不提供下载身份认证。
 
 不选择机器 preset 时，打包、上传以及手动 macOS 签名检查（本地 macOS 未签名构建除外）使用 `apps/desktop/.env.windows` 或 `.env.macos`，由目标平台选择。复制对应的 [Windows 模板](../.env.windows.example) 或 [macOS 模板](../.env.macos.example)，填写本机配置；Git 忽略这两个本地文件，安装产物也不包含它们。发布字段只从选定的配置文件读取，不回退到系统或 shell 中的同名变量；`PATH`、代理和构建工具环境仍保留。发布版本是命令参数而非发布字段，上传从打包写下的完成记录中读取它。文件使用 UTF-8，支持 BOM；相对证书、SignTool、Apple API Key 和钥匙串路径以 `apps/desktop` 为基准，变量值不做 shell 展开，包含 `#` 或空格的密码需要引号。Windows CI 读取相同的机器 preset。
 
@@ -93,6 +95,8 @@ pnpm run package:desktop:win:x64
 
 macOS arm64 命令要求 Apple Silicon。macOS x64 命令可以在 Intel macOS 或带 Rosetta 的 Apple Silicon 上运行。Windows x64 命令要求 Windows x64。Linux 不是受支持的 Desktop 发布目标。
 
+macOS 正式发布和本地未签名 DMG 都通过 [electron-builder 配置](../scripts/electron-builder-config.mjs)中的 `dmg.format: 'ULMO'` 使用 LZMA 压缩。[构建时补丁](../../../patches/app-builder-lib@26.17.0.patch)为固定版本 builder 的校验规则和 TypeScript 声明添加此格式。
+
 每个目标都在 `apps/desktop/.desktop-build/targets/<target>/` 下持有自己的打包输入、已准备运行时、包集合、dsh 依赖树、pnpm 准备状态、未打包应用、更新元数据和最终产物。Electron 归档缓存继续由 `.desktop-build/downloads` 共享，因为每个归档文件名都包含版本、平台和架构，并且在解包前经过验证。目标构建绝不读取其他目标的可变准备状态。
 
 <a id="windows-actions"></a>
@@ -111,10 +115,22 @@ macOS arm64 命令要求 Apple Silicon。macOS x64 命令可以在 Intel macOS �
 
 `Package Desktop · macOS` [手动工作流](../../../.github/workflows/macos-package.yml) 使用带有 `dsh-mac-package-trial` 标签的 Apple Silicon runner。它选择 `test` 或 `production`，以 UTC 日期、运行编号和重试次数解析 `build_version=auto`，并复用现有签名、公证和打包运行时检查。成功的 DMG／ZIP 与诊断日志保留 14 天；工作流不发布 release。操作人员须注册 runner，并验收完整 Actions 运行后再依赖该流程。
 
-运行 `node apps/desktop/scripts/setup-macos-packaging.mjs "$HOME/ci"` 创建私有 `runner/`、`packaging/{presets,secrets,certificates}` 和 `cache/macos-signatures` 目录，不覆盖已有文件；追加 `--check` 仅检查。在 checkout 外填写 [preset](../config/macos-packaging/test.env.example) 和[签名](../config/macos-packaging/macos-signing.env.example)模板，将秘密和证书文件权限设为 `0600`。`DSH_PACKAGING_CONFIG_DIR` 指定 `packaging` 的绝对目录，`DSH_PACKAGING_PRESET` 选择其中的 preset；缺少文件立即失败，不回退到 `.env.macos`。Mac 签名和仅准备构建读取 `secrets/macos-signing.env`，相对凭据路径以该文件所在目录为基准。公开 preset 拒绝签名凭据，签名文件不能覆盖公开配置。本地未签名 Mac 构建保留无需配置的行为。
+运行 `node apps/desktop/scripts/setup-macos-packaging.mjs "$HOME/dsh-ci"` 创建私有 `runner/`、`packaging/{presets,secrets,certificates}` 和 `cache/macos-signatures` 目录，不覆盖已有文件；追加 `--check` 仅检查。在 checkout 外填写 [preset](../config/macos-packaging/test.env.example) 和[签名](../config/macos-packaging/macos-signing.env.example)模板，将秘密和证书文件权限设为 `0600`。`DSH_PACKAGING_CONFIG_DIR` 指定 `packaging` 的绝对目录，`DSH_PACKAGING_PRESET` 选择其中的 preset；缺少文件立即失败，不回退到 `.env.macos`。Mac 签名和仅准备构建读取 `secrets/macos-signing.env`，相对凭据路径以该文件所在目录为基准。公开 preset 拒绝签名凭据，签名文件不能覆盖公开配置。本地未签名 Mac 构建保留无需配置的行为。
 
-运行 `bash apps/desktop/scripts/start-macos-packaging-runner.sh "$HOME/ci/runner" "$HOME/ci/packaging" <absolute-node-24-bin-directory> --check` 检查宿主工具和配置文件。脚本同时选择当前 Xcode 及其 macOS SDK，并编译小型链接探针。注册后省略 `--check`，清理继承环境并在前台启动 runner，存活期间阻止空闲睡眠。Ctrl-C 停止，服务安装单独进行。runner 拥有 `_work` 下的源码目录，与日常开发分开。该账户可读取签名文件，因此只执行可信代码。沿用现有公证代理恢复规则；强制终止后，先检查保留的恢复记录再构建。新建模板将 `DSH_DESKTOP_MACOS_SIGNATURE_CACHE_DIR` 设为 checkout 外 `cache/macos-signatures` 的绝对路径。已有部署重新运行 setup 后，在各 preset 中补上该字段；已有文件保持不变。这样可跨干净检出保留签名；缓存验证和容量限制见 [macOS 签名](#macos-release-signing)。
+运行 `bash apps/desktop/scripts/start-macos-packaging-runner.sh "$HOME/dsh-ci/runner" "$HOME/dsh-ci/packaging" <absolute-node-24-bin-directory> --check` 检查宿主工具和配置文件。脚本同时选择当前 Xcode 及其 macOS SDK，并编译小型链接探针。注册后省略 `--check`，清理继承环境并在前台启动 runner，存活期间阻止空闲睡眠。安装下方服务前，先用 Ctrl-C 停止。runner 拥有 `_work` 下的源码目录，与日常开发分开。该账户可读取签名文件，因此只执行可信代码。沿用现有公证代理恢复规则；强制终止后，先检查保留的恢复记录再构建。新建模板将 `DSH_DESKTOP_MACOS_SIGNATURE_CACHE_DIR` 设为 checkout 外 `cache/macos-signatures` 的绝对路径。已有部署重新运行 setup 后，在各 preset 中补上该字段；已有文件保持不变。这样可跨干净检出保留签名；缓存验证和容量限制见 [macOS 签名](#macos-release-signing)。
 
+
+工作流选项 `skip_notarization` 默认为 `false`；对应 CLI 参数是 `--skip-notarization`。该模式保留 Developer ID 签名、DMG 签名验证和打包运行时验证，跳过 Apple 公证和 stapling，不要求 Apple 公证凭据。DMG／ZIP 文件名带 `-unnotarized`，存放于 `.desktop-build/targets/<target>/unnotarized-artifacts/`，上传产物标为 `unnotarized-debug`。这些产物仅供内部调试：Gatekeeper 可能阻止下载副本运行，不能视为可分发包或用于更新发布。该模式不写入发布完成记录，不能与未签名、Windows 或仅准备构建组合。
+
+在 checkout 中，以注册 runner 的同一账户安装用户服务，不使用 `sudo`：
+
+```sh
+bash apps/desktop/scripts/macos-runner-service.sh install "$HOME/dsh-ci/runner" "$HOME/dsh-ci/packaging" /opt/homebrew/opt/node@24/bin
+bash apps/desktop/scripts/macos-runner-service.sh start "$HOME/dsh-ci/runner"
+bash apps/desktop/scripts/macos-runner-service.sh status "$HOME/dsh-ci/runner"
+```
+
+安装脚本将启动脚本复制到 `runner/dsh-service`，将服务 PATH 设为 Node 24 和系统工具，并使用 GitHub 的 `svc.sh` 与 `runsvc.sh`。LaunchAgent 在 SSH 断开后继续运行，但重启后需要该账户登录桌面，注销桌面时停止。FileVault 磁盘解锁仍由操作人员完成，这不提供无人值守开机。日志位于 `runner/dsh-service/stdout.log` 和 `stderr.log`；验收时确认出现 `Connected to GitHub` 与 `Listening for Jobs`。更新已安装的启动脚本或工具路径时，等待 runner 空闲，依次执行 `stop`、`uninstall`，再重新安装。这两个操作都不会注销 runner 或删除打包凭据。卸载保留 `runner/dsh-service`（包括日志）和显式 `.path`；重新安装会替换启动快照和 PATH。
 
 <a id="unsigned-windows-test-installer"></a>
 

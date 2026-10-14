@@ -498,8 +498,30 @@ interface LlmConfigurableProvider {
    * from outside.
    */
   declared?: boolean
+  /**
+   * Route endpoint the adapter uses when the profile sets no `baseURL`; the
+   * adapter may still send an individual model to that model's own endpoint.
+   * Absent when the route has no fixed endpoint.
+   */
+  defaultBaseURL?: string
+  /** Environment variables used to construct a provider endpoint; absent when none are reported. */
+  baseURLEnv?: readonly string[]
+  /** Authentication the adapter performs when the profile names no credential reference; absent when it reports none. */
+  nativeAuth?: LlmNativeAuth
   /** Configuration diagnostic for repair; unaffected models may remain serviceable. */
   error?: string
+}
+```
+
+A settings editor shows `defaultBaseURL`, endpoint configuration variables from `baseURLEnv`, and `nativeAuth` for a profile that leaves the endpoint or the credential reference unset. Both variable lists contain names, never values.
+
+```ts type-equiv
+/** Authentication a provider route performs without a credential reference in its profile. */
+interface LlmNativeAuth {
+  /** Environment variables the route's authentication reads, in lookup order; empty when it reads none. */
+  env: readonly string[]
+  /** Whether a stored OAuth sign-in can authenticate the route. */
+  oauth: boolean
 }
 ```
 

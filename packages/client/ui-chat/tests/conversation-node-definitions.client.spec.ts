@@ -659,7 +659,7 @@ describe('built-in conversation node Definitions', () => {
     }
   })
 
-  it('opens exchanges only for human input claimed for Step 1', () => {
+  it('opens exchanges only for human input claimed for Step 1; every other input stays an input', () => {
     const human = textMessage('block-human', 'first task')
     const steer = textMessage('block-steer', 'adjust course')
     const notice = { ...textMessage('block-notice', 'background work finished'), source: { kind: 'schedule' } }
@@ -693,7 +693,7 @@ describe('built-in conversation node Definitions', () => {
       at(15, 'turn/start', { turn: 2 }),
       at(16, 'agent/inbox/spliced', { target: 'next-turn', start: 0, removedCount: 1, inserted: [] }),
     ])
-    expect(inputs(snapshot(value))).toEqual([['user', 'exchange'], ['steering', null]])
+    expect(inputs(snapshot(value))).toEqual([['user', 'exchange'], ['steering', 'input']])
     expect(bottomTurns(snapshot(value))).toEqual([1, 2])
 
     value.append(at(17, 'step/start', { turn: 2, step: 1 }))
@@ -702,7 +702,7 @@ describe('built-in conversation node Definitions', () => {
     value.append(at(20, 'step/end', { turn: 2, step: 1 }))
     value.append(at(21, 'turn/end', { turn: 2, reason: { kind: 'completed' } }))
     value.flush()
-    expect(inputs(snapshot(value))).toEqual([['user', 'exchange'], ['steering', null], ['turn-trigger', null]])
+    expect(inputs(snapshot(value))).toEqual([['user', 'exchange'], ['steering', 'input'], ['turn-trigger', 'input']])
     expect(bottomTurns(snapshot(value))).toEqual([1, 2])
 
     value.append(at(22, 'agent/inbox/spliced', { target: 'next-step', start: 0, inserted: [idle] }))
@@ -2855,4 +2855,28 @@ it('retains a sign-out cancellation notice when reopening a partial turn', () =>
   expect(node(snapshot(value), 'turn-error')?.data).toMatchObject({
     code: 'ACCOUNT_SIGNED_OUT', message: 'Stopped because you signed out of DeepSeek.',
   })
+})
+
+it('reports a turn closed after its process exited as a stopped turn', () => {
+  const value = assembler([
+    at(7, 'turn/end', { turn: 1, reason: { kind: 'interrupted' } }),
+  ], true)
+  expect(node(snapshot(value), 'turn-error')?.data).toMatchObject({
+    code: 'INTERRUPTED', message: 'The DSH process exited before this turn finished.',
+  })
+})
+
+it('reports an interrupted ending on a turn observed from its start', () => {
+  const value = assembler([
+    at(1, 'turn/start', { turn: 1 }),
+    at(2, 'turn/end', { turn: 1, reason: { kind: 'interrupted' } }),
+  ])
+  expect(node(snapshot(value), 'turn-error')?.data).toMatchObject({ seq: 2, turn: 1, code: 'INTERRUPTED' })
+})
+
+it('keeps user cancellations and forked endings free of a failure row', () => {
+  for (const reason of [{ kind: 'aborted', reason: { kind: 'user' } }, { kind: 'forked' }] as const) {
+    const value = assembler([at(7, 'turn/end', { turn: 1, reason })], true)
+    expect(node(snapshot(value), 'turn-error')).toBeUndefined()
+  }
 })

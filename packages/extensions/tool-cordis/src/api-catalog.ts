@@ -754,8 +754,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
       },
       {
-        signature: 'readonly operator: PeerScope',
-        description: 'The operator Peer every admitted request speaks for; its scope lives as long as Connection.',
+        signature: 'readonly browserPeer: PeerScope',
+        description: 'The Peer every authenticated browser connection shares; its principal is the owner and its scope lives as long as Connection.',
         parameters: [],
       },
       {
@@ -777,9 +777,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'admit(request: ConnectionTrustRequest): PeerAdmission',
-        description: 'Admit one request: it passes requestRejection and speaks for the operator, or it is refused with that status.',
+        description: 'Admit one network request: it passes requestRejection and speaks for browserPeer, or it is refused with that status.',
         parameters: [{ name: 'request', description: 'request headers from the HTTP or upgrade request.' }],
-        returns: 'the operator Peer, or the rejection status.',
+        returns: 'the admitted Peer, or the rejection status.',
+      },
+      {
+        signature: 'createPeer(options: { readonly principal: Principal }): PeerScope',
+        description: 'Create an independent Peer. In-process only: no route, header, query, or cookie reaches it. Disposed with the Context that read `ctx.connection`, or earlier by its own `dispose()`.',
+        parameters: [{ name: 'options', description: '.principal - principal fixed for the Peer\'s lifetime.' }],
+        returns: 'a new Peer distinct from every other Peer.',
       },
       {
         signature: 'authorizeIndex(request: ConnectionIndexRequest, response: ConnectionIndexResponse): boolean',
@@ -817,7 +823,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'credentials',
     summary: 'Abstract credential service over two key spaces that answer two questions.',
-    description: 'Abstract credential service over two key spaces that answer two questions.\n\nA CredentialRef answers "what is behind this environment-variable name", layered over the process environment, the provider-managed store, and `.env` files. One seam-wide rule binds that half: an empty stored value is absent everywhere — `resolve` skips it, `describe` reports it unconfigured — so a blank never masquerades as a configured secret.\n\nA CredentialKey answers "what credential does this plugin hold for this id". Nothing can layer here — an authorization grant has no environment to be read from — so presence of the record is the whole fact, and modifyRecord is the only write path because a correct write depends on the current value (a token refresh is read-decide-replace under one lock).',
+    description: 'Abstract credential service over two key spaces that answer two questions.\n\nA CredentialRef answers "what is behind this environment-variable name": the provider-managed store first, then ambient fallbacks such as the process environment and `.env` files. One seam-wide rule binds that half: an empty stored value is absent everywhere — `resolve` skips it, `describe` reports it unconfigured — so a blank never masquerades as a configured secret.\n\nA CredentialKey answers "what credential does this plugin hold for this id". Nothing can layer here — an authorization grant has no environment to be read from — so presence of the record is the whole fact, and modifyRecord is the only write path because a correct write depends on the current value (a token refresh is read-decide-replace under one lock).',
     methods: [
       {
         signature: 'abstract resolve(ref: CredentialRef): Promise<ResolvedCredential | undefined>',
@@ -833,12 +839,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'abstract set(ref: CredentialRef, value: string): Promise<void>',
-        description: 'Durably store one value in the provider-managed writable source. Rejects while a read-only source shadows the reference — the write would appear to succeed while resolution keeps returning the shadowing value — and rejects an empty value (use unset).',
+        description: 'Durably store one value in the provider-managed writable source. The stored value takes precedence over ambient fallbacks, and empty values are rejected (use unset).',
         parameters: [{ name: 'ref', description: 'the reference to store.' }, { name: 'value', description: 'the non-empty secret value.' }],
       },
       {
         signature: 'abstract unset(ref: CredentialRef): Promise<void>',
-        description: 'Remove one reference from the provider-managed writable source; removing an absent reference is a no-op. Rejects while a read-only source shadows the reference, like set.',
+        description: 'Remove one reference from the provider-managed writable source; removing an absent reference is a no-op. Ambient fallback layers may become effective again after removal.',
         parameters: [{ name: 'ref', description: 'the reference to remove.' }],
       },
       {
@@ -911,7 +917,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'abstract getProfile(client: AccountClientMetadata): Promise<AccountDetails[\'profile\'] | null>',
-        description: 'Query Platform profile independently of wallet balances. A ready result whose stable profile ID first becomes available or changes notifies watch consumers, so identity consumers re-read getPlatformSession; repeated IDs stay silent.',
+        description: 'Query Platform profile independently of wallet balances. A ready result whose stable profile ID first becomes available or changes notifies identity-enabled watch consumers, so they re-read getPlatformSession; repeated IDs stay silent.',
         parameters: [{ name: 'client', description: 'identity of the requesting UI for this call.' }],
         returns: 'profile outcome, or null if signed out or the grant changed during the query.',
       },
@@ -952,9 +958,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the signed-out state after local removal; remote failures never restore the grant.',
       },
       {
-        signature: 'abstract watch(signal: AbortSignal): AsyncIterable<AccountView>',
+        signature: 'abstract watch(signal: AbortSignal, includeIdentityChanges?: boolean): AsyncIterable<AccountView>',
         description: 'Subscribe to snapshots including a complete initial state.',
-        parameters: [{ name: 'signal', description: 'subscription lifetime; ending it never cancels login.' }],
+        parameters: [{ name: 'signal', description: 'subscription lifetime; ending it never cancels login.' }, { name: 'includeIdentityChanges', description: 'also notify when cached Platform identity changes; defaults to false.' }],
         returns: 'complete snapshots as account state changes.',
       },
       {
@@ -1294,6 +1300,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Read direct module dependency URLs from the active Node loader.',
         parameters: [{ name: 'url', description: 'Module URL.' }],
         returns: 'Linked module URLs, or an empty list for an uncached module.',
+      },
+      {
+        signature: 'async reconcileProfile(requiredIds: readonly string[] = []): Promise<ProfileReconciliation>',
+        description: 'Recompose the profile from its manifest and patch files, replacing running plugins whose loaded files below the profile directory or its linked package targets changed on disk, and publishing its runtime resolution. Changed modules are evicted and the Loader entries running them stop; app-boot\'s recomposeProfile then publishes the resolution, applies the generation, starts the stopped entries with the current files and configuration, imports entries whose import failed again, and judges activation. Afterwards the modules below the mappings the recomposition dropped are evicted, so a removed or deselected package is imported afresh when it returns. Callers run inside runExclusive.',
+        parameters: [{ name: 'requiredIds', description: 'Entry ids whose inactive state is reported as a failure even when it predates this call.' }],
+        returns: 'Inactive-entry diagnostics, the changed modules that load after a restart, and a profile-wide restart reason.',
+        throws: ['The patch read, publication, preparation, apply, or activation failure of the recomposition, including a replacement plugin that fails to load or start, whose previous code no longer runs.'],
       },
     ],
   },
@@ -1873,6 +1886,49 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'remoteAccess',
+    summary: 'Registry of access policies, the Gateway\'s access decisions, list filtering, and the per-Peer access snapshot.',
+    description: 'Registry of access policies, the Gateway\'s access decisions, list filtering, and the per-Peer access snapshot. Every composition that mounts the Gateway mounts this service too.',
+    methods: [
+      {
+        signature: 'registerPolicy<K extends Exclude<keyof PrincipalMap, \'owner\'>>(kind: K, policy: RemoteAccessPolicy<PrincipalMap[K]>): () => void',
+        description: 'Register the policy of one non-owner principal kind in the caller\'s fiber; open snapshots are recomputed on registration and removal.',
+        parameters: [{ name: 'kind', description: 'the principal kind the policy serves; never `owner`.' }, { name: 'policy', description: 'business-owned bindings and refusal reasons for principals of `kind`.' }],
+        returns: 'disposer removing this policy.',
+        throws: ['Error when `kind` already has a policy.'],
+      },
+      {
+        signature: 'invalidate(principal?: Principal): void',
+        description: 'Report that the bindings or condition answers for `principal` may have changed. Business packages call this on every grant, revocation, mode change, and expiry; open snapshots re-push, and the next failure of each policy is logged again.',
+        parameters: [{ name: 'principal', description: 'affected principal; omitted for every principal.' }],
+      },
+      {
+        signature: 'decide(request: RemoteAccessRequest<Principal>): RemoteAccessDecision',
+        description: 'Gateway-only: decide one request whose resources the Gateway resolved. The owner is allowed, and so is `remoteAccess/follow`: every Peer reads its own snapshot. Otherwise the action is allowed only when, on every listed resource, some binding of the principal\'s policy names that resource, has a role listing the action, and has no condition or a condition that allows. `bindings()` is called once per decision.',
+        parameters: [{ name: 'request', description: 'the caller or recipient, the action, the resources it touches, and a call\'s arguments.' }],
+        returns: '`allow`; or `deny` with `no-allow` when the principal kind has no policy, the first refusing condition\'s reason on the first resource no binding allows, else `explain()`\'s reason, else `no-allow`; `policy-failed` when `bindings()`, a condition, or `explain()` throws, logged once per policy until the next `invalidate()`. The Gateway throws `remote-access/denied` for a denied call and drops a denied event.',
+      },
+      {
+        signature: 'allows(resource: RemoteAccessResource): boolean',
+        description: 'Filter items inside a Remote method. The invocation is read from the Context that accessed this service, so call it as `this.ctx.remoteAccess.allows(resource)` from the Remote method. Each check reads the policy\'s bindings again, so a long-running stream sees binding changes from the next check on.',
+        parameters: [{ name: 'resource', description: 'resource of one result item.' }],
+        returns: 'true for the owner and outside a Remote call; otherwise whether the invocation\'s endpoint action is allowed on `resource` without call arguments, false when the policy is absent or fails.',
+      },
+      {
+        signature: 'snapshotFor(principal: Principal): RemoteAccessBaseline',
+        description: 'The baseline a page opens with before its snapshot stream connects. A business package rendering a non-owner page assigns this value to REMOTE_ACCESS_SNAPSHOT_KEY after every index injection row, replacing the owner baseline the webServer index carries.',
+        parameters: [{ name: 'principal', description: 'the page\'s caller identity.' }],
+        returns: 'the owner baseline for the owner; otherwise the principal\'s current grants.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *follow(signal: AbortSignal): AsyncIterable<RemoteAccessFrame>',
+        description: 'Stream the calling Peer\'s access snapshot: one baseline, then `upsert` and `remove` frames after each `invalidate()` and each policy registration or removal that changes a grant. The owner receives only `{ owner: true }`. The generation ends when `signal` aborts or this service unloads, so a reloaded service starts every reader from a fresh baseline.',
+        parameters: [{ name: 'signal', description: 'generation cancellation.' }],
+        returns: 'the access frames of one generation.',
+      },
+    ],
+  },
+  {
     key: 'sandbox',
     summary: 'Abstract process-sandbox service.',
     description: 'Abstract process-sandbox service. confine must return enforcing argv or fail closed at wrap or runner-execution time; silent unconfined passthrough is forbidden. Functional probes arbitrate multi-runner chains and may be skipped for a sole candidate, whose own refusal remains the fail-closed end.',
@@ -1982,8 +2038,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'visible Session summaries ordered by activity.',
       },
       {
-        signature: '@Remote(\'search\') search(request: SessionSearchRequest, signal: AbortSignal): Promise<SessionSearchValue>',
-        description: 'Search visible Session content without resuming an Agent.',
+        signature: '@Remote(\'search\') async search(request: SessionSearchRequest, signal: AbortSignal): Promise<SessionSearchValue>',
+        description: 'Search visible Session content without resuming an Agent. A non-owner receives only the hits whose Session `allows()` admits; `hasMore` describes the bounded result before that filtering.',
         parameters: [{ name: 'request', description: 'literal message-content query.' }, { name: 'signal', description: 'cancellation for list and search reads.' }],
         returns: 'authorized bounded Session search results.',
       },
@@ -2050,7 +2106,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the new Session identity.',
       },
       {
-        signature: '@Remote(\'prompt\') prompt(request: SessionPromptRequest, signal: AbortSignal): Promise<SessionPromptValue>',
+        signature: '@Remote(\'prompt\') async prompt(request: SessionPromptRequest, signal: AbortSignal): Promise<SessionPromptValue>',
         description: 'Admit one prompt after explicitly resuming its Session.',
         parameters: [{ name: 'request', description: 'Session identity, prompt content, source metadata, and delivery mode.' }, { name: 'signal', description: 'caller cancellation before prompt admission begins.' }],
         returns: 'acknowledgement that the Agent accepted the prompt.',
@@ -2074,13 +2130,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'acknowledgement that cancellation was requested.',
       },
       {
-        signature: '@Remote(\'page\') page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage>',
+        signature: '@Remote({ name: \'page\', resources: { session: addressedSession } }) page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage>',
         description: 'Read one cold-safe, message-aligned Session history page.',
         parameters: [{ name: 'request', description: 'durable address, backward cursor, and page budget.' }, { name: 'signal', description: 'cancellation for persistence reads.' }],
         returns: 'one chronological page.',
       },
       {
-        signature: '@Remote({ mode: \'stream\' }) follow(request: SessionFollowRequest, signal: AbortSignal): AsyncIterable<SessionFollowFrame>',
+        signature: '@Remote({ mode: \'stream\', resources: { session: addressedSession } }) follow(request: SessionFollowRequest, signal: AbortSignal): AsyncIterable<SessionFollowFrame>',
         description: 'Follow one Session log from its opening or resume cursor.',
         parameters: [{ name: 'request', description: 'durable address and last committed sequence already held by the caller.' }, { name: 'signal', description: 'cancellation owned by the Remote stream carrier.' }],
         returns: 'a complete opening snapshot followed by gap-free durable event frames and optional cursorless assistant-stream frames.',
@@ -2092,7 +2148,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'a sequenced baseline, cached hints when migration is deferred, or null when absent.',
       },
       {
-        signature: '@Remote({ mode: \'stream\' }) control(signal: AbortSignal): AsyncIterable<SessionControlFrame>',
+        signature: '@Remote({ mode: \'stream\' }) async *control(signal: AbortSignal): AsyncIterable<SessionControlFrame>',
         description: 'Stream a complete live-control baseline followed by replacement frames.',
         parameters: [{ name: 'signal', description: 'cancellation owned by the Remote stream carrier.' }],
         returns: 'one complete baseline followed by live replacement frames.',
@@ -3458,9 +3514,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'hasLiveClient(): boolean',
-        description: 'Check for an active Client event stream.',
+        description: 'Check for an active owner Client event stream, the only kind that can answer forwarded waterfalls.',
         parameters: [],
-        returns: 'whether a stream is open and has not been cancelled.',
+        returns: 'whether an owner stream is open and has not been cancelled.',
       },
       {
         signature: 'registerRemoteEvents( source: TypertRemoteEventSource, host: RemoteEventHostInfo, ): () => Promise<void>',
@@ -3767,8 +3823,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the complete resulting pin set, most recently pinned first.',
       },
       {
-        signature: '@Remote({ mode: \'stream\' }) follow(signal: AbortSignal): AsyncIterable<WorkspaceFollowFrame>',
-        description: 'Stream a complete Workspace baseline followed by ordered increments.',
+        signature: '@Remote({ mode: \'stream\' }) async *follow(signal: AbortSignal): AsyncIterable<WorkspaceFollowFrame>',
+        description: 'Stream a complete Workspace baseline followed by ordered increments. A non-owner receives only the Workspaces and Sessions `allows()` admits. When a delivered Workspace is no longer admitted at its next change or the next order change, the stream sends a `replace` frame with the complete filtered state instead of a `remove`, because a Client never resurrects a removed Workspace; a `remove` frame reports a deletion and reaches only a Client that received that Workspace.',
         parameters: [{ name: 'signal', description: 'generation cancellation.' }],
         returns: 'baseline followed by ordered Workspace increments.',
       },
@@ -4888,7 +4944,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ChangeResult',
-    declaration: 'export interface ChangeResult {\n    changed: boolean;\n    application: \'applied\' | \'restart-required\' | \'overridden\' | \'failed\' | \'cancelled\';\n    stage: \'install\' | \'enable\' | \'remove\';\n    target: string;\n    enabled?: boolean;\n    error?: ManagementError;\n    warnings?: string[];\n    packageResult?: PackageResult;\n    bundle?: string;\n    version?: string;\n    pendingBuilds?: string[];\n    approvedBuilds?: string[];\n    registries?: Registry[];\n    failedAt?: \'registry\' | \'spec-host\';\n}',
+    declaration: 'export interface ChangeResult {\n    changed: boolean;\n    application: \'applied\' | \'restart-required\' | \'overridden\' | \'failed\' | \'cancelled\';\n    restartReason?: RestartReason;\n    stage: \'install\' | \'enable\' | \'remove\';\n    target: string;\n    enabled?: boolean;\n    error?: ManagementError;\n    warnings?: string[];\n    packageResult?: PackageResult;\n    bundle?: string;\n    version?: string;\n    pendingBuilds?: string[];\n    approvedBuilds?: string[];\n    registries?: Registry[];\n    failedAt?: \'registry\' | \'spec-host\';\n}',
   },
   {
     name: 'ClientArtifactBaseline',
@@ -4992,7 +5048,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ConnectionFetchHandler',
-    declaration: 'export interface ConnectionFetchHandler {\n    requestBodyMode(request: {\n        readonly method: string;\n        readonly url: URL;\n    }): ConnectionRequestBodyMode;\n    fetch(request: Request): Promise<Response>;\n}',
+    declaration: 'export interface ConnectionFetchHandler {\n    requestBodyMode(request: {\n        readonly method: string;\n        readonly url: URL;\n    }): ConnectionRequestBodyMode;\n    fetch(request: Request, peer: PeerScope): Promise<Response>;\n}',
   },
   {
     name: 'ConnectionFetchMethod',
@@ -5632,11 +5688,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'InvocationDescriptor',
-    declaration: 'export interface InvocationDescriptor {\n    readonly id: string;\n    readonly service: string;\n    readonly namespace: string;\n    readonly method: string;\n    readonly implementation?: string;\n    readonly mode?: \'stream\';\n    readonly invocation: {\n        readonly kind: \'direct\';\n    } | {\n        readonly kind: \'context\';\n        readonly context: string;\n        readonly wire: string;\n        readonly codec: TypertCodec;\n    };\n    readonly scope?: {\n        readonly context: string;\n        readonly wire: string;\n    };\n    readonly parameters: readonly InvocationParameterDescriptor[];\n    readonly uplink?: {\n        readonly codec: TypertCodec;\n    };\n    readonly cancellation?: {\n        readonly parameter: \'signal\';\n    };\n    readonly result: TypertCodec;\n    readonly sourceLocation?: InvocationSourceLocation;\n}',
+    declaration: 'export interface InvocationDescriptor {\n    readonly id: string;\n    readonly service: string;\n    readonly namespace: string;\n    readonly method: string;\n    readonly implementation?: string;\n    readonly mode?: \'stream\';\n    readonly invocation: {\n        readonly kind: \'direct\';\n    } | {\n        readonly kind: \'context\';\n        readonly context: string;\n        readonly wire: string;\n        readonly codec: TypertCodec;\n    };\n    readonly scope?: {\n        readonly context: string;\n        readonly wire: string;\n    };\n    readonly parameters: readonly InvocationParameterDescriptor[];\n    readonly uplink?: {\n        readonly codec: TypertCodec;\n    };\n    readonly cancellation?: {\n        readonly parameter: \'signal\';\n    };\n    readonly result: TypertCodec;\n    readonly description?: string;\n    readonly sourceLocation?: InvocationSourceLocation;\n}',
   },
   {
     name: 'InvocationParameterDescriptor',
-    declaration: 'export interface InvocationParameterDescriptor {\n    readonly name: string;\n    readonly wire: string;\n    readonly source: \'json\' | \'lookup\';\n    readonly lookup?: string;\n    readonly codec: TypertCodec;\n    readonly acceptsUndefined?: true;\n}',
+    declaration: 'export interface InvocationParameterDescriptor {\n    readonly name: string;\n    readonly description?: string;\n    readonly wire: string;\n    readonly source: \'json\' | \'lookup\';\n    readonly lookup?: string;\n    readonly codec: TypertCodec;\n    readonly acceptsUndefined?: true;\n}',
   },
   {
     name: 'InvocationSourceLocation',
@@ -5644,7 +5700,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'InvokeRemoteRequest',
-    declaration: 'export interface InvokeRemoteRequest {\n    readonly namespace: string;\n    readonly method: string;\n    readonly args: Readonly<Record<string, unknown>>;\n    readonly uplink?: AsyncIterable<unknown>;\n    readonly uplinkWindow?: RemoteUplinkWindow | undefined;\n    readonly peer?: PeerScope;\n    readonly signal?: AbortSignal;\n}',
+    declaration: 'export interface InvokeRemoteRequest {\n    readonly namespace: string;\n    readonly method: string;\n    readonly args: Readonly<Record<string, unknown>>;\n    readonly uplink?: AsyncIterable<unknown>;\n    readonly uplinkWindow?: RemoteUplinkWindow | undefined;\n    readonly peer: PeerScope;\n    readonly signal?: AbortSignal;\n}',
   },
   {
     name: 'JobAppendOptions',
@@ -5812,7 +5868,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmConfigurableProvider',
-    declaration: 'export interface LlmConfigurableProvider {\n    provider: string;\n    displayName: string;\n    settingsNs: string;\n    settingsPath: readonly string[];\n    declared?: boolean;\n    error?: string;\n}',
+    declaration: 'export interface LlmConfigurableProvider {\n    provider: string;\n    displayName: string;\n    settingsNs: string;\n    settingsPath: readonly string[];\n    declared?: boolean;\n    defaultBaseURL?: string;\n    baseURLEnv?: readonly string[];\n    nativeAuth?: LlmNativeAuth;\n    error?: string;\n}',
   },
   {
     name: 'LlmDiscoveredModel',
@@ -5845,6 +5901,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'LlmModelReasoningInfo',
     declaration: 'export interface LlmModelReasoningInfo {\n    efforts: readonly LlmReasoningEffortInfo[];\n    defaultEffort?: ReasoningEffortId;\n}',
+  },
+  {
+    name: 'LlmNativeAuth',
+    declaration: 'export interface LlmNativeAuth {\n    env: readonly string[];\n    oauth: boolean;\n}',
   },
   {
     name: 'LlmProviderInfo',
@@ -5916,7 +5976,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ManagementError',
-    declaration: 'export interface ManagementError {\n    code: ReadOnlyReason | \'unknown-plugin\' | \'invalid-spec\' | \'ambiguous-install\' | \'not-bundle\' | \'not-removable\' | \'stop-profile\' | \'bundle-in-use\' | \'stale-approval\' | \'incompatible-version\' | \'operation-error\';\n    diagnostic?: string;\n    incompatible?: IncompatiblePlugin[];\n}',
+    declaration: 'export interface ManagementError {\n    code: ReadOnlyReason | \'unknown-plugin\' | \'invalid-spec\' | \'already-installed\' | \'ambiguous-install\' | \'not-bundle\' | \'not-removable\' | \'stop-profile\' | \'bundle-in-use\' | \'stale-approval\' | \'incompatible-version\' | \'operation-error\';\n    diagnostic?: string;\n    incompatible?: IncompatiblePlugin[];\n}',
   },
   {
     name: 'ManualCompactAgentContext',
@@ -6180,7 +6240,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'PeerScope',
-    declaration: 'export interface PeerScope {\n    readonly id: PeerId;\n    readonly ctx: Context;\n    dispose(): Promise<void>;\n}',
+    declaration: 'export interface PeerScope {\n    readonly id: PeerId;\n    readonly ctx: Context;\n    readonly principal: Principal;\n    readonly signal: AbortSignal;\n    dispose(): Promise<void>;\n}',
+  },
+  {
+    name: 'PendingModule',
+    declaration: 'export interface PendingModule {\n    url: string;\n    reason: \'host-module\' | \'unmanaged-plugin\' | \'module-comparison\';\n}',
   },
   {
     name: 'PermissionCatalog',
@@ -6303,6 +6367,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type PreToolDecision = {\n    kind: \'allow\';\n} | {\n    kind: \'deny\';\n    reason: string;\n    info?: ToolErrorInfo;\n} | {\n    kind: \'cancel\';\n} | {\n    kind: \'ask\';\n    reason?: string;\n    displayReason?: {\n        readonly en: string;\n        readonly [locale: string]: string;\n    };\n};',
   },
   {
+    name: 'Principal',
+    declaration: 'export type Principal = PrincipalMap[keyof PrincipalMap];',
+  },
+  {
+    name: 'PrincipalMap',
+    declaration: 'export interface PrincipalMap {\n    owner: {\n        readonly kind: \'owner\';\n    };\n}',
+  },
+  {
     name: 'ProductEvent',
     declaration: 'export type ProductEvent = {\n    [K in keyof ProductEventMap]: {\n        eventName: K;\n        attributes: ProductEventMap[K];\n        timestamp: number;\n    };\n}[keyof ProductEventMap];',
   },
@@ -6317,6 +6389,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ProfilePnpmInvocation',
     declaration: 'export interface ProfilePnpmInvocation {\n    readonly command: string;\n    readonly args: readonly string[];\n    readonly env: Readonly<Record<string, string>>;\n}',
+  },
+  {
+    name: 'ProfileReconciliation',
+    declaration: 'export interface ProfileReconciliation {\n    warnings: string[];\n    pending: PendingModule[];\n    restartReason?: \'module-comparison\' | \'package-moved\';\n}',
   },
   {
     name: 'ProjectionChangeListener',
@@ -6471,6 +6547,62 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface Reload {\n    filename: string;\n    modules: ReloadModules;\n    runtime?: Plugin.Runtime | undefined;\n}',
   },
   {
+    name: 'RemoteAccessAction',
+    declaration: 'export type RemoteAccessAction = RemoteAccessEndpoint | `event:${string}`;',
+  },
+  {
+    name: 'RemoteAccessBaseline',
+    declaration: 'export type RemoteAccessBaseline = Extract<RemoteAccessFrame, {\n    type: \'baseline\';\n}>;',
+  },
+  {
+    name: 'RemoteAccessBinding',
+    declaration: 'export type RemoteAccessBinding = {\n    [K in RemoteAccessResourceKind]: {\n        readonly role: RemoteAccessRole<K>;\n        readonly resource: RemoteAccessResourceOf<K>;\n        readonly condition?: RemoteAccessCondition<K>;\n    };\n}[RemoteAccessResourceKind];',
+  },
+  {
+    name: 'RemoteAccessCondition',
+    declaration: 'export type RemoteAccessCondition<K extends RemoteAccessResourceKind> = (request: {\n    readonly action: RemoteAccessAction;\n    readonly resource: RemoteAccessResourceOf<K>;\n    readonly args?: Readonly<Record<string, unknown>>;\n}) => RemoteAccessDecision;',
+  },
+  {
+    name: 'RemoteAccessDecision',
+    declaration: 'export type RemoteAccessDecision = {\n    readonly kind: \'allow\';\n} | {\n    readonly kind: \'deny\';\n    readonly reason: string;\n};',
+  },
+  {
+    name: 'RemoteAccessEndpoint',
+    declaration: 'export type RemoteAccessEndpoint = `${string}/${string}`;',
+  },
+  {
+    name: 'RemoteAccessFrame',
+    declaration: 'export type RemoteAccessFrame = {\n    readonly type: \'baseline\';\n    readonly owner: true;\n} | {\n    readonly type: \'baseline\';\n    readonly owner: false;\n    readonly grants: readonly RemoteAccessGrant[];\n} | {\n    readonly type: \'upsert\';\n    readonly grant: RemoteAccessGrant;\n} | {\n    readonly type: \'remove\';\n    readonly resource: RemoteAccessResource;\n};',
+  },
+  {
+    name: 'RemoteAccessGrant',
+    declaration: 'export interface RemoteAccessGrant {\n    readonly resource: RemoteAccessResource;\n    readonly actions: readonly string[];\n}',
+  },
+  {
+    name: 'RemoteAccessPolicy',
+    declaration: 'export interface RemoteAccessPolicy<P extends Principal> {\n    bindings(principal: P): readonly RemoteAccessBinding[];\n    explain?(request: RemoteAccessRequest<P>): string | undefined;\n}',
+  },
+  {
+    name: 'RemoteAccessRequest',
+    declaration: 'export interface RemoteAccessRequest<P extends Principal> {\n    readonly principal: P;\n    readonly action: RemoteAccessAction;\n    readonly resources: readonly RemoteAccessResource[];\n    readonly args?: Readonly<Record<string, unknown>>;\n}',
+  },
+  {
+    name: 'RemoteAccessResource',
+    declaration: 'export type RemoteAccessResource = {\n    readonly kind: \'global\';\n} | {\n    [Kind in TypertResourceKind]: {\n        readonly kind: Kind;\n        readonly id: TypertResourceId<TypertResourceMap[Kind]>;\n    };\n}[TypertResourceKind];',
+  },
+  {
+    name: 'RemoteAccessResourceKind',
+    declaration: 'export type RemoteAccessResourceKind = \'global\' | TypertResourceKind;',
+  },
+  {
+    name: 'RemoteAccessResourceOf',
+    declaration: 'export type RemoteAccessResourceOf<K extends RemoteAccessResourceKind> = Extract<RemoteAccessResource, {\n    readonly kind: K;\n}>;',
+  },
+  {
+    name: 'RemoteAccessRole',
+    declaration: 'export interface RemoteAccessRole<K extends RemoteAccessResourceKind> {\n    readonly name: string;\n    readonly resource: K;\n    readonly actions: readonly RemoteAccessAction[];\n}',
+  },
+  {
     name: 'RemoteError',
     declaration: 'export class RemoteError<Code extends RemoteErrorCode = RemoteErrorCode> extends Error {\n    readonly isDSHRemoteError: true;\n    constructor(readonly code: Code, message: string, readonly details: RemoteErrorDetailsMap[Code], options?: ErrorOptions);\n}',
   },
@@ -6553,6 +6685,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ResolvedSubagentStartRequest',
     declaration: 'export interface ResolvedSubagentStartRequest extends SubagentStartRequest {\n    readonly cwd: string;\n}',
+  },
+  {
+    name: 'RestartReason',
+    declaration: 'export type RestartReason = \'no-hmr\' | \'package-moved\' | \'host-module\' | \'unmanaged-plugin\' | \'module-comparison\';',
   },
   {
     name: 'RestoredSessionOptions',
@@ -7564,7 +7700,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentCapabilities',
-    declaration: 'export interface SubagentCapabilities {\n    readonly agentOptions: boolean;\n    readonly outputSchema: boolean;\n    readonly depthLimit: boolean;\n    readonly toolFilter: boolean;\n    readonly persona: boolean;\n}',
+    declaration: 'export interface SubagentCapabilities {\n    readonly agentOptions: boolean;\n    readonly agentPreset: boolean;\n    readonly outputSchema: boolean;\n    readonly depthLimit: boolean;\n}',
   },
   {
     name: 'SubagentCatalogEntry',
@@ -7640,7 +7776,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentStartRequest',
-    declaration: 'export interface SubagentStartRequest {\n    readonly cwd?: string;\n    readonly label?: string;\n    readonly prompt: ContentBlock[];\n    readonly parent: Agent;\n    readonly signal: AbortSignal;\n    readonly agentOptions?: AgentOptions;\n    readonly outputSchema?: ObjectJsonSchema;\n    readonly maxDepth?: number;\n    readonly toolFilter?: ToolRestriction;\n    readonly persona?: string;\n}',
+    declaration: 'export interface SubagentStartRequest {\n    readonly cwd?: string;\n    readonly agentPreset?: string;\n    readonly label?: string;\n    readonly prompt: ContentBlock[];\n    readonly parent: Agent;\n    readonly signal: AbortSignal;\n    readonly agentOptions?: AgentOptions;\n    readonly outputSchema?: ObjectJsonSchema;\n    readonly maxDepth?: number;\n}',
   },
   {
     name: 'SubagentStopReason',
@@ -8128,7 +8264,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TypertCodec',
-    declaration: 'export type TypertCodec = {\n    readonly mode: \'strict\';\n    readonly typeSymbol: string;\n    readonly create: () => TypertSchema;\n    readonly decode?: (value: unknown) => unknown;\n    readonly encode?: (value: unknown, writeBytes: (bytes: Uint8Array, path: readonly (string | number)[]) => null) => unknown;\n} | {\n    readonly mode: \'src-json\';\n};',
+    declaration: 'export type TypertCodec<Value = unknown> = TypertRemoteValue<Value> & {\n    readonly mode: \'strict\';\n    readonly typeSymbol: string;\n    readonly decode?: ((value: unknown) => unknown) | undefined;\n    readonly encode?: ((value: unknown, writeBytes: (bytes: Uint8Array, path: readonly (string | number)[]) => null) => unknown) | undefined;\n} | {\n    readonly mode: \'src-json\';\n};',
   },
   {
     name: 'TypertContribution',
@@ -8156,7 +8292,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TypertGatewayWireStream',
-    declaration: 'export interface TypertGatewayWireStream {\n    readonly open: (endpoint: string, payload: unknown, uplink: AsyncIterable<unknown>, peer: PeerScope | undefined, signal: AbortSignal) => Promise<AsyncIterable<unknown>>;\n    readonly failure: (error: unknown) => {\n        readonly code: string;\n        readonly message: string;\n        readonly details: object;\n    };\n}',
+    declaration: 'export interface TypertGatewayWireStream {\n    readonly open: (endpoint: string, payload: unknown, uplink: AsyncIterable<unknown>, peer: PeerScope, signal: AbortSignal) => Promise<AsyncIterable<unknown>>;\n    readonly failure: (error: unknown) => {\n        readonly code: string;\n        readonly message: string;\n        readonly details: object;\n    };\n}',
   },
   {
     name: 'TypertMemberModel',
@@ -8188,7 +8324,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TypertRemoteEventFrame',
-    declaration: 'export interface TypertRemoteEventFrame {\n    readonly event: string;\n    readonly args: readonly unknown[];\n}',
+    declaration: 'export interface TypertRemoteEventFrame {\n    readonly event: string;\n    readonly args: readonly unknown[];\n    readonly resources?: Readonly<Record<string, TypertResourceReader>>;\n}',
   },
   {
     name: 'TypertRemoteEventInvocation',
@@ -8205,6 +8341,30 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TypertRemoteService',
     declaration: 'export abstract class TypertRemoteService<out T = never> extends Service<T> {\n    readonly typertRemote: TypertGatewayBinding<this>;\n}',
+  },
+  {
+    name: 'TypertRemoteValue',
+    declaration: 'export interface TypertRemoteValue<Value = unknown> {\n    readonly create: () => TypertSchema<Value>;\n    readonly description?: string | undefined;\n    readonly jsonSchema?: Readonly<Record<string, unknown>> | undefined;\n    readonly jsonSchemaError?: string | undefined;\n}',
+  },
+  {
+    name: 'TypertResource',
+    declaration: 'export interface TypertResource<Id> {\n    readonly [RESOURCE_ID]: Id;\n}',
+  },
+  {
+    name: 'TypertResourceId',
+    declaration: 'export type TypertResourceId<Resource> = Resource extends TypertResource<infer Id> ? Id : never;',
+  },
+  {
+    name: 'TypertResourceKind',
+    declaration: 'export type TypertResourceKind = Extract<keyof TypertResourceMap, string>;',
+  },
+  {
+    name: 'TypertResourceMap',
+    declaration: 'export interface TypertResourceMap {\n}',
+  },
+  {
+    name: 'TypertResourceReader',
+    declaration: 'export type TypertResourceReader = {\n    read(...args: readonly unknown[]): unknown;\n}[\'read\'];',
   },
   {
     name: 'TypertSchema',
@@ -8536,7 +8696,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WorkspaceFollowIncrement',
-    declaration: 'export type WorkspaceFollowIncrement = {\n    readonly type: \'upsert\';\n    readonly workspace: WorkspaceView;\n} | {\n    readonly type: \'remove\';\n    readonly workspaceId: WorkspaceId;\n} | {\n    readonly type: \'order\';\n    readonly workspaceIds: readonly WorkspaceId[];\n} | {\n    readonly type: \'archived\';\n    readonly archivedSessionIds: readonly SessionId[];\n} | {\n    readonly type: \'pinned\';\n    readonly pinnedSessionIds: readonly SessionId[];\n};',
+    declaration: 'export type WorkspaceFollowIncrement = {\n    readonly type: \'replace\';\n    readonly value: WorkspaceBaseline;\n} | {\n    readonly type: \'upsert\';\n    readonly workspace: WorkspaceView;\n} | {\n    readonly type: \'remove\';\n    readonly workspaceId: WorkspaceId;\n} | {\n    readonly type: \'order\';\n    readonly workspaceIds: readonly WorkspaceId[];\n} | {\n    readonly type: \'archived\';\n    readonly archivedSessionIds: readonly SessionId[];\n} | {\n    readonly type: \'pinned\';\n    readonly pinnedSessionIds: readonly SessionId[];\n};',
   },
   {
     name: 'WorkspaceInsertBeforeRequest',
