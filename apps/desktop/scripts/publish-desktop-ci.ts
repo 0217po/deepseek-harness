@@ -62,8 +62,8 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
     if (mode === '--publish' && !env.DESKTOP_APPROVED_PACKAGE) throw new Error('desktop publish: approved package digest is required')
     if (mode === '--check') {
       if (env.GITHUB_OUTPUT) await appendFile(env.GITHUB_OUTPUT, `approval=${approval}\nlabel=${plan.version} → ${manifest.source.channel} / ${plan.target} / ${plan.environment}\n`)
-      if (env.GITHUB_STEP_SUMMARY) await appendFile(env.GITHUB_STEP_SUMMARY,
-        await desktopPublicationSummary(manifest.source, plan, config.origin, approval))
+      if (env.GITHUB_STEP_SUMMARY && !env.DESKTOP_APPROVED_PACKAGE) await appendFile(env.GITHUB_STEP_SUMMARY,
+        await desktopPublicationSummary(manifest.source, plan, approval))
       if (env.GITHUB_OUTPUT && config.githubApp) await appendFile(env.GITHUB_OUTPUT,
         `app-client-id=${config.githubApp.clientId}\napp-key-file=${config.githubApp.privateKeyFile}\n`)
       process.stdout.write(`desktop publish: verified ${plan.target} ${plan.version}; no credentials read or COS requests made\n`)

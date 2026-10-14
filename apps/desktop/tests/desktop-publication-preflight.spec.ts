@@ -20,7 +20,7 @@ it.each(['mac-arm64', 'win-x64'] as const)('preflights a complete retained %s bu
     const releaseId = 'a'.repeat(32)
     await writeFile(join(configRoot, 'presets/test.env'), `DSH_DESKTOP_AUTO_UPDATE_ENV=test\nDOWNLOAD_TEST_RELEASE_ID=${releaseId}\n`)
     await writeFile(join(configRoot, 'publishing/test.json'), JSON.stringify({
-      bucket: 'fixture-1250000000', origin: 'https://example.com', credentialsFile: join(root, 'absent-credentials.json'),
+      bucket: 'fixture-1250000000', origin: 'https://EXAMPLE.com:443/', credentialsFile: join(root, 'absent-credentials.json'),
     }))
     const commit = 'b'.repeat(40)
     const base = `deepseek-harness-1.0.0-${target}`
@@ -52,11 +52,12 @@ it.each(['mac-arm64', 'win-x64'] as const)('preflights a complete retained %s bu
     expect(prepared.plan.version).toBe('1.0.0')
     expect(prepared.plan.artifacts.every(file => file.path.startsWith(retained))).toBe(true)
     expect(signatureChecks).toBe(1)
-    const summary = await desktopPublicationSummary(prepared.manifest.source, prepared.plan, prepared.config.origin, 'c'.repeat(64))
+    const summary = await desktopPublicationSummary(prepared.manifest.source, prepared.plan, 'c'.repeat(64))
     await expect(summary).toMatchFileSnapshot(`./expected/publication-${target}.md`)
     const feed = prepared.plan.artifacts.find(file => file.channelMetadata)!
     expect(summary).toContain(createHash('sha256').update(feed.contents!).digest('hex'))
-    expect(summary).toContain('https://github.com/owner/repo/actions/runs/10/attempts/2')
+    expect(summary).toContain('https&#58;//github.com/owner/repo/actions/runs/10/attempts/2')
+    expect(summary).not.toContain('example.com//')
     expect(summary).not.toContain(root)
     expect(summary).not.toContain('absent-credentials')
     await expect(prepareDesktopPublication({ ...env, DESKTOP_APPROVED_PACKAGE: 'wrong' }, signature)).rejects.toThrow(/changed after approval/u)

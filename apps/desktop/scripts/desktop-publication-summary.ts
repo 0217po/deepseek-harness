@@ -5,7 +5,7 @@ import type { DesktopRetainedSource } from './desktop-release-store.ts'
 import type { DesktopUploadPlan } from './desktop-upload-plan.ts'
 
 function text(value: string): string {
-  return value.replace(/[&<>"'|`\r\n]/gu, character => `&#${character.charCodeAt(0)};`)
+  return value.replace(/[&<>"'|`\r\n\\*_\[\]()!~:]/gu, character => `&#${character.charCodeAt(0)};`)
 }
 
 function code(value: string): string { return `<code>${text(value)}</code>` }
@@ -14,15 +14,16 @@ function link(url: string, label = url): string { return `<a href="${text(url)}"
 
 /**
  * Render Chinese approval details after package, destination and signature verification succeeds.
- * @param source Verified retained packaging identity.
+ * @param source Verified retained packaging identity; a test plan requires its validated release ID.
  * @param plan Validated upload plan; YAML contents are the bytes that will be uploaded.
- * @param origin Validated HTTPS download origin from the publishing configuration.
  * @param approval Digest bound to the approved manifest and upload plan.
+ * File SHA-256 hex supports `shasum -a 256` on downloads; upload reconciliation separately uses SHA-512 base64.
  * @returns GitHub-flavored Markdown with final URLs and upload-byte fingerprints, without credentials or local paths.
  */
 export async function desktopPublicationSummary(
-  source: DesktopRetainedSource, plan: DesktopUploadPlan, origin: string, approval: string,
+  source: DesktopRetainedSource, plan: DesktopUploadPlan, approval: string,
 ): Promise<string> {
+  const origin = new URL(plan.publicUrl).origin
   const url = (key: string) => `${origin}/${key.split('/').map(encodeURIComponent).join('/')}`
   const files = []
   for (const file of plan.artifacts) {
@@ -65,6 +66,6 @@ export async function desktopPublicationSummary(
     `审批摘要 SHA-256：${code(approval)}`, '',
     `共 ${plan.artifacts.length} 个文件；大小及 SHA-256 对应实际上传字节，包括更新后的 YAML 内容。`, '',
     '| 文件 | 大小 | SHA-256 |', '| --- | --- | --- |', ...files, '', '</details>', '',
-    '此摘要在公开仓库中可公开查看，包含下载路径及 test 发布的 release ID。随机前缀不能替代访问鉴权。', '',
+    '若仓库为公开仓库，此摘要中的下载路径及 test 发布的 release ID 也会公开。随机前缀不能替代访问鉴权。', '',
   ].join('\n')
 }
