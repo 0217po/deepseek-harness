@@ -249,6 +249,40 @@ it('publishes one avatar load and retries it through the shared Settings refresh
   expect(images[3]!.getAttribute('src')).toBeNull()
 }, 60_000)
 
+it('keeps successful account refreshes silent and reports only failed reads', async ({ start }) => {
+  vi.stubGlobal('dshDesktop', {})
+  const output = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+  const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+  const c = await start()
+  const actions = operations(c)
+  await actions.refreshAccount()
+  c.mock.remote.account.getProfile.mockResolvedValue(ok(profile))
+  c.mock.remote.account.getBalance.mockResolvedValue(ok({ status: 'ready', value: [], bonusWallets: [] }))
+  c.mock.streams.push('account/watch', stored)
+  await vi.waitFor(() => { expect(actions.hooks.account.getSnapshot().details?.profile).toEqual(profile) })
+  await actions.refreshAccount()
+  for (const spy of [output, info, log]) {
+    expect(spy.mock.calls.filter(call => String(call[0]).startsWith('[deepseek-account]'))).toEqual([])
+  }
+  c.mock.remote.account.getProfile.mockResolvedValueOnce(ok({ status: 'failed' }))
+  c.mock.remote.account.getBalance.mockRejectedValueOnce(new Error('private-transport-detail'))
+  await actions.refreshAccount()
+  expect(output).toHaveBeenCalledWith('[deepseek-account] account read failed', expect.objectContaining({
+    field: 'profile',
+  }))
+  expect(output).toHaveBeenCalledWith('[deepseek-account] account read failed', expect.objectContaining({
+    field: 'balance',
+  }))
+  expect(JSON.stringify(output.mock.calls)).not.toContain('private-transport-detail')
+  c.mock.remote.account.getBalance.mockResolvedValueOnce({ ok: false, error: new RemoteError('gateway/internal', 'private-rpc-detail', {}) })
+  await actions.refreshAccount()
+  expect(output).toHaveBeenCalledWith('[deepseek-account] account read failed', expect.objectContaining({
+    field: 'balance',
+  }))
+  expect(JSON.stringify(output.mock.calls)).not.toContain('private-rpc-detail')
+}, 60_000)
+
 it('coalesces refreshes, publishes independent failures, and rejects stale responses after sign-out or unload', async ({ start }) => {
   vi.stubGlobal('dshDesktop', {})
   const c = await start()

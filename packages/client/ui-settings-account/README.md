@@ -114,6 +114,6 @@ The [desktop login decision](../../../.agents/notes/implemented/architecture/202
 
 Usage and top-up show a centered 24px loading indicator without visible loading text until the native document loads; the return action remains available. The loading SVG is embedded locally from Figma node 2957:72553.
 
-Default-model initialization runs after publishing and accepting the sign-in frame, without delaying subsequent account frames. Failures are recorded in diagnostics and do not mark the signed-in account as failed.
+Default-model initialization runs after publishing and accepting the sign-in frame, without delaying subsequent account frames. Failures are recorded with `console.error` in the renderer Console and do not mark the signed-in account as failed. Profile and balance reads also report only failures, without account data or raw exceptions; successful refreshes and account frames are silent.
 
 Read-only onboarding settings and a failed initial account stream leave the workspace accessible. A failed initial settings read exposes Retry, which reissues the shared settings read. Overlapping onboarding and Platform overlays release background interaction only after their last owner unmounts.
