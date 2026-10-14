@@ -151,6 +151,16 @@ it('correlates a native request with its logged tool invocation', async () => {
   expect(native.request).toHaveBeenCalledExactlyOnceWith('listApps', {}, expect.any(AbortSignal), ToolCallId('lifecycle-1'))
 })
 
+it('reports screenshot pixel coordinates while preserving native capabilities', async () => {
+  const f = await setup()
+  const capabilities = { platform: 'macos', coordinateSpace: 'window-points', permissions: { accessibility: true, screenCapture: false } }
+  native.request.mockResolvedValueOnce(capabilities)
+  const result = await f.execute('getCapabilities')
+  expect(result.isError).toBe(false)
+  expect(result.value).toEqual({ ...capabilities, coordinateSpace: 'screenshot-pixels' })
+  expect(native.request).toHaveBeenCalledExactlyOnceWith('getCapabilities', {}, expect.any(AbortSignal), ToolCallId('lifecycle-1'))
+})
+
 it('sends native diagnostics to the Host logger without changing the tool result', async () => {
   const f = await setup()
   const messages: string[] = []
