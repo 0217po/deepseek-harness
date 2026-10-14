@@ -1,8 +1,8 @@
-/** One-time custom-profile initialization from shipped templates. */
+/** Custom-profile replacement from shipped templates. */
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   initProfile,
@@ -80,36 +80,58 @@ describe('initializeProfileFromDefault', () => {
     })
   })
 
-  it('rejects an existing target without changing its files', () => {
+  it('replaces an existing target with a fresh template copy', () => {
     withHome((home) => {
       const dir = resolveProfileDir('rescue', home)
       initProfile(dir, ['existing-bundle'])
+      const manifest = readProfileManifest('test', dir)
+      manifest.dependencies = { 'existing-bundle': '1.0.0' }
+      writeProfileManifest(dir, manifest)
       writeFileSync(join(dir, PROFILE_PATCH_FILENAME), '- id: existing\n  disabled: true\n')
-      const paths = ['package.json', PROFILE_PATCH_FILENAME, 'pnpm-workspace.yaml'].map(file => join(dir, file))
-      const before = paths.map(path => readFileSync(path))
+      mkdirSync(join(dir, 'node_modules', 'existing-bundle'), { recursive: true })
 
-      expect(() => {
-        initializeProfileFromDefault('rescue', 'web', home)
+      initializeProfileFromDefault('rescue', 'web', home)
+
+      expect(readProfileManifest('test', dir)).toEqual({
+        name: 'dsh-profile-rescue',
+        private: true,
+        dependencies: {},
+        dsh: { profile: { bundles: [...PROFILE_TEMPLATES.web!.bundles] } },
       })
-        .toThrow('profile "rescue" already exists')
-      expect(paths.map(path => readFileSync(path))).toEqual(before)
+      expect(readFileSync(join(dir, PROFILE_PATCH_FILENAME), 'utf8')).not.toContain('existing')
+      expect(existsSync(join(dir, 'node_modules'))).toBe(false)
+      expect(readdirSync(dirname(dir))).toEqual(['rescue'])
     })
   })
 
-  it('rejects a residual target directory without changing its contents', () => {
+  it('replaces a residual target directory', () => {
     withHome((home) => {
       const dir = resolveProfileDir('rescue', home)
       mkdirSync(dir, { recursive: true })
-      const residual = join(dir, PROFILE_PATCH_FILENAME)
-      writeFileSync(residual, '- id: residual\n  disabled: true\n')
-      const before = readFileSync(residual)
+      writeFileSync(join(dir, 'residual'), '')
 
-      expect(() => {
-        initializeProfileFromDefault('rescue', 'web', home)
-      })
-        .toThrow('profile directory')
-      expect(readFileSync(residual)).toEqual(before)
-      expect(existsSync(join(dir, 'package.json'))).toBe(false)
+      initializeProfileFromDefault('rescue', 'web', home)
+
+      expect(existsSync(join(dir, 'residual'))).toBe(false)
+      expect(readProfileManifest('test', dir).dsh?.profile).toEqual(PROFILE_TEMPLATES.web)
+    })
+  })
+
+  // Windows ignores POSIX directory write bits.
+  it.skipIf(process.platform === 'win32')('keeps the previous target when the fresh copy cannot be written', () => {
+    withHome((home) => {
+      const dir = resolveProfileDir('previous', home)
+      initProfile(dir, ['existing-bundle'])
+      const before = readFileSync(join(dir, 'package.json'))
+      chmodSync(dirname(dir), 0o500)
+      try {
+        expect(() => {
+          initializeProfileFromDefault('previous', 'web', home)
+        }).toThrow()
+      } finally {
+        chmodSync(dirname(dir), 0o700)
+      }
+      expect(readFileSync(join(dir, 'package.json'))).toEqual(before)
     })
   })
 
@@ -133,7 +155,7 @@ describe('initializeProfileFromDefault', () => {
     })
   })
 
-  it('allows only one of two synchronized processes to create the target', async () => {
+  it('leaves one complete template copy after two synchronized processes replace the target', async () => {
     const home = mkdtempSync(join(tmpdir(), 'dsh-profile-from-default-race-'))
     const gate = join(home, 'start')
     const ready = [join(home, 'ready-1'), join(home, 'ready-2')]
@@ -146,9 +168,10 @@ describe('initializeProfileFromDefault', () => {
       await Promise.all(ready.map(waitForFile))
       writeFileSync(gate, '')
       const results = await Promise.all(children)
-      expect(results.map(result => result.exitCode).sort()).toEqual([0, 1])
-      expect(readProfileManifest('test', resolveProfileDir('rescue', home)).dsh?.profile)
-        .toEqual(PROFILE_TEMPLATES.web)
+      expect(results.map(result => result.exitCode)).toContain(0)
+      const dir = resolveProfileDir('rescue', home)
+      expect(readProfileManifest('test', dir).dsh?.profile).toEqual(PROFILE_TEMPLATES.web)
+      expect(readdirSync(dirname(dir))).toEqual(['rescue'])
     } finally {
       for (const child of children) child.kill('SIGKILL')
       rmSync(home, { recursive: true, force: true })
