@@ -1,4 +1,4 @@
-/** Publish a retained package selected by the routing job; --check never reads secrets or contacts COS. */
+/** Publish a retained package selected by the preparation job; --check never reads secrets or contacts COS. */
 import { createHash } from 'node:crypto'
 import { appendFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
@@ -32,7 +32,7 @@ export async function prepareDesktopPublication(env: NodeJS.ProcessEnv, verifySi
   const source = manifest.source
   if (source.repository !== env.GITHUB_REPOSITORY || source.runnerName !== route.runnerName || source.target !== route.target
     || source.channel !== route.channel || source.sourceRef !== route.sourceRef || source.commit !== route.commit
-    || source.preset !== route.preset || !source.publishRequested) {
+    || source.preset !== route.preset) {
     throw new Error('desktop publish: local package differs from the routed request')
   }
   if (source.qualification !== (source.target === 'win-x64' ? 'signed' : 'notarized')) throw new Error('desktop publish: debugging artifacts cannot be published')

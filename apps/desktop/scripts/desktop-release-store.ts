@@ -22,7 +22,8 @@ const sourceSchema = z.strictObject({
   productVersion: z.string().min(1),
   version: z.string().min(1),
   testReleaseId: z.string().regex(/^[a-f0-9]{32}$/u).nullable(),
-  publishRequested: z.boolean(),
+  // Older retained manifests carry this flag; manual publication does not depend on it.
+  publishRequested: z.boolean().optional(),
   qualification: z.enum(['signed', 'notarized', 'unsigned', 'unnotarized']),
 })
 const manifestSchema = z.strictObject({
