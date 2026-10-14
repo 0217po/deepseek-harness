@@ -39,7 +39,7 @@ Environment 审批限制此工作流，不限制同一机器账户运行的任�
 
 打包只保留文件。成功后，在 `master` 上打开 **Publish Desktop · COS → Run workflow**，填写打包运行 URL 中的 `package_run_id`，并可填写 `package_run_attempt`。留空选择最新尝试，且该尝试必须成功，不会回退到较早的成功尝试；显式填写则选择对应的成功构建。Windows 必须完成签名，macOS 必须完成公证和 stapling。GitHub job 证据确定原 runner，本机清单在审批前提供 preset、版本、源码和通道。不会下载安装包或请求 artifact。旧清单的 `publishRequested=false` 不影响发布资格；本机文件缺失或变化会停止发布。
 
-上传前，发布器校验全部留存文件的哈希、版本及目标信息，再复核平台签名。macOS 校验 DMG，并解压 ZIP 校验 app 票据；Windows 校验 Authenticode、配置的签名证书指纹及时间戳。准备阶段生成审批摘要，列出版本、通道、平台、环境、源码 ref/SHA、package run/attempt、对象路径及拟创建的 tag。两种发布 job 均等待 **Review deployments → Approve and deploy**，随后重新核对已批准的 manifest 与上传计划摘要。文件或目标变化会被拒绝。审批不能修改版本；应拒绝并重新打包。两种环境都上传缺失文件、校验远端字节，再更新 YAML。此工作流没有只上传文件的模式。production 最后为记录的打包提交创建 `desktop-v<version>`；已有 tag 必须指向同一提交。
+上传前，发布器校验全部留存文件的哈希、版本及目标信息，再复核平台签名。macOS 校验 DMG，并解压 ZIP 校验 app 票据；Windows 校验 Authenticode、配置的签名证书指纹及时间戳。准备阶段生成中文审批摘要，分别展示版本、通道、平台和环境，以及留存的 test release ID、安装包与升级 YAML 的完整 URL、原打包尝试链接、源码 ref/SHA、平台校验结果及拟创建的 tag。折叠详情包含 COS 存储桶，以及实际上传字节的大小和 SHA-256（包括改写后的 YAML）。公开仓库的摘要会公开测试前缀和下载 URL；前缀不提供访问鉴权。两种发布 job 均等待 **Review deployments → Approve and deploy**，随后重新核对已批准的 manifest 与上传计划摘要。文件或目标变化会被拒绝。审批不能修改版本；应拒绝并重新打包。两种环境都上传缺失文件、校验远端字节，再更新 YAML。此工作流没有只上传文件的模式。production 最后为记录的打包提交创建 `desktop-v<version>`；已有 tag 必须指向同一提交。
 
 <a id="recovery-and-records"></a>
 

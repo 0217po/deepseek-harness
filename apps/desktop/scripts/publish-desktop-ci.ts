@@ -12,6 +12,7 @@ import { desktopPublishCos } from './desktop-publish-cos.ts'
 import { createDesktopPublicationRecord, wasDesktopAttemptPublished, withDesktopChannelLock } from './desktop-publish-record.ts'
 import { publishDesktopRelease } from './desktop-publish.ts'
 import { desktopPublicationFailure } from './desktop-publication-failure.ts'
+import { desktopPublicationSummary } from './desktop-publication-summary.ts'
 import { publishDesktopTag } from './desktop-publish-tag.ts'
 
 const routeSchema = z.object({ runId: z.string(), attempt: z.string(), commit: z.string(), runnerName: z.string(),
@@ -62,8 +63,7 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
     if (mode === '--check') {
       if (env.GITHUB_OUTPUT) await appendFile(env.GITHUB_OUTPUT, `approval=${approval}\nlabel=${plan.version} → ${manifest.source.channel} / ${plan.target} / ${plan.environment}\n`)
       if (env.GITHUB_STEP_SUMMARY) await appendFile(env.GITHUB_STEP_SUMMARY,
-        `\n## Confirm Desktop publication\n\nVersion: **${plan.version}**; channel: **${manifest.source.channel}**; environment: **${plan.environment}**; platform: **${plan.target}**\n\nSource: ${manifest.source.sourceRef} @ ${route.commit}\n\nPackage: ${route.runId}, attempt ${route.attempt}\n\nTag: ${plan.environment === 'production' ? `desktop-v${plan.version}` : 'none (test)'}\n\nApproved package SHA-256: ${approval}\n\n` +
-        plan.artifacts.map(file => `- ${file.channelMetadata ? 'Feed' : 'Artifact'}: ${file.key}`).join('\n') + '\n')
+        await desktopPublicationSummary(manifest.source, plan, config.origin, approval))
       if (env.GITHUB_OUTPUT && config.githubApp) await appendFile(env.GITHUB_OUTPUT,
         `app-client-id=${config.githubApp.clientId}\napp-key-file=${config.githubApp.privateKeyFile}\n`)
       process.stdout.write(`desktop publish: verified ${plan.target} ${plan.version}; no credentials read or COS requests made\n`)

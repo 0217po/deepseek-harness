@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { retainDesktopCi } from '../scripts/retain-desktop-ci.ts'
+import { desktopPublicationSummary } from '../scripts/desktop-publication-summary.ts'
 import { prepareDesktopPublication } from '../scripts/publish-desktop-ci.ts'
 
 it.each(['mac-arm64', 'win-x64'] as const)('preflights a complete retained %s build without credentials or source checkout manifests', async (target) => {
@@ -51,6 +52,13 @@ it.each(['mac-arm64', 'win-x64'] as const)('preflights a complete retained %s bu
     expect(prepared.plan.version).toBe('1.0.0')
     expect(prepared.plan.artifacts.every(file => file.path.startsWith(retained))).toBe(true)
     expect(signatureChecks).toBe(1)
+    const summary = await desktopPublicationSummary(prepared.manifest.source, prepared.plan, prepared.config.origin, 'c'.repeat(64))
+    await expect(summary).toMatchFileSnapshot(`./expected/publication-${target}.md`)
+    const feed = prepared.plan.artifacts.find(file => file.channelMetadata)!
+    expect(summary).toContain(createHash('sha256').update(feed.contents!).digest('hex'))
+    expect(summary).toContain('https://github.com/owner/repo/actions/runs/10/attempts/2')
+    expect(summary).not.toContain(root)
+    expect(summary).not.toContain('absent-credentials')
     await expect(prepareDesktopPublication({ ...env, DESKTOP_APPROVED_PACKAGE: 'wrong' }, signature)).rejects.toThrow(/changed after approval/u)
     await expect(prepareDesktopPublication({ ...env, RUNNER_NAME: 'other-machine' }, signature)).rejects.toThrow(/different machine/u)
     await writeFile(join(retained, `${base}.${extension}`), 'changed')
