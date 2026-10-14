@@ -141,6 +141,11 @@ int wmain() {
         "Preserved backup: C:\\Apps\\\xE6\x96\x87\xE4\xBB\xB6.old"}) {
         assert(directorySaved.find(expected) != std::string::npos);
     }
+    assert(InstallerReportDirectoryFailure(nullptr, ERROR_ACCESS_DENIED, L"a", L"", 0, L"", log.c_str(), directoryReport.c_str(), 0,
+        L"title", L"heading", L"hint", L"copy", L"expand", L"collapse", L"saved %s", L"unsaved", L"copied") == 1);
+    const std::string removalSaved = ReadBytes(directoryReport);
+    assert(removalSaved.find("Operation: RemoveDirectoryW") != std::string::npos);
+    assert(removalSaved.find("Preserved backup:") == std::string::npos);
     assert(InstallerReportDirectoryFailure(nullptr, ERROR_ACCESS_DENIED, L"a", L"", 0, L"", log.c_str(), (log + L"\\impossible.txt").c_str(), 0,
         L"title", L"heading", L"hint", L"copy", L"expand", L"collapse", L"saved %s", L"unsaved", L"copied") == 0);
 

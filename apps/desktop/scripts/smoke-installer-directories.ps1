@@ -102,14 +102,17 @@ try {
       $backups = @(Get-ChildItem -LiteralPath $caseRoot -Directory -Filter 'Application.old-*')
       if ($backups.Count -ne 1 -or [IO.File]::ReadAllText((Join-Path $backups[0].FullName 'asset.txt')) -ne 'old asset' -or
           [IO.File]::ReadAllText((Join-Path $backups[0].FullName 'obsolete.txt')) -ne 'old only' -or
-          [IO.File]::ReadAllText((Join-Path $target 'unrelated.txt')) -ne 'unrelated file') {
+          [IO.File]::ReadAllText((Join-Path "$target.conflict" 'unrelated.txt')) -ne 'unrelated file') {
         throw 'Failed restoration did not preserve the backup and the conflicting destination'
+      }
+      if ((Test-Path -LiteralPath $target) -or @(Get-ChildItem -LiteralPath $caseRoot -Directory -Filter 'Application.new-*').Count -ne 0) {
+        throw 'Reported restoration failure retried recovery or retained its unlocked staging directory'
       }
       if ($FrameLibrary) {
         $reports = @(Get-ChildItem -LiteralPath $reportDir -File)
         if ($reports.Count -ne 1) { throw 'Failed restoration did not save exactly one report' }
         $report = Get-Content -LiteralPath $reports[0].FullName -Raw -Encoding UTF8
-        foreach ($expected in @('Windows error: 183', 'Restoration error: 183', "Preserved backup: $($backups[0].FullName)")) {
+        foreach ($expected in @('promote: Windows error: 183', 'restore: Windows error: 183', 'Restoration error: 183', "Preserved backup: $($backups[0].FullName)")) {
           if (-not $report.Contains($expected)) { throw "Failed restoration report lacks '$expected'" }
         }
       }

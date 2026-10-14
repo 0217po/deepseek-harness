@@ -10,9 +10,11 @@ Var dshDirectorySource
 Var dshDirectoryDestination
 Var dshRestoreError
 Var dshDirectoryLogDirectory
+Var dshRecoveryStopped
 
 ; MoveFileEx preserves the destination and exposes the Windows error before rollback changes it.
-!macro dshDirectoryOperation SOURCE DESTINATION RESULT
+; Open files inside a directory can make its rename return access denied (5).
+!macro dshDirectoryOperation SOURCE DESTINATION RESULT PHASE
   Push $0
   Push $1
   Push $2
@@ -38,7 +40,7 @@ Var dshDirectoryLogDirectory
     FileOpen $2 "$PLUGINSDIR\directory-operations.log" a
     ${IfNot} ${Errors}
       FileSeek $2 0 END
-      FileWrite $2 "Windows error: ${RESULT}$\r$\n"
+      FileWrite $2 "${PHASE}: Windows error: ${RESULT}$\r$\n"
       FileClose $2
     ${EndIf}
     ${If} ${RESULT} != 5
@@ -59,6 +61,9 @@ Var dshDirectoryLogDirectory
 !macroend
 
 !macro dshReportDirectoryFailure
+  ${If} $dshRestoreError != 0
+    StrCpy $dshRecoveryStopped "1"
+  ${EndIf}
   !ifmacrodef customInstallerDirectoryFailed
     !insertmacro customInstallerDirectoryFailed
   !else
@@ -89,6 +94,7 @@ Var dshDirectoryLogDirectory
 
 !macro dshStageApplication
   !ifdef DSH_INSTALLER_LOG_DIR
+    ; electron-builder defines the cache name after including our function bodies, before this section expands.
     StrCpy $dshDirectoryLogDirectory "${DSH_INSTALLER_LOG_DIR}"
   !endif
   StrCpy $dshFinalDirectory $INSTDIR
@@ -103,6 +109,7 @@ Var dshDirectoryLogDirectory
   StrCpy $dshNewMoved ""
   StrCpy $dshDirectoryError 0
   StrCpy $dshRestoreError 0
+  StrCpy $dshRecoveryStopped ""
   ClearErrors
   CreateDirectory $dshNewDirectory
   ${If} ${Errors}
@@ -129,6 +136,9 @@ Function .onGUIEnd
 FunctionEnd
 
 Function dshCleanupDirectories
+  ${If} $dshRecoveryStopped == "1"
+    Return
+  ${EndIf}
   ${If} $dshFinalDirectory != ""
     Call dshRollbackDirectories
   ${EndIf}
@@ -142,10 +152,11 @@ Function dshRollbackDirectories
     StrCpy $dshNewMoved ""
   ${EndIf}
   ${If} $dshOldMoved == "1"
-    !insertmacro dshDirectoryOperation "$dshOldDirectory" "$dshFinalDirectory" $dshRestoreError
+    !insertmacro dshDirectoryOperation "$dshOldDirectory" "$dshFinalDirectory" $dshRestoreError "restore"
     ${If} $dshRestoreError != 0
       ; Leave the complete backup in place if another process prevents restoration.
       DetailPrint $dshOldDirectory
+      RMDir /r "\\?\$dshNewDirectory"
       Return
     ${EndIf}
     StrCpy $dshOldMoved ""
@@ -166,7 +177,7 @@ Function dshPromoteDirectories
   ${If} ${FileExists} "$dshFinalDirectory\*.*"
     StrCpy $dshDirectorySource $dshFinalDirectory
     StrCpy $dshDirectoryDestination $dshOldDirectory
-    !insertmacro dshDirectoryOperation "$dshDirectorySource" "$dshDirectoryDestination" $dshDirectoryError
+    !insertmacro dshDirectoryOperation "$dshDirectorySource" "$dshDirectoryDestination" $dshDirectoryError "backup"
     ${If} $dshDirectoryError != 0
       Call dshRollbackDirectories
       !insertmacro dshReportDirectoryFailure
@@ -178,7 +189,7 @@ Function dshPromoteDirectories
     ; NSIS can create the destination before the install section starts.
     StrCpy $dshDirectorySource $dshFinalDirectory
     StrCpy $dshDirectoryDestination ""
-    !insertmacro dshDirectoryOperation "$dshDirectorySource" "" $dshDirectoryError
+    !insertmacro dshDirectoryOperation "$dshDirectorySource" "" $dshDirectoryError "remove-empty"
     ${If} $dshDirectoryError != 0
       Call dshRollbackDirectories
       !insertmacro dshReportDirectoryFailure
@@ -189,7 +200,7 @@ Function dshPromoteDirectories
   ClearErrors
   StrCpy $dshDirectorySource $dshNewDirectory
   StrCpy $dshDirectoryDestination $dshFinalDirectory
-  !insertmacro dshDirectoryOperation "$dshDirectorySource" "$dshDirectoryDestination" $dshDirectoryError
+  !insertmacro dshDirectoryOperation "$dshDirectorySource" "$dshDirectoryDestination" $dshDirectoryError "promote"
   ${If} $dshDirectoryError != 0
     Call dshRollbackDirectories
     !insertmacro dshReportDirectoryFailure

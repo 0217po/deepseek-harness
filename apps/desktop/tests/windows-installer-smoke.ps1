@@ -179,7 +179,7 @@ try {
     } finally {
         $lockedFile.Dispose()
     }
-    $results.Add('locked-directory-shows-copyable-error-and-preserves-installation')
+    $results.Add('locked-directory-shows-error-and-copy-control-and-preserves-installation')
 
     $process = Start-Setup dark ''
     Click-Control $process $copy.INSTALLER_CHOOSE_PATH

@@ -22,7 +22,7 @@ LangString decompressionFailed ${LANG_ENGLISH} "Payload extraction failed"
 Section
   InitPluginsDir
   FileOpen $0 "${TARGET_DIR}.plugin-dir.tmp" w
-  FileWrite $0 "$PLUGINSDIR"
+  FileWriteUTF16LE /BOM $0 "$PLUGINSDIR"
   FileClose $0
   Rename "${TARGET_DIR}.plugin-dir.tmp" "${TARGET_DIR}.plugin-dir"
   !ifdef SOURCE_DLL
@@ -39,9 +39,11 @@ Section
     FileClose $0
     StrCpy $dshDirectorySource $dshNewDirectory
     StrCpy $dshDirectoryDestination $dshFinalDirectory
-    !insertmacro dshDirectoryOperation "$dshDirectorySource" "$dshDirectoryDestination" $dshDirectoryError
+    !insertmacro dshDirectoryOperation "$dshDirectorySource" "$dshDirectoryDestination" $dshDirectoryError "promote"
     Call dshRollbackDirectories
     !insertmacro dshReportDirectoryFailure
+    Rename $dshFinalDirectory "${TARGET_DIR}.conflict"
+    Call dshCleanupDirectories
     SetErrorLevel 2
     Quit
   !endif
