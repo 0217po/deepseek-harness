@@ -176,7 +176,9 @@ class LinuxScopeStartup {
     if (startup !== undefined) throw deserializeRunnerError(startup.error)
     if (existsSync(this.files.requestPath)
       && !(outcome.signal !== null && this.terminationSignals.has(outcome.signal))) {
-      throw new Error(`${this.kind} scope exited before its bootstrap consumed the launch request`)
+      throw new Error(
+        `${this.kind} scope exited before its bootstrap consumed the launch request; if the user-systemd manager stopped after the provider probed it, restart the provider to probe native containment again`,
+      )
     }
     return outcome
   }

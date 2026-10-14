@@ -268,7 +268,7 @@ describe('Linux scope establishment and quiescence', () => {
     const { child, result } = launch(async () => missingUnit())
     result.owner.signal('SIGTERM')
     child.exit(outcome.exitCode, outcome.signal)
-    await expect(result.direct).rejects.toThrow('before its bootstrap consumed')
+    await expect(result.direct).rejects.toThrow(/before its bootstrap consumed.*restart the provider to probe native containment again/u)
     await expect(result.owner.waitForExit()).resolves.toBeUndefined()
     result.owner.cleanup?.()
   })
