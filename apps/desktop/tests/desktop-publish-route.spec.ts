@@ -18,13 +18,12 @@ it('routes the exact successful attempt to its registered machine', () => {
     .toMatchObject({ runId: '42', attempt: '2', runnerLabel: 'dsh-mini', preset: 'test' })
 })
 
-it.each(['attempt', 'repository', 'commit', 'mode', 'request', 'runner', 'workflow'] as const)('rejects mismatched %s evidence', (field) => {
+it.each(['attempt', 'repository', 'commit', 'mode', 'runner', 'workflow'] as const)('rejects mismatched %s evidence', (field) => {
   const f = fixture()
   if (field === 'attempt') f.source.attempt = '1'
   if (field === 'repository') f.source.repository = 'other/repo'
   if (field === 'commit') f.source.workflowCommit = 'b'.repeat(40)
   if (field === 'mode') f.source.qualification = 'unnotarized'
-  if (field === 'request') f.source.publishRequested = false
   if (field === 'runner') f.jobs[0]!.runner_name = 'laptop'
   if (field === 'workflow') f.run.path = '.github/workflows/ci.yml'
   expect(() => resolveDesktopPublishRoute('owner/repo', f.run, { source: f.source }, f.jobs, f.routes)).toThrow()
@@ -44,4 +43,10 @@ it('keeps the artifact source separate from the workflow commit', () => {
   f.source.sourceRef = 'dsh-v1.0.0'
   expect(resolveDesktopPublishRoute('owner/repo', f.run, { source: f.source }, f.jobs, f.routes))
     .toMatchObject({ commit: 'b'.repeat(40), sourceRef: 'dsh-v1.0.0', channel: 'nightly' })
+})
+
+it('accepts a retained package that did not request publication during packaging', () => {
+  const f = fixture()
+  f.source.publishRequested = false
+  expect(resolveDesktopPublishRoute('owner/repo', f.run, { source: f.source }, f.jobs, f.routes)).toMatchObject({ runId: '42' })
 })

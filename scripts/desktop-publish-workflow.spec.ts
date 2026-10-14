@@ -17,24 +17,26 @@ const workflow = yaml.load(readFileSync(resolve(import.meta.dirname, '../.github
   }>
 }
 
-it('routes only completed package requests and gates production secrets with the production Environment', () => {
-  expect(workflow.on).toEqual({ workflow_run: {
-    workflows: ['Package Desktop · macOS', 'Package Desktop · Windows'], types: ['completed'],
+it('selects packages manually and gates production secrets with the production Environment', () => {
+  expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
+  expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: {
+    package_run_id: { type: 'string', required: true },
+    package_run_attempt: { type: 'string', required: false, default: '' },
   } })
   expect(workflow.permissions).toEqual({ contents: 'read', actions: 'read' })
-  expect(workflow.jobs.route?.if).toBe("github.event.workflow_run.conclusion == 'success'")
+  expect(workflow.jobs.route?.if).toBeUndefined()
   const publish = workflow.jobs.publish!
   expect(publish.defaults).toBeUndefined()
   expect(publish.steps.find(step => step.id === 'key')?.run).toBe('node apps/desktop/scripts/read-desktop-app-key.mjs')
-  expect(publish.if).toBe("needs.route.outputs.publish == 'true'")
+  expect(publish.if).toBeUndefined()
   expect(publish['runs-on']).toEqual(['self-hosted', '${{ needs.route.outputs.runner }}'])
-  expect(publish.environment).toBe("${{ needs.route.outputs.preset == 'production' && 'desktop-production' || 'desktop-test' }}")
+  expect(publish.environment).toBe("${{ needs.prepare.outputs.preset == 'production' && 'desktop-production' || 'desktop-test' }}")
   const ids = publish.steps.map(step => step.id)
   expect(ids.indexOf('check')).toBeLessThan(ids.indexOf('key'))
   expect(ids.indexOf('key')).toBeLessThan(ids.indexOf('app'))
   expect(ids.indexOf('app')).toBeLessThan(ids.indexOf('publish'))
   for (const id of ['key', 'app']) expect(publish.steps.find(step => step.id === id)?.if)
-    .toBe("needs.route.outputs.preset == 'production'")
+    .toBe("needs.prepare.outputs.preset == 'production'")
   expect(publish.steps.find(step => step.id === 'app')?.with).toMatchObject({ 'permission-contents': 'write' })
   expect(publish.steps.find(step => step.id === 'publish')?.env?.DESKTOP_TAG_TOKEN).toBe('${{ steps.app.outputs.token }}')
 })
@@ -44,6 +46,9 @@ it('prepares an approval digest without an Environment and binds the approved jo
   const prepare = workflow.jobs.prepare!
   const publish = workflow.jobs.publish!
   expect(prepare.environment).toBeUndefined()
+  expect(prepare.steps.find(step => step.id === 'local')?.run).toContain('resolve-retained-desktop-publish-ci.ts')
+  expect(prepare.steps.find(step => step.id === 'check')?.env?.DESKTOP_PUBLISH_ROUTE).toBe('${{ steps.local.outputs.route }}')
+  expect(publish.env?.DESKTOP_PUBLISH_ROUTE).toBe('${{ needs.prepare.outputs.route }}')
   expect(prepare.steps.find(step => step.id === 'check')?.run).toContain('--check')
   expect(prepare.steps.some(step => step.id === 'key' || step.id === 'app')).toBe(false)
   expect(publish.needs).toEqual(['route', 'prepare'])

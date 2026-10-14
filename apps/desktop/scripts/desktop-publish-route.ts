@@ -12,7 +12,7 @@ const requestSchema = z.object({ source: z.object({
   workflowCommit: z.string(), sourceRef: z.string().regex(/^(?:master|dsh-v[0-9][0-9A-Za-z.-]*)$/u),
   channel: z.enum(['nightly', 'latest']),
   runnerName: z.string(), target: z.enum(['mac-arm64', 'win-x64']), preset: z.enum(['test', 'production']),
-  publishRequested: z.literal(true), qualification: z.enum(['signed', 'notarized']),
+  qualification: z.enum(['signed', 'notarized']),
 }) })
 const jobsSchema = z.array(z.object({ runner_name: z.string().nullable(), conclusion: z.string().nullable() }))
 const routesSchema = z.record(z.string(), z.object({ label: z.string().regex(/^dsh-[a-z0-9-]+$/u), target: z.enum(['mac-arm64', 'win-x64']) }))
@@ -31,10 +31,10 @@ export interface DesktopPublishRoute {
 }
 
 /**
- * Match a public publication request to GitHub's attempt/job evidence and configured machine labels.
+ * Match a locally retained manifest to GitHub's attempt/job evidence and configured machine labels.
  * @param repository Current repository, not a value selected by the artifact.
  * @param runValue GitHub response for the exact packaging attempt.
- * @param requestValue Retained manifest downloaded from that attempt's request artifact.
+ * @param requestValue Retained manifest read on the original packaging machine.
  * @param jobsValue GitHub jobs for the same packaging attempt.
  * @param routesValue Administrator-maintained runner-name to unique-label mapping.
  * @returns Route to the original machine. Unknown runners, modes and mismatches reject.

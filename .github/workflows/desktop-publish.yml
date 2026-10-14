@@ -1,9 +1,19 @@
 name: Publish Desktop · COS
 
+run-name: Publish Desktop package ${{ inputs.package_run_id }} / attempt ${{ inputs.package_run_attempt || 'latest' }}
+
 on:
-  workflow_run:
-    workflows: ['Package Desktop · macOS', 'Package Desktop · Windows']
-    types: [completed]
+  workflow_dispatch:
+    inputs:
+      package_run_id:
+        description: 'Successful Package Desktop run ID'
+        type: string
+        required: true
+      package_run_attempt:
+        description: 'Package attempt; blank selects latest, which must have succeeded'
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -11,13 +21,10 @@ permissions:
 
 jobs:
   route:
-    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     outputs:
-      publish: ${{ steps.route.outputs.publish }}
-      route: ${{ steps.route.outputs.route }}
+      selection: ${{ steps.route.outputs.selection }}
       runner: ${{ steps.route.outputs.runner }}
-      preset: ${{ steps.route.outputs.preset }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -36,14 +43,15 @@ jobs:
 
   prepare:
     needs: route
-    if: needs.route.outputs.publish == 'true'
     runs-on: [self-hosted, '${{ needs.route.outputs.runner }}']
     timeout-minutes: 30
     outputs:
+      route: ${{ steps.local.outputs.route }}
+      preset: ${{ steps.local.outputs.preset }}
       approval: ${{ steps.check.outputs.approval }}
       label: ${{ steps.check.outputs.label }}
     env:
-      DESKTOP_PUBLISH_ROUTE: ${{ needs.route.outputs.route }}
+      DESKTOP_PACKAGE_SELECTION: ${{ needs.route.outputs.selection }}
       DSH_TELEMETRY_DISABLED: '1'
     steps:
       - uses: actions/checkout@v7.0.1
@@ -60,24 +68,31 @@ jobs:
           node-version: '24'
       - run: pnpm install --frozen-lockfile
         working-directory: desktop-publisher
+      - name: Resolve retained package and approval environment
+        id: local
+        working-directory: desktop-publisher
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node --import tsx apps/desktop/scripts/resolve-retained-desktop-publish-ci.ts
       - name: Verify local package without upload credentials
         id: check
         working-directory: desktop-publisher
+        env:
+          DESKTOP_PUBLISH_ROUTE: ${{ steps.local.outputs.route }}
         run: node --import tsx apps/desktop/scripts/publish-desktop-ci.ts --check
 
   publish:
     name: Approve ${{ needs.prepare.outputs.label }}
     needs: [route, prepare]
-    if: needs.route.outputs.publish == 'true'
     runs-on: [self-hosted, '${{ needs.route.outputs.runner }}']
-    environment: ${{ needs.route.outputs.preset == 'production' && 'desktop-production' || 'desktop-test' }}
+    environment: ${{ needs.prepare.outputs.preset == 'production' && 'desktop-production' || 'desktop-test' }}
     concurrency:
-      group: desktop-publish-${{ needs.route.outputs.runner }}-${{ needs.route.outputs.preset }}
+      group: desktop-publish-${{ needs.route.outputs.runner }}-${{ needs.prepare.outputs.preset }}
       cancel-in-progress: false
     timeout-minutes: 90
     env:
       DESKTOP_APPROVED_PACKAGE: ${{ needs.prepare.outputs.approval }}
-      DESKTOP_PUBLISH_ROUTE: ${{ needs.route.outputs.route }}
+      DESKTOP_PUBLISH_ROUTE: ${{ needs.prepare.outputs.route }}
       DSH_TELEMETRY_DISABLED: '1'
     steps:
       - uses: actions/checkout@v7.0.1
@@ -99,14 +114,14 @@ jobs:
         working-directory: desktop-publisher
         run: node --import tsx apps/desktop/scripts/publish-desktop-ci.ts --check
       - name: Read machine GitHub App key
-        if: needs.route.outputs.preset == 'production'
+        if: needs.prepare.outputs.preset == 'production'
         id: key
         env:
           APP_KEY_FILE: ${{ steps.check.outputs.app-key-file }}
         working-directory: desktop-publisher
         run: node apps/desktop/scripts/read-desktop-app-key.mjs
       - name: Create short-lived tag token
-        if: needs.route.outputs.preset == 'production'
+        if: needs.prepare.outputs.preset == 'production'
         id: app
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
