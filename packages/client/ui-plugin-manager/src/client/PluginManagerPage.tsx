@@ -29,7 +29,7 @@ import {
   type InstallInputError, type InstallState, type InstallSubject, type PackageRow, type PackageView,
   type PluginManagerFace, type RegistryChoice,
 } from './manager-store.ts'
-import { managementText, noticeText, packageText, registryText, rowText, type Translate } from './presentation.ts'
+import { managementText, noticeText, packageText, registryText, restartText, rowText, type Translate } from './presentation.ts'
 import type { PluginPackageRef, PluginRowRef, PluginsSubject } from './slot-contract.ts'
 import type { ConfigPageForm } from './slot-contract.ts'
 import css from './PluginManagerPage.module.css'
@@ -103,13 +103,14 @@ const BUILTIN_PROFILE_BUNDLES = new Set([
   '@deepseek-ai/dsh-sdk-minimal',
 ])
 
-/** Display order on the main and full optional plugin lists; new bundles join the main list. */
+/** The optional bundles the main list always holds, in this order; new bundles join the main list. */
 const EXTENSION_BUNDLES = [
   '@deepseek-ai/dsh-experimental-agent-team-profile',
   '@deepseek-ai/dsh-experimental-voice-input-bundle',
   '@deepseek-ai/dsh-experimental-auto-review',
   '@deepseek-ai/dsh-experimental-inspector-profile',
 ]
+/** The optional bundles the main list holds back until the profile picks them; the More list shows them from the start. */
 const MORE_BUNDLES = [
   '@deepseek-ai/dsh-experimental-tool-worktree',
   '@deepseek-ai/dsh-experimental-cot-translation-bundle',
@@ -121,13 +122,36 @@ const MORE_BUNDLES = [
   '@deepseek-ai/dsh-subagent-codex',
   '@deepseek-ai/dsh-subagent-claude-code',
 ]
+/**
+ * Whether the main list shows an official optional bundle: the always-held ones, and any held-back one the profile enabled.
+ * @param pkg - the official bundle as the Host reports it.
+ * @returns whether the main list shows it.
+ */
+function pinnedToMainList(pkg: PackageView): boolean {
+  return !MORE_BUNDLES.includes(pkg.name) || pkg.enabled
+}
 
-function orderPackages(packages: readonly PackageView[], order: readonly string[]): PackageView[] {
-  const rank = (name: string): number => {
-    const index = order.indexOf(name)
-    return index < 0 ? order.length : index
-  }
-  return [...packages].sort((a, b) => rank(a.name) - rank(b.name))
+/**
+ * Where an optional bundle sits on both lists: the always-held ones in their order, then the bundles neither list
+ * ranks, then the held-back ones in theirs, so Codex and Claude Code stay last on the More list.
+ * @param name - the bundle's package name.
+ * @returns the rank; bundles of equal rank keep the order the Host reported.
+ */
+function optionalBundleRank(name: string): number {
+  const alwaysHeld = EXTENSION_BUNDLES.indexOf(name)
+  if (alwaysHeld >= 0) return alwaysHeld
+  const heldBack = MORE_BUNDLES.indexOf(name)
+  return heldBack < 0 ? EXTENSION_BUNDLES.length : EXTENSION_BUNDLES.length + 1 + heldBack
+}
+
+/**
+ * Order the official optional bundles as both lists show them, so a bundle the profile picks from the More list
+ * keeps its place among the neighbours the main list already holds.
+ * @param packages - the official bundles the Host offers.
+ * @returns the bundles in display order.
+ */
+function orderOptionalBundles(packages: readonly PackageView[]): PackageView[] {
+  return [...packages].sort((a, b) => optionalBundleRank(a.name) - optionalBundleRank(b.name))
 }
 
 /** How long a toast holds: long enough to read a failure that names what broke. */
@@ -482,7 +506,8 @@ function DetailTop({ crumbLabel, crumbText, onBack, icon, actions }: {
 
 function updateAvailable(pkg: PackageView): boolean {
   const target = pkg.installTarget
-  if (!pkg.installed || pkg.availability === 'installation' || target === undefined) return false
+  // An update removes the installed package first, so a package that cannot be removed offers none.
+  if (!pkg.installed || !pkg.removable || pkg.availability === 'installation' || target === undefined) return false
   return pkg.version !== target.version
     || ((target.spec.startsWith('link:') || pkg.source?.startsWith('link:') === true) && pkg.source !== target.spec)
 }
@@ -1285,7 +1310,7 @@ function InstallDialog({
             ? <p className={css.result} role="status">{t('installDoneNothing')}</p>
             : null}
           {phase === 'done' && install.restartRequired
-            ? <p className={css.resultWarn} role="status">{t('installDoneRestart')}</p>
+            ? <p className={css.resultWarn} role="status">{restartText('installDoneRestart', install.restartReason, t)}</p>
             : null}
           {phase === 'done' && subject?.kind === 'registry' && subject.name !== undefined && subject.version !== undefined
             && install.installedVersion !== null && install.installedVersion !== subject.version
@@ -1422,8 +1447,13 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
     && (pkg.installed || pkg.official || pkg.error !== undefined))
   const mine = listed.filter(pkg => !pkg.official)
   const official = listed.filter(pkg => pkg.official)
-  const extensions = orderPackages(official.filter(pkg => !MORE_BUNDLES.includes(pkg.name)), EXTENSION_BUNDLES)
-  const more = [...extensions, ...orderPackages(official.filter(pkg => MORE_BUNDLES.includes(pkg.name)), MORE_BUNDLES)]
+  // Both lists read one order over every offered bundle: the main list holds the always-held ones plus the held-back
+  // ones the profile enabled, and the More list holds all of them, so enabling a bundle from the More list pins it
+  // to the main list without moving it among its neighbours there.
+  const ordered = orderOptionalBundles(official)
+  const pinned = new Set(official.filter(pinnedToMainList).map(pkg => pkg.name))
+  const extensions = ordered.filter(pkg => pinned.has(pkg.name))
+  const more = ordered
   const loaded = state.status === 'ready' || state.status === 'error'
   const refreshing = state.refreshStatus === 'refreshing'
   const openPkg = view.kind === 'package' || view.kind === 'row' ? listed.find(pkg => pkg.name === view.name) : undefined
@@ -1431,7 +1461,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const openRow = view.kind === 'row' && openPkg !== undefined ? openPkg.rows.find(row => row.rowId === view.rowId) : undefined
   const showsCards = openPkg === undefined && openItem === undefined
   const detailFromMore = (view.kind === 'package' || view.kind === 'row')
-    && (view.from === 'more' || MORE_BUNDLES.includes(view.name))
+    && (view.from === 'more' || (MORE_BUNDLES.includes(view.name) && !pinned.has(view.name)))
   const showsMoreList = showsCards && (view.kind === 'more' || detailFromMore)
   const showsMainList = showsCards && !showsMoreList
   const openPkgInMore = openPkg !== undefined && openPkg.official && detailFromMore
@@ -1484,7 +1514,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
       {showsMainList
         ? (
           <header className={css.pageHead} data-window-drag>
-            <div>
+            <div className={css.pageHeading}>
               <h1 className={css.pageTitle}>{t('title')}</h1>
               <div className={css.pageIntro}>
                 <span>{t('intro')}</span>

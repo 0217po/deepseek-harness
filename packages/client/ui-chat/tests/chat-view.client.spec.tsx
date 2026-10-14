@@ -27,7 +27,7 @@ import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controlle
 import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { KeyedSnapshotSelectorHook, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
-import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import { EMPTY_CONVERSATION_SNAPSHOT } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
@@ -479,6 +479,7 @@ function makeHarness(
       createSnapshotStore<SessionStatusSnapshot>(new Map()),
     ),
     useWorkspaces: emptyWorkspaces(),
+    ...allowAllAccess,
     useProjection: (key: string) => {
       const inbox = useTestSession(snapshot => snapshot.testInbox)
       return key === 'inbox' ? inbox : outlineValue
@@ -2005,6 +2006,23 @@ describe('ChatView', () => {
     expect(renderedFlowKinds(view.container)).toEqual(['user', 'turn-process'])
   })
 
+  it('matches echoes past an input Node whose payload carries no message source', () => {
+    const base = chatSnapshotFixture({ nodes: [user(1, 'question')] })
+    const snapshot = new ChatSnapshotBuilder().replace({
+      nodes: [...base.nodes.values(), {
+        key: 'plugin-input', id: 'plugin-input', kind: 'plugin-input', target: 'chat', anchorSeq: 2,
+        location: { kind: 'session' }, visibility: 'visible', groupTree: 'input', data: null,
+      }],
+      timeline: base.timeline,
+    })
+    const h = makeHarness({}, { pendingSubmissions: [{
+      requestId: 'pending' as never, placement: 'transcript', time: 1_000, text: 'pending text', attachments: [],
+    }] }, snapshot)
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getByText('pending text')).toBeTruthy()
+    expect(view.container.querySelector('[data-submission-echo]')).not.toBeNull()
+  })
+
   it.each(['ABC', 'ACB', 'BAC', 'BCA', 'CAB', 'CBA'])(
     'uses the first local opening echo until Host admission identifies the input (%s)', (hostOrder) => {
       const pending: SessionSnapshot['pendingSubmissions'] = ['A', 'B', 'C'].map(text => ({
@@ -3357,6 +3375,17 @@ describe('ChatView', () => {
     expect(buttons[0]!.getAttribute('aria-disabled')).toBe('true')
     fireEvent.click(buttons[0]!)
     expect(h.forkAt).not.toHaveBeenCalled()
+  })
+
+  it('omits the Turn Tail branch action when the Session access snapshot excludes session/fork', () => {
+    const h = makeHarness({ nodes: [user(1, 'question'), assistant(2, 'answer')], turnEnds: new Map([[1, 3]]) })
+    const useAccess = vi.fn((endpoint: string) => endpoint !== 'session/fork')
+    // Chat Node renderers read the harness's standard props object, so the override goes there.
+    Object.assign(h.props, { useAccess })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getAllByRole('button', { name: '复制' }).length).toBeGreaterThan(0)
+    expect(view.queryByRole('button', { name: '在新对话中分支' })).toBeNull()
+    expect(useAccess).toHaveBeenCalledWith('session/fork')
   })
 
   it('renders assistant Markdown across history, streaming, final, and interrupted states while user text stays literal', () => {
