@@ -49,7 +49,7 @@ export function apply(ctx: Context): void {
   const page = globalThis as Partial<Record<typeof CONTACT_CONFIG_GLOBAL, unknown>>
   const config = ContactConfig(page[CONTACT_CONFIG_GLOBAL] ?? {})
   let snapshot: AccountSnapshot = {
-    view: undefined, details: undefined, failed: false, loginVisible: false, desktopOnboardingVisible: true,
+    view: undefined, details: undefined, failed: false, loginVisible: false, desktopOnboardingVisible: desktop,
   }
   // Desktop main opens the authorization page natively; a plain browser opens it in a tab it owns.
   const browser = new BrowserLogin(url => authorizeUrlWithTheme(url, ctx.theme.getTheme().active.colorScheme))

@@ -74,6 +74,7 @@ it('registers account sign-in in a plain browser without the Desktop-only surfac
     expect(quotaNoticeEntry(c)).toBeDefined()
     expect(platformHostEntry(c)).toBeUndefined()
     expect(c.ctx.slots.entries('shell.overlay').some(entry => entry.options.id === 'desktop-onboarding')).toBe(false)
+    expect(operations(c).hooks.account.getSnapshot().desktopOnboardingVisible).toBe(false)
   }
 }, 60_000)
 
