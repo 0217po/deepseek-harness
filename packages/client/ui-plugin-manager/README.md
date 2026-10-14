@@ -98,6 +98,8 @@ A row's page exists only while a `plugins.row.config` entry names the row, so a 
 
 -----
 
+Built-in illustrations follow the [feature preview authoring guide](../../../docs/cookbook/adding-a-plugin-preview.md): optional, one 640×300 SVG per language, with both English and Chinese required. The internal map and its asset test enforce the format; packages have no preview declaration interface.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
