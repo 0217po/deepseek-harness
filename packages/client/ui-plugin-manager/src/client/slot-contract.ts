@@ -9,6 +9,8 @@
  * `import type` and registers through `ctx.slots`; it never imports this
  * package at runtime.
  *
+ * A contributed tab, such as Discover, installs through the page's own dialog.
+ *
  * Entries accept `page` for the form with its own save control and `summary`
  * for an official card's one-liner or a row's missing-description fallback.
  * Bundle configuration renders only `page`. A detail contribution is rendered
@@ -77,6 +79,22 @@ export interface PluginActivationOwnerProps {
   readonly onOpenDetails: () => void
 }
 
+/** Owner props of a page tab another plugin contributes, such as Discover. */
+export interface PluginTabProps {
+  /**
+   * Install an exact spec the person already confirmed: the page's install dialog opens at its check and progress
+   * screens, without the spec form.
+   * @param spec - the install spec, such as `name@version`.
+   * @param registry - the registry to ask first for this install only; absent keeps the dialog's registry choice.
+   */
+  readonly install: (spec: string, registry?: string) => void
+  /**
+   * Switch to the Installed tab and open a bundle's page.
+   * @param packageName - npm package name of the bundle.
+   */
+  readonly openPackage: (packageName: string) => void
+}
+
 /** Add-plugin menu actions, independent of any selected bundle or Session. */
 export interface PluginAddActionsProps {
   /** Close the add-plugin menu before starting the contributed action. */
@@ -87,6 +105,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /** Additional MenuItemButton rows after installation: 72px high, with a title and a description capped at two lines. */
     'plugins.add.actions': { kind: 'list'; scope: 'root'; owner: PluginAddActionsProps }
+    /**
+     * Tabs after the page's own Installed tab, such as Discover: `label` names the tab and `order` places it. The
+     * page renders the selected entry under its header and tabs; the entry draws its own content and installs
+     * through the owner's `install`.
+     */
+    'plugins.tab': { kind: 'list'; scope: 'root'; owner: PluginTabProps }
     /** Optional guidance after the user enables a bundle from the list, keyed by npm package name. */
     'plugins.bundle.activation': { kind: 'keyed'; scope: 'root'; owner: PluginActivationOwnerProps }
     /**

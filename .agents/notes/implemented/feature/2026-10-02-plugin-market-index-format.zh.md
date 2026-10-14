@@ -1,6 +1,6 @@
 # Agent Note: 插件市场索引格式
 
-Status: proposed
+Status: implemented
 
 [English](2026-10-02-plugin-market-index-format.md) | 中文
 
@@ -12,9 +12,9 @@ DSH 只能从用户已知的 spec 安装第三方组合包（bundle）：npm 包
 
 因此，索引必须包含列表页面显示的全部内容：本地化标题和描述、图标、作者、可用版本、兼容性和发布时间。市场还需要发布自己的数据，例如分类、标签、下载量和评分，而 DSH 不需要理解这些值的含义。
 
-## 提案
+## 决策
 
-将**索引**与**索引生成器**分开。DSH 定义并读取一种 JSON 索引格式。索引如何生成、基于哪份源列表生成，由生成器负责。DSH 的读取器、Discover 页面和参考生成器是使用此格式的独立变更。索引列出[profile 插件组合包](../../implemented/architecture/2026-08-05-profile-plugin-bundles.zh.md)，并通过[引导式插件安装](../../implemented/architecture/2026-09-15-guided-plugin-installation.zh.md)安装它们。
+**索引**与**索引生成器**相互分离。DSH 定义并读取一种 JSON 索引格式。索引如何生成、基于哪份源列表生成，由生成器负责。[`dsh-plugin-market-index`](../../../../packages/util/plugin-market-index/README.zh.md) 是可执行的规则集；[发现 Agent Note](2026-10-02-plugin-market-discover.zh.md) 记录 DSH 如何读取和展示索引。索引列出[profile 插件组合包](../../implemented/architecture/2026-08-05-profile-plugin-bundles.zh.md)，并通过[引导式插件安装](../../implemented/architecture/2026-09-15-guided-plugin-installation.zh.md)安装它们。
 
 市场复用 npm 的包名、版本、范围、发布标签和 person 声明。读取器与生成器使用维护中的 npm 解析器和校验器。新增字段或改变含义需要 npm 无法满足的插件市场需求。
 
@@ -114,7 +114,7 @@ DSH 只能从用户已知的 spec 安装第三方组合包（bundle）：npm 包
 | `name` | 是 | npm 维护的包名校验器接受的新包名称；在索引内唯一。 |
 | `title` | 否 | `LocalizedText`；缺省时读取器显示 `name`。 |
 | `description` | 否 | `LocalizedText`。 |
-| `icon` | 否 | 以下两种形式之一：`data:<type>;base64,<payload>`，其中 `<type>` 为 `image/svg+xml`、`image/png`、`image/jpeg` 或 `image/webp`，`<payload>` 是按规范填充的 base64，解码后的载荷不超过 256 KiB；或者 URL 引用，它相对于索引 URL 解析的结果是 `https:` URL，或与索引 URL 同源。 |
+| `icon` | 否 | 以下两种形式之一：`data:<type>;base64,<payload>`，其中 `<type>` 为 `image/svg+xml`、`image/png`、`image/jpeg` 或 `image/webp`，`<payload>` 是按规范填充的 base64，解码后的载荷不超过 32 KiB；或者 URL 引用，它相对于索引 URL 解析的结果是 `https:` URL，或与索引 URL 同源。 |
 | `author` | 否 | 至少包含一个非空白字符的字符串。 |
 | `homepage` | 否 | 介绍该插件的页面的绝对 `https:` 或 `http:` URL。 |
 | `metadata` | 否 | 包含下列值的对象。 |
@@ -197,7 +197,7 @@ DSH 只能从用户已知的 spec 安装第三方组合包（bundle）：npm 包
 
 **每个版本各有显示字段。** 列表每个插件只显示一行，旧的显示文本、图标、作者和主页会增加索引大小，却没有读取器显示它们。
 
-**只允许内联图标。** 不发额外请求的列表需要内联图标，但 256 KiB 原始字节编码为 base64 后约为 341 KiB，因此 100 个插件的索引可能达到约 35 MB。URL 图标以额外请求和向图片主机暴露用户 IP 地址为代价，换取较小的索引。
+**只允许内联图标。** 不发额外请求的列表需要内联图标，但已安装插件的 256 KiB 图标上限编码为 base64 后约为 341 KiB，因此 100 个插件的索引可能达到约 35 MB。URL 图标以额外请求和向图片主机暴露用户 IP 地址为代价，换取较小的索引。32 KiB 的内联上限编码为 base64 后约为 43 KiB，因此 1,000 个带内联图标的插件最多增加约 43 MB；更大的图标使用 URL 引用。
 
 **从对等依赖推断宿主兼容性。** 市场定义要求作者声明 `engines.dsh` 的新标准。现有包必须添加此声明才能列出；不需要回退、workspace 映射或范围求交。
 
@@ -215,7 +215,7 @@ DSH 只能从用户已知的 spec 安装第三方组合包（bundle）：npm 包
 
 **拒绝未知成员。** 这样每次增加可选成员都需要新的 `format` 值，并会破坏所有已部署的读取器。
 
-## 验收标准
+## 后果
 
 - 校验器接受上面的示例，并对根字段、插件字段、版本字段和 `source` 形式中的每条规则各拒绝一个违例，诊断信息给出对应的 JSON 路径。
 - 根据每个示例版本构建的安装参数可被 DSH 的安装 spec 解析器和 pnpm 接受。
