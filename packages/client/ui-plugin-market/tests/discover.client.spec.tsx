@@ -59,14 +59,14 @@ const LISTING: MarketSearchResult = {
   entries: [
     entry('dsh-a', {
       title: { en: 'Alpha', zh: '甲' }, description: 'Does A', author: 'Jane', icon: 'https://cdn.example/a.png',
-      homepage: 'https://example.com/alpha#readme',
+      homepage: 'https://example.com/alpha#readme', repository: { url: 'https://github.com/o/plugins', directory: 'packages/a' },
     }, { category: 'tools', labels: ['official', 'beta'], sortKeys: { downloads: 1 } }, {
       source: { type: 'npm', registry: 'https://r.example/' }, install: { spec: 'dsh-a@1.0.0', registry: 'https://r.example/' },
     }),
     entry('dsh-b', { installation: { status: 'installed', installedVersion: '1.0.0' } }, { category: 'themes', labels: ['official'], sortKeys: { downloads: 9 } }, {
       publishTimestamp: 1790000000, source: { type: 'git', url: 'https://github.com/o/r', commit: COMMIT, path: 'packages/b' },
     }),
-    entry('dsh-c', { installation: { status: 'update-available', installedVersion: '0.9.0' } }),
+    entry('dsh-c', { installation: { status: 'update-available', installedVersion: '0.9.0' }, repository: { url: 'https://git.example/o/c' } }),
     entry('dsh-f', { installation: { status: 'provided' } }, {}, { source: { type: 'git', url: 'https://github.com/o/f', commit: COMMIT } }),
     entry('dsh-g', {}, {}, { compatibility: { ...INCOMPATIBLE, exempted: false } }),
     entry('dsh-h', {}, {}, { compatibility: { ...INCOMPATIBLE, exempted: true } }),
@@ -287,6 +287,10 @@ describe('DiscoverSection', () => {
     const homepage = detail.getByRole('link', { name: 'https://example.com/alpha#readme' })
     expect([homepage.getAttribute('href'), homepage.getAttribute('target'), homepage.getAttribute('rel')])
       .toEqual(['https://example.com/alpha#readme', '_blank', 'noopener noreferrer'])
+    const repository = detail.getByRole('link', { name: 'https://github.com/o/plugins' })
+    expect([repository.getAttribute('href'), repository.getAttribute('target')]).toEqual(['https://github.com/o/plugins', '_blank'])
+    expect(detail.getByText(en.factSourceCode)).toBeTruthy()
+    expect(detail.getByText('packages/a')).toBeTruthy()
     fireEvent.click(detail.getByRole('button', { name: 'Install Alpha' }))
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: en.install }))
     expect(install).toHaveBeenCalledOnce()
@@ -303,6 +307,13 @@ describe('DiscoverSection', () => {
     fireEvent.click(screen.getByRole('button', { name: en.backToList }))
     fireEvent.click(card('dsh-h').getByRole('button', { name: 'View dsh-h' }))
     expect(screen.getAllByText(en.exempted)).toHaveLength(2)
+  })
+
+  it('links a repository without a directory', () => {
+    renderTab()
+    fireEvent.click(card('dsh-c').getByRole('button', { name: 'View dsh-c' }))
+    const detail = within(document.querySelector('[data-market-detail="dsh-c"]') as HTMLElement)
+    expect(detail.getByRole('link', { name: 'https://git.example/o/c' }).closest('dd')?.querySelector('code')).toBeNull()
   })
 
   it('lists every version on the entry page and installs the one chosen', () => {

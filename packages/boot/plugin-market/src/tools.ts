@@ -109,6 +109,7 @@ function registerTool(ctx: Context): void {
               ...entry.description === undefined ? {} : { description: english(entry.description) },
               ...entry.author === undefined ? {} : { author: english(entry.author) },
               ...entry.homepage === undefined ? {} : { homepage: entry.homepage },
+              ...entry.repository === undefined ? {} : { repository: entry.repository },
               ...entry.metadata.category === undefined ? {} : { category: entry.metadata.category },
               labels: entry.metadata.labels,
               sortKeys: entry.metadata.sortKeys,

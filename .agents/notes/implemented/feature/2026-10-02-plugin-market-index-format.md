@@ -45,6 +45,7 @@ The market reuses npm's package names, versions, ranges, distribution tags, and 
       "icon": "icons/auto-review.svg",
       "author": "Example Labs",
       "homepage": "https://example.com/dsh-auto-review",
+      "repository": { "url": "https://github.com/example/dsh-plugins", "directory": "auto-review" },
       "metadata": {
         "category": "productivity",
         "labels": ["official"],
@@ -117,6 +118,7 @@ Category, label, and sort-key ids are non-empty strings. Readers look ids up as 
 | `icon` | no | Either `data:<type>;base64,<payload>`, where `<type>` is `image/svg+xml`, `image/png`, `image/jpeg`, or `image/webp`, `<payload>` is canonically padded base64, and the decoded payload is at most 32 KiB; or a URL reference whose resolution against the index URL is an `https:` URL or has the index URL's origin. |
 | `author` | no | String with at least one non-whitespace character. |
 | `homepage` | no | Absolute `https:` or `http:` URL of a page about the plugin. |
+| `repository` | no | `{ "url": string, "directory"?: string }`. `url` is the absolute `https:` or `http:` URL of the source repository's web page, without credentials, query, or fragment; `directory` is the package directory inside it, with the `path` rule of a Git source. It is for display and never selects an install source. |
 | `metadata` | no | Object holding the values below. |
 | `metadata.category` | no | One declared category id. |
 | `metadata.labels` | no | Array of distinct declared label ids. |
@@ -166,7 +168,7 @@ A reader cannot verify these rules; a generator that violates them publishes a m
 - `engines.dsh` copies the manifest's declared range unchanged. A version with a missing, blank, or invalid range is omitted with a diagnostic. A plugin with no eligible version is omitted.
 - `dist-tags` snapshots npm's [distribution tags](https://docs.npmjs.com/cli/v11/commands/npm-dist-tag/), retaining only targets present among the eligible listed versions. For Git sources, the publisher or market supplies the same exact tag-to-version mapping.
 - Each listed version declares `dsh.bundle`. Installation independently refuses a package without a bundle patch.
-- `title`, `description`, and `icon` come from the highest listed version's locale metadata, manifest fields, and icon under the installed-plugin display rules. Use npm's `node-semver.rsort()` order, retaining input order for ties. This metadata choice does not select the installation version. `homepage` copies that version's manifest `homepage` and is absent without one.
+- `title`, `description`, and `icon` come from the highest listed version's locale metadata, manifest fields, and icon under the installed-plugin display rules. Use npm's `node-semver.rsort()` order, retaining input order for ties. This metadata choice does not select the installation version. `homepage` copies that version's manifest `homepage` and is absent without one. `repository` comes from that version's manifest `repository`: a shorthand or Git URL becomes the repository's web URL, `directory` is copied, and the field is absent when the manifest has none or names no web-addressable repository.
 - `author` comes from the same highest listed version's npm author declaration. Copy an object's `name`; parse shorthand strings with a maintained npm person normalizer. Omit an absent or whitespace-only name and contact fields. Normalize a fresh projection, leaving the source manifest untouched.
 
 ### Reader rules

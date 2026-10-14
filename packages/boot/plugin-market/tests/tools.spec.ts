@@ -43,7 +43,7 @@ const document = {
   metadata: { categories: { tools: { title: 'Tools' } }, labels: { official: { title: 'Official' } }, sortKeys: { downloads: { title: 'Downloads', order: 'desc' } } },
   plugins: [
     {
-      name: 'dsh-a', author: 'Jane', homepage: 'https://example.com/a',
+      name: 'dsh-a', author: 'Jane', homepage: 'https://example.com/a', repository: { url: 'https://github.com/o/a' },
       title: { en: 'A', zh: '甲' }, description: { en: 'Does A', zh: '做甲' },
       metadata: { category: 'tools', labels: ['official'], sortKeys: { downloads: 5 } },
       versions: [
@@ -78,7 +78,8 @@ it('pages plugins with the default version\'s install target and registry plugin
     index: 'Market',
     entries: [
       {
-        name: 'dsh-a', title: 'A', description: 'Does A', author: 'Jane', homepage: 'https://example.com/a', category: 'tools',
+        name: 'dsh-a', title: 'A', description: 'Does A', author: 'Jane', homepage: 'https://example.com/a',
+        repository: { url: 'https://github.com/o/a' }, category: 'tools',
         labels: ['official'], sortKeys: { downloads: 5 }, installation: { status: 'not-installed' },
         defaultVersion: {
           version: '1.0.0', published: '2026-09-27T02:40:00.000Z', compatibility: { compatible: true },

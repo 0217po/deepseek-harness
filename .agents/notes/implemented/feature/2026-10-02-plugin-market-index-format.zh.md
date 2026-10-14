@@ -45,6 +45,7 @@ DSH 只能从用户已知的 spec 安装第三方组合包（bundle）：npm 包
       "icon": "icons/auto-review.svg",
       "author": "Example Labs",
       "homepage": "https://example.com/dsh-auto-review",
+      "repository": { "url": "https://github.com/example/dsh-plugins", "directory": "auto-review" },
       "metadata": {
         "category": "productivity",
         "labels": ["official"],
@@ -117,6 +118,7 @@ DSH 只能从用户已知的 spec 安装第三方组合包（bundle）：npm 包
 | `icon` | 否 | 以下两种形式之一：`data:<type>;base64,<payload>`，其中 `<type>` 为 `image/svg+xml`、`image/png`、`image/jpeg` 或 `image/webp`，`<payload>` 是按规范填充的 base64，解码后的载荷不超过 32 KiB；或者 URL 引用，它相对于索引 URL 解析的结果是 `https:` URL，或与索引 URL 同源。 |
 | `author` | 否 | 至少包含一个非空白字符的字符串。 |
 | `homepage` | 否 | 介绍该插件的页面的绝对 `https:` 或 `http:` URL。 |
+| `repository` | 否 | `{ "url": string, "directory"?: string }`。`url` 是源代码仓库网页的绝对 `https:` 或 `http:` URL，不含凭据、查询或片段；`directory` 是包在仓库中的目录，规则与 Git 来源的 `path` 相同。该字段仅用于展示，从不决定安装来源。 |
 | `metadata` | 否 | 包含下列值的对象。 |
 | `metadata.category` | 否 | 一个已声明的分类 id。 |
 | `metadata.labels` | 否 | 由互不相同的已声明标签 id 组成的数组。 |
@@ -166,7 +168,7 @@ DSH 只能从用户已知的 spec 安装第三方组合包（bundle）：npm 包
 - `engines.dsh` 原样复制 manifest 声明的范围。缺失、空白或无效范围的版本会被省略并给出诊断。没有合格版本的插件会被省略。
 - `dist-tags` 是 npm [发布标签](https://docs.npmjs.com/cli/v11/commands/npm-dist-tag/)的快照，只保留指向合格且已列出版本的目标。对于 Git 来源，发布者或市场提供同样的精确标签到版本映射。
 - 列出的每个版本都声明了 `dsh.bundle`。安装时也会独立拒绝没有组合包 patch 的包。
-- `title`、`description` 和 `icon` 来自所列最高版本的语言元数据、manifest 字段和图标，采用已安装插件的显示规则。使用 npm 的 `node-semver.rsort()` 顺序，相等时保留输入顺序。元数据选择不选择安装版本。`homepage` 复制该版本 manifest 的 `homepage`，manifest 没有该字段时省略。
+- `title`、`description` 和 `icon` 来自所列最高版本的语言元数据、manifest 字段和图标，采用已安装插件的显示规则。使用 npm 的 `node-semver.rsort()` 顺序，相等时保留输入顺序。元数据选择不选择安装版本。`homepage` 复制该版本 manifest 的 `homepage`，manifest 没有该字段时省略。`repository` 来自该版本 manifest 的 `repository`：简写或 Git URL 转换为仓库的网页 URL，`directory` 原样复制；manifest 没有该字段，或其指向的仓库没有网页地址时省略。
 - `author` 来自同一最高版本的 npm 作者声明。复制对象的 `name`；使用维护中的 npm person 归一化器解析简写字符串。省略缺失或全空白的名称以及联系字段。归一化新建的投影，不修改源 manifest。
 
 ### 读取器规则

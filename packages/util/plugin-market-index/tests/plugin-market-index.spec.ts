@@ -56,6 +56,7 @@ describe('parseMarketIndex', () => {
           icon: 'icons/foo.svg',
           author: 'Jane Doe',
           homepage: 'https://github.com/jane/dsh-foo#readme',
+          repository: { url: 'https://github.com/jane/dsh-plugins', directory: 'packages/foo', type: 'git' },
           metadata: { category: 'productivity', keywords: ['review'], labels: ['official', 'ui'], sortKeys: { downloads: 12 }, extra: 1 },
           unknown: 'ignored',
           versions: [
@@ -91,6 +92,7 @@ describe('parseMarketIndex', () => {
           icon: 'https://market.example/dsh/icons/foo.svg',
           author: 'Jane Doe',
           homepage: 'https://github.com/jane/dsh-foo#readme',
+          repository: { url: 'https://github.com/jane/dsh-plugins', directory: 'packages/foo' },
           metadata: { category: 'productivity', keywords: ['review'], labels: ['official', 'ui'], sortKeys: { downloads: 12 } },
           versions: [
             { version: '1.10.0', publishTimestamp: 2, source: { type: 'npm' }, engines: {} },
@@ -174,6 +176,13 @@ describe('parseMarketIndex', () => {
     expect(entryRejection({ homepage: 'docs/foo' })).toBe('$.plugins[0].homepage must be an absolute URL')
     expect(entryRejection({ homepage: 3 })).toBe('$.plugins[0].homepage must be a string with a non-whitespace character')
     expect(parseMarketIndex(document({ plugins: [entry({ homepage: 'http://intranet.example/foo' })] }), INDEX_URL).plugins[0]?.homepage).toBe('http://intranet.example/foo')
+    expect(parseMarketIndex(document({ plugins: [entry({ repository: { url: 'http://git.intranet/o/r' } })] }), INDEX_URL).plugins[0]?.repository)
+      .toEqual({ url: 'http://git.intranet/o/r' })
+    expect(entryRejection({ repository: 'https://github.com/o/r' })).toBe('$.plugins[0].repository must be an object')
+    expect(entryRejection({ repository: { url: 'git+ssh://git@github.com/o/r.git' } })).toBe('$.plugins[0].repository.url must use https: or http:')
+    expect(entryRejection({ repository: { url: 'https://github.com/o/r#main' } })).toBe('$.plugins[0].repository.url must not contain a query or fragment')
+    expect(entryRejection({ repository: { url: 'https://github.com/o/r', directory: '../x' } }))
+      .toBe('$.plugins[0].repository.directory must be a relative directory of letters, digits, and ._@+- segments without . or ..')
     expect(entryRejection({ versions: [] })).toBe('$.plugins[0].versions must be a non-empty array')
     expect(entryRejection({ versions: npmVersion() })).toBe('$.plugins[0].versions must be a non-empty array')
     expect(entryRejection({ versions: [npmVersion(), npmVersion({ publishTimestamp: 5 })] })).toBe('$.plugins[0].versions[1].version duplicates 1.2.3')

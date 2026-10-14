@@ -53,6 +53,7 @@ DSH 不内置任何索引源。选择**发现**，点击**添加索引源**，�
       "icon": "icons/foo.svg",
       "author": "Jane Doe",
       "homepage": "https://github.com/jane/dsh-plugin-foo#readme",
+      "repository": { "url": "https://github.com/jane/dsh-plugin-foo" },
       "versions": [
         { "version": "1.1.0", "publishTimestamp": 1790476800, "source": { "type": "npm" }, "engines": { "dsh": ">=0.2.0-rc.2" } },
         { "version": "1.0.0", "publishTimestamp": 1788000000, "source": { "type": "npm" } }
@@ -99,6 +100,7 @@ DSH 不内置任何索引源。选择**发现**，点击**添加索引源**，�
 | `icon` | 否 | 内联 `data:` URL（SVG、PNG、JPEG 或 WebP，不超过 32 KiB）或 URL，见上文。 |
 | `author` | 否 | 显示文本。 |
 | `homepage` | 否 | 介绍该插件的页面的绝对 `https:` 或 `http:` URL；插件页面会链接到它。 |
+| `repository` | 否 | `{ "url": string, "directory"?: string }`：源代码仓库的网页，以及包在其中的目录。插件页面以**源代码**链接到它。 |
 | `metadata.category` | 否 | 一个已声明的分类 id。 |
 | `metadata.labels` | 否 | 已声明的标签 id。 |
 | `metadata.sortKeys` | 否 | 将已声明的排序键 id 映射为数值的对象，例如下载量或评分。 |

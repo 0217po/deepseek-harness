@@ -32,6 +32,14 @@ export interface MarketPluginMetadata {
   readonly sortKeys: Readonly<Record<string, number>>
 }
 
+/** Where a plugin's source code is published; display only, never an install source. */
+export interface MarketRepository {
+  /** Absolute http(s) URL of the repository's web page, without credentials, query, or fragment. */
+  readonly url: string
+  /** Relative POSIX directory of the package inside the repository; absent means the repository root. */
+  readonly directory?: string
+}
+
 /** Where one exact version is installed from. */
 export type MarketSource =
   | {
@@ -76,6 +84,7 @@ export interface MarketPlugin {
   readonly author?: string
   /** Absolute http(s) URL of a page about the plugin. */
   readonly homepage?: string
+  readonly repository?: MarketRepository
   readonly metadata: MarketPluginMetadata
   /** Non-empty, in descending SemVer precedence. */
   readonly versions: readonly MarketVersion[]

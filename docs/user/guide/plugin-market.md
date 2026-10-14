@@ -53,6 +53,7 @@ This is a minimal index with one npm plugin and one plugin from a Git monorepo:
       "icon": "icons/foo.svg",
       "author": "Jane Doe",
       "homepage": "https://github.com/jane/dsh-plugin-foo#readme",
+      "repository": { "url": "https://github.com/jane/dsh-plugin-foo" },
       "versions": [
         { "version": "1.1.0", "publishTimestamp": 1790476800, "source": { "type": "npm" }, "engines": { "dsh": ">=0.2.0-rc.2" } },
         { "version": "1.0.0", "publishTimestamp": 1788000000, "source": { "type": "npm" } }
@@ -99,6 +100,7 @@ Text fields marked `LocalizedText` are a string or an object of strings keyed by
 | `icon` | no | Inline `data:` URL (SVG, PNG, JPEG, or WebP, at most 32 KiB) or URL, as described above. |
 | `author` | no | Display text. |
 | `homepage` | no | Absolute `https:` or `http:` URL of a page about the plugin; the plugin page links it. |
+| `repository` | no | `{ "url": string, "directory"?: string }`: the source repository's web page, and the package directory inside it. The plugin page links it as **Source code**. |
 | `metadata.category` | no | One declared category id. |
 | `metadata.labels` | no | Declared label ids. |
 | `metadata.sortKeys` | no | Object mapping declared sort-key ids to numbers, such as downloads or ratings. |

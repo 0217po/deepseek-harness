@@ -45,7 +45,7 @@ import { MarketIndexError, marketInstallTarget, parseMarketIndex } from '@deepse
 | `marketInstallTarget(name, version)` | 安装该精确版本的 `{ spec, registry? }`。 |
 | `MarketIndexError` | 携带 `path` 和 `reason` 的校验失败。 |
 | `MAX_INLINE_ICON_BYTES` | 内联 `data:` 图标解码后载荷的最大字节数，即 32 KiB。 |
-| `MarketIndex`, `MarketPlugin`, `MarketVersion`, `MarketEngines`, `MarketSource`, `MarketIndexMetadata`, `MarketPluginMetadata`, `MarketDeclaration`, `MarketSortKeyDeclaration`, `MarketInstallTarget` | 经过校验的记录类型。 |
+| `MarketIndex`, `MarketPlugin`, `MarketVersion`, `MarketEngines`, `MarketSource`, `MarketRepository`, `MarketIndexMetadata`, `MarketPluginMetadata`, `MarketDeclaration`, `MarketSortKeyDeclaration`, `MarketInstallTarget` | 经过校验的记录类型。 |
 
 <a id="model-experience"></a>
 ## 模型体验

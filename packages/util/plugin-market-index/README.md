@@ -45,7 +45,7 @@ import { MarketIndexError, marketInstallTarget, parseMarketIndex } from '@deepse
 | `marketInstallTarget(name, version)` | `{ spec, registry? }` that installs that exact version. |
 | `MarketIndexError` | Validation failure carrying `path` and `reason`. |
 | `MAX_INLINE_ICON_BYTES` | Largest decoded payload of an inline `data:` icon, 32 KiB. |
-| `MarketIndex`, `MarketPlugin`, `MarketVersion`, `MarketEngines`, `MarketSource`, `MarketIndexMetadata`, `MarketPluginMetadata`, `MarketDeclaration`, `MarketSortKeyDeclaration`, `MarketInstallTarget` | Validated record types. |
+| `MarketIndex`, `MarketPlugin`, `MarketVersion`, `MarketEngines`, `MarketSource`, `MarketRepository`, `MarketIndexMetadata`, `MarketPluginMetadata`, `MarketDeclaration`, `MarketSortKeyDeclaration`, `MarketInstallTarget` | Validated record types. |
 
 <a id="model-experience"></a>
 ## Model Experience

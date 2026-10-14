@@ -8,7 +8,7 @@ import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import semver from 'semver'
 import type {
   MarketDeclaration, MarketEngines, MarketIndex, MarketIndexMetadata, MarketInstallTarget, MarketPlugin, MarketPluginMetadata,
-  MarketSortKeyDeclaration, MarketSource, MarketVersion,
+  MarketRepository, MarketSortKeyDeclaration, MarketSource, MarketVersion,
 } from './types.ts'
 
 export type * from './types.ts'
@@ -181,6 +181,13 @@ function packagePath(value: unknown, path: string): string {
   return text
 }
 
+function repository(value: unknown, path: string): MarketRepository {
+  const object = objectAt(value, path)
+  const url = httpUrl(object.url, `${path}.url`, ['https:', 'http:']).href
+  const directory = optional(object, 'directory', path, packagePath)
+  return { url, ...directory === undefined ? {} : { directory } }
+}
+
 function source(value: unknown, path: string): MarketSource {
   const object = objectAt(value, path)
   switch (object.type) {
@@ -267,6 +274,7 @@ function plugin(value: unknown, path: string, index: MarketIndexMetadata, indexU
   const iconUrl = optional(object, 'icon', path, (member, at) => icon(member, at, indexUrl))
   const author = optional(object, 'author', path, stringAt)
   const homepage = optional(object, 'homepage', path, homepageUrl)
+  const repo = optional(object, 'repository', path, repository)
   return {
     name,
     ...title === undefined ? {} : { title },
@@ -274,6 +282,7 @@ function plugin(value: unknown, path: string, index: MarketIndexMetadata, indexU
     ...iconUrl === undefined ? {} : { icon: iconUrl },
     ...author === undefined ? {} : { author },
     ...homepage === undefined ? {} : { homepage },
+    ...repo === undefined ? {} : { repository: repo },
     metadata: pluginMetadata(object.metadata, `${path}.metadata`, index),
     versions: versions(object.versions, `${path}.versions`),
   }

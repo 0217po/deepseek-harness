@@ -239,6 +239,15 @@ function EntryDetail({ entry, listing, t, face, language, onBack, onInstall, onO
               <dd><a className={css.link} href={entry.homepage} target="_blank" rel="noopener noreferrer">{entry.homepage}</a></dd>
             </div>
           )}
+          {entry.repository === undefined ? null : (
+            <div>
+              <dt>{t('factSourceCode')}</dt>
+              <dd>
+                <a className={css.link} href={entry.repository.url} target="_blank" rel="noopener noreferrer">{entry.repository.url}</a>
+                {entry.repository.directory === undefined ? null : <> <code>{entry.repository.directory}</code></>}
+              </dd>
+            </div>
+          )}
           {sourceFacts(entry.name, version).map(fact => (
             <div key={fact.kind}><dt>{t(FACT_KEYS[fact.kind])}</dt><dd><code>{fact.value}</code></dd></div>
           ))}
