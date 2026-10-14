@@ -658,6 +658,32 @@ describe('PluginManagerPage', () => {
     expect(detailImage.width).toBe(36)
   })
 
+  it('shows a known bundle preview in its details before activation, follows the UI language, and survives decode failure', () => {
+    const name = '@deepseek-ai/dsh-experimental-badge-skill-bundle'
+    const { actions, setLanguage } = renderTab({ packages: [pkg({ name, enabled: false }), pkg()] })
+    expect(screen.queryByRole('img')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: `View ${name}` }))
+    const english = screen.getByRole('img', { name: en.previewAlt.replace('{name}', name) }).getAttribute('src')
+    expect(english).toMatch(/badge-skill-preview\.svg$/)
+    setLanguage(zh)
+    const chinese = screen.getByRole('img', { name: zh.previewAlt.replace('{name}', name) })
+    expect(chinese.getAttribute('src')).toMatch(/badge-skill-preview\.zh\.svg$/)
+    fireEvent.error(chinese)
+    expect(screen.queryByRole('img')).toBeNull()
+    expect(screen.getByRole('status').textContent).toBe(zh.previewUnavailable)
+    fireEvent.click(screen.getByRole('switch', { name: zh.enableToggle.replace('{name}', name) }))
+    expect(actions.setEnabled).toHaveBeenCalledWith(name, true)
+    setLanguage(en)
+    expect(screen.getByRole('img').getAttribute('src')).toBe(english)
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('shows no preview for bundles without one', () => {
+    renderTab({ packages: [pkg()] })
+    fireEvent.click(screen.getByRole('button', { name: 'View dsh-better-sidebar' }))
+    expect(screen.queryByRole('img')).toBeNull()
+  })
+
   it('shows metadata diagnostics without blocking management or displaying legacy descriptions', () => {
     const error = 'locale/zh.json: invalid title'
     const { actions, set, setLanguage } = renderTab({
