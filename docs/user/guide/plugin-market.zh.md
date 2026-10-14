@@ -11,6 +11,7 @@
 - [打开「发现」](#turn-on)
 - [浏览和安装](#browse-and-install)
 - [发布索引](#publish-an-index)
+- [用参考生成器生成索引](#generate-an-index)
 - [索引格式参考](#index-format)
 - [延伸阅读](#further-exploration)
 
@@ -79,6 +80,26 @@ DSH 不内置任何索引源。选择**发现**，点击**添加索引源**，�
 ```
 
 违反下列任何一条规则时，DSH 会拒绝整个索引，并在**管理索引源…**中该索引源下方显示原因及违规值的 JSON 路径。
+
+<a id="generate-an-index"></a>
+## 用参考生成器生成索引
+
+仓库包含一个[参考生成器](../../../apps/plugin-market-generator/README.zh.md)，可以从一份纯文本列表构建索引。每行写一个 npm 包名或 https Git 仓库 URL；空行和以 `#` 开头的行会被忽略：
+
+```text
+@team/dsh-foo
+https://gitlab.example.com/team/dsh-plugins
+```
+
+在 DSH 代码仓库中运行它：
+
+```sh
+pnpm --filter @deepseek-ai/dsh-plugin-market-generator start --input plugins.txt --output site/index.json --title "Team plugins"
+```
+
+对于 npm 包，索引列出所有未弃用且声明了 `dsh.bundle` 的版本。对于 Git 仓库，生成器在默认分支上查找组合包，列出它们在 `vX.Y.Z`、`X.Y.Z` 和 `<name>@X.Y.Z` 标签处的版本，以及每个包在默认分支上的版本。标题、描述、图标、作者和主页取自每个插件的最高版本。路径相对于你运行 pnpm 的目录。
+
+生成器只下载和读取文件，从不安装包或运行其代码。它在列表旁的 `.plugin-market-cache` 中保存缓存，因此再次运行时只下载新的版本和提交。按上文所述发布输出目录，即 `index.json` 及其 `icons/` 目录。
 
 <a id="index-format"></a>
 ## 索引格式参考

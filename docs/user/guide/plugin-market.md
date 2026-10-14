@@ -11,6 +11,7 @@ A plugin market is one JSON index file that lists installable DSH bundles with t
 - [Turn on Discover](#turn-on)
 - [Browse and install](#browse-and-install)
 - [Publish an index](#publish-an-index)
+- [Generate an index with the reference generator](#generate-an-index)
 - [Index format reference](#index-format)
 - [Further Exploration](#further-exploration)
 
@@ -79,6 +80,26 @@ This is a minimal index with one npm plugin and one plugin from a Git monorepo:
 ```
 
 DSH rejects the whole index when any rule below is violated and shows the reason, with the JSON path of the offending value, under the source in **Manage index sources…**.
+
+<a id="generate-an-index"></a>
+## Generate an index with the reference generator
+
+The repository includes a [reference generator](../../../apps/plugin-market-generator/README.md) that builds an index from a plain list. Write one npm package name or https Git repository URL per line; blank lines and lines starting with `#` are ignored:
+
+```text
+@team/dsh-foo
+https://gitlab.example.com/team/dsh-plugins
+```
+
+Run it from a DSH checkout:
+
+```sh
+pnpm --filter @deepseek-ai/dsh-plugin-market-generator start --input plugins.txt --output site/index.json --title "Team plugins"
+```
+
+For an npm package, the index lists every version that is not deprecated and declares `dsh.bundle`. For a Git repository, it finds the bundle packages on the default branch and lists their versions at `vX.Y.Z`, `X.Y.Z`, and `<name>@X.Y.Z` tags, plus each package's version on the default branch. Titles, descriptions, icons, authors, and homepages come from each plugin's highest version. Paths are relative to the directory where you run pnpm.
+
+The generator only downloads and reads files; it never installs packages or runs their code. It keeps a cache in `.plugin-market-cache` next to the list, so a repeated run downloads only new versions and commits. Publish the output directory, `index.json` together with its `icons/` directory, as described above.
 
 <a id="index-format"></a>
 ## Index format reference
