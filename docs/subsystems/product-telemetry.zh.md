@@ -51,7 +51,9 @@ Authenticated event intake; disabled instances do not inspect identity or accept
 @Remote({ mode: 'stream' }) async *watchPolicy(signal: AbortSignal): AsyncIterable<boolean>
 
 /**
- * Submit selected Desktop fields; missing identity is omitted and never generated.
+ * Submit selected Desktop fields with cached static environment and fresh identity.
+ * The first intake waits for bounded environment queries; concurrent intakes share them.
+ * Missing identity is omitted; failed environment fields carry fixed reasons.
  * @param event - typed product event without message contents or credentials.
  * @returns after local submission; no delivery or warehouse acknowledgement.
  */

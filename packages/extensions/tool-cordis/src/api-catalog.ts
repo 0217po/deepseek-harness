@@ -1797,7 +1797,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote async report(event: ProductEvent): Promise<void>',
-        description: 'Submit selected Desktop fields; missing identity is omitted and never generated.',
+        description: 'Submit selected Desktop fields with cached static environment and fresh identity. The first intake waits for bounded environment queries; concurrent intakes share them. Missing identity is omitted; failed environment fields carry fixed reasons.',
         parameters: [{ name: 'event', description: 'typed product event without message contents or credentials.' }],
         returns: 'after local submission; no delivery or warehouse acknowledgement.',
       },
