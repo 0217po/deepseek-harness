@@ -255,7 +255,8 @@ describe('Linux native capability selection', () => {
     const failedQuery = vi.fn(() => ({ status: 1, error: undefined }))
     try {
       vi.stubEnv('XDG_RUNTIME_DIR', runtime)
-      // A bound path without a listener, as a stopped manager leaves it, and another path's listener need the query.
+      // A row for the path without the listening flag, such as a connection accepted after the
+      // listener closed, and another path's listener both need the query.
       writeFileSync(table, header + row('00000000', socket) + row('00010000', `listener ${socket}`))
       expect(confirmLinuxManager({ spawnSync: failedQuery as never, unixSocketTable: table })).toBe(false)
       expect(failedQuery).toHaveBeenCalledOnce()
@@ -281,7 +282,13 @@ describe('Linux native capability selection', () => {
     directories.push(runtime)
     mkdirSync(join(runtime, 'systemd'))
     const server = createServer()
-    await new Promise<void>((resolve) => { server.listen(join(runtime, 'systemd', 'private'), resolve) })
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(join(runtime, 'systemd', 'private'), () => {
+        server.removeListener('error', reject)
+        resolve()
+      })
+    })
     const query = vi.fn(() => ({ status: 1, error: undefined }))
     try {
       vi.stubEnv('XDG_RUNTIME_DIR', runtime)

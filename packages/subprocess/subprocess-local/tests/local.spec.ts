@@ -611,6 +611,7 @@ describe('LocalSubprocessRuntime', () => {
     mockWin32ForIsolatedRuntime()
     mockNodePtyForIsolatedRuntime(nodePtySpawn)
     vi.doMock('../src/linux-scope.ts', () => ({
+      confirmLinuxManager: vi.fn(() => true),
       signalLinuxDirectProcess,
       launchLinuxScope: vi.fn(),
       prepareLinuxTerminalScope,
@@ -712,6 +713,7 @@ describe('LocalSubprocessRuntime', () => {
     mockWin32ForIsolatedRuntime()
     mockNodePtyForIsolatedRuntime(nodePtySpawn)
     vi.doMock('../src/linux-scope.ts', () => ({
+      confirmLinuxManager: vi.fn(() => true),
       signalLinuxDirectProcess,
       launchLinuxScope: vi.fn(),
       prepareLinuxTerminalScope,
