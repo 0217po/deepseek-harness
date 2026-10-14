@@ -247,6 +247,29 @@ describe('PluginManagerPage', () => {
     expect(screen.getByRole('tabpanel', { name: en.installedTab })).toBeTruthy()
   })
 
+  it('keeps the Installed tab panel through loading and the More list out of the tabs', () => {
+    const worktree = '@deepseek-ai/dsh-experimental-tool-worktree'
+    const { navigation, set } = renderTab({ status: 'loading', packages: [] }, {}, {
+      'plugins.tab:discover': (_view, owner) => (
+        <button type="button" onClick={() => { (owner as PluginTabProps).openPackage(worktree) }}>Discover open</button>
+      ),
+    }, {}, [{ id: 'discover', label: 'Discover' }])
+    const installed = screen.getByRole('tab', { name: en.installedTab })
+    expect(document.getElementById(installed.getAttribute('aria-controls') as string)?.getAttribute('role')).toBe('tabpanel')
+    set({ status: 'ready', packages: [] })
+    expect(screen.getByRole('tabpanel', { name: en.installedTab }).textContent).toBe(en.empty)
+    set({ packages: [pkg({ name: worktree, official: true, optional: true, installed: false, enabled: false })] })
+    act(() => { navigation.actions.setView({ kind: 'more' }) })
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.queryByRole('tabpanel')).toBeNull()
+    act(() => { navigation.actions.setView({ kind: 'list' }) })
+    fireEvent.click(screen.getByRole('tab', { name: 'Discover' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Discover open' }))
+    expect(document.querySelector(`[data-plugin-detail="${worktree}"]`)).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en.backToPackage.replace('{name}', en.moreTitle) }))
+    expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
+  })
+
   it('shows a confirmed spec as a check and a refusal with retry, without the spec form or another registry', () => {
     const confirmed: InstallState = { ...IDLE_INSTALL, open: true, spec: 'dsh-a@1.0.0', confirmed: true, registries: REGISTRIES }
     const { actions, set } = renderTab({ install: { ...confirmed, phase: 'checking' } })

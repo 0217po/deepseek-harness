@@ -84,6 +84,7 @@ export interface MarketPlugin {
   readonly author?: string
   /** Absolute http(s) URL of a page about the plugin. */
   readonly homepage?: string
+  /** Web page of the plugin's source repository and its package directory; display only. */
   readonly repository?: MarketRepository
   readonly metadata: MarketPluginMetadata
   /** Non-empty, in descending SemVer precedence. */

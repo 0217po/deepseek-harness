@@ -168,7 +168,7 @@ DSH 只能从用户已知的 spec 安装第三方组合包（bundle）：npm 包
 - `engines.dsh` 原样复制 manifest 声明的范围。缺失、空白或无效范围的版本会被省略并给出诊断。没有合格版本的插件会被省略。
 - `dist-tags` 是 npm [发布标签](https://docs.npmjs.com/cli/v11/commands/npm-dist-tag/)的快照，只保留指向合格且已列出版本的目标。对于 Git 来源，发布者或市场提供同样的精确标签到版本映射。
 - 列出的每个版本都声明了 `dsh.bundle`。安装时也会独立拒绝没有组合包 patch 的包。
-- `title`、`description` 和 `icon` 来自所列最高版本的语言元数据、manifest 字段和图标，采用已安装插件的显示规则。使用 npm 的 `node-semver.rsort()` 顺序，相等时保留输入顺序。元数据选择不选择安装版本。`homepage` 复制该版本 manifest 的 `homepage`，manifest 没有该字段时省略。`repository` 来自该版本 manifest 的 `repository`：简写或 Git URL 转换为仓库的网页 URL，`directory` 原样复制；manifest 没有该字段，或其指向的仓库没有网页地址时省略。
+- `title`、`description` 和 `icon` 来自所列最高版本的语言元数据、manifest 字段和图标，采用已安装插件的显示规则。使用 npm 的 `node-semver.rsort()` 顺序，相等时保留输入顺序。元数据选择不选择安装版本。`homepage` 复制该版本 manifest 的 `homepage`，manifest 没有该字段时省略。`repository` 来自该版本 manifest 的 `repository`：简写或 Git URL 转换为仓库的网页 URL，`directory` 符合 `directory` 规则时原样复制，否则丢弃并保留 `url`；manifest 没有该字段，或其指向的仓库没有网页地址时省略。
 - `author` 来自同一最高版本的 npm 作者声明。复制对象的 `name`；使用维护中的 npm person 归一化器解析简写字符串。省略缺失或全空白的名称以及联系字段。归一化新建的投影，不修改源 manifest。
 
 ### 读取器规则

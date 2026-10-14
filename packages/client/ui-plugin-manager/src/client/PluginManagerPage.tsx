@@ -123,6 +123,7 @@ const MORE_BUNDLES = [
   '@deepseek-ai/dsh-experimental-session-titles-bundle',
   '@deepseek-ai/dsh-experimental-badge-skill-bundle',
   '@deepseek-ai/dsh-experimental-ralph-bundle',
+  '@deepseek-ai/dsh-experimental-plugin-market-bundle',
   '@deepseek-ai/dsh-subagent-codex',
   '@deepseek-ai/dsh-subagent-claude-code',
 ]
@@ -1533,6 +1534,10 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const showsMainList = showsCards && !showsMoreList
   const installedCards = onInstalled && showsCards
   const openPkgInMore = openPkg !== undefined && openPkg.official && detailFromMore
+  // The Installed tab's panel, whatever it currently shows; the More list is not a tab panel.
+  const installedPanel = tabs.length === 0 || showsMoreList
+    ? {}
+    : { role: 'tabpanel', id: `${tabsId}-${INSTALLED_TAB}-panel`, 'aria-labelledby': `${tabsId}-${INSTALLED_TAB}` }
   const activated = listed.find(pkg => pkg.name === activation && pkg.enabled && !state.busy.includes(pkg.name))
   const setRowEnabled = (row: PackageRow, enabled: boolean): void => {
     /* v8 ignore next -- a row without a live entry has its switch disabled */
@@ -1644,11 +1649,15 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
           <h1 className={css.pageTitle}>{t('moreTitle')}</h1>
         </header>
       ) : null}
-      {installedCards && state.status === 'loading' ? <ListSkeleton label={t('loading')} /> : null}
-      {installedCards && state.status === 'unavailable' ? (
-        <p className={`${css.status} ${css.statusWithDot}`} role="status">
-          <StateDot state="idle" />{t('unavailable')}
-        </p>
+      {installedCards && !loaded ? (
+        <div className={css.installedPanel} {...installedPanel}>
+          {state.status === 'loading' ? <ListSkeleton label={t('loading')} /> : null}
+          {state.status === 'unavailable' ? (
+            <p className={`${css.status} ${css.statusWithDot}`} role="status">
+              <StateDot state="idle" />{t('unavailable')}
+            </p>
+          ) : null}
+        </div>
       ) : null}
       {state.notice === null || noticeLine === null
         ? null
@@ -1709,10 +1718,9 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
         : null}
       {loaded && installedCards
         ? basicCards.length === 0 && official.length === 0 && mine.length === 0 && state.status !== 'error'
-          ? <p className={css.empty}>{t('empty')}</p>
+          ? <div className={css.installedPanel} {...installedPanel}><p className={css.empty}>{t('empty')}</p></div>
           : (
-            <div className={css.installedPanel}
-              {...tabs.length === 0 || showsMoreList ? {} : { role: 'tabpanel', id: `${tabsId}-${INSTALLED_TAB}-panel`, 'aria-labelledby': `${tabsId}-${INSTALLED_TAB}` }}>
+            <div className={css.installedPanel} {...installedPanel}>
               {showsMoreList ? (
                 <section className={css.group} data-plugin-scope="global" data-plugin-group="more">
                   <ul className={css.cards}>{more.map(packageCard)}</ul>
