@@ -210,7 +210,7 @@ describe('subagent prompt Remote', () => {
       invocation: {
         request: { namespace: 'subagents', method: 'prompt', args: {} },
         service: 'subagents',
-        peer: { id: 'subagent-peer' as PeerId, ctx, principal, signal, dispose: async () => {} },
+        peer: { id: 'subagent-peer' as PeerId, ctx, principal, interactions: 'answer', signal, dispose: async () => {} },
         signal,
         uplink: <In>(): AsyncIterable<In> => ({ [Symbol.asyncIterator]: () => ({ next: async () => ({ done: true, value: undefined }) }) }),
       } satisfies RemoteInvocation,

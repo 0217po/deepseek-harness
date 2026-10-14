@@ -188,16 +188,18 @@ export interface PeerScope {
   readonly principal: Principal
   /** Aborted once the Peer is disposed. */
   readonly signal: AbortSignal
+  /** Participation in forwarded interactions; independent of RBAC. */
+  readonly interactions: 'answer' | 'none'
   dispose(): Promise<void>
 }
 ```
 
-`@deepseek-ai/dsh-client-connection` implements the one Peer class, `Peer(owner, { principal })`, with `createScope(owner, peer)`, the same mechanism an Agent uses to create its own scope: the Peer object is the ScopeKey, `peer.ctx` carries connection-lifetime effects, `peer.signal` aborts when the scope ends, and `dispose()` quiets the fiber. Connection creates `connection.browserPeer` with the owner principal when the service applies; [Peer principals and method-level Remote access control](../../implemented/architecture/2026-10-12-peer-principal-and-remote-access.md) owns principals, `createPeer()`, and access checks.
+`@deepseek-ai/dsh-client-connection` implements the one Peer class, `Peer(owner, { principal, interactions? })`, with `createScope(owner, peer)`, the same mechanism an Agent uses to create its own scope: the Peer object is the ScopeKey, `peer.ctx` carries connection-lifetime effects, `peer.signal` aborts when the scope ends, and `dispose()` quiets the fiber. Connection creates `connection.browserPeer` with the owner principal when the service applies; [Peer principals and method-level Remote access control](../../implemented/architecture/2026-10-12-peer-principal-and-remote-access.md) owns principals, `createPeer()`, and access checks.
 
 | Member | Semantics |
 | --- | --- |
 | `connection.browserPeer: PeerScope` | The Peer every authenticated browser connection shares; owner principal; lives and dies with the Connection |
-| `connection.admit(request): PeerAdmission` | Runs the existing `requestRejection`: returns `{ rejection: 401 \| 403 }` when refused, otherwise `{ peer: browserPeer }`. Future admitters plug in here |
+| `connection.admit(request): PeerAdmission` | Checks Host/Origin and signed browser or API Cookies; returns `{ rejection: 401 \| 403 }` or the credential's live Peer; connect publishes the API Peer and its lifecycle socket releases it |
 
 The Gateway's `handleUpgrade(req, socket, head, peer)` binds an opener with a fixed Peer to that socket and registers socket closure in `peer.ctx.effect`; when the scope is already inactive, it closes the socket directly with 1001 instead. `InvokeRemoteRequest.peer` and the `peer` parameter of `RemoteStreamOpener` and `wireStream.open` are required, so every in-process caller names its Peer, and the Gateway creates none. Looking up a Peer by id and Peer open and close events wait until the first consumer that needs them appears.
 

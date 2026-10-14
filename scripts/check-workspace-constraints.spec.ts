@@ -442,6 +442,18 @@ it('requires the Inspector Worker, Client chunks, and mirrored DevTools resource
   }
 })
 
+it('requires both physical Client entries only for opted-in packages', () => {
+  for (const dir of ['packages/client/connection', 'packages/api/gateway', 'packages/typert/registry']) {
+    const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+    expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+    for (const omitted of ['lib/client.node.js', 'lib/client.browser.js']) {
+      const files = manifest.files!.filter(file => file !== omitted)
+      expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, files } }))
+        .toEqual([expect.stringContaining('package.json files must be')])
+    }
+  }
+})
+
 it('requires the standalone shortcut protocol and rejects unrelated runtime files', () => {
   const dir = 'packages/client/shortcuts'
   const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']

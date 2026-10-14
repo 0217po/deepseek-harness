@@ -868,6 +868,7 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   ConnectionRequestRejection: 'transport rejection status is owned by packages/client/connection/src/rpc.ts',
   ConnectionTrustRequest: 'transport authentication input is owned by packages/client/connection/src/rpc.ts',
   PeerAdmission: 'Peer admission outcome is owned by packages/client/connection/src/rpc.ts',
+  ConnectionAdmission: 'physical socket admission and release are owned by packages/client/connection/src/rpc.ts',
   PeerScope: 'Peer scope contract is owned by packages/typert/protocol/src/types.ts',
   RemoteAccessPolicy: 'access policy contract is owned by packages/api/remote-access/README.md',
   RemoteAccessRequest: 'Gateway decision requests are owned by packages/api/remote-access/README.md',
