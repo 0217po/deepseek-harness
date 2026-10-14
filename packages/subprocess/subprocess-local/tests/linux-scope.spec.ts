@@ -1,12 +1,16 @@
 import { EventEmitter } from 'node:events'
-import { existsSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import {
+  confirmLinuxManager,
   launchLinuxScope,
   prepareLinuxTerminalScope,
   probeLinuxBootstrap,
+  probeLinuxManager,
   probeLinuxNative,
   probeLinuxScope,
   signalLinuxDirectProcess,
@@ -209,7 +213,8 @@ describe('Linux native capability selection', () => {
   it('uses the default command adapters and runner resolution', () => {
     childProcessMocks.spawnSync.mockReturnValue({ status: 0, error: undefined })
     expect(probeLinuxScope()).toEqual(['--expand-environment=no'])
-    expect(childProcessMocks.spawnSync).toHaveBeenCalledOnce()
+    expect(probeLinuxManager()).toBe(true)
+    expect(childProcessMocks.spawnSync).toHaveBeenCalledTimes(2)
     expect(probeLinuxBootstrap({ loadLinuxExecve: () => vi.fn() as never })).toBe(true)
     expect(probeLinuxBootstrap({
       runnerInvocation: [process.execPath],
@@ -217,15 +222,50 @@ describe('Linux native capability selection', () => {
     })).toBe(process.platform !== 'win32')
   })
 
-  it('quiets systemd logging on the transient-scope probe', () => {
+  it('keeps quieting on the transient-scope probe but preserves manager diagnostics', () => {
     const spawnSync = vi.fn((
       _command: string,
       _args: readonly string[],
       _options: unknown,
     ) => ({ status: 0, error: undefined }))
     expect(probeLinuxScope({ spawnSync: spawnSync as never })).toEqual(['--expand-environment=no'])
+    expect(probeLinuxManager({ spawnSync: spawnSync as never })).toBe(true)
     const scopeOptions = spawnSync.mock.calls[0]?.[2] as { env: NodeJS.ProcessEnv }
+    const managerOptions = spawnSync.mock.calls[1]?.[2] as { env: NodeJS.ProcessEnv }
     expect(scopeOptions.env).toMatchObject({ LC_ALL: 'C', SYSTEMD_LOG_TARGET: 'null' })
+    expect(managerOptions.env).toMatchObject({ LC_ALL: 'C' })
+    expect(managerOptions.env).not.toHaveProperty('SYSTEMD_LOG_TARGET')
+
+    expect(probeLinuxManager({
+      spawnSync: vi.fn(() => ({ status: 1, error: undefined })) as never,
+    })).toBe(false)
+    expect(probeLinuxManager({
+      spawnSync: vi.fn(() => ({ status: null, error: new Error('missing') })) as never,
+    })).toBe(false)
+  })
+
+  it('confirms the user manager from its socket file before querying systemctl', () => {
+    const runtime = mkdtempSync(join(tmpdir(), 'dsh-runtime-'))
+    directories.push(runtime)
+    const failedQuery = vi.fn(() => ({ status: 1, error: undefined }))
+    try {
+      vi.stubEnv('XDG_RUNTIME_DIR', runtime)
+      expect(confirmLinuxManager({ spawnSync: failedQuery as never })).toBe(false)
+      expect(failedQuery).toHaveBeenCalledOnce()
+      mkdirSync(join(runtime, 'systemd'))
+      writeFileSync(join(runtime, 'systemd', 'private'), '')
+      expect(confirmLinuxManager({ spawnSync: failedQuery as never })).toBe(true)
+      expect(failedQuery).toHaveBeenCalledOnce()
+
+      for (const value of ['', undefined]) {
+        vi.stubEnv('XDG_RUNTIME_DIR', value)
+        const query = vi.fn(() => ({ status: 0, error: undefined }))
+        expect(confirmLinuxManager({ spawnSync: query as never })).toBe(true)
+        expect(query).toHaveBeenCalledOnce()
+      }
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('drops the expansion opt-out only for a systemd-run that rejects it', () => {

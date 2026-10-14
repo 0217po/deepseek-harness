@@ -4,6 +4,7 @@ import { controlPipe } from './control-spawn.ts'
 import { execFile, spawn, spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { setTimeout as sleepMs } from 'node:timers/promises'
 import type {
   SubprocessOutcome,
@@ -156,6 +157,38 @@ export function probeLinuxScope(internals: LinuxScopeInternals = {}): LiteralArg
  */
 export function probeLinuxNative(internals: LinuxScopeInternals = {}): LiteralArgvOptions | undefined {
   return probeLinuxBootstrap(internals) ? probeLinuxScope(internals) : undefined
+}
+
+/**
+ * Query the user manager once through systemctl.
+ * @param internals - optional systemctl seam used by tests.
+ * @returns whether the query succeeds.
+ */
+export function probeLinuxManager(internals: LinuxScopeInternals = {}): boolean {
+  const result = (internals.spawnSync ?? spawnSync)(internals.systemctl ?? 'systemctl', [
+    '--user',
+    'show',
+    '--property=Version',
+    '--value',
+  ], { env: managerEnvironment(), stdio: 'ignore', timeout: SYSTEMCTL_TIMEOUT_MS })
+  return result.error === undefined && result.status === 0
+}
+
+/**
+ * Confirm the user manager before a scope launch. The manager's socket file at
+ * `$XDG_RUNTIME_DIR/systemd/private` disappears when the manager stops, so its
+ * presence answers without a child process; otherwise one systemctl query decides.
+ * A crashed manager that leaves its socket file passes, and its scope launch fails.
+ * @param internals - optional systemctl seam used by tests.
+ * @returns whether a scope launch can reach the user manager.
+ */
+export function confirmLinuxManager(internals: LinuxScopeInternals = {}): boolean {
+  const runtimeDirectory = childEnv().XDG_RUNTIME_DIR
+  if (runtimeDirectory !== undefined && runtimeDirectory !== ''
+    && existsSync(join(runtimeDirectory, 'systemd', 'private'))) {
+    return true
+  }
+  return probeLinuxManager(internals)
 }
 
 interface DirectRange {

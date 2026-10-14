@@ -34,6 +34,7 @@ import {
 import { logSpillFailure, prepareManagedProcessBinding } from './output.ts'
 import type { LocalSubprocessHandle, SpawnInternals } from './spawn.ts'
 import {
+  confirmLinuxManager,
   launchLinuxScope,
   prepareLinuxTerminalScope,
   probeLinuxNative,
@@ -67,11 +68,13 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
   internals: SpawnInternals = {}
   /** Provider-lifetime latch suppressing repeated weaker-containment warnings. */
   private fallbackWarningIssued = false
+  /** Whether the first eligible ordinary or terminal spawn has run the Linux native probe. */
+  private linuxProbed = false
   /**
-   * Provider-lifetime result of the Linux native probe; false when native containment is unavailable.
-   * Each probe is a spawnSync that blocks the event loop and forks the host, so no later spawn repeats it.
+   * Provider-lifetime result of that probe: literal-argv scope options, or undefined when unavailable.
+   * Each probe is a spawnSync that blocks the event loop and forks the host, so later spawns only confirm the user manager.
    */
-  private linuxScope: LiteralArgvOptions | false | undefined
+  private linuxLiteralArgv: LiteralArgvOptions | undefined
   /** Test hook for platform process inspection; production resolves lazily on terminal spawn. */
   terminalInspector: ProcessInspector | undefined
 
@@ -192,7 +195,7 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
       handle = spawnSubprocess(spec, internals)
     } else {
       const binding = prepareManagedProcessBinding(internals)
-      const linuxScope = containmentMode === 'linux-scope' ? this.linuxScopeOptions() : undefined
+      const linuxScope = containmentMode === 'linux-scope' ? this.linuxLiteralArgv : undefined
       const launch = linuxScope === undefined
         ? launchWindowsJob(spec, env)
         : launchLinuxScope(spec, env, linuxScope)
@@ -214,10 +217,14 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
     return handle
   }
 
-  /** Run the Linux native probe on the first eligible ordinary or terminal spawn and keep its result for the provider lifetime. */
-  private linuxScopeOptions(): LiteralArgvOptions | undefined {
-    this.linuxScope ??= probeLinuxNative() ?? false
-    return this.linuxScope === false ? undefined : this.linuxScope
+  /** Probe on the first eligible ordinary or terminal spawn; after a positive result, confirm the user manager before each launch. */
+  private linuxScopeAvailable(): boolean {
+    if (!this.linuxProbed) {
+      this.linuxProbed = true
+      this.linuxLiteralArgv = probeLinuxNative()
+      return this.linuxLiteralArgv !== undefined
+    }
+    return this.linuxLiteralArgv !== undefined && confirmLinuxManager()
   }
 
   private selectContainmentMode(
@@ -226,7 +233,7 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
     const platform = this.internals.platform ?? process.platform
     let fallbackReason: string | undefined
     if (platform === 'linux') {
-      if (this.linuxScopeOptions() !== undefined) return 'linux-scope'
+      if (this.linuxScopeAvailable()) return 'linux-scope'
       fallbackReason = 'the current user-systemd scope or private bootstrap is unavailable'
     }
     if (kind === 'ordinary' && platform === 'win32') {
@@ -294,7 +301,7 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
     let scope: ReturnType<typeof prepareLinuxTerminalScope> | undefined
     let terminal: NodePty.IPty
     try {
-      const linuxScope = containmentMode === 'linux-scope' ? this.linuxScopeOptions() : undefined
+      const linuxScope = containmentMode === 'linux-scope' ? this.linuxLiteralArgv : undefined
       scope = linuxScope === undefined
         ? undefined
         : prepareLinuxTerminalScope(launch, { ...activity?.env ?? env, PWD: spec.cwd, TERM: spec.terminalType }, linuxScope)
