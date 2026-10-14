@@ -360,7 +360,7 @@ it('keeps native element diagnostics out of model-visible state and structured t
   expect(JSON.parse(content.text)).toEqual(visible)
 })
 
-it('preserves screenshot coordinates and image attachments on every host', async () => {
+it('preserves screenshot attachments and invalidates pixel coordinates when window listings observe a resize', async () => {
   const f = await setup({ provider: 'image-fixture', model: 'vision' })
   await selectApplication(f)
   f.ctx.llm.registerAdapter(['image-fixture'], new ImageAdapter())
@@ -380,6 +380,17 @@ it('preserves screenshot coordinates and image attachments on every host', async
   const stored = await f.ctx.attachments.readImage(image.attachment)
   expect(Buffer.from(stored.data).toString('base64')).toBe(data)
   expect(result.value).toMatchObject({ ...metadata, coordinateSpace: 'screenshot-pixels', mimeType: 'image/png', data })
+  const windows = [{ windowId: 7, pid: 17, appName: 'Fixture', title: 'Window',
+    bounds: { ...metadata.bounds, width: 2 }, isOnScreen: true, onCurrentSpace: true }]
+  native.request.mockResolvedValueOnce(windows)
+  const listed = await f.execute('listWindows', { appHandle: 'app-one' })
+  expect(listed.isError).toBe(false)
+  expect(listed.value).toEqual(windows)
+  native.request.mockClear()
+  const click = await f.execute('click', { appHandle: 'app-one', windowId: 7, x: 0, y: 0 })
+  expect(click.isError).toBe(true)
+  expect(JSON.stringify(click.content)).toContain('SCREENSHOT_REQUIRED')
+  expect(native.request).not.toHaveBeenCalled()
 })
 
 it('maps the actual model-request image pixels back to native points without storing the screenshot twice', async () => {
