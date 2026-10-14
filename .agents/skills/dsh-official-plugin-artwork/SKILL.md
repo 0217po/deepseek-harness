@@ -1,11 +1,15 @@
 ---
 name: dsh-official-plugin-artwork
-description: Draw and review official DeepSeek Harness plugin icons, including experimental plugins. Use for package icon.svg assets and PluginArtwork glyphs; covers semantic references, proportions, lettering, transparency, package metadata, and designer review. Not for toolbar or action icons.
+description: Draw and review official DeepSeek Harness plugin icons and optional feature previews, including experimental plugins. Use for package artwork and PluginArtwork glyphs; covers semantic references, proportions, lettering, transparency, localization, package metadata, and designer review. Not for toolbar or action icons.
 ---
 
 # Official plugin artwork
 
 Draw recognizable artwork that belongs beside the existing official icons. Official and official experimental plugins share this visual language; the UI label communicates experimental status. This guidance does not replace designer approval.
+
+## Optional feature previews
+
+For a larger image below a bundle's description, follow [adding a built-in plugin feature preview](../../../docs/cookbook/adding-a-plugin-preview.md). It owns optionality, image count, design canvas, display size and position, language variants, asset limits, and acceptance. The icon dimensions below do not apply to previews. Inspect the real feature, preserve its produced assets, and keep the preview in its owning package.
 
 ## Establish the subject
 

@@ -149,6 +149,8 @@ For an image on bundle cards, details, and component rows, a package-root plugin
 
 Optionally add `"preview": "./preview.svg"` to the same manifest for a larger feature image on bundle details, or export `./preview` when the field is absent. For artwork containing text, use a language map such as `"preview": { "en": "./preview.svg", "zh": "./preview.zh.svg" }`; English is required as the fallback, and the UI selects an image through its existing locale resolver. Include every image in `files`. The formats and path restrictions match `icon`, with a 1 MiB total limit across variants; use self-contained SVGs or optimized screenshots. Reading requires no activation. Omission leaves the detail layout unchanged; a bad preview preserves other metadata and management actions. Images remain optional.
 
+For official built-in and experimental bundles, follow the [feature preview authoring guide](adding-a-plugin-preview.md) for image count, canvas, placement, localization, and review.
+
 Installed bundle cards and details, component lists and configuration details, and Settings' plugin inventory display this metadata, including disabled and preset plugins. Reads do not activate plugins.
 
 Only Settings shortens literal package-name and module-name fallbacks by removing npm scope and Cordis/DSH prefixes; Plugin Manager keeps complete names. Locale titles and descriptions remain unchanged. A row configuration page can use its registered summary when the plugin has no display description.

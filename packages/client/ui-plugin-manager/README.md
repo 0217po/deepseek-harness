@@ -98,6 +98,8 @@ A row's page exists only while a `plugins.row.config` entry names the row, so a 
 
 Bundle details display an optional package-owned feature preview below the description, including before activation. Translated artwork follows the UI language through the existing locale resolver, with English as the fallback. No preview means no image or reserved space; a decode failure shows a localized message without blocking configuration or enablement. Cards and component rows keep their small icons.
 
+Official artwork follows the [feature preview authoring guide](../../../docs/cookbook/adding-a-plugin-preview.md), which specifies canvas, placement, image count, localization, and acceptance.
+
 -----
 
 <a id="understand-the-implementation"></a>

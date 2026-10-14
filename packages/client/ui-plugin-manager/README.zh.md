@@ -98,6 +98,8 @@ ctx.slots.inject('plugins.detail.section', () => ctx.slots.register({
 
 组合包详情在描述下方展示可选的包内功能配图，未启用时也可查看。多语言配图通过现有语言解析器跟随界面语言，以英文回退。没有配图就不显示图片或预留空位；解码失败时显示本地化提示，不影响配置或启用。卡片与组件行保留小尺寸图标。
 
+官方配图遵循[功能配图创作指南](../../../docs/cookbook/adding-a-plugin-preview.zh.md)，其中规定画布、位置、图片数量、本地化和验收要求。
+
 -----
 
 <a id="understand-the-implementation"></a>

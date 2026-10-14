@@ -149,6 +149,8 @@ Append-only, prefix-stable, replacing, or independent behavior, including the ex
 
 需要在组合包详情展示较大的功能配图时，可在同一清单中添加 `"preview": "./preview.svg"`，或在省略字段时导出 `./preview`。含文字的配图可使用语言映射，如 `"preview": { "en": "./preview.svg", "zh": "./preview.zh.svg" }`；必须提供英文回退，界面通过现有语言解析器选择图片。将每张图片加入 `files`。格式和路径限制与 `icon` 相同，各语言图片合计上限为 1 MiB；使用自包含 SVG 或优化后的截图，读取时无需激活插件。省略配图不改变详情布局；配图错误不影响其他元信息和管理操作。插件不必提供配图。
 
+官方内置和实验性插件包的配图数量、画布、位置、本地化和评审要求见[功能配图创作指南](adding-a-plugin-preview.zh.md)。
+
 已安装 bundle 的卡片和详情、组件列表与配置详情、设置中的插件清单都展示这些元信息，包括禁用插件和预设内插件。读取时不激活插件。
 
 仅设置页会移除字面包名和模块名回退值的 npm scope 与 Cordis/DSH 前缀；插件管理页保留完整名称。locale 标题和描述保持原样。插件没有展示描述时，行配置页可以使用注册组件的摘要。
