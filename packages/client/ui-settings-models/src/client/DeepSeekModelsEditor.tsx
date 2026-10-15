@@ -73,7 +73,7 @@ export interface DeepSeekModelsValidationFailure {
   index: number
   /** Message key owned by the Models settings section. */
   key: 'modelIdRequired' | 'modelIdDuplicate' | 'modelNameInvalid' | 'modelContextInvalid'
-  | 'modelMaxTokensInvalid'
+  | 'modelMaxTokensInvalid' | 'modelReasoningNeedsLevel'
 }
 
 /** Convert a schema-validated catalog value into records without dropping hidden fields. */
@@ -116,6 +116,13 @@ export function validateDeepSeekModels(value: unknown): DeepSeekModelsValidation
     if (maxTokens !== undefined
       && (typeof maxTokens !== 'number' || !Number.isInteger(maxTokens) || maxTokens <= 0)) {
       return { index, key: 'modelMaxTokensInvalid' }
+    }
+    // pi-ai refuses a reasoning dict that offers nothing beyond `off`; `false`
+    // is the spelling of a model that does not reason.
+    const efforts = model['reasoningEfforts']
+    if (typeof efforts === 'object' && efforts !== null && !Array.isArray(efforts)
+      && !Object.keys(efforts).some(level => level !== 'off')) {
+      return { index, key: 'modelReasoningNeedsLevel' }
     }
   }
   return undefined

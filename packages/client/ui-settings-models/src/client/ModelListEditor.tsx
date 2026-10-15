@@ -65,7 +65,10 @@ export interface ProbeTarget {
 export interface ModelListEditorProps {
   /** The rows as currently drafted. */
   models: readonly ModelDraft[]
-  /** Installed provider whose catalog supplies defaults without endpoint I/O. */
+  /**
+   * Installed provider whose catalog supplies defaults without endpoint I/O;
+   * absent for a hand-declared route, whose rows then edit `reasoningEfforts`.
+   */
   catalogProvider?: string | undefined
   /** Route input types for models absent from the installed catalog. */
   defaultInput?: readonly string[] | undefined
@@ -362,6 +365,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
             inputField="input"
             inputFallback={inputDefaults.get(textOf(model, 'id')) ?? props.defaultInput}
             inputLoading={catalogProvider !== undefined && catalog === undefined}
+            reasoning={catalogProvider === undefined}
             expanded={expanded.has(index)}
             disabled={disabled}
             t={t}
