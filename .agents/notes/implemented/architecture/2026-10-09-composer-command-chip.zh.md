@@ -17,6 +17,7 @@ Status: implemented
 - 在提交事务之外，状态机的认领跟随文档：`draft-changed` 携带行首 chip 的认领，因此删除或挤开 chip 会释放认领，历史恢复会重新进入 claimed。命令提交失败后按同一规则结算，只要行首仍有 chip 就回到 claimed；Enter 时从输入文本裁决出的认领没有 chip，回到 plain。
 - 节点 transform 让 chip 保持在行首位置。前面有兄弟节点或位于后续块中的 chip 会变回字面 token，并像在旧 token 前输入那样释放认领。chip 自身的 transform 覆盖兄弟节点插入和跨块移动；段落 transform 覆盖在 chip 所在块之前插入块的情况，因此没有任何更新需要遍历整个文档。
 - 删除分两步。从折叠光标出发、方向触及 chip 的字符删除先把它标记为选中（宿主元素上的 `data-selected`；根元素的 `data-composer-chip-selected` 隐藏光标），同方向的下一次删除才整体移除它。字符删除命令和删除类输入事件都会参与判断，因为 iOS 处理带范围的 `deleteContentBackward` 时不经过该命令。分发过程中没有产生字符删除的按键、点击、失焦或光标离开 chip 会清除标记，因此 macOS Ctrl+H 这类平台删除快捷键会保留它。编辑器选区保持为折叠的 range，`isKeyboardSelectable()` 仍为 false，原因与引用 chip 记录的相同。Escape 仍不释放认领。
+- 持久化的草稿记录行首 chip 的认领 token（`DraftSnapshot.command`），从不保存认领本身。恢复时输入框调用触发管线的 `resolveClaim`，它轮询可选的 source 钩子 `matchClaim`：等待 source 的目录就绪，只应答认领，与 Enter 的 `matchEnter` 不同，从不调用或执行命令。chip 只在恢复产生的那个版本上重建，并合入种子的历史条目；在此之前发生的编辑、无人认领的 token 或目录加载失败都会保留字面 token，Enter 仍会对其裁决。
 - 删除 `claim-decor.ts` 和文本引用的优先级规则。
 
 `slash/input-*` 事件、`CommandClaim`、`InputState.claim` 与触发源的字段保持不变。`CommandClaim.token` 仍以分隔符结尾，命令参数仍从其后的剪贴板文本读取。
@@ -36,5 +37,5 @@ Status: implemented
 ## 影响
 
 - Backspace 不再逐字编辑命令名并重新打开菜单。在 chip 边缘按两次 Backspace 或 Delete 会删除 chip，参数保留为普通文字。
-- 刷新后恢复的草稿是纯文本；Enter 裁决仍会把它作为命令提交。
+- 刷新后，命令目录加载完成即恢复 chip；在此之前以及恢复不适用时，草稿显示字面 token。
 - 通过真实按键整体删除 chip 只能在浏览器 lane 中观察，因为 jsdom 缺少 `Selection.modify`；`lifecycle-chrome.e2e.ts` 固定了删除分隔符、选中、删除这三次按键。

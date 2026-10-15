@@ -120,6 +120,13 @@ export interface InputTriggerController {
     envelope: { readonly attachments: number },
   ): Promise<PickOutcome>
   /**
+   * Resolve the claim a persisted command chip names without acting on it.
+   * @param token - command spelling without its argument separator, e.g. '/goal'.
+   * @param signal - restore-attempt abort.
+   * @returns the claim, or undefined when no source claims the token; rejects when catalog warmup fails.
+   */
+  resolveClaim(token: string, signal: AbortSignal): Promise<CommandClaim | undefined>
+  /**
    * @param source - chip owner, or undefined for a text reference.
    * @param reference - source id and glyph.
    * @returns whether a preview opened.

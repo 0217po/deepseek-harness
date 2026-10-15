@@ -271,9 +271,11 @@ export class DraftEditorRuntime {
    * @param span - detect-coordinate range.
    * @param claim - the command claim the chip anchors.
    * @param tail - the character following the range before editing.
+   * @param mergeHistory - merge into the previous history entry (a restored
+   * draft's chip is part of its seed, not an undoable step).
    * @returns whether the range mapped and the edit applied.
    */
-  insertCommand(span: DetectSpan, claim: CommandClaim, tail: string): boolean {
+  insertCommand(span: DetectSpan, claim: CommandClaim, tail: string, mergeHistory = false): boolean {
     const separator = claim.token.slice(claim.token.trimEnd().length)
     let applied = false
     this.applyEdit(() => {
@@ -281,7 +283,7 @@ export class DraftEditorRuntime {
         ? [$createCommandChipNode(claim)]
         : [$createCommandChipNode(claim), $createTextNode(separator)]
       applied = $replaceDetectSpanWithNodes(span, nodes)
-    })
+    }, mergeHistory ? HISTORY_MERGE_TAG : undefined)
     return applied
   }
 

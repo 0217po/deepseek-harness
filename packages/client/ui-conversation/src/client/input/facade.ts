@@ -150,6 +150,10 @@ export class SessionInputShell implements SessionInput {
   private disposed = false
   /** Conversation store writer for the current semantic document. */
   private persistDraft: ((draft: DraftSnapshot) => void) | undefined
+  /** A restored draft's command token waiting for the trigger pipeline, with the revision its restore produced. */
+  private pendingCommand: { readonly token: string; readonly rev: number } | undefined
+  /** The in-flight claim resolution for a restored command chip. */
+  private commandRestore: AbortController | undefined
   /** The mounted composer's file-picker opener (scoped pick-files event target). */
   private filePicker: Parameters<ComposerKeyboard['bindFilePicker']>[0] | undefined
   /** Default sends retained until admission settles or scope disposal releases their attachments. */
@@ -216,19 +220,59 @@ export class SessionInputShell implements SessionInput {
    */
   setDraft(text: DraftInput): void {
     const draft = resolveDraftInput(text)
+    this.cancelCommandRestore()
     if (draft.references.length === 0) this.draftEditor.setDraft(draft.text)
     else this.draftEditor.restoreDraft(draft.text, draft.references)
+    if (draft.command === undefined) return
+    this.pendingCommand = { token: draft.command.token, rev: this.rev }
+    this.restoreCommand()
   }
 
-  /** Reconnect optional catalog notifications without waiting for another edit. */
+  /**
+   * Reconnect optional catalog notifications and resume a pending command
+   * chip restore without waiting for another edit.
+   */
   refreshLexiconSubscription(): void {
-    if (!this.disposed) this.draftEditor.refreshLexiconSubscription()
+    if (this.disposed) return
+    this.draftEditor.refreshLexiconSubscription()
+    this.restoreCommand()
+  }
+
+  /**
+   * Rebuild the command chip a restored draft carried once the trigger
+   * pipeline can resolve its claim. The rebuild applies only at the revision
+   * the restore produced: an edit made while the claim resolves keeps the
+   * literal token, which Enter still adjudicates as the command.
+   */
+  private restoreCommand(): void {
+    const pending = this.pendingCommand
+    const inputTriggers = this.deps.inputTriggers?.()
+    if (pending === undefined || inputTriggers === undefined || this.disposed) return
+    this.pendingCommand = undefined
+    const restore = new AbortController()
+    this.commandRestore = restore
+    const spelling = pending.token.trimEnd()
+    inputTriggers.resolveClaim(spelling, restore.signal).then((claim) => {
+      if (restore.signal.aborted) return
+      this.commandRestore = undefined
+      if (claim !== undefined) this.applyClaim(claim, { start: 0, end: spelling.length, draftRev: pending.rev }, true)
+    }, (_error: unknown) => {
+      // A catalog warmup failure or an abort leaves the literal token, which Enter still adjudicates.
+      if (this.commandRestore === restore) this.commandRestore = undefined
+    })
+  }
+
+  /** Drop a pending or in-flight command chip restore. */
+  private cancelCommandRestore(): void {
+    this.pendingCommand = undefined
+    this.commandRestore?.abort()
+    this.commandRestore = undefined
   }
 
   /** Current semantic document, stable until its content revision changes. */
   get draftSnapshot(): DraftSnapshot {
     if (this.draftSnapshotCache?.revision === this.rev) return this.draftSnapshotCache.value
-    const value = snapshotDraft(this.projection.clipboardText, this.projection.occurrences)
+    const value = snapshotDraft(this.projection.clipboardText, this.projection.occurrences, this.projection.command?.token)
     this.draftSnapshotCache = { revision: this.rev, value }
     return value
   }
@@ -456,6 +500,15 @@ export class SessionInputShell implements SessionInput {
    * @returns whether the edit applied (phase, span CAS, and leading guard passed).
    */
   beginCommand(claim: CommandClaim, span: TokenSpan): boolean {
+    return this.applyClaim(claim, span, false)
+  }
+
+  /**
+   * Replace [0, span.end) with the command chip and enter claimed.
+   * @param mergeHistory - merge the edit into the previous history entry.
+   * @returns whether the edit applied.
+   */
+  private applyClaim(claim: CommandClaim, span: TokenSpan, mergeHistory: boolean): boolean {
     const phase = this.core.state.phase
     if (phase !== 'plain' && phase !== 'claimed') return false
     if (span.draftRev !== this.rev) return false
@@ -463,7 +516,7 @@ export class SessionInputShell implements SessionInput {
     // whitespace prefix is dropped so the chip takes the leading seat.
     if (this.projection.detectText.slice(0, span.start).trim() !== '') return false
     const tail = this.projection.detectText.slice(span.end, span.end + 1)
-    const applied = this.draftEditor.insertCommand({ start: 0, end: span.end }, claim, tail)
+    const applied = this.draftEditor.insertCommand({ start: 0, end: span.end }, claim, tail, mergeHistory)
     if (!applied) return false
     this.dispatchRun(({ type: 'claim', claim }))
     return true
@@ -559,6 +612,7 @@ export class SessionInputShell implements SessionInput {
       flight.controller.abort()
     }
     this.disposed = true
+    this.cancelCommandRestore()
     this.dispatchRun(({ type: 'release' }))
     this.unsubscribeInbox?.()
     this.unregister()
