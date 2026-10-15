@@ -48,7 +48,6 @@ describe('ModelReasoningEfforts', () => {
   ])('shows a model whose field is %s as switched off without writing', (_label, model) => {
     const { writes } = renderGroup(model)
     expect(toggle().getAttribute('aria-checked')).toBe('false')
-    expect(screen.getByText(en.modelReasoningOffHint)).toBeTruthy()
     expect(levels()).toEqual([])
     expect(writes).toEqual([])
   })

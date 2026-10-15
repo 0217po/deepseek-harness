@@ -176,7 +176,7 @@ export function ModelReasoningEfforts({ model, levels, position, disabled, t, on
         />
       </div>
       {entries === undefined
-        ? <p className={styles['advancedHint']}>{t('modelReasoningOffHint')}</p>
+        ? null
         : (
           <>
             {entries.length > 0
