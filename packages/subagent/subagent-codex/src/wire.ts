@@ -369,7 +369,7 @@ export class CodexAppServerWire {
     const output = this.collectOutput()
     if (output.length === 0) {
       this.recordFailure({ stage: 'turn', category: 'invalid-result' })
-      throw new Error('subagent-codex: Codex completed without a final answer')
+      throw new Error('subagent-codex: Codex completed without an answer')
     }
     return { output, stopReason: 'completed' }
   }
@@ -671,8 +671,9 @@ export class CodexAppServerWire {
       if (item.phase === 'final_answer') {
         this.lastFinalAnswer = text
       } else if (item.phase === 'partial_answer') {
-        // Stable answer text that later assistant output or tool calls may
-        // follow; it outranks only unphased text.
+        // `MessagePhase::PartialAnswer` (openai/codex codex-rs/protocol/src/models.rs,
+        // app-server 0.162+): stable answer text that later assistant output
+        // or tool calls may follow; it outranks only unphased text.
         this.lastPartialAnswer = text
       } else if (item.phase === null) {
         this.lastUnphasedAnswer = text

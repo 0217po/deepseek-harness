@@ -821,7 +821,7 @@ describe('CodexAppServerWire', () => {
     wire.close()
   })
 
-  it('ranks final_answer above partial_answer and partial_answer above nullable-phase answers', async () => {
+  it('ranks final_answer above partial_answer above nullable-phase answers and never selects commentary', async () => {
     const scenarios: Array<{
       readonly frames: JsonObject[]
       readonly text: string
@@ -847,8 +847,10 @@ describe('CodexAppServerWire', () => {
       {
         frames: [
           agentMessage('unphased', null),
+          agentMessage('commentary before partial', 'commentary'),
           agentMessage('first partial', 'partial_answer'),
           agentMessage('last partial', 'partial_answer'),
+          agentMessage('commentary after partial', 'commentary'),
           agentMessage('unphased after partial', null),
         ],
         text: 'last partial',
@@ -1005,7 +1007,7 @@ describe('CodexAppServerWire', () => {
     }> = [
       {
         frames: [turnCompleted('completed')],
-        message: 'without a final answer',
+        message: 'without an answer',
         category: 'invalid-result',
       },
       {
@@ -1014,7 +1016,7 @@ describe('CodexAppServerWire', () => {
           agentMessage(' \n ', 'final_answer'),
           turnCompleted('completed'),
         ],
-        message: 'without a final answer',
+        message: 'without an answer',
         category: 'invalid-result',
       },
       {
