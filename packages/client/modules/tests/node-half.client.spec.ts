@@ -15,6 +15,39 @@ import * as modulesClient from '../src/client/index.ts'
 import { ClientModuleRegistry, bootInjections, orderByModuleGraph } from '../src/index.ts'
 import type { ClientModuleLoaderTarget, WebBootEntry, WebBootGraph } from '../src/client/index.ts'
 
+/**
+ * Paths whose synchronous read refuses, as a browser Worker refuses a file
+ * whose bytes arrive only through an asynchronous fetch.
+ */
+const syncRefused = vi.hoisted(() => new Set<string>())
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  return {
+    ...actual,
+    readFileSync: ((path: Parameters<typeof actual.readFileSync>[0], ...rest: unknown[]) => {
+      if (syncRefused.has(String(path))) {
+        throw Object.assign(new Error(`synchronous read refused for ${String(path)}`), { code: 'ERR_DSH_VFS_DEFERRED' })
+      }
+      return (actual.readFileSync as (...args: unknown[]) => unknown)(path, ...rest)
+    }) as typeof actual.readFileSync,
+  }
+})
+
+/** Paths whose next asynchronous read fails once, as a lazily fetched file whose download fails. */
+const asyncFailOnce = vi.hoisted(() => new Set<string>())
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return {
+    ...actual,
+    readFile: ((path: Parameters<typeof actual.readFile>[0], ...rest: unknown[]) => {
+      if (typeof path === 'string' && asyncFailOnce.delete(path)) return Promise.reject(new Error(`download failed for ${path}`))
+      return (actual.readFile as (...args: unknown[]) => unknown)(path, ...rest)
+    }) as typeof actual.readFile,
+  }
+})
+
 const MODULES_ID = '@deepseek-ai/dsh-client-modules'
 const UI_RENDERER_ID = '@deepseek-ai/dsh-client-ui-renderer'
 
@@ -44,6 +77,7 @@ afterEach(async () => {
   }))
   if (root !== undefined) rmSync(root, { recursive: true, force: true })
   root = undefined
+  syncRefused.clear()
 })
 
 it.each([false, true])('tracks the Web carrier lifetime when server-first is %s', async (serverFirst) => {
@@ -931,6 +965,43 @@ describe('client bundle activation', () => {
     expect(chunk.body.toString('utf8')).toContain(`sourceMappingURL=${chunkMapReference('client.terminal.js', row.rev)}`)
     expect((await routeRequest(route, url.replace('.js?', '.js.map?'))).status).toBe(200)
     expect((await routeRequest(route, url.replace(`rev=${row.rev}`, 'rev=stale'))).status).toBe(404)
+  })
+
+  it('reads a package-local chunk and its map body only through the asynchronous filesystem face', async () => {
+    const packageName = '@fixture/async-chunk'
+    const clientPath = writePackage(packageName)
+    const chunkPath = join(dirname(clientPath), 'client.pdf.js')
+    mkdirSync(dirname(clientPath), { recursive: true })
+    writeFileSync(clientPath, 'module.exports = { load: () => require.async("./client.pdf.js") }\n')
+    writeFileSync(chunkPath, 'module.exports = { marker: "pdf loaded" }\n')
+    syncRefused.add(chunkPath)
+    const { service, route } = constructWithRoute([packageName])
+    const row = service.graph().entries[0]!
+    const url = chunkReference(packageName, 'client.pdf.js', row.rev)
+
+    const chunk = await routeRequest(route, url)
+    expect(chunk.status).toBe(200)
+    expect(chunk.body.toString('utf8')).toContain('pdf loaded')
+    const map = await routeRequest(route, url.replace('.js?', '.js.map?'))
+    expect(map.status).toBe(200)
+    expect(JSON.parse(map.body.toString('utf8'))).toMatchObject({ version: 3 })
+  })
+
+  it('reads a package-local chunk again after its first asynchronous read fails', async () => {
+    const packageName = '@fixture/retried-chunk'
+    const clientPath = writePackage(packageName)
+    const chunkPath = join(dirname(clientPath), 'client.excel.js')
+    mkdirSync(dirname(clientPath), { recursive: true })
+    writeFileSync(clientPath, 'module.exports = { load: () => require.async("./client.excel.js") }\n')
+    writeFileSync(chunkPath, 'module.exports = { marker: "excel loaded" }\n')
+    asyncFailOnce.add(chunkPath)
+    const { service, route } = constructWithRoute([packageName])
+    const url = chunkReference(packageName, 'client.excel.js', service.graph().entries[0]!.rev)
+
+    await expect(routeRequest(route, url)).rejects.toThrow(`download failed for ${chunkPath}`)
+    const retried = await routeRequest(route, url)
+    expect(retried.status).toBe(200)
+    expect(retried.body.toString('utf8')).toContain('excel loaded')
   })
 
   it('loads a renamed browser export at the logical URL without exposing Node bundles as chunks', async () => {

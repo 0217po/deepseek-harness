@@ -25,6 +25,7 @@
 
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join } from 'node:path'
@@ -380,11 +381,17 @@ function identitySectionMap(source: string, sourceUrl: string): Record<string, u
   }
 }
 
-/** Run one producer in the first requester's microtask, not off-thread, and share its settlement. */
-function lazyBody(produce: () => Buffer): () => Promise<Buffer> {
+/**
+ * Run one producer in the first requester's microtask, not off-thread, and share its settlement. A rejected run is
+ * dropped once it settles, so the next request produces again.
+ */
+function lazyBody(produce: () => Buffer | Promise<Buffer>): () => Promise<Buffer> {
   let result: Promise<Buffer> | undefined
   return () => {
-    result ??= Promise.resolve().then(produce)
+    result ??= Promise.resolve().then(produce).catch((error: unknown) => {
+      result = undefined
+      throw error
+    })
     return result
   }
 }
@@ -1121,20 +1128,22 @@ export class ClientModuleRegistry extends Service {
     const clientPath = join(dirname(record.meta.clientPath), fileName)
     if (!existsSync(clientPath)) return undefined
     const sourceMapUrl = chunkMapReference(fileName, record.entry.rev)
-    const resource = (): ComboResource => ({
+    // An on-demand chunk is read asynchronously: a host whose filesystem fetches
+    // lazily requested files on first read can serve it without a blocking read.
+    const resource = async (): Promise<ComboResource> => ({
       id: record.entry.id,
       rev: record.entry.rev,
       clientPath,
       fileName,
-      bundle: readFileSync(clientPath),
+      bundle: await readFile(clientPath),
     })
     const response: LazyResponse = sourceMap
       ? {
-        body: lazyBody(() => buildComboSourceMap([resource()], this.readSourceMap, fileName)),
+        body: lazyBody(async () => buildComboSourceMap([await resource()], this.readSourceMap, fileName)),
         contentType: 'application/json; charset=utf-8',
       }
       : {
-        body: lazyBody(() => buildComboScript([resource()], sourceMapUrl)),
+        body: lazyBody(async () => buildComboScript([await resource()], sourceMapUrl)),
         contentType: 'text/javascript; charset=utf-8',
       }
     this.responses.set(resourceUrl, response)
