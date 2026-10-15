@@ -70,8 +70,8 @@ describe('terminalCardModel', () => {
   it.each([1, -1])('preserves signed exit code %s in the localized capsule', (code) => {
     const card = terminalCardModel(settled({ content: [{ type: 'text', text: `failed\n[exit code: ${code}]` }] }))
     expect(card?.card).toMatchObject({ output: 'failed', exitCode: code })
-    expect(terminalExitLabel(card, enT)).toBe(`Exit Code: ${code}`)
-    expect(terminalExitLabel(card, t)).toBe(`退出码：${code}`)
+    expect(terminalExitLabel(card, enT)).toBe(`exit code ${code}`)
+    expect(terminalExitLabel(card, t)).toBe(`退出码 ${code}`)
   })
 
   it('omits exit capsules without a settled foreground failure', () => {
@@ -477,8 +477,8 @@ describe('chat row terminal body', () => {
       content: [{ type: 'text', text: 'boom\n[exit code: 2]' }],
     }))} />)
     expect(view.container.querySelector('[data-state]')?.getAttribute('data-state')).toBe('error')
-    expect(view.getByText('退出码：2')).toBeTruthy()
-    expect(view.container.querySelector('[data-terminal-summary]')?.textContent).toBe('List files退出码：2')
+    expect(view.getByText('退出码 2')).toBeTruthy()
+    expect(view.getByText('退出码 2').previousElementSibling?.textContent).toBe('List files')
     expect(view.container.querySelector('[class*="_errorSummary_"]')).toBeNull()
   })
 })
@@ -538,10 +538,10 @@ describe('BashRow terminal card', () => {
     }))} />)
     expect(view.container.querySelector('[data-variant="bash"]')?.getAttribute('data-state')).toBe('error')
     expect(view.container.querySelector('[class*="_errorSummary_"]')).toBeNull()
-    expect(view.getByText('退出码：2')).toBeTruthy()
+    expect(view.getByText('退出码 2')).toBeTruthy()
     expect(view.getByText('List files')).toBeTruthy()
     fireEvent.keyDown(view.getByRole('button'), { key: 'Enter' })
-    expect(view.getByText('退出码：2')).toBeTruthy()
+    expect(view.getAllByText('退出码 2')).toHaveLength(2)
     expect(view.getByText('boom', RAW)).toBeTruthy()
   })
 

@@ -78,6 +78,8 @@ interface GalleryCall {
 /** The five successful writes; docs/press.md and src/tokens.css join via other tools. */
 const WRITES = ['site/report.html', 'a/style.css', 'b/style.css', 'site/index.html', 'site/app.js']
 
+const LONG_COMMAND_DESCRIPTION = 'Check every generated stylesheet and component theme against the shared design tokens, inspect the application pages for inconsistent colors, and report all remaining lint failures before publishing the production build'
+
 /** The gallery turn's tool calls, in surface order. */
 const CALLS: GalleryCall[] = [
   ...WRITES.map(path => ({
@@ -165,6 +167,11 @@ const CALLS: GalleryCall[] = [
     name: 'bash',
     args: { command: 'pnpm run lint', description: 'Run the lint gate', workdir: 'site' },
     result: 'style.css: unexpected hex literal\n[exit code: 1]',
+  },
+  {
+    name: 'bash',
+    args: { command: 'pnpm run lint:styles', description: LONG_COMMAND_DESCRIPTION, workdir: 'site' },
+    result: 'theme.css: unexpected hex literal\n[exit code: 1]',
   },
   {
     name: 'web_search',
@@ -378,43 +385,55 @@ describe('web e2e: clickable links gallery', () => {
     expect(await fetchSummaryLink.getAttribute('target')).toBe('_blank')
 
     await expandTurnProcesses(page)
-    const failedCommand = page.locator('[data-sample="bash"]').filter({ hasText: 'Run the lint gate' })
-    const commandSummary = failedCommand.locator('[data-terminal-summary]')
-    const exitBadge = commandSummary.getByText('Exit Code: 1', { exact: true })
-    await exitBadge.waitFor()
-    for (const colorScheme of ['light', 'dark'] as const) {
-      await page.emulateMedia({ colorScheme })
-      await expect.poll(() => page.locator('body').evaluate(element => element.hasAttribute('data-ds-dark-theme'))).toBe(colorScheme === 'dark')
-      for (const width of ['760px', '260px']) {
-        await failedCommand.evaluate((element, value) => { element.style.width = value }, width)
-        const geometry = await commandSummary.evaluate((element) => {
-          const description = element.firstElementChild!
-          const badge = element.lastElementChild!
-          const row = element.closest('[data-sample]')!
-          const textRect = description.getBoundingClientRect()
-          const badgeRect = badge.getBoundingClientRect()
-          const rowRect = row.getBoundingClientRect()
-          return {
-            neutral: getComputedStyle(description).color === getComputedStyle(row).color,
-            fits: badgeRect.right <= rowRect.right + 1 && badgeRect.bottom <= rowRect.bottom + 1,
-            inline: Math.abs(badgeRect.top - textRect.top) < 5,
-            truncated: description.scrollWidth > description.clientWidth,
-            ellipsis: getComputedStyle(description).textOverflow === 'ellipsis',
-            singleLine: Math.abs(rowRect.height - textRect.height) < 1,
-            gap: badgeRect.left - textRect.right,
+    const failedCommands = [
+      { description: 'Run the lint gate', long: false },
+      { description: LONG_COMMAND_DESCRIPTION, long: true },
+    ].map(({ description, long }) => ({
+      row: page.locator('[data-sample="bash"]').filter({ hasText: description }),
+      long,
+    }))
+    try {
+      for (const colorScheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme })
+        await expect.poll(() => page.locator('body').evaluate(element => element.hasAttribute('data-ds-dark-theme'))).toBe(colorScheme === 'dark')
+        for (const { row, long } of failedCommands) {
+          const exitBadge = row.getByText('exit code 1', { exact: true })
+          await exitBadge.waitFor()
+          for (const width of ['760px', '260px']) {
+            await row.evaluate((element, value) => { element.style.width = value }, width)
+            const geometry = await exitBadge.evaluate((badge) => {
+              const description = badge.previousElementSibling!
+              const row = badge.closest('[data-sample]')!
+              const textRect = description.getBoundingClientRect()
+              const badgeRect = badge.getBoundingClientRect()
+              const rowRect = row.getBoundingClientRect()
+              return {
+                neutral: getComputedStyle(description).color === getComputedStyle(row).color,
+                fits: badgeRect.right <= rowRect.right + 1 && badgeRect.bottom <= rowRect.bottom + 1,
+                inline: Math.abs(badgeRect.top - textRect.top) < 5,
+                truncated: description.scrollWidth > description.clientWidth,
+                ellipsis: getComputedStyle(description).textOverflow === 'ellipsis',
+                singleLine: Math.abs(rowRect.height - textRect.height) < 1,
+                height: rowRect.height,
+                gap: badgeRect.left - textRect.right,
+              }
+            })
+            const context = JSON.stringify({ width, colorScheme, long, ...geometry })
+            expect(geometry.neutral, context).toBe(true)
+            expect(geometry.fits, context).toBe(true)
+            expect(geometry.inline, context).toBe(true)
+            expect(geometry.singleLine, context).toBe(true)
+            expect(geometry.height, context).toBeCloseTo(24, 0)
+            if (long || width === '760px') expect(geometry.truncated, context).toBe(long)
+            expect(geometry.ellipsis, context).toBe(true)
+            expect(geometry.gap, context).toBeCloseTo(8, 0)
           }
-        })
-        expect(geometry.neutral).toBe(true)
-        expect(geometry.fits, JSON.stringify({ width, colorScheme, ...geometry })).toBe(true)
-        expect(geometry.inline).toBe(true)
-        expect(geometry.singleLine).toBe(true)
-        expect(geometry.truncated).toBe(width === '260px')
-        expect(geometry.ellipsis).toBe(true)
-        expect(geometry.gap).toBeCloseTo(8, 0)
+        }
       }
+    } finally {
+      for (const { row } of failedCommands) await row.evaluate((element) => { element.style.width = '' })
+      await page.emulateMedia({ colorScheme: null })
     }
-    await failedCommand.evaluate((element) => { element.style.width = '' })
-    await page.emulateMedia({ colorScheme: null })
     // Clicking the collapsed summary link opens the page without expanding the row.
     const fetchPopupPromise = page.waitForEvent('popup')
     await fetchSummaryLink.click()

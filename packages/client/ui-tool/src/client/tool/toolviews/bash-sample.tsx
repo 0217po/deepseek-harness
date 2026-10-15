@@ -19,7 +19,7 @@ import {
 } from '../models/terminal-card-model.ts'
 import { formatToolBody, toolRowModel, type ToolRowState } from '../models/tool-call-model.ts'
 import { CONVERSATION_NS as NS } from '../../locale.ts'
-import { TerminalSummary } from '../components/TerminalSummary.tsx'
+import { ExitCodeBadge } from '../components/ExitCodeBadge.tsx'
 import css from './bash-sample.module.css'
 
 type BashRowProps = ToolCallViewProps & PropsLocale<'conversation'>
@@ -73,7 +73,7 @@ export const BashRow = memo(function BashRow({ toolName, block, sessionId, useSe
   )
   const normalSummary = terminal?.description ?? model.summary
   const exitLabel = terminalExitLabel(terminalModel, t)
-  const settlementLine = state === 'error'
+  const settlementLine = exitLabel !== null ? null : state === 'error'
     ? model.errorSummary ?? normalSummary
     : state === 'stopped' ? t('bash.stopped') : null
   const running = state === 'running' || state === 'preparing'
@@ -111,13 +111,14 @@ export const BashRow = memo(function BashRow({ toolName, block, sessionId, useSe
         <TextShimmer active={running}>
           <TextShimmer className={css.title}>{t(model.titleKey)}</TextShimmer>
           <span className={css.sep} data-shimmer-decoration aria-hidden />
-          {exitLabel !== null ? <TerminalSummary description={normalSummary} exitLabel={exitLabel} /> : <span className={clsx(
+          <span className={clsx(
             css.summary,
-            state === 'error' && css.errorSummary,
-            state === 'stopped' && css.stoppedSummary,
+            exitLabel === null && state === 'error' && css.errorSummary,
+            exitLabel === null && state === 'stopped' && css.stoppedSummary,
           )}>
             <TextShimmer>{settlementLine ?? normalSummary}</TextShimmer>
-          </span>}
+          </span>
+          {exitLabel !== null && <ExitCodeBadge label={exitLabel} />}
         </TextShimmer>
       </div>
       {open && (

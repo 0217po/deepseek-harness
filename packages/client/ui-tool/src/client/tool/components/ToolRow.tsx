@@ -25,7 +25,7 @@ import {
 import type { WebCardModelProps } from '../models/web-card-model.ts'
 import { AskQuestionCard } from './AskQuestionCard.tsx'
 import { ToolDetails, type ToolDetailsModel } from './ToolDetails.tsx'
-import { TerminalSummary } from './TerminalSummary.tsx'
+import { ExitCodeBadge } from './ExitCodeBadge.tsx'
 import css from './ToolRow.module.css'
 
 export interface ToolRowProps {
@@ -51,7 +51,10 @@ export interface ToolRowProps {
   output?: string | null | undefined
   /** Ask-user transcript card; card fields are mutually exclusive and replace text sections. */
   askQuestion?: AskQuestionCardModel | null | undefined
-  /** Error first line shown as the collapsed summary on an error row; null/absent = keep `summary`. */
+  /**
+   * First error line for rows without an exit status capsule; null/absent keeps
+   * the ordinary summary. Rows with an exit capsule retain the command description.
+   */
   errorSummary?: string | null | undefined
   /** Terminal card; card fields are mutually exclusive and replace text sections. */
   terminal?: TerminalCardModel | null | undefined
@@ -210,9 +213,7 @@ export const ToolRow = memo(function ToolRow({
        its title shows no trailing dot). */
     <>
       <span className={css.sep} data-shimmer-decoration aria-hidden />
-      {exitLabel !== null ? (
-        <TerminalSummary description={summaryText} exitLabel={exitLabel} />
-      ) : openFile !== undefined ? (
+      {exitLabel === null && openFile !== undefined ? (
         <button
           type="button"
           className={css.fileLink}
@@ -221,7 +222,7 @@ export const ToolRow = memo(function ToolRow({
         >
           <TextShimmer>{summaryText}</TextShimmer>
         </button>
-      ) : linkHref !== undefined ? (
+      ) : exitLabel === null && linkHref !== undefined ? (
         <a
           className={css.fileLink}
           href={linkHref}
@@ -236,13 +237,14 @@ export const ToolRow = memo(function ToolRow({
         <span
           className={clsx(
             css.summary,
-            state === 'error' && css.errorSummary,
-            state === 'stopped' && css.stoppedSummary,
+            exitLabel === null && state === 'error' && css.errorSummary,
+            exitLabel === null && state === 'stopped' && css.stoppedSummary,
           )}
         >
           <TextShimmer>{summaryText}</TextShimmer>
         </span>
       )}
+      {exitLabel !== null && <ExitCodeBadge label={exitLabel} />}
       {suffix !== null && (
         <TextShimmer className={css.summarySuffix}>{suffix}</TextShimmer>
       )}

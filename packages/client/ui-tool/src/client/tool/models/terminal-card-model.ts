@@ -109,7 +109,7 @@ export function terminalExitLabel(model: TerminalCardModel | null | undefined, t
   const { exitCode, signal } = model.card
   if (signal !== undefined) return t('terminal.signal', { signal })
   if (exitCode === null) return t('terminal.noExitCode')
-  if (exitCode !== undefined && exitCode !== 0) return t('terminal.exitCodeBadge', { code: exitCode })
+  if (exitCode !== undefined && exitCode !== 0) return t('terminal.exitCode', { code: exitCode })
   return null
 }
 
