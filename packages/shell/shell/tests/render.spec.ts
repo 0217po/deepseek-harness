@@ -23,6 +23,14 @@ describe('parseExitStatus', () => {
     expect(parseExitStatus('[exit code: 5]')).toEqual({ body: '[exit code: 5]', exitCode: 0 })
   })
 
+  it('preserves a missing exit code and leaves the timeout in the body', () => {
+    expect(parseExitStatus('(no output)\n[timed out after 100ms]\n[exit code: null]'))
+      .toEqual({ body: '(no output)\n[timed out after 100ms]', exitCode: null })
+    expect(parseExitStatus('[exit code: null]')).toEqual({ body: '[exit code: null]', exitCode: 0 })
+    expect(parseExitStatus('output\n[exit code: null]\nmore output'))
+      .toEqual({ body: 'output\n[exit code: null]\nmore output', exitCode: 0 })
+  })
+
   it('recovers a signal kill ahead of any non-zero exit marker', () => {
     expect(parseExitStatus('gone\n[killed by signal: SIGKILL]')).toEqual({ body: 'gone', signal: 'SIGKILL' })
     // A fake signal marker with no leading newline is output, not a kill.

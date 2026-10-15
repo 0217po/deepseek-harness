@@ -71,6 +71,11 @@
 - text: "style.css: unexpected hex literal"
 - button "Inspect"
 - button "Failed Bash Check every generated stylesheet and component theme against the shared design tokens, inspect the application pages for inconsistent colors, and report all remaining lint failures before publishing the production build exit code 1"
+- button "Failed Bash Build the site no exit code" [expanded]
+- text: Failed site pnpm run build no exit code
+- button "Copy"
+- text: (no output) [timed out after {{duration}}]
+- button "Inspect"
 - button "Search clickable link styles, produced files ui" [expanded]
 - paragraph:
   - text: Unify links per

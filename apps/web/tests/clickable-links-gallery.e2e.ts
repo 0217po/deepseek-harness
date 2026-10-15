@@ -174,6 +174,11 @@ const CALLS: GalleryCall[] = [
     result: 'theme.css: unexpected hex literal\n[exit code: 1]',
   },
   {
+    name: 'bash',
+    args: { command: 'pnpm run build', description: 'Build the site', workdir: 'site' },
+    result: '(no output)\n[timed out after 100ms]\n[exit code: null]',
+  },
+  {
     name: 'web_search',
     args: { queries: ['clickable link styles', 'produced files ui'] },
     result: 'Two sources found.',
@@ -453,12 +458,20 @@ describe('web e2e: clickable links gallery', () => {
       /^Edit src\/tokens\.css/,
       /^Grep linkColor/,
       /Run the lint gate|pnpm run lint/,
+      /Build the site/,
     ]) {
       const toggle = page.getByRole('button', { name: row }).first()
       await toggle.waitFor({ timeout: 10_000 })
       const box = await toggle.boundingBox()
       await toggle.click(box === null ? {} : { position: { x: box.width - 8, y: box.height / 2 } })
     }
+    const noExitCommand = page.locator('[data-sample="bash"]').filter({ hasText: 'Build the site' })
+    expect(await noExitCommand.getAttribute('data-state')).toBe('error')
+    expect(await noExitCommand.getByText('no exit code', { exact: true }).count()).toBe(1)
+    const noExitTerminal = page.locator('[data-terminal]').filter({ hasText: 'pnpm run build' })
+    expect(await noExitTerminal.getByText('no exit code', { exact: true }).count()).toBe(1)
+    expect(await noExitTerminal.getByText('[timed out after 100ms]', { exact: true }).count()).toBe(1)
+    expect(await noExitTerminal.getByText('[exit code: null]', { exact: true }).count()).toBe(0)
     // Both generic rows (the unclassified str_replace_editor and the unknown
     // design_tokens_sync) expand to their IN/OUT surfaces.
     const genericRows = page.getByRole('button', { name: /^Tool call/ })

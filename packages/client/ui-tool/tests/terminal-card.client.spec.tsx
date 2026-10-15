@@ -79,14 +79,26 @@ describe('terminalCardModel', () => {
     expect(terminalExitLabel(undefined, enT)).toBeNull()
     expect(terminalExitLabel(terminalCardModel(running()), enT)).toBeNull()
     expect(terminalExitLabel(terminalCardModel(settled()), enT)).toBeNull()
+    expect(terminalExitLabel(terminalCardModel(settled({
+      call: { name: 'terminal_send', argsRaw: JSON.stringify({ sessionId: 'term-1', text: 'hello' }) },
+    })), enT)).toBeNull()
     expect(terminalExitLabel(terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ run_in_background: true }) } })), enT)).toBeNull()
   })
 
-  it('names signals and unknown exits without substituting an exit code', () => {
-    const model = terminalCardModel(settled())!
-    expect(terminalExitLabel({ ...model, card: { running: false, signal: 'SIGTERM' } }, enT)).toBe('signal SIGTERM')
-    expect(terminalExitLabel({ ...model, card: { running: false, exitCode: null } }, enT)).toBe('no exit code')
-    expect(terminalExitLabel({ ...model, card: { running: false } }, enT)).toBeNull()
+  it('names a recorded signal without substituting an exit code', () => {
+    const model = terminalCardModel(settled({ content: [{ type: 'text', text: 'gone\n[killed by signal: SIGTERM]' }] }))
+    expect(terminalExitLabel(model, enT)).toBe('signal SIGTERM')
+  })
+
+  it.each(['bash', 'pwsh'])('preserves a %s timeout without an exit code', (name) => {
+    const model = terminalCardModel(settled({
+      call: { name, argsRaw: ARGS },
+      content: [{ type: 'text', text: '(no output)\n[timed out after 100ms]\n[exit code: null]' }],
+    }))!
+    expect(model.card).toMatchObject({ output: '(no output)\n[timed out after 100ms]', exitCode: null })
+    expect(terminalFailed(model)).toBe(true)
+    expect(terminalExitLabel(model, enT)).toBe('no exit code')
+    expect(terminalExitLabel(model, t)).toBe('未正常退出')
   })
 
   it('derives a running standard-shell card from raw arguments', () => {

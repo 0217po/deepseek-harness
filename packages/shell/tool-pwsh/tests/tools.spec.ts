@@ -1048,6 +1048,7 @@ describe('UI presentation', () => {
     const cases = [
       { result: { ...base, exitCode: 0, signal: null, timedOut: false }, expect: { exitCode: 0 } },
       { result: { ...base, exitCode: 7, signal: null, timedOut: false }, expect: { exitCode: 7 } },
+      { result: { ...base, exitCode: null, signal: null, timedOut: true }, expect: { exitCode: null } },
       { result: { ...base, exitCode: null, signal: 'SIGTERM' as const, timedOut: false }, expect: { signal: 'SIGTERM' } },
       // A trapped-timeout run that exits 0 has no signal/exit marker → reads as exit 0 (it did exit 0).
       { result: { ...base, exitCode: 0, signal: null, timedOut: true }, expect: { exitCode: 0 } },
