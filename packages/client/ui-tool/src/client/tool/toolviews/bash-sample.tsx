@@ -15,9 +15,12 @@ import {
   terminalBlockLabels,
   terminalCardModel,
   terminalFailed,
+  terminalExitLabel,
 } from '../models/terminal-card-model.ts'
 import { formatToolBody, toolRowModel, type ToolRowState } from '../models/tool-call-model.ts'
 import { CONVERSATION_NS as NS } from '../../locale.ts'
+import { TerminalSummary } from '../components/TerminalSummary.tsx'
+import terminalSummaryCss from '../components/TerminalSummary.module.css'
 import css from './bash-sample.module.css'
 
 type BashRowProps = ToolCallViewProps & PropsLocale<'conversation'>
@@ -49,8 +52,7 @@ export const BashRow = memo(function BashRow({ toolName, block, sessionId, useSe
   const terminalModel = useMemo(() => terminalCardModel(block, cwd), [block, cwd])
   const terminal = useMemo(() => terminalModel === null ? null : localizeTerminalCardModel(terminalModel, t), [terminalModel, t])
   const labels = useMemo(() => terminalBlockLabels(t), [t])
-  // A failing exit status is the terminal card's own error signal (the call
-  // itself settles isError:false), surfaced through the row's error summary.
+  // Exit failures are result data even when the tool call itself succeeds.
   const state = model.state === 'ok' && terminalModel !== null && terminalFailed(terminalModel)
     ? 'error'
     : model.state
@@ -71,6 +73,7 @@ export const BashRow = memo(function BashRow({ toolName, block, sessionId, useSe
     [genericBody, model.bodyRaw, model.variant, open],
   )
   const normalSummary = terminal?.description ?? model.summary
+  const exitLabel = terminalExitLabel(terminalModel, t)
   const settlementLine = state === 'error'
     ? model.errorSummary ?? normalSummary
     : state === 'stopped' ? t('bash.stopped') : null
@@ -93,7 +96,7 @@ export const BashRow = memo(function BashRow({ toolName, block, sessionId, useSe
   return (
     <div className={css.card}>
       <div
-        className={css.root}
+        className={clsx(css.root, exitLabel !== null && terminalSummaryCss.row)}
         data-sample="bash"
         data-variant="bash"
         data-state={state}
@@ -104,18 +107,18 @@ export const BashRow = memo(function BashRow({ toolName, block, sessionId, useSe
         onClick={expandable ? toggleExpand : undefined}
         onKeyDown={expandable ? toggleFromKeyboard : undefined}
       >
-        <span className={css.leading}>{leading}</span>
+        <span className={clsx(css.leading, exitLabel !== null && terminalSummaryCss.leading)}>{leading}</span>
         {status !== null && <span className={css.visuallyHidden}>{status}</span>}
-        <TextShimmer active={running}>
+        <TextShimmer active={running} contentClassName={exitLabel !== null ? terminalSummaryCss.content : undefined}>
           <TextShimmer className={css.title}>{t(model.titleKey)}</TextShimmer>
-          <span className={css.sep} data-shimmer-decoration aria-hidden />
-          <span className={clsx(
+          <span className={clsx(css.sep, exitLabel !== null && terminalSummaryCss.separator)} data-shimmer-decoration aria-hidden />
+          {exitLabel !== null ? <TerminalSummary description={normalSummary} exitLabel={exitLabel} /> : <span className={clsx(
             css.summary,
             state === 'error' && css.errorSummary,
             state === 'stopped' && css.stoppedSummary,
           )}>
             <TextShimmer>{settlementLine ?? normalSummary}</TextShimmer>
-          </span>
+          </span>}
         </TextShimmer>
       </div>
       {open && (

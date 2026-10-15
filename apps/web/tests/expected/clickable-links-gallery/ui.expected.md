@@ -65,7 +65,7 @@
 - button "Inspect"
 - button "Glob **/*.css"
 - button "Bash List the built site"
-- button "Failed Bash Run the lint gate" [expanded]
+- 'button "Failed Bash Run the lint gate Exit Code: 1" [expanded]'
 - text: Failed site pnpm run lint exit code 1
 - button "Copy"
 - text: "style.css: unexpected hex literal"

@@ -1,0 +1,52 @@
+/* The capsule follows the description and wraps intact when their combined width does not fit. */
+.summary {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 8px;
+  min-width: 0;
+}
+
+.description {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
+}
+
+.badge {
+  flex: none;
+  gap: 5px;
+  margin-block: 2px;
+}
+
+.dot {
+  flex: none;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--dsw-alias-state-error-primary);
+}
+
+.row[data-expandable] {
+  height: auto;
+  min-height: calc(24px + var(--dsh-content-font-delta, 0px));
+  align-items: flex-start;
+}
+
+.row .content {
+  align-items: flex-start;
+}
+
+.row .leading {
+  margin-top: 4px;
+}
+
+.row .separator {
+  margin-top: calc(11px + var(--dsh-content-font-delta, 0px) / 2);
+}

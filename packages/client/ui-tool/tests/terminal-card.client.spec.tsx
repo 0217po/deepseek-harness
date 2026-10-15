@@ -12,7 +12,7 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import {
-  localizeTerminalCardModel, terminalCardModel, terminalFailed,
+  localizeTerminalCardModel, terminalCardModel, terminalFailed, terminalExitLabel,
 } from '../src/client/tool/models/terminal-card-model.ts'
 import { GenericToolCard, type GenericToolCardProps } from '../src/client/tool/toolviews/GenericToolCard.tsx'
 import { BashRow } from '../src/client/tool/toolviews/bash-sample.tsx'
@@ -67,6 +67,28 @@ const settled = (over?: Partial<ToolResultNode>): ToolResultNode => {
 }
 
 describe('terminalCardModel', () => {
+  it.each([1, -1])('preserves signed exit code %s in the localized capsule', (code) => {
+    const card = terminalCardModel(settled({ content: [{ type: 'text', text: `failed\n[exit code: ${code}]` }] }))
+    expect(card?.card).toMatchObject({ output: 'failed', exitCode: code })
+    expect(terminalExitLabel(card, enT)).toBe(`Exit Code: ${code}`)
+    expect(terminalExitLabel(card, t)).toBe(`退出码：${code}`)
+  })
+
+  it('omits exit capsules without a settled foreground failure', () => {
+    expect(terminalExitLabel(null, enT)).toBeNull()
+    expect(terminalExitLabel(undefined, enT)).toBeNull()
+    expect(terminalExitLabel(terminalCardModel(running()), enT)).toBeNull()
+    expect(terminalExitLabel(terminalCardModel(settled()), enT)).toBeNull()
+    expect(terminalExitLabel(terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ run_in_background: true }) } })), enT)).toBeNull()
+  })
+
+  it('names signals and unknown exits without substituting an exit code', () => {
+    const model = terminalCardModel(settled())!
+    expect(terminalExitLabel({ ...model, card: { running: false, signal: 'SIGTERM' } }, enT)).toBe('signal SIGTERM')
+    expect(terminalExitLabel({ ...model, card: { running: false, exitCode: null } }, enT)).toBe('no exit code')
+    expect(terminalExitLabel({ ...model, card: { running: false } }, enT)).toBeNull()
+  })
+
   it('derives a running standard-shell card from raw arguments', () => {
     expect(terminalCardModel(running({ argsRaw: shellArgs({ workdir: '/projects/app' }) }))).toEqual({
       copy: { kind: 'shell', command: 'ls -la', description: 'List files' },
@@ -455,6 +477,9 @@ describe('chat row terminal body', () => {
       content: [{ type: 'text', text: 'boom\n[exit code: 2]' }],
     }))} />)
     expect(view.container.querySelector('[data-state]')?.getAttribute('data-state')).toBe('error')
+    expect(view.getByText('退出码：2')).toBeTruthy()
+    expect(view.container.querySelector('[data-terminal-summary]')?.textContent).toBe('List files退出码：2')
+    expect(view.container.querySelector('[class*="_errorSummary_"]')).toBeNull()
   })
 })
 
@@ -512,7 +537,12 @@ describe('BashRow terminal card', () => {
       content: [{ type: 'text', text: 'boom\n[exit code: 2]' }],
     }))} />)
     expect(view.container.querySelector('[data-variant="bash"]')?.getAttribute('data-state')).toBe('error')
-    expect(view.container.querySelector('[class*="_errorSummary_"]')?.textContent).toBe('List files')
+    expect(view.container.querySelector('[class*="_errorSummary_"]')).toBeNull()
+    expect(view.getByText('退出码：2')).toBeTruthy()
+    expect(view.getByText('List files')).toBeTruthy()
+    fireEvent.keyDown(view.getByRole('button'), { key: 'Enter' })
+    expect(view.getByText('退出码：2')).toBeTruthy()
+    expect(view.getByText('boom', RAW)).toBeTruthy()
   })
 
   it('shows the call description as the terminal summary', () => {

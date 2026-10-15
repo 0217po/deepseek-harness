@@ -378,6 +378,38 @@ describe('web e2e: clickable links gallery', () => {
     expect(await fetchSummaryLink.getAttribute('target')).toBe('_blank')
 
     await expandTurnProcesses(page)
+    const failedCommand = page.locator('[data-sample="bash"]').filter({ hasText: 'Run the lint gate' })
+    const commandSummary = failedCommand.locator('[data-terminal-summary]')
+    const exitBadge = commandSummary.getByText('Exit Code: 1', { exact: true })
+    await exitBadge.waitFor()
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme })
+      await expect.poll(() => page.locator('body').evaluate(element => element.hasAttribute('data-ds-dark-theme'))).toBe(colorScheme === 'dark')
+      for (const width of ['760px', '260px']) {
+        await failedCommand.evaluate((element, value) => { element.style.width = value }, width)
+        const geometry = await commandSummary.evaluate((element) => {
+          const description = element.firstElementChild!
+          const badge = element.lastElementChild!
+          const row = element.closest('[data-sample]')!
+          const textRect = description.getBoundingClientRect()
+          const badgeRect = badge.getBoundingClientRect()
+          const rowRect = row.getBoundingClientRect()
+          return {
+            neutral: getComputedStyle(description).color === getComputedStyle(row).color,
+            fits: badgeRect.right <= rowRect.right + 1 && badgeRect.bottom <= rowRect.bottom + 1,
+            inline: Math.abs(badgeRect.top - textRect.top) < 5,
+            wrapped: badgeRect.top >= textRect.bottom,
+            gap: badgeRect.left - textRect.right,
+          }
+        })
+        expect(geometry.neutral).toBe(true)
+        expect(geometry.fits, JSON.stringify({ width, colorScheme, ...geometry })).toBe(true)
+        expect(width === '760px' ? geometry.inline : geometry.wrapped).toBe(true)
+        if (width === '760px') expect(geometry.gap).toBeCloseTo(8, 0)
+      }
+    }
+    await failedCommand.evaluate((element) => { element.style.width = '' })
+    await page.emulateMedia({ colorScheme: null })
     // Clicking the collapsed summary link opens the page without expanding the row.
     const fetchPopupPromise = page.waitForEvent('popup')
     await fetchSummaryLink.click()

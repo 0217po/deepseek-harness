@@ -89,14 +89,28 @@ export function localizeTerminalCardModel(
  * True when a settled terminal card reports a failing exit — a non-zero code
  * or a terminating signal. The bash tool settles a failing command as a
  * completed call (`isError` stays false: the exit status is result data), so
- * this is the collapsed row's only failure signal; without it the red exit
- * pill would be visible only after expanding the card.
+ * the row retains that failure state alongside its exit capsule.
  * @param model - a derived terminal card.
  * @returns whether the card's exit status is a failure.
  */
 export function terminalFailed(model: TerminalCardModel): boolean {
   const { exitCode, signal, running } = model.card
   return running !== true && ((exitCode !== undefined && exitCode !== 0) || signal !== undefined)
+}
+
+/**
+ * Localize a settled foreground command's exit status without inventing a code.
+ * @param model - terminal card, absent for generic execution errors.
+ * @param t - conversation locale.
+ * @returns the capsule label, or null for running, background, or successful calls.
+ */
+export function terminalExitLabel(model: TerminalCardModel | null | undefined, t: TranslateNS<'conversation'>): string | null {
+  if (model == null || model.card.running || model.card.background) return null
+  const { exitCode, signal } = model.card
+  if (signal !== undefined) return t('terminal.signal', { signal })
+  if (exitCode === null) return t('terminal.noExitCode')
+  if (exitCode !== undefined && exitCode !== 0) return t('terminal.exitCodeBadge', { code: exitCode })
+  return null
 }
 
 /**
@@ -280,7 +294,7 @@ function terminalSendCall(name: string, args: Record<string, unknown>): Terminal
 function parseExitStatus(text: string): { output: string; exitCode?: number; signal?: string } {
   const signal = /\n\[killed by signal: ([^\]\n]+)\]$/.exec(text)
   if (signal?.[1] !== undefined) return { output: text.slice(0, signal.index), signal: signal[1] }
-  const exit = /\n\[exit code: (\d+)\]$/.exec(text)
+  const exit = /\n\[exit code: (-?\d+)\]$/.exec(text)
   if (exit?.[1] !== undefined) return { output: text.slice(0, exit.index), exitCode: Number(exit[1]) }
   return { output: text, exitCode: 0 }
 }

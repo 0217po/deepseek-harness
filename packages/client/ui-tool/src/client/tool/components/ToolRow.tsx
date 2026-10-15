@@ -13,7 +13,7 @@ import { CHAT_READ_MAX_LINES, type ReadCardModel } from '../models/read-card-mod
 import type { ImageCardModel } from '../models/image-card-model.ts'
 import { CHAT_SEARCH_MAX_LINES, type SearchCardModel } from '../models/search-card-model.ts'
 import {
-  localizeTerminalCardModel, terminalBlockLabels, type TerminalCardModel,
+  localizeTerminalCardModel, terminalBlockLabels, terminalExitLabel, type TerminalCardModel,
 } from '../models/terminal-card-model.ts'
 import {
   codeToolbarLabels, diffBlockLabels, readBlockLabels, searchBlockLabels, webBlockLabels,
@@ -25,6 +25,8 @@ import {
 import type { WebCardModelProps } from '../models/web-card-model.ts'
 import { AskQuestionCard } from './AskQuestionCard.tsx'
 import { ToolDetails, type ToolDetailsModel } from './ToolDetails.tsx'
+import { TerminalSummary } from './TerminalSummary.tsx'
+import terminalSummaryCss from './TerminalSummary.module.css'
 import css from './ToolRow.module.css'
 
 export interface ToolRowProps {
@@ -176,10 +178,9 @@ export const ToolRow = memo(function ToolRow({
   const status = stateStatus(state, t)
   const running = state === 'running' || state === 'preparing'
   const normalSummary = terminalBody?.description ?? (open ? detailsBody?.expandedSummary ?? summary : summary)
-  // A failure keeps its first result line when available and otherwise turns
-  // the ordinary summary red. An interruption turns the tool-owned summary
-  // amber while retaining the business icon and hidden state announcement.
-  const failureLine = state === 'error' ? errorSummary ?? normalSummary : null
+  const exitLabel = terminalExitLabel(terminal, t)
+  // Generic failures retain their first result line; command exits keep their description.
+  const failureLine = state === 'error' && exitLabel === null ? errorSummary ?? normalSummary : null
   const summaryText = failureLine ?? normalSummary
   // Diff totals remain visible after the optional summary suffix.
   const diffStat = useMemo(() => diffBody === null ? null : diffTotals(diffBody.card.diffs), [diffBody])
@@ -209,8 +210,10 @@ export const ToolRow = memo(function ToolRow({
     /* An empty summary drops the separator with it (a row that is only
        its title shows no trailing dot). */
     <>
-      <span className={css.sep} data-shimmer-decoration aria-hidden />
-      {openFile !== undefined ? (
+      <span className={clsx(css.sep, exitLabel !== null && terminalSummaryCss.separator)} data-shimmer-decoration aria-hidden />
+      {exitLabel !== null ? (
+        <TerminalSummary description={summaryText} exitLabel={exitLabel} />
+      ) : openFile !== undefined ? (
         <button
           type="button"
           className={css.fileLink}
@@ -250,7 +253,7 @@ export const ToolRow = memo(function ToolRow({
         </TextShimmer>
       )}
     </>
-  ), [summaryLinkKeyDown, linkHref, openFile, state, suffix, totals, summaryText])
+  ), [summaryLinkKeyDown, linkHref, openFile, state, suffix, totals, summaryText, exitLabel])
   const expandedContent = useMemo(() => open ? (
     <div className={clsx(css.bodyWrap, detailsBody !== null && css.detailsBodyWrap)}>
       {askQuestionBody !== null
@@ -370,8 +373,9 @@ export const ToolRow = memo(function ToolRow({
     <div className={css.root} data-variant={variant} data-tool={toolName} data-state={state}>
       {status !== null && <span className={css.visuallyHidden}>{status}</span>}
       <DisclosureRow
-        rowClassName={css.row}
-        leadingClassName={css.leading}
+        rowClassName={clsx(css.row, exitLabel !== null && terminalSummaryCss.row)}
+        contentLayoutClassName={exitLabel !== null ? terminalSummaryCss.content : undefined}
+        leadingClassName={clsx(css.leading, exitLabel !== null && terminalSummaryCss.leading)}
         titleClassName={css.title}
         icon={icon}
         title={title}
