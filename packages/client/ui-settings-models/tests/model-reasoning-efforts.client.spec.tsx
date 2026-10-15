@@ -1,18 +1,19 @@
 // @vitest-environment jsdom
-/** Reasoning levels of hand-declared pi-ai models: echo, level rows, API values, and placement. */
+/** Reasoning levels of hand-declared pi-ai models: echo, level rows, API values, refusals, and placement. */
 import { useState } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DeepSeekModelDraft } from '../src/client/DeepSeekModelsEditor.tsx'
 import { validateDeepSeekModels } from '../src/client/DeepSeekModelsEditor.tsx'
 import { ModelListEditor } from '../src/client/ModelListEditor.tsx'
-import { ModelReasoningEfforts } from '../src/client/ModelReasoningEfforts.tsx'
+import { ModelReasoningEfforts, validateReasoningEfforts } from '../src/client/ModelReasoningEfforts.tsx'
 import type { ModelsOperations } from '../src/client/operations.ts'
 import { en } from '../src/client/locales.ts'
 
 afterEach(cleanup)
 
 const t = (key: keyof typeof en): string => en[key]
+const DEFAULTS = { off: null, low: 'low', medium: 'medium', high: 'high' }
 
 /** Render the controlled group over local state, reporting every write. */
 function renderGroup(initial: DeepSeekModelDraft, options: { disabled?: boolean } = {}) {
@@ -36,6 +37,7 @@ const select = (row: number) => screen.getByRole<HTMLSelectElement>('combobox', 
 const value = (level: string) => screen.getByRole<HTMLInputElement>('textbox', { name: `${level} ${en.modelReasoningValue}` })
 const remove = (level: string) => screen.getByRole<HTMLButtonElement>('button', { name: `${en.modelReasoningRemove} ${level}` })
 const add = () => screen.getByRole<HTMLButtonElement>('button', { name: en.modelReasoningAdd })
+const entriesOf = (efforts: unknown) => Object.entries(efforts as object)
 
 describe('ModelReasoningEfforts', () => {
   it.each([
@@ -49,47 +51,46 @@ describe('ModelReasoningEfforts', () => {
     expect(writes).toEqual([])
   })
 
-  it('echoes stored levels as rows with their API values', () => {
-    renderGroup({ id: 'gateway', reasoningEfforts: { off: null, high: 'high', max: 'ultra' } })
+  it('echoes stored levels in their stored order with their API values', () => {
+    renderGroup({ id: 'gateway', reasoningEfforts: { off: null, max: 'ultra', high: 'high' } })
     expect(toggle().getAttribute('aria-checked')).toBe('true')
     expect(screen.getByRole('button', { name: en.modelReasoningHelp })).toBeTruthy()
-    expect(levels()).toEqual(['off', 'high', 'max'])
+    expect(levels()).toEqual(['off', 'max', 'high'])
     expect(value('off').value).toBe('')
     expect(value('off').placeholder).toBe(en.modelReasoningOffValuePlaceholder)
     expect(value('off').disabled).toBe(true)
-    expect(value('high').value).toBe('high')
     expect(value('max').value).toBe('ultra')
+    expect(value('high').value).toBe('high')
     // Each select offers its own level and the levels no other row uses.
-    expect([...select(2).options].map(option => option.value)).toEqual(['minimal', 'low', 'medium', 'high', 'xhigh'])
+    expect([...select(3).options].map(option => option.value)).toEqual(['minimal', 'low', 'medium', 'high', 'xhigh'])
+    expect(screen.queryByText(en.modelReasoningValueRequired)).toBeNull()
   })
 
   it('turns on with off, low, medium, and high while keeping other fields', () => {
     const { writes } = renderGroup({ id: 'chat', contextWindow: 131072, compat: { supportsDeveloperRole: false } })
     fireEvent.click(toggle())
     expect(writes.at(-1)).toEqual({
-      id: 'chat', contextWindow: 131072, compat: { supportsDeveloperRole: false },
-      reasoningEfforts: { off: null, low: 'low', medium: 'medium', high: 'high' },
+      id: 'chat', contextWindow: 131072, compat: { supportsDeveloperRole: false }, reasoningEfforts: DEFAULTS,
     })
     expect(levels()).toEqual(['off', 'low', 'medium', 'high'])
   })
 
-  it('removes the field when switched off and restores the levels when switched back on', () => {
-    const stored = { off: 'none', high: 'deep' }
-    const { writes } = renderGroup({ id: 'chat', reasoningEfforts: stored })
+  it('removes the field when switched off and starts from the defaults when switched back on', () => {
+    const { writes } = renderGroup({ id: 'chat', reasoningEfforts: { off: 'none', high: 'deep' } })
     fireEvent.click(toggle())
     expect(writes[0]).toEqual({ id: 'chat' })
     fireEvent.click(toggle())
-    expect(writes[1]).toEqual({ id: 'chat', reasoningEfforts: stored })
+    expect(writes[1]).toEqual({ id: 'chat', reasoningEfforts: DEFAULTS })
   })
 
-  it('adds the next unused level above the highest row, then the lowest unused one', () => {
+  it('appends the next unused level above the highest row, then the lowest unused one', () => {
     const { efforts } = renderGroup({ id: 'chat', reasoningEfforts: { low: 'low', max: 'max' } })
     fireEvent.click(add())
     expect(levels()).toEqual(['low', 'max', 'off'])
-    expect(efforts()).toEqual({ off: null, low: 'low', max: 'max' })
+    expect(entriesOf(efforts())).toEqual([['low', 'low'], ['max', 'max'], ['off', null]])
     fireEvent.click(add())
     expect(levels()).toEqual(['low', 'max', 'off', 'minimal'])
-    expect(efforts()).toEqual({ off: null, minimal: 'minimal', low: 'low', max: 'max' })
+    expect(entriesOf(efforts())).toEqual([['low', 'low'], ['max', 'max'], ['off', null], ['minimal', 'minimal']])
   })
 
   it('stops adding once every level has a row', () => {
@@ -99,29 +100,64 @@ describe('ModelReasoningEfforts', () => {
     expect(add().disabled).toBe(true)
   })
 
-  it('keeps the edited row in place and writes levels in escalation order', () => {
+  it('changes a level in place, carrying a custom value only between thinking levels', () => {
     const { efforts } = renderGroup({ id: 'chat', reasoningEfforts: { low: 'low', high: 'deep', max: 'max' } })
     fireEvent.change(select(1), { target: { value: 'xhigh' } })
     expect(levels()).toEqual(['xhigh', 'high', 'max'])
-    expect(Object.entries(efforts() as object)).toEqual([['high', 'deep'], ['xhigh', 'xhigh'], ['max', 'max']])
-    // A custom spelling moves between thinking levels, but not across off.
+    expect(entriesOf(efforts())).toEqual([['xhigh', 'xhigh'], ['high', 'deep'], ['max', 'max']])
     fireEvent.change(select(2), { target: { value: 'medium' } })
-    expect(efforts()).toEqual({ medium: 'deep', xhigh: 'xhigh', max: 'max' })
+    expect(entriesOf(efforts())).toEqual([['xhigh', 'xhigh'], ['medium', 'deep'], ['max', 'max']])
     fireEvent.change(select(2), { target: { value: 'off' } })
-    expect(efforts()).toEqual({ off: null, xhigh: 'xhigh', max: 'max' })
+    expect(entriesOf(efforts())).toEqual([['xhigh', 'xhigh'], ['off', null], ['max', 'max']])
     fireEvent.change(select(2), { target: { value: 'low' } })
-    expect(efforts()).toEqual({ low: 'low', xhigh: 'xhigh', max: 'max' })
+    expect(entriesOf(efforts())).toEqual([['xhigh', 'xhigh'], ['low', 'low'], ['max', 'max']])
   })
 
-  it('edits API values, sending the level name for a blank field and keeping a stored off value', () => {
+  it('edits API values, storing the level name for a cleared field and showing it once the field is left', () => {
     const { efforts } = renderGroup({ id: 'gateway', reasoningEfforts: { off: 'none', high: 'high' } })
     expect(value('off').value).toBe('none')
-    expect(value('off').disabled).toBe(true)
     fireEvent.change(value('high'), { target: { value: ' deep ' } })
     expect(efforts()).toEqual({ off: 'none', high: 'deep' })
     fireEvent.change(value('high'), { target: { value: '' } })
     expect(value('high').value).toBe('')
     expect(efforts()).toEqual({ off: 'none', high: 'high' })
+    fireEvent.blur(value('high'))
+    expect(value('high').value).toBe('high')
+  })
+
+  it.each([
+    ['a level besides off without a value', { off: null, high: null }, 'high'],
+    ['an empty value', { off: null, high: '' }, 'high'],
+    ['an empty off value', { off: '', high: 'high' }, 'off'],
+  ])('flags %s that the adapter refuses', (_label, stored, level) => {
+    renderGroup({ id: 'chat', reasoningEfforts: stored })
+    expect(value(level).getAttribute('aria-invalid')).toBe('true')
+    expect(screen.getByText(en.modelReasoningValueRequired)).toBeTruthy()
+  })
+
+  it('repairs a refused value with the level name once its field is left', () => {
+    const { efforts } = renderGroup({ id: 'chat', reasoningEfforts: { off: null, high: null } })
+    expect(value('high').value).toBe('')
+    fireEvent.focus(value('high'))
+    fireEvent.blur(value('high'))
+    expect(efforts()).toEqual({ off: null, high: 'high' })
+    expect(value('high').getAttribute('aria-invalid')).toBe('false')
+    expect(screen.queryByText(en.modelReasoningValueRequired)).toBeNull()
+  })
+
+  it('leaves an accepted value alone when its field is left', () => {
+    const { writes } = renderGroup({ id: 'chat', reasoningEfforts: { high: 'deep' } })
+    fireEvent.blur(value('high'))
+    expect(writes).toEqual([])
+  })
+
+  it('shows a valueless field as switched on with no levels, which the adapter refuses', () => {
+    const { writes } = renderGroup({ id: 'chat', reasoningEfforts: null })
+    expect(toggle().getAttribute('aria-checked')).toBe('true')
+    expect(levels()).toEqual([])
+    expect(screen.getByText(en.modelReasoningNeedsLevel)).toBeTruthy()
+    fireEvent.click(add())
+    expect(writes.at(-1)).toEqual({ id: 'chat', reasoningEfforts: { off: null } })
   })
 
   it('deletes a row and requires a level besides off', () => {
@@ -153,15 +189,33 @@ describe('ModelReasoningEfforts', () => {
 describe('reasoning-level validation', () => {
   it.each([
     [{}],
+    [null],
     [{ off: null }],
     [{ off: 'none' }],
   ])('refuses %j, which offers nothing beyond off', (stored) => {
-    expect(validateDeepSeekModels([{ id: 'ok' }, { id: 'chat', reasoningEfforts: stored }]))
+    expect(validateReasoningEfforts([{ id: 'ok' }, { id: 'chat', reasoningEfforts: stored }]))
       .toEqual({ index: 1, key: 'modelReasoningNeedsLevel' })
   })
 
-  it.each([[false], [{ high: 'high' }], [{ off: null, max: 'ultra' }]])('accepts %j', (stored) => {
-    expect(validateDeepSeekModels([{ id: 'chat', reasoningEfforts: stored }])).toBeUndefined()
+  it.each([
+    [{ high: null }],
+    [{ off: null, high: '' }],
+    [{ off: '', high: 'high' }],
+  ])('refuses %j, which holds a value the adapter rejects', (stored) => {
+    expect(validateReasoningEfforts([{ id: 'chat', reasoningEfforts: stored }]))
+      .toEqual({ index: 0, key: 'modelReasoningValueRequired' })
+  })
+
+  it.each([[undefined], [false], [{ high: 'high' }], [{ off: null, max: 'ultra' }]])('accepts %j', (stored) => {
+    expect(validateReasoningEfforts([{ id: 'chat', reasoningEfforts: stored }])).toBeUndefined()
+  })
+
+  it('accepts an inherited model list', () => {
+    expect(validateReasoningEfforts(undefined)).toBeUndefined()
+  })
+
+  it('stays out of the shared model checker that DeepSeek and catalog rows use', () => {
+    expect(validateDeepSeekModels([{ id: 'chat', reasoningEfforts: { off: null } }])).toBeUndefined()
   })
 })
 
@@ -173,17 +227,44 @@ describe('reasoning levels in the model list', () => {
     writeSettings: vi.fn(),
   }
 
+  /** Render the list over local state, reporting every write. */
+  function renderList(initial: DeepSeekModelDraft[]) {
+    const writes: DeepSeekModelDraft[][] = []
+    function Harness() {
+      const [models, setModels] = useState(initial)
+      return (
+        <ModelListEditor
+          models={models} onChange={(next) => { writes.push(next); setModels(next) }}
+          probe={{ settingsNs: 'llm-pi-ai' }} operations={operations} disabled={false} t={t} onBusyChange={() => {}}
+        />
+      )
+    }
+    render(<Harness />)
+    return { writes }
+  }
+
   it('edits a hand-declared route row', () => {
-    const onChange = vi.fn()
-    render(<ModelListEditor
-      models={[{ id: 'my-reasoner' }]} onChange={onChange} probe={{ settingsNs: 'llm-pi-ai' }}
-      operations={operations} disabled={false} t={t} onBusyChange={() => {}}
-    />)
+    const { writes } = renderList([{ id: 'my-reasoner' }])
     fireEvent.click(screen.getByRole('button', { name: `${en.modelAdvanced} 1` }))
     fireEvent.click(toggle())
-    expect(onChange).toHaveBeenCalledWith([
-      { id: 'my-reasoner', reasoningEfforts: { off: null, low: 'low', medium: 'medium', high: 'high' } },
-    ])
+    expect(writes.at(-1)).toEqual([{ id: 'my-reasoner', reasoningEfforts: DEFAULTS }])
+  })
+
+  it('writes only the surviving model\'s own levels after the row above it is deleted', () => {
+    // Rows are keyed by position, so the survivor reuses the deleted model's editor instance.
+    const { writes } = renderList([{ id: 'a' }, { id: 'b' }])
+    fireEvent.click(screen.getByRole('button', { name: `${en.modelAdvanced} 1` }))
+    fireEvent.click(screen.getByRole('button', { name: `${en.modelAdvanced} 2` }))
+    const first = within(screen.getByRole('group', { name: `${en.modelReasoning} 1` }))
+    fireEvent.click(first.getByRole('switch'))
+    fireEvent.click(first.getByRole('button', { name: `${en.modelReasoningRemove} medium` }))
+    fireEvent.change(first.getByRole('textbox', { name: `high ${en.modelReasoningValue}` }), { target: { value: 'deep' } })
+    fireEvent.click(first.getByRole('switch'))
+    fireEvent.click(screen.getByRole('button', { name: `${en.removeModel} 1` }))
+    expect(writes.at(-1)).toEqual([{ id: 'b' }])
+
+    fireEvent.click(within(screen.getByRole('group', { name: `${en.modelReasoning} 1` })).getByRole('switch'))
+    expect(writes.at(-1)).toEqual([{ id: 'b', reasoningEfforts: DEFAULTS }])
   })
 
   it('leaves catalog route rows to the installed catalog', () => {

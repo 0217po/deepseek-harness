@@ -1069,6 +1069,28 @@ describe('hand-declared providers', () => {
     expect(screen.getByLabelText<HTMLSelectElement>(en.customApi).value).toBe('')
   })
 
+  it.each([
+    ['blocks a hand-declared route', true],
+    ['leaves a catalog route to the adapter', false],
+  ])('%s whose stored reasoning levels the adapter refuses', async (_label, declared) => {
+    // Only a hand-declared route's rows edit reasoning levels, so only there
+    // can the card name the row and offer the switch that repairs it.
+    await mountSection({
+      providers: {
+        'acme-gateway': {
+          api: 'openai-completions',
+          models: [{ id: 'acme-large', reasoningEfforts: { off: null } }],
+        },
+      },
+      declaredRoutes: declared ? ['acme-gateway'] : [],
+    })
+    openEditor('acme-gateway')
+
+    const refusal = `${en.model} 1: ${en.modelReasoningNeedsLevel}`
+    expect(screen.queryByText(refusal) !== null).toBe(declared)
+    expect(buttonNamed(en.apply).disabled).toBe(declared)
+  })
+
   it('retries only the key after the profile landed, and reports the provider on cancel', async () => {
     const set = vi.fn()
       .mockResolvedValueOnce(remoteFail('credential store is read-only'))
