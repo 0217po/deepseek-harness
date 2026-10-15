@@ -85,8 +85,8 @@ jobs:
           const head=cp.execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
           if(tagged!==head) throw Error('Checkout does not match source tag');
           } else {
-          const branch=cp.execFileSync('git',['symbolic-ref','--short','HEAD'],{encoding:'utf8'}).trim();
-          if(branch!==ref || ref.startsWith('refs/')) throw Error('Select a branch in this repository, not a SHA or PR ref');
+          const branch=cp.execFileSync('git',['rev-parse','--abbrev-ref','HEAD'],{encoding:'utf8'}).trim();
+          if(branch==='HEAD' || branch!==ref || ref.startsWith('refs/')) throw Error('Select a branch in this repository, not a SHA or PR ref');
           }
           if(!fs.readFileSync('apps/desktop/scripts/desktop-ci-version.mjs','utf8').includes('PACKAGE_VERSION_MODE')) throw Error('Source lacks Desktop channel/version CI support; select a newer release');"
       - uses: pnpm/action-setup@v5.0.0
