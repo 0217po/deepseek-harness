@@ -25,8 +25,8 @@ interface ModelRowProps {
   inputField: 'inputModalities' | 'input'
   inputFallback?: readonly string[] | undefined
   inputLoading?: boolean
-  /** Whether the row edits `reasoningEfforts`; only a hand-declared pi-ai route has no catalog to inherit them from. */
-  reasoning?: boolean
+  /** Levels the row's `reasoningEfforts` may declare; absent or empty shows no reasoning control. */
+  reasoningLevels?: readonly string[] | undefined
   expanded: boolean
   disabled: boolean
   t: (key: ModelsKey) => string
@@ -109,8 +109,12 @@ export function ModelRow(props: ModelRowProps): ReactNode {
               model={model} field={props.inputField} position={position}
               fallback={props.inputFallback} disabled={disabled || props.inputLoading === true} t={t} onChange={props.onChange}
             />
-            {props.reasoning === true
-              ? <ModelReasoningEfforts model={model} position={position} disabled={disabled} t={t} onChange={props.onChange} />
+            {props.reasoningLevels !== undefined && props.reasoningLevels.length > 0
+              ? (
+                <ModelReasoningEfforts
+                  model={model} levels={props.reasoningLevels} position={position} disabled={disabled} t={t} onChange={props.onChange}
+                />
+              )
               : null}
           </div>
         )

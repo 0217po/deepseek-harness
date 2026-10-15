@@ -65,11 +65,14 @@ export interface ProbeTarget {
 export interface ModelListEditorProps {
   /** The rows as currently drafted. */
   models: readonly ModelDraft[]
-  /**
-   * Installed provider whose catalog supplies defaults without endpoint I/O;
-   * absent for a hand-declared route, whose rows then edit `reasoningEfforts`.
-   */
+  /** Installed provider whose catalog supplies defaults without endpoint I/O. */
   catalogProvider?: string | undefined
+  /**
+   * Reasoning levels a hand-declared route's rows may declare in
+   * `reasoningEfforts`, in escalation order; absent or empty shows no
+   * reasoning control, leaving a catalog model's levels to the catalog.
+   */
+  reasoningLevels?: readonly string[] | undefined
   /** Route input types for models absent from the installed catalog. */
   defaultInput?: readonly string[] | undefined
   /** Whether the user layer currently owns the whole array; absent on a create. */
@@ -365,7 +368,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
             inputField="input"
             inputFallback={inputDefaults.get(textOf(model, 'id')) ?? props.defaultInput}
             inputLoading={catalogProvider !== undefined && catalog === undefined}
-            reasoning={catalogProvider === undefined}
+            reasoningLevels={props.reasoningLevels}
             expanded={expanded.has(index)}
             disabled={disabled}
             t={t}

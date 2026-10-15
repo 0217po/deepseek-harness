@@ -14,15 +14,17 @@ afterEach(cleanup)
 
 const t = (key: keyof typeof en): string => en[key]
 const DEFAULTS = { off: null, low: 'low', medium: 'medium', high: 'high' }
+/** The levels llm-pi-ai's schema lists today. */
+const LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
 
 /** Render the controlled group over local state, reporting every write. */
-function renderGroup(initial: DeepSeekModelDraft, options: { disabled?: boolean } = {}) {
+function renderGroup(initial: DeepSeekModelDraft, options: { disabled?: boolean; levels?: readonly string[] } = {}) {
   const writes: DeepSeekModelDraft[] = []
   function Harness() {
     const [model, setModel] = useState(initial)
     return (
       <ModelReasoningEfforts
-        model={model} position={1} disabled={options.disabled ?? false} t={t}
+        model={model} levels={options.levels ?? LEVELS} position={1} disabled={options.disabled ?? false} t={t}
         onChange={(next) => { writes.push(next); setModel(next) }}
       />
     )
@@ -172,6 +174,24 @@ describe('ModelReasoningEfforts', () => {
     expect(efforts()).toEqual({})
   })
 
+  it('offers the levels it is given, seeding only the defaults the list names', () => {
+    const { efforts } = renderGroup({ id: 'gateway' }, { levels: ['off', 'low', 'high', 'ultra'] })
+    fireEvent.click(toggle())
+    expect(entriesOf(efforts())).toEqual([['off', null], ['low', 'low'], ['high', 'high']])
+    expect([...select(3).options].map(option => option.value)).toEqual(['high', 'ultra'])
+    fireEvent.click(add())
+    expect(levels()).toEqual(['off', 'low', 'high', 'ultra'])
+    expect(add().disabled).toBe(true)
+  })
+
+  it('keeps a stored key the offered levels do not name', () => {
+    const { efforts } = renderGroup({ id: 'gateway', reasoningEfforts: { turbo: 'turbo-x', high: 'high' } })
+    expect(levels()).toEqual(['turbo', 'high'])
+    expect([...select(1).options].map(option => option.value)).toEqual(['turbo', 'off', 'minimal', 'low', 'medium', 'xhigh', 'max'])
+    fireEvent.change(value('high'), { target: { value: 'deep' } })
+    expect(entriesOf(efforts())).toEqual([['turbo', 'turbo-x'], ['high', 'deep']])
+  })
+
   it('disables every control while read-only or saving', () => {
     const { writes } = renderGroup({ id: 'chat', reasoningEfforts: { high: 'deep' } }, { disabled: true })
     expect((toggle() as HTMLButtonElement).disabled).toBe(true)
@@ -234,7 +254,7 @@ describe('reasoning levels in the model list', () => {
       const [models, setModels] = useState(initial)
       return (
         <ModelListEditor
-          models={models} onChange={(next) => { writes.push(next); setModels(next) }}
+          models={models} onChange={(next) => { writes.push(next); setModels(next) }} reasoningLevels={LEVELS}
           probe={{ settingsNs: 'llm-pi-ai' }} operations={operations} disabled={false} t={t} onBusyChange={() => {}}
         />
       )
@@ -267,9 +287,12 @@ describe('reasoning levels in the model list', () => {
     expect(writes.at(-1)).toEqual([{ id: 'b', reasoningEfforts: DEFAULTS }])
   })
 
-  it('leaves catalog route rows to the installed catalog', () => {
+  it.each([
+    ['without a level list', undefined],
+    ['with an empty level list', []],
+  ])('shows no reasoning control %s, leaving catalog rows to the installed catalog', (_label, reasoningLevels) => {
     render(<ModelListEditor
-      models={[{ id: 'gpt-5' }]} onChange={vi.fn()} catalogProvider="openai"
+      models={[{ id: 'gpt-5' }]} onChange={vi.fn()} catalogProvider="openai" reasoningLevels={reasoningLevels}
       probe={{ settingsNs: 'llm-pi-ai', provider: 'openai' }}
       operations={operations} disabled={false} t={t} onBusyChange={() => {}}
     />)

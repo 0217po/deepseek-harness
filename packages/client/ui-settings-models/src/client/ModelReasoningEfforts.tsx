@@ -8,25 +8,14 @@ import { modelDrafts } from './DeepSeekModelsEditor.tsx'
 import type { ModelsKey } from './locales.ts'
 import styles from './ModelsSection.module.css'
 
-/** pi-ai's thinking levels in escalation order: the only keys `reasoningEfforts` accepts. */
-const LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
-
-/** One pi-ai thinking level. */
-type Level = typeof LEVELS[number]
-
 /** Declared levels in stored order, each with the value stored for it, whatever a hand edit left there. */
-type Entries = readonly (readonly [Level, unknown])[]
+type Entries = readonly (readonly [string, unknown])[]
 
-/** Levels a model offers when the switch is turned on: Off plus the common OpenAI-compatible trio. */
-const INITIAL_LEVELS: readonly Level[] = ['off', 'low', 'medium', 'high']
-
-/** Whether a stored key names a pi-ai level. */
-function isLevel(key: string): key is Level {
-  return (LEVELS as readonly string[]).includes(key)
-}
+/** Levels a model offers when the switch is turned on, where the schema lists them: Off plus the common OpenAI-compatible trio. */
+const INITIAL_LEVELS: readonly string[] = ['off', 'low', 'medium', 'high']
 
 /** The wire value a level sends unless its row says otherwise; `null` is the Off entry that sends nothing. */
-function defaultValue(level: Level): string | null {
+function defaultValue(level: string): string | null {
   return level === 'off' ? null : level
 }
 
@@ -36,12 +25,13 @@ function defaultValue(level: Level): string | null {
  * @param wire - the value stored for it.
  * @returns whether the adapter would resolve the entry.
  */
-function acceptedValue(level: Level, wire: unknown): boolean {
+function acceptedValue(level: string, wire: unknown): boolean {
   return typeof wire === 'string' ? wire.length > 0 : wire === null && level === 'off'
 }
 
 /**
- * Read the declared levels from a row in their stored order.
+ * Read the declared levels from a row in their stored order, including a key
+ * the offered levels do not name, so an edit never drops it.
  * @param model - model row as drafted.
  * @returns the entries; empty for a valueless field, which pi-ai refuses, and
  * `undefined` when the field is absent or `false`.
@@ -50,7 +40,7 @@ function readEfforts(model: DeepSeekModelDraft): Entries | undefined {
   const value = model['reasoningEfforts']
   if (value === null) return []
   if (typeof value !== 'object' || Array.isArray(value)) return undefined
-  return Object.entries(value).filter((entry): entry is [Level, unknown] => isLevel(entry[0]))
+  return Object.entries(value)
 }
 
 /**
@@ -98,6 +88,8 @@ export function validateReasoningEfforts(value: unknown): ReasoningEffortsFailur
 interface ModelReasoningEffortsProps {
   /** Effective model row, including fields outside the curated editor. */
   model: DeepSeekModelDraft
+  /** Levels the adapter's schema accepts as `reasoningEfforts` keys, in escalation order. */
+  levels: readonly string[]
   /** One-based row position for accessible names. */
   position: number
   /** Prevent changes while read-only or saving. */
@@ -115,21 +107,21 @@ interface ModelReasoningEffortsProps {
  * @param props - model declaration and row replacement action.
  * @returns the reasoning-level group.
  */
-export function ModelReasoningEfforts({ model, position, disabled, t, onChange }: ModelReasoningEffortsProps): ReactNode {
+export function ModelReasoningEfforts({ model, levels, position, disabled, t, onChange }: ModelReasoningEffortsProps): ReactNode {
   const entries = readEfforts(model)
   // Only the focused field keeps its own text, so a field cleared while typing
   // stays empty although its level's name is stored. Leaving the field drops
   // it, and deleting a model, resetting the list, or folding these options all
   // move focus first, so no text outlives the field it was typed into.
-  const [typing, setTyping] = useState<{ level: Level; text: string } | undefined>(undefined)
+  const [typing, setTyping] = useState<{ level: string; text: string } | undefined>(undefined)
   const label = `${t('modelReasoning')} ${String(position)}`
-  const levels = entries?.map(([level]) => level) ?? []
+  const used = entries?.map(([level]) => level) ?? []
 
   const write = (next: Entries | undefined): void => { onChange(withEfforts(model, next)) }
-  const replaceAt = (current: Entries, index: number, entry: readonly [Level, unknown]): Entries =>
+  const replaceAt = (current: Entries, index: number, entry: readonly [string, unknown]): Entries =>
     current.map((existing, at) => at === index ? entry : existing)
 
-  const changeLevel = (current: Entries, index: number, from: Level, wire: unknown, to: Level): void => {
+  const changeLevel = (current: Entries, index: number, from: string, wire: unknown, to: string): void => {
     // Only a custom spelling between two thinking levels carries over; a value
     // still spelled as its old level, or one crossing to or from Off, resets.
     const carried = typeof wire === 'string' && wire.length > 0 && wire !== from && from !== 'off' && to !== 'off'
@@ -137,28 +129,35 @@ export function ModelReasoningEfforts({ model, position, disabled, t, onChange }
   }
 
   const addLevel = (current: Entries): void => {
-    const highest = Math.max(-1, ...levels.map(level => LEVELS.indexOf(level)))
-    const level = LEVELS.find((candidate, index) => index > highest && !levels.includes(candidate))
-      ?? LEVELS.find(candidate => !levels.includes(candidate))
+    const highest = Math.max(-1, ...used.map(level => levels.indexOf(level)))
+    const level = levels.find((candidate, index) => index > highest && !used.includes(candidate))
+      ?? levels.find(candidate => !used.includes(candidate))
     /* v8 ignore next -- the add button is disabled once every level has a row */
     if (level === undefined) return
     write([...current, [level, defaultValue(level)]])
   }
 
-  const editValue = (current: Entries, index: number, level: Level, text: string): void => {
+  const editValue = (current: Entries, index: number, level: string, text: string): void => {
     setTyping({ level, text })
     const trimmed = text.trim()
     write(replaceAt(current, index, [level, trimmed.length === 0 ? defaultValue(level) : trimmed]))
   }
 
-  const leaveValue = (current: Entries, index: number, level: Level, wire: unknown): void => {
+  const leaveValue = (current: Entries, index: number, level: string, wire: unknown): void => {
     setTyping(undefined)
     // Leaving a field whose stored value the adapter refuses repairs it with the level name.
     if (!acceptedValue(level, wire)) write(replaceAt(current, index, [level, defaultValue(level)]))
   }
 
+  // A stored key the offered levels do not name stays selectable in its own row.
+  const choicesFor = (level: string): readonly string[] => [
+    ...levels.includes(level) ? [] : [level],
+    ...levels.filter(choice => choice === level || !used.includes(choice)),
+  ]
+  const initialEntries = INITIAL_LEVELS.filter(level => levels.includes(level)).map(level => [level, defaultValue(level)] as const)
+
   const refused = entries?.some(([level, wire]) => !acceptedValue(level, wire)) === true
-  const missingLevel = entries !== undefined && !levels.some(level => level !== 'off')
+  const missingLevel = entries !== undefined && !used.some(level => level !== 'off')
 
   return (
     <div className={styles['modelReasoning']} role="group" aria-label={label}>
@@ -173,7 +172,7 @@ export function ModelReasoningEfforts({ model, position, disabled, t, onChange }
           checked={entries !== undefined}
           label={label}
           disabled={disabled}
-          onChange={(on) => { write(on ? INITIAL_LEVELS.map(level => [level, defaultValue(level)] as const) : undefined) }}
+          onChange={(on) => { write(on ? initialEntries : undefined) }}
         />
       </div>
       {entries === undefined
@@ -199,9 +198,9 @@ export function ModelReasoningEfforts({ model, position, disabled, t, onChange }
                   value={level}
                   aria-label={`${t('modelReasoningLevel')} ${String(index + 1)}`}
                   disabled={disabled}
-                  onChange={(event) => { changeLevel(entries, index, level, wire, event.target.value as Level) }}
+                  onChange={(event) => { changeLevel(entries, index, level, wire, event.target.value) }}
                 >
-                  {LEVELS.filter(choice => choice === level || !levels.includes(choice)).map(choice => (
+                  {choicesFor(level).map(choice => (
                     <option key={choice} value={choice}>{choice}</option>
                   ))}
                 </select>
@@ -235,7 +234,7 @@ export function ModelReasoningEfforts({ model, position, disabled, t, onChange }
             <button
               type="button"
               className={styles['addModelButton']}
-              disabled={disabled || levels.length === LEVELS.length}
+              disabled={disabled || levels.every(level => used.includes(level))}
               onClick={() => { addLevel(entries) }}
             >
               <IconPlusOutlineRegular size={14} />
