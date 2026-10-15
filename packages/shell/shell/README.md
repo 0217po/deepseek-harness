@@ -64,7 +64,7 @@ The seam is not an executor: mount exactly one provider per composition, and the
 
 ### The shared exit-status contract
 
-Tool results end with a machine-readable exit marker — `[exit code: N]`, `[exit code: null]` when no exit code is available, or `[killed by signal: X]` — so the model can always tell how a command ended. The seam owns that marker format and the `parseExitStatus` helper that splits a rendered result back into its output body and structured exit status, keeping the `bash` and `pwsh` tools from drifting on it.
+Tool results end with a machine-readable exit marker — `[exit code: N]` or `[killed by signal: X]` — so the model can always tell how a command ended. The seam owns that marker format and the `parseExitStatus` helper that splits a rendered result back into its output body and structured exit status, keeping the `bash` and `pwsh` tools from drifting on it.
 
 -----
 
