@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-root",
-  "version": "0.2.1-alpha.2",
+  "version": "0.2.1-alpha.3",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -213,6 +213,8 @@
     "postinstall": "node scripts/install-lefthook.mjs",
     "gen-official-bundle-catalog": "tsx scripts/gen-official-bundle-catalog.ts",
     "verify-official-bundle-catalog": "tsx scripts/gen-official-bundle-catalog.ts --check",
+    "gen-provider-data": "tsx packages/llm/llm-pi-ai/scripts/gen-provider-data.ts",
+    "verify-provider-data": "tsx packages/llm/llm-pi-ai/scripts/gen-provider-data.ts --check",
     "verify-product-use": "tsx scripts/verify-product-use.ts"
   },
   "devDependencies": {
@@ -229,6 +231,7 @@
     "@deepseek-ai/dsh-computer-use": "workspace:*",
     "@deepseek-ai/dsh-experimental-computer-use-cua-driver-mcp": "workspace:*",
     "@deepseek-ai/dsh-experimental-computer-use-cua-driver-native": "workspace:*",
+    "@deepseek-ai/dsh-cua": "workspace:*",
     "@deepseek-ai/dsh-experimental-claude-code-mods": "workspace:*",
     "@deepseek-ai/dsh-llm-replay": "workspace:*",
     "@deepseek-ai/dsh-mcp-client": "workspace:*",
@@ -285,6 +288,7 @@
     "@deepseek-ai/dsh-tool-working-directory": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*",
     "@deepseek-ai/dsh-experimental-worktree": "workspace:*",
-    "@deepseek-ai/dsh-experimental-tool-worktree": "workspace:*"
+    "@deepseek-ai/dsh-experimental-tool-worktree": "workspace:*",
+    "@deepseek-ai/dsh-experimental-cua-macos": "workspace:*"
   }
 }

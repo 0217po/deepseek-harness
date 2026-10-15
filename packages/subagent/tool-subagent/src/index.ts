@@ -31,6 +31,7 @@ import {
 } from './model-selection.ts'
 import type { DelegationModelRequest, ModelSelectionPolicy } from './model-selection.ts'
 import { registerListSubagentModels } from './list-models.ts'
+import { SubagentPresetSelection, type PresetSelectionConfig, type PresetSelectionRequest } from './preset-selection.ts'
 import type {} from './model-selection-settings.ts'
 import {
   recordSubagentModelSelection,
@@ -46,7 +47,7 @@ export const inject = ['tools', 'subagents', 'systemPrompt', 'sessionProjections
 const delegationTools = new Set<ToolDefinition>()
 
 /** Config: which registered provider this tool delegates to, plus child defaults. */
-export interface Config {
+export interface Config extends PresetSelectionConfig {
   /** The `ctx.subagents` provider name to start runs on (e.g. `spawn`, `acp`). */
   provider: string
   /**
@@ -63,22 +64,6 @@ export interface Config {
    * Agent options applied to every child; omitted fields use child-loop defaults.
    */
   agentOptions?: AgentOptions
-  /**
-   * Per-child persona that shadows `deployment:persona-prefix`. Requires the
-   * provider's `persona` capability; omission preserves the deployment persona.
-   */
-  persona?: string
-  /**
-   * Tool filter applied to every child. Filtered tools disappear from its
-   * prompt and reject execution. Requires the provider's `toolFilter`
-   * capability; unknown names fail startup.
-   */
-  toolFilter?: {
-    /** Global tool names the child keeps; everything else is removed. */
-    allow?: string[]
-    /** Global tool names removed from the child. */
-    deny?: string[]
-  }
   /**
    * Maximum child depth: a non-negative safe integer (`0` forbids delegation),
    * or `'provider-managed'` to send no cap. A numeric cap
@@ -108,12 +93,8 @@ export const Config: z<Config> = z.object({
     reasoningEffort: ReturnType<typeof ReasoningEffortId>
     maxTokens: number
   }),
-  persona: z.string(),
-  // Preserve omission; Schemastery's `{ allow: [] }` default would deny every tool.
-  toolFilter: z.object({
-    allow: z.array(z.string()).default(undefined as unknown as string[]),
-    deny: z.array(z.string()).default(undefined as unknown as string[]),
-  }).default(undefined as unknown as { allow: string[]; deny: string[] }),
+  agentPreset: z.string().min(1),
+  allowedAgentPresets: (z.array(z.string().min(1)).min(1) as z<string[] | undefined>).default(undefined),
   maxDepth: z.union([z.natural().max(Number.MAX_SAFE_INTEGER), z.const('provider-managed' as const)]),
 })
 
@@ -157,24 +138,31 @@ function providerWording(inheritsConversation: boolean): { description: string; 
 
 /**
  * Install one delegation-tool composition.
+ * Standing preset choices are validated for each Agent before its tool is installed.
  * @param ctx - Context that owns the registrations.
  * @param config - delegation-tool configuration.
  * @param session - unpublished Session supplied by a direct Agent setup; omit for a standing composition.
  */
-export function apply(ctx: Context, config: Config, session?: Session): void {
+export async function apply(ctx: Context, config: Config, session?: Session): Promise<void> {
+  for (const field of ['persona', 'toolFilter']) {
+    if (Object.hasOwn(config, field)) {
+      throw new Error(`tool-subagent: ${field} is no longer supported; configure persona and tool plugins in an Agent Preset and select it with agentPreset (spawn only)`)
+    }
+  }
+  const presets = new SubagentPresetSelection(config)
+  if (presets.configured && ctx.get('agentPresets') === undefined) {
+    throw new Error('tool-subagent: agent preset selection requires the agent-presets service')
+  }
   // Direct apply() bypasses Schemastery's numeric constraints. A direct-apply
   // omission stays capless (the schema default only runs through the loader).
   if (config.maxDepth !== 'provider-managed') assertSubagentMaxDepth(config.maxDepth)
-  // Reject an empty explicit filter at load instead of failing every delegation.
-  if (config.toolFilter !== undefined && config.toolFilter.allow === undefined && config.toolFilter.deny === undefined) {
-    throw new Error('tool-subagent: `toolFilter` is configured but names neither `allow` nor `deny` — remove the key or fill the filter')
-  }
   const toolName = config.toolName ?? 'subagent'
 
   const modelSelectionCapable = config.modelSelectionSettings === true
   ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
 
   const assertSubagentProviderConfiguration = (subagentProvider: SubagentProvider): void => {
+    presets.assertProvider(subagentProvider)
     if (ctx.subagents.resolveMaxDepth(config.maxDepth) !== undefined && !subagentProvider.capabilities.depthLimit) {
       throw new Error(
         `tool-subagent: provider "${subagentProvider.name}" cannot enforce maxDepth (no depthLimit capability) — `
@@ -244,6 +232,13 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
             required: true,
             description: wording.promptDescription,
           },
+          ...presets.choices === undefined ? {} : {
+            agent_preset: {
+              type: 'string' as const,
+              enum: [...presets.choices],
+              description: presets.description,
+            },
+          },
           ...modelSelectionEnabled ? {
             provider: {
               type: 'string' as const,
@@ -285,6 +280,7 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
             throw new Error('subagent tool requires a calling agent (exec.agent was undefined)')
           }
 
+          const agentPreset = presets.resolve(args as PresetSelectionRequest)
           const modelRequest = args as DelegationModelRequest
           const parentOptions = parentAgentOptionsForDelegation(parent)
           const requiresRoutePreflight = hasDelegationModelRequest(modelRequest)
@@ -326,9 +322,8 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
             ...args.cwd === undefined ? {} : { cwd: args.cwd },
             prompt: [{ type: 'text', text: args.prompt }] as ContentBlock[],
             parent,
+            ...agentPreset === undefined ? {} : { agentPreset },
             ...requestedChildAgentOptions !== undefined ? { agentOptions: requestedChildAgentOptions } : {},
-            ...config.persona !== undefined ? { persona: config.persona } : {},
-            ...config.toolFilter !== undefined ? { toolFilter: config.toolFilter } : {},
             ...maxDepth !== undefined ? { maxDepth } : {},
           }
 
@@ -400,19 +395,23 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
     })
   }
 
-  if (config.modelSelectionSettings !== true) {
+  const compositionScope = scopeOf(ctx)
+  if (presets.configured && (session !== undefined || compositionScope === undefined)) await presets.validate(ctx)
+
+  if (!modelSelectionCapable && (!presets.configured || session !== undefined || compositionScope === undefined)) {
     install(ctx, undefined)
     return
   }
 
   const settings = ctx.get('subagentModelSelection')
-  if (settings === undefined) {
+  if (modelSelectionCapable && settings === undefined) {
     throw new Error(
       'tool-subagent: `modelSelectionSettings` requires '
       + '@deepseek-ai/dsh-tool-subagent/model-selection-settings in the Host scope',
     )
   }
   const selectForSession = (target: Session): ModelSelectionPolicy | undefined => {
+    if (!modelSelectionCapable || settings === undefined) return undefined
     const freshSession = target.firstLiveSeq === 0
       // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
       && target.eventAt(SessionSeq(0))?.type !== 'session/end-seed'
@@ -446,7 +445,6 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
     return
   }
 
-  const compositionScope = scopeOf(ctx)
   if (compositionScope === undefined) {
     throw new Error('tool-subagent: standing `modelSelectionSettings` requires a scoped preset Context')
   }
@@ -467,7 +465,8 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
     let fiber: ReturnType<Context['inject']>
     try {
       const policy = selectForSession(candidate.session)
-      fiber = candidate.ctx.inject(['tools', 'subagents', 'systemPrompt'], (runtimeCtx) => {
+      fiber = candidate.ctx.inject(['tools', 'subagents', 'systemPrompt'], async (runtimeCtx) => {
+        if (presets.configured) await presets.validate(ctx)
         install(runtimeCtx, policy)
       })
     } finally {

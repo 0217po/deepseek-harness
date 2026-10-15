@@ -63,7 +63,7 @@ try {
   });
   const unregister = ctx.subagents.registerProvider({
     name: "built-local",
-    capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+    capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false },
     inheritsParentContext: false,
     prepareContinuable() { return Promise.resolve({}); },
   });

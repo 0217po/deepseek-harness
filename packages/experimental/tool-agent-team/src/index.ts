@@ -32,7 +32,7 @@ export const Config: z<Config> = z.object({
 
 /** Model-facing collaboration guidance shared by Lead and teammates. */
 function teamPolicy(interrupt: boolean): string {
-  return `Agent Teams is available in this session, but create teammates only when the user explicitly asks to use Agent Teams or teammates.
+  return `Agent Teams is available in this session
 
 The Team Lead and all teammates share the same working directory and filesystem. Edits are immediately visible to every member. Split write work into disjoint scopes, record expected write scopes on shared tasks, and use task dependencies when work must be ordered. Write-scope overlap is advisory, not a lock.
 
@@ -175,6 +175,19 @@ function install(agent: Agent, ctx: Context, config: Required<Config>): () => vo
       order: scoped.systemPrompt.getSectionOrder('TEAM_POLICY'),
       text: teamPolicy(config.interrupt),
     }))
+    register(scoped.systemPrompt.context({
+      name: 'team:identity',
+      order: scoped.systemPrompt.getContextOrder('TEAM_IDENTITY'),
+      required: true,
+      text: () => {
+        const { role, name } = ctx.agentTeams.membership(agent)
+        return `${role === 'lead'
+          ? 'You are the Team Lead named "lead".'
+          : `You are teammate "${name}".\nYour Team Lead is named "lead".\nTo message your Team Lead, use send_message({ target: "lead", message: "..." }).`}
+Use list_agents({}) to find your teammates and their names.
+To message another teammate, use send_message({ target: "<teammate name>", message: "..." }).`
+      },
+    }))
 
     register(scoped.tools.register(defineTool({
       name: 'spawn_teammate',
@@ -196,18 +209,7 @@ function install(agent: Agent, ctx: Context, config: Required<Config>): () => vo
         const result = await ctx.agentTeams.spawnTeammate(agent, {
           name: args.name,
           description: args.description,
-          prompt: [
-            { type: 'text', text: `<system-reminder>
-You are teammate "${args.name.trim()}".
-Your Team Lead is named "lead".
-Use list_agents({}) to find your teammates and their names.
-To message your Team Lead, use send_message({ target: "lead", message: "..." }).
-To message another teammate, use send_message({ target: "<teammate name>", message: "..." }).
-</system-reminder>
-
-` },
-            { type: 'text', text: args.prompt },
-          ],
+          prompt: [{ type: 'text', text: args.prompt }],
           context,
           provider: context === 'fork' ? config.forkProvider : config.freshProvider,
           signal: exec.signal,

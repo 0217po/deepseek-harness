@@ -94,6 +94,8 @@ interface EditorTarget extends ProviderIdentity {
   declared?: boolean
   /** The route's catalog endpoint (see {@link ProviderEditorProps.defaultBaseURL}). */
   defaultBaseURL?: string
+  /** Environment used to construct an endpoint (see {@link ProviderEditorProps.baseURLEnv}). */
+  baseURLEnv?: readonly string[]
   /** The route's native authentication (see {@link ProviderEditorProps.nativeAuth}). */
   nativeAuth?: LlmNativeAuth
 }
@@ -113,13 +115,14 @@ interface CatalogDraft {
 /** Values that vary around the shared provider-editor rendering. */
 interface ProviderEditorRenderProps extends Pick<
   ProviderEditorProps,
-  'namespace' | 'schema' | 'operations' | 't' | 'readOnly' | 'onClose' | 'credential'
+  'namespace' | 'schema' | 'operations' | 't' | 'readOnly' | 'onClose'
 > {
   target: EditorTarget
+  row: ProviderRow
 }
 
 /** Render an editor for either the setup posture or an expanded provider row. */
-function renderProviderEditor({ target, ...props }: ProviderEditorRenderProps): ReactNode {
+function renderProviderEditor({ target, row, ...props }: ProviderEditorRenderProps): ReactNode {
   return (
     <ProviderEditor
       provider={target.provider}
@@ -127,7 +130,10 @@ function renderProviderEditor({ target, ...props }: ProviderEditorRenderProps): 
       settingsPath={target.settingsPath}
       {...target.declared === true ? { declared: true } : {}}
       {...target.defaultBaseURL === undefined ? {} : { defaultBaseURL: target.defaultBaseURL }}
+      {...target.baseURLEnv === undefined ? {} : { baseURLEnv: target.baseURLEnv }}
       {...target.nativeAuth === undefined ? {} : { nativeAuth: target.nativeAuth }}
+      {...row.credential === undefined ? {} : { credential: row.credential }}
+      {...row.credentialChecks === undefined ? {} : { credentialChecks: row.credentialChecks }}
       {...props}
     />
   )
@@ -207,6 +213,7 @@ function targetOf(row: ProviderRow): EditorTarget {
     // Only declared routes may expose route-owned fields.
     ...row.entry.declared === true ? { declared: true } : {},
     ...row.entry.defaultBaseURL === undefined ? {} : { defaultBaseURL: row.entry.defaultBaseURL },
+    ...row.entry.baseURLEnv === undefined ? {} : { baseURLEnv: row.entry.baseURLEnv },
     ...row.entry.nativeAuth === undefined ? {} : { nativeAuth: row.entry.nativeAuth },
   }
 }
@@ -431,8 +438,8 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                 {error}
                 {renderProviderEditor({
                   target,
+                  row,
                   namespace,
-                  ...row.credential === undefined ? {} : { credential: row.credential },
                   schema,
                   operations,
                   t,
@@ -544,8 +551,8 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
               {open
                 ? renderProviderEditor({
                   target,
+                  row,
                   namespace,
-                  ...row.credential === undefined ? {} : { credential: row.credential },
                   schema,
                   operations,
                   t,
@@ -637,7 +644,9 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                       settingsPath={draft.target.settingsPath}
                       operations={operations}
                       {...draft.target.defaultBaseURL === undefined ? {} : { defaultBaseURL: draft.target.defaultBaseURL }}
+                      {...draft.target.baseURLEnv === undefined ? {} : { baseURLEnv: draft.target.baseURLEnv }}
                       {...draft.target.nativeAuth === undefined ? {} : { nativeAuth: draft.target.nativeAuth }}
+                      {...addRow?.credentialChecks === undefined ? {} : { credentialChecks: addRow.credentialChecks }}
                       t={t}
                       readOnly={!state.writable}
                       onClose={(changed) => { closeEditor(changed, draft.target) }}

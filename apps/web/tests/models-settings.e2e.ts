@@ -145,6 +145,11 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     // turn with a ByteString TypeError; the form names the offending field
     // instead.
     await key.fill('sk-\u{1F600}minimax')
+    expect(await key.getAttribute('type')).toBe('password')
+    await dialog.getByRole('button', { name: '显示密钥', exact: true }).click()
+    expect(await key.getAttribute('type')).toBe('text')
+    await dialog.getByRole('button', { name: '隐藏密钥', exact: true }).click()
+    expect(await key.getAttribute('type')).toBe('password')
     await dialog.getByText('该 API 密钥格式错误，请检查。').waitFor({ timeout: 10_000 })
     await expect.poll(async () => save.isEnabled(), { timeout: 10_000 }).toBe(false)
 
@@ -215,7 +220,8 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-customized'))
     const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.getByRole('button', { name: '编辑 minimax-cn' }).click()
-    await dialog.getByText('API 密钥来源：已保存凭据', { exact: true }).waitFor({ timeout: 10_000 })
+    await dialog.getByPlaceholder('留空使用已保存凭据', { exact: true }).waitFor({ timeout: 10_000 })
+    expect(await dialog.textContent()).not.toContain('API 密钥来源：')
     expect(await dialog.textContent()).not.toMatch(/oauth/i)
     await dialog.getByText('自定义设置').click()
     const url = dialog.getByLabel('API 地址')

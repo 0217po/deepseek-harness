@@ -106,6 +106,8 @@ const windowsRunnerCoverageExclusions = process.platform === 'win32'
       // win32.spec's injected bindings and exercised natively by every
       // Windows suite through the real backend.
       'packages/session/session-persistence-jsonl/src/lease.ts',
+      // The macOS provider transport uses Unix sockets; POSIX lanes cover its real socket lifecycle.
+      'packages/experimental/cua-macos/src/shared-native.ts',
     ]
   : []
 
@@ -333,6 +335,9 @@ export default defineConfig({
         // The mods band entry imports the bridge's generated Remote contribution, which exists only in lib;
         // the Web snapshot exercises the built entry, while source tests cover mountModsBand.
         'packages/experimental/client-ui-claude-code-mods/src/client/index.ts',
+        // The access entry imports its generated Remote contribution, which exists only in lib;
+        // the Web snapshot exercises the built entry, while source tests cover mountAccess.
+        'packages/api/remote-access/src/client/index.ts',
         // Slash/command/input round: per-file gaps deferred with the same
         // client-lane debt. TODO(gui): cover and remove with the lane above.
         'packages/client/ui-commands/src/index.ts',
