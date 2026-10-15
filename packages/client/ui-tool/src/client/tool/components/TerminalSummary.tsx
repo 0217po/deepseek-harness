@@ -5,7 +5,7 @@ import css from './TerminalSummary.module.css'
 /**
  * Keep the command description neutral and its exit status visible at narrow widths.
  * @param props - tool-authored description and localized exit label.
- * @returns a wrapping description with a neutral status capsule.
+ * @returns a single-line description with space reserved for its status capsule.
  */
 export function TerminalSummary({ description, exitLabel }: { description: string; exitLabel: string }) {
   return (

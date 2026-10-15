@@ -26,7 +26,6 @@ import type { WebCardModelProps } from '../models/web-card-model.ts'
 import { AskQuestionCard } from './AskQuestionCard.tsx'
 import { ToolDetails, type ToolDetailsModel } from './ToolDetails.tsx'
 import { TerminalSummary } from './TerminalSummary.tsx'
-import terminalSummaryCss from './TerminalSummary.module.css'
 import css from './ToolRow.module.css'
 
 export interface ToolRowProps {
@@ -210,7 +209,7 @@ export const ToolRow = memo(function ToolRow({
     /* An empty summary drops the separator with it (a row that is only
        its title shows no trailing dot). */
     <>
-      <span className={clsx(css.sep, exitLabel !== null && terminalSummaryCss.separator)} data-shimmer-decoration aria-hidden />
+      <span className={css.sep} data-shimmer-decoration aria-hidden />
       {exitLabel !== null ? (
         <TerminalSummary description={summaryText} exitLabel={exitLabel} />
       ) : openFile !== undefined ? (
@@ -373,9 +372,8 @@ export const ToolRow = memo(function ToolRow({
     <div className={css.root} data-variant={variant} data-tool={toolName} data-state={state}>
       {status !== null && <span className={css.visuallyHidden}>{status}</span>}
       <DisclosureRow
-        rowClassName={clsx(css.row, exitLabel !== null && terminalSummaryCss.row)}
-        contentLayoutClassName={exitLabel !== null ? terminalSummaryCss.content : undefined}
-        leadingClassName={clsx(css.leading, exitLabel !== null && terminalSummaryCss.leading)}
+        rowClassName={css.row}
+        leadingClassName={css.leading}
         titleClassName={css.title}
         icon={icon}
         title={title}

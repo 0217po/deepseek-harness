@@ -398,14 +398,19 @@ describe('web e2e: clickable links gallery', () => {
             neutral: getComputedStyle(description).color === getComputedStyle(row).color,
             fits: badgeRect.right <= rowRect.right + 1 && badgeRect.bottom <= rowRect.bottom + 1,
             inline: Math.abs(badgeRect.top - textRect.top) < 5,
-            wrapped: badgeRect.top >= textRect.bottom,
+            truncated: description.scrollWidth > description.clientWidth,
+            ellipsis: getComputedStyle(description).textOverflow === 'ellipsis',
+            singleLine: Math.abs(rowRect.height - textRect.height) < 1,
             gap: badgeRect.left - textRect.right,
           }
         })
         expect(geometry.neutral).toBe(true)
         expect(geometry.fits, JSON.stringify({ width, colorScheme, ...geometry })).toBe(true)
-        expect(width === '760px' ? geometry.inline : geometry.wrapped).toBe(true)
-        if (width === '760px') expect(geometry.gap).toBeCloseTo(8, 0)
+        expect(geometry.inline).toBe(true)
+        expect(geometry.singleLine).toBe(true)
+        expect(geometry.truncated).toBe(width === '260px')
+        expect(geometry.ellipsis).toBe(true)
+        expect(geometry.gap).toBeCloseTo(8, 0)
       }
     }
     await failedCommand.evaluate((element) => { element.style.width = '' })

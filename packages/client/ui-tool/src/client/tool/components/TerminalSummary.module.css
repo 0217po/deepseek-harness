@@ -1,8 +1,7 @@
-/* The capsule follows the description and wraps intact when their combined width does not fit. */
+/* Reserve the capsule width before truncating the description on the same line. */
 .summary {
   display: flex;
   flex: 0 1 auto;
-  flex-wrap: wrap;
   align-items: center;
   column-gap: 8px;
   min-width: 0;
@@ -10,7 +9,6 @@
 
 .description {
   min-width: 0;
-  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -21,7 +19,6 @@
 .badge {
   flex: none;
   gap: 5px;
-  margin-block: 2px;
 }
 
 .dot {
@@ -31,22 +28,4 @@
   border-radius: 50%;
   corner-shape: round;
   background: var(--dsw-alias-state-error-primary);
-}
-
-.row[data-expandable] {
-  height: auto;
-  min-height: calc(24px + var(--dsh-content-font-delta, 0px));
-  align-items: flex-start;
-}
-
-.row .content {
-  align-items: flex-start;
-}
-
-.row .leading {
-  margin-top: 4px;
-}
-
-.row .separator {
-  margin-top: calc(11px + var(--dsh-content-font-delta, 0px) / 2);
 }
