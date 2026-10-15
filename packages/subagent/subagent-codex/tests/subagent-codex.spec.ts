@@ -821,6 +821,53 @@ describe('CodexAppServerWire', () => {
     wire.close()
   })
 
+  it('ranks final_answer above partial_answer and partial_answer above nullable-phase answers', async () => {
+    const scenarios: Array<{
+      readonly frames: JsonObject[]
+      readonly text: string
+    }> = [
+      {
+        frames: [
+          agentMessage('partial', 'partial_answer'),
+          agentMessage('final', 'final_answer'),
+        ],
+        text: 'final',
+      },
+      {
+        frames: [
+          agentMessage('final', 'final_answer'),
+          agentMessage('partial after final', 'partial_answer'),
+        ],
+        text: 'final',
+      },
+      {
+        frames: [agentMessage('only partial', 'partial_answer')],
+        text: 'only partial',
+      },
+      {
+        frames: [
+          agentMessage('unphased', null),
+          agentMessage('first partial', 'partial_answer'),
+          agentMessage('last partial', 'partial_answer'),
+          agentMessage('unphased after partial', null),
+        ],
+        text: 'last partial',
+      },
+    ]
+    for (const scenario of scenarios) {
+      const { child, wire } = await initializeWire()
+      const result = wire.runTurn(['task'], new AbortController().signal)
+      const turnStart = await child.peer.nextMethod('turn/start')
+      child.peer.respond(turnStart, { turn: { id: 'turn-1' } })
+      child.peer.send(...scenario.frames, turnCompleted('completed'))
+      await expect(result).resolves.toEqual({
+        output: [{ type: 'text', text: scenario.text }],
+        stopReason: 'completed',
+      })
+      wire.close()
+    }
+  })
+
   it('groups representative string errors without changing stop reasons', async () => {
     const scenarios = [
       ['contextWindowExceeded', 'limit', 'max-tokens'],
