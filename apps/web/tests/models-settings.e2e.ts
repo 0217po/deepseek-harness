@@ -7,9 +7,10 @@
 // appears after route topology invalidation without presenting liveness as
 // provider status. The customized-settings fold writes its curated fields —
 // the endpoint, a declared route's own name and protocol, and the reasoning
-// levels of its models — as merge patches against the stored profile. Zero model calls: configuration is pure
-// settings/credentials/llm-domain traffic, so there is no fixture and a
-// stray stream would fail loud because the adapter registry is empty. The provider under test is
+// levels of its models — as merge patches against the stored profile. Zero
+// model calls: configuration is pure settings/credentials/llm-domain traffic,
+// so there is no fixture and a stray stream would fail loud because the
+// adapter registry is empty. The provider under test is
 // minimax-cn so a developer's real ANTHROPIC/OPENAI environment keys can
 // never shadow the derived reference. The deletion dialog distinguishes a
 // reference-free profile from a page-managed key before the credential and
